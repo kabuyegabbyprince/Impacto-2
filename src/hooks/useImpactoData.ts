@@ -1,0 +1,5251 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import { uploadFile, dataUrlToUint8Array } from "../lib/supabaseStorage";
+import { MockDB } from "../lib/mockData";
+import { notifyCrossTabChange } from "../lib/crossTabSync";
+import { useOrgStore } from "../store/orgStore";
+import {
+  Organization,
+  OrgMember,
+  Event,
+  Meeting,
+  NewsPost,
+  ChatChannel,
+  ChatMessage,
+  Goal,
+  Grant,
+  LedgerEntry,
+  Donation,
+  ErrorReport,
+  SubscriptionPayment,
+  MemberTier,
+  PlatformSettings,
+  ActivityLog,
+  ActivityAttendance,
+  MessageTemplate,
+  NotificationSend,
+  PollMessage,
+  PollVote,
+  EventRSVP,
+  EventWaitlist,
+  IdentityVerification,
+  Document,
+  DocumentAcknowledgement,
+  Resignation,
+  AuditLog,
+  SupportConversation,
+  SupportMessage,
+  EventAttendance,
+  MemberFee,
+  MarketplaceProduct,
+  MarketplaceLead,
+} from "../types";
+
+// Helper for fake latency/promises
+const delay = (ms = 400) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// ==========================================
+// 1. ORGANIZATIONS HOOKS
+// ==========================================
+export function useOrganizations() {
+  return useQuery({
+    queryKey: ["organizations"],
+    queryFn: async () => {
+      let orgs: Organization[];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("organizations")
+          .select("*")
+          .order("name", { ascending: true });
+        if (error) throw error;
+        orgs = data as Organization[];
+      } else {
+        await delay();
+        orgs = MockDB.getOrgs();
+      }
+      return orgs.map((org) => {
+        const localVal = localStorage.getItem(
+          `impacto_org_is_public_directory_${org.id}`,
+        );
+        const localJoin = localStorage.getItem(
+          `impacto_org_allow_public_joining_${org.id}`,
+        );
+        const localPPE = localStorage.getItem(
+          `impacto_org_public_page_enabled_${org.id}`,
+        );
+        const localSGP = localStorage.getItem(
+          `impacto_org_show_goals_publicly_${org.id}`,
+        );
+        const localSIP = localStorage.getItem(
+          `impacto_org_show_impact_publicly_${org.id}`,
+        );
+        const localTier = localStorage.getItem(
+          `impacto_org_subscription_tier_${org.id}`,
+        );
+        const localMarketplace = localStorage.getItem(
+          `impacto_org_marketplace_enabled_${org.id}`,
+        );
+        const localFeeNotif = localStorage.getItem(
+          `impacto_org_fee_notification_${org.id}`,
+        );
+        return {
+          ...org,
+          subscription_tier: (localTier as any) || org.subscription_tier || "trial",
+          marketplace_enabled:
+            localMarketplace !== null
+              ? JSON.parse(localMarketplace)
+              : (org.marketplace_enabled ?? true),
+          fee_notification:
+            localFeeNotif !== null
+              ? localFeeNotif
+              : org.fee_notification,
+          is_public_directory:
+            localVal !== null
+              ? JSON.parse(localVal)
+              : (org.is_public_directory ?? true),
+          allow_public_joining:
+            localJoin !== null
+              ? JSON.parse(localJoin)
+              : (org.allow_public_joining ?? true),
+          public_page_enabled:
+            localPPE !== null
+              ? JSON.parse(localPPE)
+              : (org.public_page_enabled ?? true),
+          show_goals_publicly:
+            localSGP !== null
+              ? JSON.parse(localSGP)
+              : (org.show_goals_publicly ?? true),
+          show_impact_publicly:
+            localSIP !== null
+              ? JSON.parse(localSIP)
+              : (org.show_impact_publicly ?? true),
+        };
+      });
+    },
+  });
+}
+
+export function useOrganization(slug: string | undefined) {
+  return useQuery({
+    queryKey: ["organization", slug],
+    queryFn: async () => {
+      if (!slug) return null;
+      let org: Organization | null = null;
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("organizations")
+          .select("*")
+          .eq("slug", slug)
+          .maybeSingle();
+        if (error) throw error;
+        org = data as Organization | null;
+      } else {
+        await delay();
+        org = MockDB.getOrgs().find((o) => o.slug === slug) || null;
+      }
+      if (org) {
+        const localVal = localStorage.getItem(
+          `impacto_org_is_public_directory_${org.id}`,
+        );
+        const localJoin = localStorage.getItem(
+          `impacto_org_allow_public_joining_${org.id}`,
+        );
+        const localPPE = localStorage.getItem(
+          `impacto_org_public_page_enabled_${org.id}`,
+        );
+        const localSGP = localStorage.getItem(
+          `impacto_org_show_goals_publicly_${org.id}`,
+        );
+        const localSIP = localStorage.getItem(
+          `impacto_org_show_impact_publicly_${org.id}`,
+        );
+        const localTier = localStorage.getItem(
+          `impacto_org_subscription_tier_${org.id}`,
+        );
+        const localMarketplace = localStorage.getItem(
+          `impacto_org_marketplace_enabled_${org.id}`,
+        );
+        const localFeeNotif = localStorage.getItem(
+          `impacto_org_fee_notification_${org.id}`,
+        );
+        org = {
+          ...org,
+          subscription_tier: (localTier as any) || org.subscription_tier || "trial",
+          marketplace_enabled:
+            localMarketplace !== null
+              ? JSON.parse(localMarketplace)
+              : (org.marketplace_enabled ?? true),
+          fee_notification:
+            localFeeNotif !== null
+              ? localFeeNotif
+              : org.fee_notification,
+          is_public_directory:
+            localVal !== null
+              ? JSON.parse(localVal)
+              : (org.is_public_directory ?? true),
+          allow_public_joining:
+            localJoin !== null
+              ? JSON.parse(localJoin)
+              : (org.allow_public_joining ?? true),
+          public_page_enabled:
+            localPPE !== null
+              ? JSON.parse(localPPE)
+              : (org.public_page_enabled ?? true),
+          show_goals_publicly:
+            localSGP !== null
+              ? JSON.parse(localSGP)
+              : (org.show_goals_publicly ?? true),
+          show_impact_publicly:
+            localSIP !== null
+              ? JSON.parse(localSIP)
+              : (org.show_impact_publicly ?? true),
+        };
+      }
+      return org;
+    },
+    enabled: !!slug,
+  });
+}
+
+export function useUpdateOrganization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Partial<Organization> & { id: string }) => {
+      const {
+        id,
+        is_public_directory,
+        allow_public_joining,
+        public_page_enabled,
+        show_goals_publicly,
+        show_impact_publicly,
+        marketplace_enabled,
+        fee_notification,
+        ...rest
+      } = payload;
+
+      if (marketplace_enabled !== undefined) {
+        localStorage.setItem(
+          `impacto_org_marketplace_enabled_${id}`,
+          JSON.stringify(marketplace_enabled),
+        );
+      }
+      if (fee_notification !== undefined) {
+        localStorage.setItem(
+          `impacto_org_fee_notification_${id}`,
+          fee_notification || "",
+        );
+      }
+
+      if (is_public_directory !== undefined) {
+        localStorage.setItem(
+          `impacto_org_is_public_directory_${id}`,
+          JSON.stringify(is_public_directory),
+        );
+      }
+      if (allow_public_joining !== undefined) {
+        localStorage.setItem(
+          `impacto_org_allow_public_joining_${id}`,
+          JSON.stringify(allow_public_joining),
+        );
+      }
+      if (public_page_enabled !== undefined) {
+        localStorage.setItem(
+          `impacto_org_public_page_enabled_${id}`,
+          JSON.stringify(public_page_enabled),
+        );
+      }
+      if (show_goals_publicly !== undefined) {
+        localStorage.setItem(
+          `impacto_org_show_goals_publicly_${id}`,
+          JSON.stringify(show_goals_publicly),
+        );
+      }
+      if (show_impact_publicly !== undefined) {
+        localStorage.setItem(
+          `impacto_org_show_impact_publicly_${id}`,
+          JSON.stringify(show_impact_publicly),
+        );
+      }
+
+      if (isSupabaseConfigured) {
+        let updatedOrg: Organization;
+        try {
+          const { data, error } = await supabase
+            .from("organizations")
+            .update(rest)
+            .eq("id", id)
+            .select()
+            .single();
+          if (error) throw error;
+          updatedOrg = data as Organization;
+        } catch (dbErr: any) {
+          console.warn("Supabase organization update failed. Fallback without subscription_tier.", dbErr);
+          if (payload.subscription_tier !== undefined) {
+            localStorage.setItem(`impacto_org_subscription_tier_${id}`, payload.subscription_tier);
+          }
+          const { subscription_tier, ...restWithoutTier } = rest as any;
+          const { data, error } = await supabase
+            .from("organizations")
+            .update(restWithoutTier)
+            .eq("id", id)
+            .select()
+            .single();
+          if (error) throw error;
+          updatedOrg = data as Organization;
+        }
+        const localVal = localStorage.getItem(
+          `impacto_org_is_public_directory_${id}`,
+        );
+        const localJoin = localStorage.getItem(
+          `impacto_org_allow_public_joining_${id}`,
+        );
+        const localPPE = localStorage.getItem(
+          `impacto_org_public_page_enabled_${id}`,
+        );
+        const localSGP = localStorage.getItem(
+          `impacto_org_show_goals_publicly_${id}`,
+        );
+        const localSIP = localStorage.getItem(
+          `impacto_org_show_impact_publicly_${id}`,
+        );
+        const localTier = localStorage.getItem(
+          `impacto_org_subscription_tier_${id}`,
+        );
+        const localMarketplace = localStorage.getItem(
+          `impacto_org_marketplace_enabled_${id}`,
+        );
+        const localFeeNotif = localStorage.getItem(
+          `impacto_org_fee_notification_${id}`,
+        );
+        return {
+          ...updatedOrg,
+          subscription_tier: (localTier as any) || updatedOrg.subscription_tier || "trial",
+          marketplace_enabled:
+            localMarketplace !== null
+              ? JSON.parse(localMarketplace)
+              : (updatedOrg.marketplace_enabled ?? true),
+          fee_notification:
+            localFeeNotif !== null
+              ? localFeeNotif
+              : updatedOrg.fee_notification,
+          is_public_directory:
+            localVal !== null
+              ? JSON.parse(localVal)
+              : (updatedOrg.is_public_directory ?? true),
+          allow_public_joining:
+            localJoin !== null
+              ? JSON.parse(localJoin)
+              : (updatedOrg.allow_public_joining ?? true),
+          public_page_enabled:
+            localPPE !== null
+              ? JSON.parse(localPPE)
+              : (updatedOrg.public_page_enabled ?? true),
+          show_goals_publicly:
+            localSGP !== null
+              ? JSON.parse(localSGP)
+              : (updatedOrg.show_goals_publicly ?? true),
+          show_impact_publicly:
+            localSIP !== null
+              ? JSON.parse(localSIP)
+              : (updatedOrg.show_impact_publicly ?? true),
+        };
+      }
+      await delay();
+      const orgs = MockDB.getOrgs();
+      const idx = orgs.findIndex((o) => o.id === payload.id);
+      if (idx !== -1) {
+        orgs[idx] = { ...orgs[idx], ...payload };
+        MockDB.saveOrgs(orgs);
+        return orgs[idx];
+      }
+      throw new Error("Organization not found.");
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["organization", data.slug] });
+      queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+      const store = useOrgStore.getState();
+      if (store.activeOrg && store.activeOrg.id === data.id) {
+        store.setActiveOrg({ ...store.activeOrg, ...data }, store.activeMember);
+      }
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
+    },
+  });
+}
+
+// ==========================================
+// 2. MEMBER MANAGEMENT HOOKS
+// ==========================================
+export function useMembers(orgId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!orgId || !isSupabaseConfigured) return;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      const channelName = `members_rt_${orgId}_${Math.random().toString(36).substring(2, 9)}`;
+      channel = supabase
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "org_members", filter: `org_id=eq.${orgId}` },
+          () => queryClient.invalidateQueries({ queryKey: ["members", orgId] })
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn("[Realtime] Members channel subscribe notice:", err);
+    }
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [orgId, queryClient]);
+
+  return useQuery({
+    queryKey: ["members", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("org_members")
+          .select("*, user:user_id(id, email, full_name, avatar_url)")
+          .eq("org_id", orgId);
+        if (error) throw error;
+        return data as OrgMember[];
+      }
+      await delay();
+      const users = MockDB.getUsers();
+      return MockDB.getMembers()
+        .filter((m) => m.org_id === orgId)
+        .map((m) => ({
+          ...m,
+          user: users.find((u) => u.id === m.user_id),
+        })) as OrgMember[];
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useApprovedMembers(orgId: string | undefined) {
+  const q = useMembers(orgId);
+  return {
+    ...q,
+    data: q.data?.filter((m) => m.status === "active") || [],
+  };
+}
+
+export function useMemberTiers(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["tiers", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("member_tiers")
+          .select("*")
+          .eq("org_id", orgId);
+        if (error) throw error;
+        return data as MemberTier[];
+      }
+      await delay();
+      return MockDB.getTiers().filter((t) => t.org_id === orgId);
+    },
+    enabled: !!orgId,
+  });
+}
+
+// Auto-Fee Assignment Helper: Automatically assigns active fee cycles to newly approved/created members
+export async function autoAssignActiveFeesToMember(orgId: string, memberId: string) {
+  try {
+    if (!orgId || !memberId) return;
+
+    let existingFees: MemberFee[] = [];
+    if (isSupabaseConfigured) {
+      try {
+        const { data } = await supabase.from("member_fees").select("*").eq("org_id", orgId);
+        if (data) existingFees = data as MemberFee[];
+      } catch (e) {}
+    }
+    const mockFees = MockDB.getMemberFees().filter((f) => f.org_id === orgId);
+    const allOrgFees = [...existingFees, ...mockFees];
+
+    const memberFees = allOrgFees.filter((f) => f.member_id === memberId || (f as any).user_id === memberId);
+    
+    // Group active or recent cycles
+    const cyclesMap = new Map<string, { payment_period: string; period_date: string; amount: number; currency: string }>();
+
+    allOrgFees.forEach((fee) => {
+      if (fee.payment_period && fee.period_date && fee.amount > 0) {
+        const key = `${fee.payment_period}_${fee.period_date}`;
+        if (!cyclesMap.has(key)) {
+          cyclesMap.set(key, {
+            payment_period: fee.payment_period,
+            period_date: fee.period_date,
+            amount: fee.amount,
+            currency: fee.currency || "RWF"
+          });
+        }
+      }
+    });
+
+    if (cyclesMap.size === 0) {
+      const currentPeriod = new Date().toISOString().slice(0, 7);
+      cyclesMap.set(`monthly_${currentPeriod}`, {
+        payment_period: "monthly",
+        period_date: currentPeriod,
+        amount: 5000,
+        currency: "RWF"
+      });
+    }
+
+    for (const cycle of cyclesMap.values()) {
+      const alreadyHas = memberFees.some(
+        (f) => f.payment_period === cycle.payment_period && f.period_date === cycle.period_date
+      );
+
+      if (!alreadyHas) {
+        const newFeeId = `fee-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+        const newFee: any = {
+          id: newFeeId,
+          org_id: orgId,
+          member_id: memberId,
+          amount: cycle.amount,
+          currency: cycle.currency,
+          payment_period: cycle.payment_period,
+          period_date: cycle.period_date,
+          status: "pending",
+          due_date: dueDate,
+          is_recurring: true,
+          admin_note: `[Auto-Assigned on Membership Onboarding/Approval] [Cycle: ${cycle.period_date}]`,
+          created_at: new Date().toISOString()
+        };
+
+        const localList = MockDB.getMemberFees();
+        localList.push(newFee);
+        MockDB.saveMemberFees(localList);
+
+        if (isSupabaseConfigured) {
+          fetch("/api/member-fees/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newFee)
+          }).catch(() => {});
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[Auto-Fee Assignment] Error assigning fees to member:", err);
+  }
+}
+
+export function useUpdateMemberStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      status,
+      role,
+      is_volunteer,
+    }: {
+      id: string;
+      status?: "active" | "suspended" | "pending" | "rejected";
+      role?: "org_admin" | "manager" | "accountant" | "member";
+      is_volunteer?: boolean;
+    }) => {
+      let updatedRecord: any = null;
+      if (isSupabaseConfigured) {
+        const updates: any = {};
+        if (status) updates.status = status;
+        if (role) updates.role = role;
+        if (is_volunteer !== undefined) updates.is_volunteer = is_volunteer;
+        const { data, error } = await supabase
+          .from("org_members")
+          .update(updates)
+          .eq("id", id)
+          .select();
+        if (error) throw error;
+        if (!data || data.length === 0) {
+          updatedRecord = { id, ...updates };
+        } else {
+          updatedRecord = data[0];
+        }
+      } else {
+        await delay();
+        const members = MockDB.getMembers();
+        const idx = members.findIndex((m) => m.id === id);
+        if (idx !== -1) {
+          if (status) members[idx].status = status;
+          if (role) members[idx].role = role;
+          if (is_volunteer !== undefined)
+            members[idx].is_volunteer = is_volunteer;
+          MockDB.saveMembers(members);
+          updatedRecord = members[idx];
+        } else {
+          throw new Error("Member not found.");
+        }
+      }
+
+      // If approved to active status, automatically assign active organization fee cycles
+      if (status === "active" && updatedRecord?.org_id) {
+        await autoAssignActiveFeesToMember(updatedRecord.org_id, updatedRecord.id);
+      }
+
+      return updatedRecord;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["members", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["member_fees", data.org_id] });
+      const { activeMember, setActiveOrg, activeOrg } = useOrgStore.getState();
+      if (activeMember && activeMember.id === data.id) {
+        const updatedMember = { ...activeMember, ...data };
+        setActiveOrg(activeOrg, updatedMember);
+      }
+    },
+  });
+}
+
+export function useDeleteMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, orgId }: { id: string; orgId: string }) => {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase
+          .from("org_members")
+          .delete()
+          .eq("id", id);
+        if (error) throw error;
+        return { id, orgId };
+      }
+      await delay();
+      const members = MockDB.getMembers();
+      const updated = members.filter((m) => m.id !== id);
+      MockDB.saveMembers(updated);
+      return { id, orgId };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["members", data.orgId] });
+      queryClient.invalidateQueries({ queryKey: ["member_fees", data.orgId] });
+    },
+  });
+}
+
+export function useCreateMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      orgId,
+      email,
+      fullName,
+      role,
+    }: {
+      orgId: string;
+      email: string;
+      fullName: string;
+      role: "org_admin" | "member";
+    }) => {
+      let createdMember: any = null;
+      if (isSupabaseConfigured) {
+        const { data: userData } = await supabase
+          .from("users")
+          .select("id")
+          .eq("email", email)
+          .maybeSingle();
+
+        let targetId = userData?.id;
+        if (!targetId) {
+          const tempId = "u-" + Math.random().toString(36).substr(2, 9);
+          const { error: insErr } = await supabase.from("users").insert({
+            id: tempId,
+            email,
+            full_name: fullName,
+            is_superadmin: false,
+          });
+          if (insErr) throw insErr;
+          targetId = tempId;
+        }
+
+        const { data, error } = await supabase
+          .from("org_members")
+          .insert({
+            org_id: orgId,
+            user_id: targetId,
+            role,
+            status: "active",
+            member_number: "MEM-" + Math.floor(100 + Math.random() * 900),
+            joined_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        createdMember = data;
+      } else {
+        await delay();
+        const users = MockDB.getUsers();
+        const members = MockDB.getMembers();
+
+        let existingUser = users.find((u) => u.email === email);
+        if (!existingUser) {
+          existingUser = {
+            id: "u-" + Math.random().toString(36).substr(2, 9),
+            email,
+            full_name: fullName,
+            is_superadmin: false,
+            created_at: new Date().toISOString(),
+          };
+          users.push(existingUser);
+          MockDB.saveUsers(users);
+        }
+
+        const newMember: OrgMember = {
+          id: "mem-" + Math.random().toString(36).substr(2, 9),
+          org_id: orgId,
+          user_id: existingUser.id,
+          role,
+          status: "active",
+          member_number: "MEM-" + Math.floor(100 + Math.random() * 900),
+          joined_at: new Date().toISOString(),
+        };
+        members.push(newMember);
+        MockDB.saveMembers(members);
+        createdMember = newMember;
+      }
+
+      // Auto-assign active dues cycles to the newly created active member
+      if (createdMember?.id && orgId) {
+        await autoAssignActiveFeesToMember(orgId, createdMember.id);
+      }
+
+      return createdMember;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["members", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["member_fees", data.org_id] });
+    },
+  });
+}
+
+// ==========================================
+// 3. EVENTS HOOKS
+// ==========================================
+export function useEvents(orgId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!orgId || !isSupabaseConfigured) return;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      const channelName = `events_rt_${orgId}_${Math.random().toString(36).substring(2, 9)}`;
+      channel = supabase
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "events", filter: `org_id=eq.${orgId}` },
+          () => queryClient.invalidateQueries({ queryKey: ["events", orgId] })
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn("[Realtime] Events channel subscribe notice:", err);
+    }
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [orgId, queryClient]);
+
+  return useQuery({
+    queryKey: ["events", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        let sbEvents: Event[] = [];
+        try {
+          const { data, error } = await supabase
+            .from("events")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("date_time", { ascending: true });
+          if (!error && data) {
+            sbEvents = (data || []).filter((e: any) => !e.is_deleted) as Event[];
+          }
+        } catch (dbErr: any) {
+          console.warn("Supabase fetch events warning:", dbErr);
+        }
+
+        const localEvents = MockDB.getEvents().filter(
+          (e) => e.org_id === orgId && !e.is_deleted,
+        );
+        const resultMap = new Map<string, Event>();
+        localEvents.forEach((e) => resultMap.set(e.id, e));
+        sbEvents.forEach((e) => resultMap.set(e.id, e));
+
+        const unsynced = localEvents.filter((e) => !sbEvents.some((s) => s.id === e.id));
+        if (unsynced.length > 0) {
+          try {
+            await supabase.from("events").upsert(unsynced);
+          } catch (syncErr) {
+            console.warn("[Events Supabase Sync] Failed to sync local events:", syncErr);
+          }
+        }
+        return Array.from(resultMap.values());
+      }
+      await delay();
+      return MockDB.getEvents().filter(
+        (e) => e.org_id === orgId && !e.is_deleted,
+      );
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useCreateEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      payload: Omit<Event, "id" | "attendees_count" | "qr_code_token">,
+    ) => {
+      if (new Date(payload.date_time) < new Date()) {
+        throw new Error("Event date must be in the future.");
+      }
+      const qr_code_token = "token-" + Math.random().toString(36).substr(2, 9);
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("events")
+            .insert({
+              ...payload,
+              qr_code_token,
+              attendees_count: 0,
+            })
+            .select()
+            .single();
+          if (error) throw error;
+          return data as Event;
+        } catch (dbErr) {
+          console.warn("Supabase events insert failed or RLS blocked, using local storage:", dbErr);
+        }
+      }
+      await delay();
+      const events = MockDB.getEvents();
+      const newEvent: Event = {
+        ...payload,
+        id: "event-" + Math.random().toString(36).substr(2, 9),
+        qr_code_token,
+        attendees_count: 0,
+      };
+      events.push(newEvent);
+      MockDB.saveEvents(events);
+      return newEvent;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["events", data.org_id] });
+    },
+  });
+}
+
+export function useUpdateEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      payload: Partial<Event> & { id: string; org_id: string },
+    ) => {
+      const { id, org_id, ...updates } = payload;
+      const last_edited_at = new Date().toISOString();
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("events")
+            .update({ ...updates, last_edited_at })
+            .eq("id", id)
+            .select()
+            .single();
+          if (error) throw error;
+          return data as Event;
+        } catch (dbErr: any) {
+          if (
+            dbErr.code === "PGRST204" ||
+            dbErr.message?.includes("last_edited_at")
+          ) {
+            const { data, error } = await supabase
+              .from("events")
+              .update(updates)
+              .eq("id", id)
+              .select()
+              .single();
+            if (error) throw error;
+            return data as Event;
+          }
+          throw dbErr;
+        }
+      }
+      await delay();
+      const events = MockDB.getEvents();
+      const idx = events.findIndex((e) => e.id === id);
+      if (idx !== -1) {
+        events[idx] = { ...events[idx], ...updates, last_edited_at };
+        MockDB.saveEvents(events);
+        return events[idx];
+      }
+      throw new Error("Event not found");
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["events", data.org_id] });
+    },
+  });
+}
+
+export function useDeleteEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, org_id }: { id: string; org_id: string }) => {
+      const last_edited_at = new Date().toISOString();
+      if (isSupabaseConfigured) {
+        try {
+          const { error } = await supabase
+            .from("events")
+            .update({ is_deleted: true, last_edited_at })
+            .eq("id", id);
+          if (error) throw error;
+        } catch (dbErr: any) {
+          if (
+            dbErr.code === "PGRST204" ||
+            dbErr.message?.includes("is_deleted") ||
+            dbErr.message?.includes("last_edited_at")
+          ) {
+            const { error } = await supabase
+              .from("events")
+              .delete()
+              .eq("id", id);
+            if (error) throw error;
+          } else {
+            throw dbErr;
+          }
+        }
+        return { id, org_id };
+      }
+      await delay();
+      const events = MockDB.getEvents();
+      const idx = events.findIndex((e) => e.id === id);
+      if (idx !== -1) {
+        events[idx] = { ...events[idx], is_deleted: true, last_edited_at };
+        MockDB.saveEvents(events);
+      }
+      return { id, org_id };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["events", data.org_id] });
+    },
+  });
+}
+
+export function useCheckIn() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      event_id,
+      member_id,
+      method,
+      status = "present",
+      attempt_lat,
+      attempt_lng,
+      distance_meters,
+    }: {
+      event_id: string;
+      member_id: string;
+      method: "manual" | "qr" | "self" | "online_confirm";
+      status?: "present" | "attempted" | "mismatch";
+      attempt_lat?: number;
+      attempt_lng?: number;
+      distance_meters?: number;
+    }) => {
+      // Also save to a local backup so UI can retrieve geolocation/status details easily
+      const backupKey = `event_att_detail_${event_id}_${member_id}`;
+      localStorage.setItem(backupKey, JSON.stringify({
+        status,
+        attempt_lat,
+        attempt_lng,
+        distance_meters,
+        check_in_method: method,
+        check_in_time: new Date().toISOString()
+      }));
+
+      if (isSupabaseConfigured) {
+        try {
+          // Attempt insertion with extra columns if columns are present in schema
+          const { error } = await supabase.from("event_attendance").insert({
+            event_id,
+            member_id,
+            check_in_method: method === "online_confirm" ? "self" : (method as any),
+            check_in_time: new Date().toISOString(),
+            status,
+            attempt_lat,
+            attempt_lng,
+            distance_meters,
+          });
+          if (error) {
+            // fallback to standard columns if table schema doesn't have custom columns
+            const { error: fallbackError } = await supabase.from("event_attendance").insert({
+              event_id,
+              member_id,
+              check_in_method: method === "online_confirm" ? "self" : (method as any),
+              check_in_time: new Date().toISOString(),
+            });
+            if (fallbackError) console.warn("Supabase event_attendance insert warning:", fallbackError);
+          }
+
+          // update attendees count in events
+          const { data: ev } = await supabase
+            .from("events")
+            .select("attendees_count, org_id")
+            .eq("id", event_id)
+            .single();
+          if (ev) {
+            await supabase
+              .from("events")
+              .update({ attendees_count: (ev.attendees_count || 0) + 1 })
+              .eq("id", event_id);
+            return { org_id: ev.org_id, event_id };
+          }
+        } catch (e) {
+          console.warn("Supabase event_attendance error, using local fallback:", e);
+        }
+        return { org_id: "", event_id };
+      }
+      await delay();
+      const events = MockDB.getEvents();
+      const idx = events.findIndex((e) => e.id === event_id);
+      if (idx !== -1) {
+        events[idx].attendees_count += 1;
+        MockDB.saveEvents(events);
+
+        // Save local event attendance record
+        const att = MockDB.getEventAttendance();
+        // Remove existing to avoid duplicates
+        const cleanedAtt = att.filter(a => !(a.event_id === event_id && a.member_id === member_id));
+        cleanedAtt.push({
+          id: `att-${Date.now()}`,
+          event_id,
+          member_id,
+          check_in_time: new Date().toISOString(),
+          check_in_method: method,
+          status,
+          attempt_lat,
+          attempt_lng,
+          distance_meters,
+        });
+        MockDB.saveEventAttendance(cleanedAtt);
+
+        return { org_id: events[idx].org_id, event_id };
+      }
+      return { org_id: "", event_id };
+    },
+    onSuccess: (res) => {
+      if (res.org_id)
+        queryClient.invalidateQueries({ queryKey: ["events", res.org_id] });
+      queryClient.invalidateQueries({
+        queryKey: ["event_attendance", res.event_id],
+      });
+    },
+  });
+}
+
+// ==========================================
+// 4. MEETINGS HOOKS
+// ==========================================
+export function useMeetings(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["meetings", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        let sbMeetings: Meeting[] = [];
+        try {
+          const { data, error } = await supabase
+            .from("meetings")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("date_time", { ascending: false });
+          if (!error && data) {
+            sbMeetings = data as Meeting[];
+          }
+        } catch (dbErr) {
+          console.warn("Supabase fetch meetings error:", dbErr);
+        }
+
+        const localMeetings = MockDB.getMeetings().filter((m) => m.org_id === orgId);
+        const resultMap = new Map<string, Meeting>();
+        localMeetings.forEach((m) => resultMap.set(m.id, m));
+        sbMeetings.forEach((m) => resultMap.set(m.id, m));
+
+        const unsynced = localMeetings.filter((m) => !sbMeetings.some((s) => s.id === m.id));
+        if (unsynced.length > 0) {
+          try {
+            await supabase.from("meetings").upsert(unsynced);
+          } catch (syncErr) {
+            console.warn("[Meetings Supabase Sync] Failed to sync local meetings:", syncErr);
+          }
+        }
+        return Array.from(resultMap.values());
+      }
+      await delay();
+      return MockDB.getMeetings().filter((m) => m.org_id === orgId);
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useCreateMeeting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Omit<Meeting, "id" | "status">) => {
+      if (new Date(payload.date_time) < new Date()) {
+        throw new Error("Meeting date must be in the future.");
+      }
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("meetings")
+          .insert({ ...payload, status: "scheduled" })
+          .select()
+          .single();
+        if (error) throw error;
+        return data as Meeting;
+      }
+      await delay();
+      const meetings = MockDB.getMeetings();
+      const newMeet: Meeting = {
+        ...payload,
+        id: "meet-" + Math.random().toString(36).substr(2, 9),
+        status: "scheduled",
+      };
+      meetings.push(newMeet);
+      MockDB.saveMeetings(meetings);
+      return newMeet;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["meetings", data.org_id] });
+    },
+  });
+}
+
+export function useUpdateMeeting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      payload: Partial<Meeting> & { id: string; org_id: string },
+    ) => {
+      if (isSupabaseConfigured) {
+        const { id, ...rest } = payload;
+        const { data, error } = await supabase
+          .from("meetings")
+          .update(rest)
+          .eq("id", id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data as Meeting;
+      }
+      await delay();
+      const meetings = MockDB.getMeetings();
+      const idx = meetings.findIndex((m) => m.id === payload.id);
+      if (idx !== -1) {
+        meetings[idx] = { ...meetings[idx], ...payload };
+        MockDB.saveMeetings(meetings);
+        return meetings[idx];
+      }
+      throw new Error("Meeting not found");
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["meetings", data.org_id] });
+    },
+  });
+}
+
+// ==========================================
+// 5. NEWS / BLOG POSTS HOOKS
+// ==========================================
+export function useNews(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["news", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        let sbPosts: NewsPost[] = [];
+        try {
+          const { data, error } = await supabase
+            .from("news_posts")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("is_pinned", { ascending: false })
+            .order("published_at", { ascending: false });
+          if (!error && data) {
+            sbPosts = data as NewsPost[];
+          }
+        } catch (dbErr) {
+          console.warn("Supabase fetch news error:", dbErr);
+        }
+
+        const localPosts = MockDB.getNews().filter((p) => p.org_id === orgId);
+        const resultMap = new Map<string, NewsPost>();
+        localPosts.forEach((p) => resultMap.set(p.id, p));
+        sbPosts.forEach((p) => resultMap.set(p.id, p));
+
+        const unsynced = localPosts.filter((p) => !sbPosts.some((s) => s.id === p.id));
+        if (unsynced.length > 0) {
+          try {
+            await supabase.from("news_posts").upsert(unsynced);
+          } catch (syncErr) {
+            console.warn("[News Supabase Sync] Failed to sync local news:", syncErr);
+          }
+        }
+        return Array.from(resultMap.values());
+      }
+      await delay();
+      return MockDB.getNews().filter((p) => p.org_id === orgId);
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useCreatePost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      payload: Omit<NewsPost, "id" | "likes_count" | "comments_count">,
+    ) => {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("news_posts")
+          .insert({
+            ...payload,
+            likes_count: 0,
+            comments_count: 0,
+            published_at: payload.published_at || new Date().toISOString(),
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        return data as NewsPost;
+      }
+      await delay();
+      const news = MockDB.getNews();
+      const newPost: NewsPost = {
+        ...payload,
+        id: "news-" + Math.random().toString(36).substr(2, 9),
+        likes_count: 0,
+        comments_count: 0,
+        published_at: payload.published_at || new Date().toISOString(),
+      };
+      news.push(newPost);
+      MockDB.saveNews(news);
+      return newPost;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["news", data.org_id] });
+    },
+  });
+}
+
+export function useUpdatePost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      payload: Partial<NewsPost> & { id: string; org_id: string },
+    ) => {
+      const last_edited_at = new Date().toISOString();
+      if (isSupabaseConfigured) {
+        const { id, ...rest } = payload;
+        try {
+          const { data, error } = await supabase
+            .from("news_posts")
+            .update({ ...rest, last_edited_at })
+            .eq("id", id)
+            .select()
+            .single();
+          if (error) throw error;
+          return data as NewsPost;
+        } catch (dbErr: any) {
+          if (
+            dbErr.code === "PGRST204" ||
+            dbErr.message?.includes("last_edited_at") ||
+            dbErr.message?.includes("is_deleted")
+          ) {
+            const { data, error } = await supabase
+              .from("news_posts")
+              .update(rest)
+              .eq("id", id)
+              .select()
+              .single();
+            if (error) throw error;
+            return data as NewsPost;
+          }
+          throw dbErr;
+        }
+      }
+      await delay();
+      const news = MockDB.getNews();
+      const idx = news.findIndex((p) => p.id === payload.id);
+      if (idx !== -1) {
+        news[idx] = { ...news[idx], ...payload, last_edited_at };
+        MockDB.saveNews(news);
+        return news[idx];
+      }
+      throw new Error("News post not found.");
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["news", data.org_id] });
+    },
+  });
+}
+
+export function useDeletePost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, org_id }: { id: string; org_id: string }) => {
+      const last_edited_at = new Date().toISOString();
+      if (isSupabaseConfigured) {
+        try {
+          const { error } = await supabase
+            .from("news_posts")
+            .update({ is_deleted: true, last_edited_at })
+            .eq("id", id);
+          if (error) throw error;
+        } catch (dbErr: any) {
+          if (
+            dbErr.code === "PGRST204" ||
+            dbErr.message?.includes("is_deleted") ||
+            dbErr.message?.includes("last_edited_at")
+          ) {
+            const { error } = await supabase
+              .from("news_posts")
+              .delete()
+              .eq("id", id);
+            if (error) throw error;
+          } else {
+            throw dbErr;
+          }
+        }
+        return { id, org_id };
+      }
+      await delay();
+      const news = MockDB.getNews();
+      const idx = news.findIndex((p) => p.id === id);
+      if (idx !== -1) {
+        news[idx] = { ...news[idx], is_deleted: true, last_edited_at };
+        MockDB.saveNews(news);
+      }
+      return { id, org_id };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["news", data.org_id] });
+    },
+  });
+}
+
+// ==========================================
+// 6. CHAT MESSAGES HOOKS
+// ==========================================
+export function useChatChannels(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["channels", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("chat_channels")
+          .select("*")
+          .eq("org_id", orgId);
+        if (error) throw error;
+        return data as ChatChannel[];
+      }
+      await delay();
+      return MockDB.getChannels().filter((c) => c.org_id === orgId);
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useChatMessages(channelId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!channelId || !isSupabaseConfigured) return;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      const channelName = `chat_rt_${channelId}_${Math.random().toString(36).substring(2, 9)}`;
+      channel = supabase
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "chat_messages", filter: `channel_id=eq.${channelId}` },
+          () => queryClient.invalidateQueries({ queryKey: ["messages", channelId] })
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn("[Realtime] Chat messages subscribe notice:", err);
+    }
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [channelId, queryClient]);
+
+  return useQuery({
+    queryKey: ["messages", channelId],
+    queryFn: async () => {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("chat_messages")
+          .select("*, sender:sender_id(full_name, avatar_url)")
+          .eq("channel_id", channelId)
+          .order("created_at", { ascending: false })
+          .limit(100);
+        if (error) throw error;
+        const sorted = (data || []).reverse();
+        // Mapping from relational nested info
+        return sorted.map((m: any) => ({
+          ...m,
+          sender_name: m.sender?.full_name || "Unknown User",
+          sender_avatar: m.sender?.avatar_url || "",
+        })) as ChatMessage[];
+      }
+      await delay(100); // lower delay for crisp chatting click
+      const filtered = MockDB.getMessages().filter(
+        (m) => m.channel_id === channelId,
+      );
+      return filtered.sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      );
+    },
+    enabled: !!channelId,
+    refetchInterval: 3000, // Bulletproof real-time fallback
+  });
+}
+
+export function useCreateChannel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      orgId: string;
+      name: string;
+      type: "group" | "announcement" | "direct";
+      channel_type?: string;
+      is_private?: boolean;
+      createdBy: string;
+      member_ids?: string[];
+    }) => {
+      const channelId = "chan-" + Math.random().toString(36).substring(2, 9);
+      const newChannel: ChatChannel = {
+        id: channelId,
+        org_id: payload.orgId,
+        name: payload.name,
+        type: payload.type,
+        channel_type: (payload.channel_type as any) || "general",
+        is_private: payload.is_private || false,
+        created_by: payload.createdBy,
+        member_ids: payload.member_ids || [],
+      };
+
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("chat_channels")
+          .insert({
+            org_id: payload.orgId,
+            name: payload.name,
+            type: payload.type,
+            channel_type: payload.channel_type || "general",
+            is_private: payload.is_private || false,
+            created_by: payload.createdBy,
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        return data as ChatChannel;
+      }
+      await delay(150);
+      const chans = MockDB.getChannels();
+      chans.push(newChannel);
+      MockDB.saveChannels(chans);
+      return newChannel;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["channels", data.org_id] });
+    },
+  });
+}
+
+export function useSendChatMessage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      channelId,
+      senderId,
+      text,
+      senderName,
+      message_type = "text",
+      file_url,
+      file_name,
+      file_size,
+      file_mime_type,
+      voice_duration_seconds,
+      reply_to_id,
+    }: {
+      channelId: string;
+      senderId: string;
+      text: string;
+      senderName: string;
+      message_type?: "text" | "file" | "image" | "voice" | "poll" | "system";
+      file_url?: string;
+      file_name?: string;
+      file_size?: number;
+      file_mime_type?: string;
+      voice_duration_seconds?: number;
+      reply_to_id?: string;
+    }) => {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("chat_messages")
+          .insert({
+            channel_id: channelId,
+            sender_id: senderId,
+            text,
+            message_type,
+            file_url,
+            file_name,
+            file_size,
+            file_mime_type,
+            voice_duration_seconds,
+            reply_to_id,
+            created_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        return { ...data, channel_id: channelId };
+      }
+      await delay(100);
+      const messages = MockDB.getMessages();
+      const newMsg: ChatMessage = {
+        id: "msg-" + Math.random().toString(36).substring(2, 9),
+        channel_id: channelId,
+        sender_id: senderId,
+        text,
+        message_type,
+        file_url,
+        file_name,
+        file_size,
+        file_mime_type,
+        voice_duration_seconds,
+        reply_to_id,
+        sender_name: senderName,
+        sender_avatar: "",
+        created_at: new Date().toISOString(),
+      };
+      messages.push(newMsg);
+      MockDB.saveMessages(messages);
+      return { ...newMsg, channel_id: channelId };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["messages", data.channel_id],
+      });
+    },
+  });
+}
+
+// ==========================================
+// 7. GOALS TO TRACK HOOKS
+// ==========================================
+export function useGoals(orgId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!orgId || !isSupabaseConfigured) return;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      const channelName = `goals_rt_${orgId}_${Math.random().toString(36).substring(2, 9)}`;
+      channel = supabase
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "goals", filter: `org_id=eq.${orgId}` },
+          () => queryClient.invalidateQueries({ queryKey: ["goals", orgId] })
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn("[Realtime] Goals subscribe notice:", err);
+    }
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [orgId, queryClient]);
+
+  return useQuery({
+    queryKey: ["goals", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        let sbGoals: Goal[] = [];
+        try {
+          const { data, error } = await supabase
+            .from("goals")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("deadline", { ascending: true });
+          if (!error && data) {
+            sbGoals = data as Goal[];
+          }
+        } catch (dbErr) {
+          console.warn("Supabase fetch goals error:", dbErr);
+        }
+
+        const localGoals = MockDB.getGoals().filter((g) => g.org_id === orgId);
+        const resultMap = new Map<string, Goal>();
+        localGoals.forEach((g) => resultMap.set(g.id, g));
+        sbGoals.forEach((g) => resultMap.set(g.id, g));
+
+        const unsynced = localGoals.filter((g) => !sbGoals.some((s) => s.id === g.id));
+        if (unsynced.length > 0) {
+          try {
+            await supabase.from("goals").upsert(unsynced);
+          } catch (syncErr) {
+            console.warn("[Goals Supabase Sync] Failed to sync local goals:", syncErr);
+          }
+        }
+        return Array.from(resultMap.values());
+      }
+      await delay();
+      return MockDB.getGoals().filter((g) => g.org_id === orgId);
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useCreateGoal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      payload: Omit<Goal, "id" | "created_at"> & { current_progress?: number },
+    ) => {
+      const startProg =
+        payload.current_progress !== undefined ? payload.current_progress : 0;
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("goals")
+          .insert({
+            ...payload,
+            current_progress: startProg,
+            created_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        return data as Goal;
+      }
+      await delay();
+      const goals = MockDB.getGoals();
+      const newGoal: Goal = {
+        ...payload,
+        id: "goal-" + Math.random().toString(36).substr(2, 9),
+        current_progress: startProg,
+        created_at: new Date().toISOString(),
+      };
+      goals.push(newGoal);
+      MockDB.saveGoals(goals);
+      return newGoal;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["goals", data.org_id] });
+    },
+  });
+}
+
+export function useUpdateGoalProgress() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      goalId,
+      value,
+      note,
+      orgId,
+    }: {
+      goalId: string;
+      value: number;
+      note?: string;
+      orgId: string;
+    }) => {
+      if (isSupabaseConfigured) {
+        let data: any = null;
+        let error: any = null;
+        try {
+          // Attempt to update with the last_note field
+          const res = await supabase
+            .from("goals")
+            .update({ current_progress: value, last_note: note })
+            .eq("id", goalId)
+            .select()
+            .single();
+          data = res.data;
+          error = res.error;
+        } catch (dbErr) {
+          // Fallback to updating only current_progress if last_note is missing on the table
+          const res = await supabase
+            .from("goals")
+            .update({ current_progress: value })
+            .eq("id", goalId)
+            .select()
+            .single();
+          data = res.data;
+          error = res.error;
+        }
+
+        if (error) throw error;
+
+        // Optionally record in goal_updates
+        await supabase.from("goal_updates").insert({
+          goal_id: goalId,
+          value,
+          note,
+          created_at: new Date().toISOString(),
+        });
+
+        // Add note metadata locally on the returned object
+        if (data) {
+          data.last_note = note;
+        }
+
+        return { data, orgId };
+      }
+      await delay();
+      const goals = MockDB.getGoals();
+      const idx = goals.findIndex((g) => g.id === goalId);
+      if (idx !== -1) {
+        goals[idx].current_progress = value;
+        goals[idx].last_note = note;
+        MockDB.saveGoals(goals);
+      }
+      return { goalId, orgId };
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["goals", res.orgId] });
+    },
+  });
+}
+
+export function useUpdateGoal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      payload: Partial<Goal> & { id: string; org_id: string },
+    ) => {
+      const { id, org_id, ...updates } = payload;
+      const last_edited_at = new Date().toISOString();
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("goals")
+            .update({ ...updates, last_edited_at })
+            .eq("id", id)
+            .select()
+            .single();
+          if (error) throw error;
+          return data as Goal;
+        } catch (dbErr: any) {
+          if (
+            dbErr.code === "PGRST204" ||
+            dbErr.message?.includes("last_edited_at")
+          ) {
+            const { data, error } = await supabase
+              .from("goals")
+              .update(updates)
+              .eq("id", id)
+              .select()
+              .single();
+            if (error) throw error;
+            return data as Goal;
+          }
+          throw dbErr;
+        }
+      }
+      await delay();
+      const goals = MockDB.getGoals();
+      const idx = goals.findIndex((g) => g.id === id);
+      if (idx !== -1) {
+        goals[idx] = { ...goals[idx], ...updates, last_edited_at };
+        MockDB.saveGoals(goals);
+        return goals[idx];
+      }
+      throw new Error("Goal not found");
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["goals", data.org_id] });
+    },
+  });
+}
+
+export function useDeleteGoal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, org_id }: { id: string; org_id: string }) => {
+      const last_edited_at = new Date().toISOString();
+      if (isSupabaseConfigured) {
+        try {
+          const { error } = await supabase
+            .from("goals")
+            .update({ is_deleted: true, last_edited_at })
+            .eq("id", id);
+          if (error) throw error;
+        } catch (dbErr: any) {
+          if (
+            dbErr.code === "PGRST204" ||
+            dbErr.message?.includes("is_deleted") ||
+            dbErr.message?.includes("last_edited_at")
+          ) {
+            const { error } = await supabase
+              .from("goals")
+              .delete()
+              .eq("id", id);
+            if (error) throw error;
+          } else {
+            throw dbErr;
+          }
+        }
+        return { id, org_id };
+      }
+      await delay();
+      const goals = MockDB.getGoals();
+      const idx = goals.findIndex((g) => g.id === id);
+      if (idx !== -1) {
+        goals[idx] = { ...goals[idx], is_deleted: true, last_edited_at };
+        MockDB.saveGoals(goals);
+      }
+      return { id, org_id };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["goals", data.org_id] });
+    },
+  });
+}
+
+// ==========================================
+// 8. GRANTS HOOKS
+// ==========================================
+export function useGrants(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["grants", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      let sbGrants: Grant[] = [];
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("grants")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("deadline", { ascending: true });
+          if (!error && data) {
+            sbGrants = data as Grant[];
+          }
+        } catch (err) {
+          console.warn("Supabase fetch grants error:", err);
+        }
+      }
+
+      const localGrants = MockDB.getGrants().filter((g) => g.org_id === orgId);
+      const grantMap = new Map<string, Grant>();
+      localGrants.forEach((g) => grantMap.set(g.id, g));
+      sbGrants.forEach((g) => grantMap.set(g.id, g));
+
+      const unsyncedGrants = localGrants.filter((g) => !sbGrants.some((s) => s.id === g.id));
+      if (isSupabaseConfigured && unsyncedGrants.length > 0) {
+        try {
+          await supabase.from("grants").upsert(unsyncedGrants);
+        } catch (syncErr) {
+          console.warn("[Grants Supabase Sync] Failed to sync local grants:", syncErr);
+        }
+      }
+
+      return Array.from(grantMap.values());
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useCreateGrant() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Omit<Grant, "id">) => {
+      const newGrant: Grant = {
+        ...payload,
+        id: "grant-" + Math.random().toString(36).substr(2, 9),
+      };
+
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("grants")
+            .insert(payload)
+            .select();
+          if (error) {
+            console.warn("Supabase insert grant warning, using local fallback:", error);
+          } else if (data && data.length > 0) {
+            newGrant.id = data[0].id;
+          }
+        } catch (dbErr) {
+          console.warn("Supabase insert grant error, fallback to local:", dbErr);
+        }
+      }
+
+      const grants = MockDB.getGrants();
+      grants.push(newGrant);
+      MockDB.saveGrants(grants);
+
+      return newGrant;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["grants", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["grants"] });
+    },
+  });
+}
+
+export function useUpdateGrantStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      grantId,
+      status,
+      orgId,
+    }: {
+      grantId: string;
+      status: Grant["status"];
+      orgId: string;
+    }) => {
+      if (isSupabaseConfigured) {
+        try {
+          const { error } = await supabase
+            .from("grants")
+            .update({ status })
+            .eq("id", grantId);
+          if (error) console.warn("Supabase update grant error:", error);
+        } catch (err) {
+          console.warn("Supabase update grant error fallback:", err);
+        }
+      }
+      const grants = MockDB.getGrants();
+      const idx = grants.findIndex((g) => g.id === grantId);
+      if (idx !== -1) {
+        grants[idx].status = status;
+        MockDB.saveGrants(grants);
+      } else if (!isSupabaseConfigured) {
+        await delay();
+      }
+
+      return { grantId, status, orgId };
+    },
+    onSuccess: (res, variables) => {
+      const targetOrg = res?.orgId || variables.orgId;
+      queryClient.invalidateQueries({ queryKey: ["grants", targetOrg] });
+      queryClient.invalidateQueries({ queryKey: ["grants"] });
+    },
+  });
+}
+
+// ==========================================
+// 9. BOOKKEEPING LEDGER HOOKS
+// ==========================================
+export function useLedgerEntries(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["ledger", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        let sbLedger: LedgerEntry[] = [];
+        try {
+          const { data, error } = await supabase
+            .from("ledger_entries")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("date", { ascending: false });
+          if (!error && data) {
+            sbLedger = data as LedgerEntry[];
+          }
+        } catch (dbErr) {
+          console.warn("Supabase fetch ledger error:", dbErr);
+        }
+
+        const localLedger = MockDB.getLedger().filter((l) => l.org_id === orgId);
+        const resultMap = new Map<string, LedgerEntry>();
+        localLedger.forEach((l) => resultMap.set(l.id, l));
+        sbLedger.forEach((l) => resultMap.set(l.id, l));
+
+        const unsynced = localLedger.filter((l) => !sbLedger.some((s) => s.id === l.id));
+        if (unsynced.length > 0) {
+          try {
+            await supabase.from("ledger_entries").upsert(unsynced);
+          } catch (syncErr) {
+            console.warn("[Ledger Supabase Sync] Failed to sync local ledger:", syncErr);
+          }
+        }
+        return Array.from(resultMap.values());
+      }
+      await delay();
+      return MockDB.getLedger().filter((l) => l.org_id === orgId);
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useCreateLedgerEntry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Omit<LedgerEntry, "id">) => {
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("ledger_entries")
+            .insert(payload)
+            .select()
+            .single();
+          if (error) throw error;
+          return data as LedgerEntry;
+        } catch (dbErr) {
+          console.warn("Supabase ledger_entries insert failed or RLS blocked, falling back to local entry:", dbErr);
+        }
+      }
+      await delay();
+      const ledger = MockDB.getLedger();
+      const newEntry: LedgerEntry = {
+        ...payload,
+        id: "led-" + Math.random().toString(36).substr(2, 9),
+      };
+      ledger.push(newEntry);
+      MockDB.saveLedger(ledger);
+      return newEntry;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["ledger", data.org_id] });
+    },
+  });
+}
+
+export function useUpdateLedgerEntry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Partial<LedgerEntry> & { id: string; org_id: string }) => {
+      const { id, org_id, ...updates } = payload;
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("ledger_entries")
+            .update(updates)
+            .eq("id", id)
+            .select()
+            .single();
+          if (error) throw error;
+          return data as LedgerEntry;
+        } catch (dbErr) {
+          console.warn("Supabase ledger update failed, falling back to local:", dbErr);
+        }
+      }
+      await delay();
+      const ledger = MockDB.getLedger();
+      const idx = ledger.findIndex((l) => l.id === id);
+      if (idx !== -1) {
+        ledger[idx] = { ...ledger[idx], ...updates };
+        MockDB.saveLedger(ledger);
+        return ledger[idx];
+      }
+      return { id, org_id, ...updates } as LedgerEntry;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["ledger", data.org_id] });
+    },
+  });
+}
+
+export function useDeleteLedgerEntry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, org_id }: { id: string; org_id: string }) => {
+      if (isSupabaseConfigured) {
+        try {
+          const { error } = await supabase
+            .from("ledger_entries")
+            .delete()
+            .eq("id", id);
+          if (error) throw error;
+        } catch (dbErr) {
+          console.warn("Supabase ledger delete failed, falling back to local:", dbErr);
+        }
+      }
+      await delay();
+      const ledger = MockDB.getLedger();
+      const updated = ledger.filter((l) => l.id !== id);
+      MockDB.saveLedger(updated);
+      return { id, org_id };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["ledger", data.org_id] });
+    },
+  });
+}
+
+// ==========================================
+// 10. DONATIONS PORTAL HOOKS
+// ==========================================
+export function useDonations(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["donations", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      let sbDonations: Donation[] = [];
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("donations")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("created_at", { ascending: false });
+          if (!error && data) {
+            sbDonations = data as Donation[];
+          }
+        } catch (err) {
+          console.warn("Supabase fetch donations error:", err);
+        }
+      }
+
+      const localDonations = MockDB.getDonations().filter((d) => d.org_id === orgId);
+      const donMap = new Map<string, Donation>();
+      localDonations.forEach((d) => donMap.set(d.id, d));
+      sbDonations.forEach((d) => donMap.set(d.id, d));
+
+      const unsyncedDonations = localDonations.filter((d) => !sbDonations.some((s) => s.id === d.id));
+      if (isSupabaseConfigured && unsyncedDonations.length > 0) {
+        try {
+          await supabase.from("donations").upsert(unsyncedDonations);
+        } catch (syncErr) {
+          console.warn("[Donations Supabase Sync] Failed to sync local donations:", syncErr);
+        }
+      }
+
+      return Array.from(donMap.values());
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useConfirmDonation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      donationId,
+      status,
+      orgId,
+    }: {
+      donationId: string;
+      status: "confirmed" | "rejected";
+      orgId: string;
+    }) => {
+      const localDonations = MockDB.getDonations();
+      const localIdx = localDonations.findIndex((d) => d.id === donationId);
+      let amount = localIdx !== -1 ? localDonations[localIdx].amount : 0;
+      let donorName = localIdx !== -1 ? localDonations[localIdx].donor_name : "Anonymous";
+
+      if (isSupabaseConfigured) {
+        try {
+          // Fetch existing donation record first so we are 100% sure we have amount and donor_name
+          const { data: fetchDonation } = await supabase
+            .from("donations")
+            .select("*")
+            .eq("id", donationId)
+            .maybeSingle();
+
+          if (fetchDonation) {
+            amount = Number(fetchDonation.amount || amount || 0);
+            donorName = fetchDonation.donor_name || donorName;
+          }
+
+          const { data, error } = await supabase
+            .from("donations")
+            .update({ status })
+            .eq("id", donationId)
+            .select();
+
+          if (error) console.warn("Supabase update donation error:", error);
+
+          if (data && data.length > 0) {
+            amount = Number(data[0].amount || amount || 0);
+            donorName = data[0].donor_name || donorName;
+          }
+
+          // If approved, log as ledger record automatically with actual amount!
+          if (status === "confirmed") {
+            const { error: ledgerErr } = await supabase.from("ledger_entries").insert({
+              org_id: orgId,
+              type: "income",
+              amount: amount,
+              currency: "RWF",
+              category: "donation",
+              description: `Donation by ${donorName} via MoMo`,
+              date: new Date().toISOString().split("T")[0],
+              reference: `DON-${donationId.slice(0, 8)}`,
+            });
+            if (ledgerErr) console.warn("Supabase ledger entry error:", ledgerErr);
+          }
+        } catch (dbErr) {
+          console.warn("Supabase confirm donation fallback to local DB:", dbErr);
+        }
+      }
+
+      // Sync local MockDB so both local state & Supabase stay perfectly matched
+      if (localIdx !== -1) {
+        localDonations[localIdx].status = status;
+        MockDB.saveDonations(localDonations);
+
+        if (status === "confirmed") {
+          const ledger = MockDB.getLedger();
+          const alreadyExists = ledger.some(
+            (l) => l.reference === `DON-${donationId.slice(0, 8)}` || l.reference === `DON-${donationId.slice(0, 4)}`
+          );
+          if (!alreadyExists) {
+            ledger.push({
+              id: "led-" + Math.random().toString(36).substr(2, 9),
+              org_id: orgId,
+              type: "income",
+              amount: amount || localDonations[localIdx].amount || 0,
+              currency: "RWF",
+              category: "donation",
+              description: `Donation by ${donorName} (#${donationId.slice(0, 4)})`,
+              date: new Date().toISOString().split("T")[0],
+              reference: `DON-${donationId.slice(0, 8)}`,
+            });
+            MockDB.saveLedger(ledger);
+          }
+        }
+      } else if (!isSupabaseConfigured) {
+        await delay();
+      }
+
+      return { donationId, status, orgId };
+    },
+    onSuccess: (res, variables) => {
+      const targetOrg = res?.orgId || variables.orgId;
+      queryClient.invalidateQueries({ queryKey: ["donations", targetOrg] });
+      queryClient.invalidateQueries({ queryKey: ["donations"] });
+      queryClient.invalidateQueries({ queryKey: ["ledger", targetOrg] });
+      queryClient.invalidateQueries({ queryKey: ["ledger"] });
+    },
+  });
+}
+
+export function useCreateDonation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      payload: Omit<Donation, "id" | "status" | "created_at">,
+    ) => {
+      const newDon: Donation = {
+        ...payload,
+        id: "don-" + Math.random().toString(36).substr(2, 9),
+        status: "awaiting_approval",
+        created_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("donations")
+            .insert({
+              ...payload,
+              status: "awaiting_approval",
+              created_at: newDon.created_at,
+            })
+            .select();
+          if (error) {
+            console.warn("Supabase insert donation error, using local fallback:", error);
+          } else if (data && data.length > 0) {
+            newDon.id = data[0].id;
+          }
+        } catch (dbErr) {
+          console.warn("Supabase insert donation error, fallback to local:", dbErr);
+        }
+      }
+
+      const donations = MockDB.getDonations();
+      donations.push(newDon);
+      MockDB.saveDonations(donations);
+
+      return newDon;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["donations", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["donations"] });
+    },
+  });
+}
+
+// ==========================================
+// 11. ERROR REPORTING HOOKS
+// ==========================================
+export function useErrorReports(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["errors", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("error_reports")
+          .select("*")
+          .eq("org_id", orgId)
+          .order("created_at", { ascending: false })
+          .limit(100);
+        if (error) throw error;
+        return data as ErrorReport[];
+      }
+      await delay();
+      return MockDB.getErrors().filter((e) => e.org_id === orgId);
+    },
+    enabled: !!orgId,
+    refetchInterval: 5000,
+  });
+}
+
+export function useSubmitErrorReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      payload: Omit<ErrorReport, "id" | "status" | "created_at">,
+    ) => {
+      const newErr: ErrorReport = {
+        ...payload,
+        id: "err-" + Math.random().toString(36).substr(2, 9),
+        status: "open",
+        created_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("error_reports")
+            .insert({
+              ...payload,
+              status: "open",
+              created_at: newErr.created_at,
+            })
+            .select();
+          if (error) {
+            console.warn("Supabase insert error report warning:", error);
+          } else if (data && data.length > 0) {
+            newErr.id = data[0].id;
+          }
+        } catch (dbErr) {
+          console.warn("Supabase insert error report error:", dbErr);
+        }
+      }
+
+      const errors = MockDB.getErrors();
+      errors.push(newErr);
+      MockDB.saveErrors(errors);
+
+      return newErr;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["platform-data"] });
+      queryClient.invalidateQueries({ queryKey: ["errors"] });
+      queryClient.invalidateQueries({ queryKey: ["errors", data.org_id] });
+    },
+  });
+}
+
+export function useResolveErrorReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("error_reports")
+          .update({ status: "resolved" })
+          .eq("id", id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data as ErrorReport;
+      }
+      await delay();
+      const errors = MockDB.getErrors();
+      const idx = errors.findIndex((e) => e.id === id);
+      if (idx !== -1) {
+        errors[idx].status = "resolved";
+        MockDB.saveErrors(errors);
+        return errors[idx];
+      }
+      throw new Error("Report not found");
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["errors", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+    },
+  });
+}
+
+export function useUpdateErrorReportAdminNotes() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      adminNotes,
+    }: {
+      id: string;
+      adminNotes: string;
+    }) => {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("error_reports")
+          .update({ admin_notes: adminNotes })
+          .eq("id", id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data as ErrorReport;
+      }
+      await delay();
+      const errors = MockDB.getErrors();
+      const idx = errors.findIndex((e) => e.id === id);
+      if (idx !== -1) {
+        errors[idx].admin_notes = adminNotes;
+        MockDB.saveErrors(errors);
+        return errors[idx];
+      }
+      throw new Error("Report not found");
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["errors", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+    },
+  });
+}
+
+// ==========================================
+// 12. SUPERADMIN PORTAL DATA HOOK
+// ==========================================
+export function usePlatformAdminData() {
+  return useQuery({
+    queryKey: ["platform_admin_data"],
+    queryFn: async () => {
+      if (isSupabaseConfigured) {
+        const { data: orgs } = await supabase.from("organizations").select("*");
+        const { data: payments } = await supabase
+          .from("subscription_payments")
+          .select("*")
+          .order("submitted_at", { ascending: false })
+          .limit(100);
+        const { data: errors } = await supabase
+          .from("error_reports")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(100);
+        const { data: settingsData } = await supabase
+          .from("platform_settings")
+          .select("*")
+          .eq("id", "global")
+          .maybeSingle();
+        const { count: usersCount } = await supabase.from("users").select("*", { count: "exact", head: true });
+        const { count: membersCount } = await supabase.from("org_members").select("*", { count: "exact", head: true });
+
+        const defaultSettings = MockDB.getPlatformSettings();
+        const enrichedOrgs = (orgs || []).map((org) => {
+          return {
+            ...org,
+            subscription_tier: org.subscription_tier || "trial",
+          };
+        });
+        const enrichedPayments = (payments || []).map((p: any) => {
+          return {
+            ...p,
+            validated_at: p.validated_at || null,
+          };
+        });
+        return {
+          orgs: enrichedOrgs as Organization[],
+          payments: enrichedPayments as SubscriptionPayment[],
+          errors: (errors || []) as ErrorReport[],
+          settings: settingsData || defaultSettings,
+          totalUsers: usersCount || MockDB.getUsers().length,
+          totalMembers: membersCount || MockDB.getMembers().length,
+        };
+      }
+      await delay();
+      return {
+        orgs: MockDB.getOrgs(),
+        payments: MockDB.getSubPayments(),
+        errors: MockDB.getErrors(),
+        settings: MockDB.getPlatformSettings(),
+        totalUsers: MockDB.getUsers().length,
+        totalMembers: MockDB.getMembers().length,
+      };
+    },
+  });
+}
+
+export function useApproveSubscription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      paymentId,
+      orgId,
+      status,
+      tier = "growth",
+    }: {
+      paymentId: string;
+      orgId: string;
+      status: "approved" | "rejected";
+      tier?: "starter" | "growth" | "enterprise";
+    }) => {
+      if (isSupabaseConfigured) {
+        const validatedAt = new Date().toISOString();
+        let resData: any;
+        try {
+          const { data, error } = await supabase
+            .from("subscription_payments")
+            .update({ status, validated_at: validatedAt } as any)
+            .eq("id", paymentId)
+            .select()
+            .single();
+          if (error) throw error;
+          resData = data;
+        } catch (dbErr: any) {
+          console.warn("Supabase sub payment validated_at failed. Fallback without validated_at.", dbErr);
+          const { data, error } = await supabase
+            .from("subscription_payments")
+            .update({ status })
+            .eq("id", paymentId)
+            .select()
+            .single();
+          if (error) throw error;
+          resData = data;
+          localStorage.setItem(`impacto_sub_payment_validated_at_${paymentId}`, validatedAt);
+        }
+
+        if (status === "approved") {
+          // extend subscription ends at
+          const nextExpiry = new Date();
+          nextExpiry.setDate(nextExpiry.getDate() + 30);
+          try {
+            await supabase
+              .from("organizations")
+              .update({
+                subscription_status: "active",
+                subscription_ends_at: nextExpiry.toISOString(),
+                subscription_tier: tier,
+              } as any)
+              .eq("id", orgId);
+          } catch (orgErr: any) {
+            console.warn("Extending sub fails with tier, trying without tier.", orgErr);
+            localStorage.setItem(`impacto_org_subscription_tier_${orgId}`, tier);
+            await supabase
+              .from("organizations")
+              .update({
+                subscription_status: "active",
+                subscription_ends_at: nextExpiry.toISOString(),
+              })
+              .eq("id", orgId);
+          }
+        }
+        return { data: resData, orgId, tier };
+      }
+      await delay();
+      const pays = MockDB.getSubPayments();
+      const idx = pays.findIndex((p) => p.id === paymentId);
+      if (idx !== -1) {
+        const validatedAt = new Date().toISOString();
+        pays[idx].status = status;
+        pays[idx].validated_at = validatedAt;
+        MockDB.saveSubPayments(pays);
+
+        if (status === "approved") {
+          const orgs = MockDB.getOrgs();
+          const oIdx = orgs.findIndex((o) => o.id === orgId);
+          if (oIdx !== -1) {
+            const nextExpiry = new Date();
+            nextExpiry.setDate(nextExpiry.getDate() + 30);
+            orgs[oIdx].subscription_status = "active";
+            orgs[oIdx].subscription_ends_at = nextExpiry.toISOString();
+            orgs[oIdx].subscription_tier = tier;
+            MockDB.saveOrgs(orgs);
+          }
+        }
+      }
+      return { paymentId, orgId, tier };
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
+
+      const store = useOrgStore.getState();
+      if (store.activeOrg && store.activeOrg.id === variables.orgId) {
+        const nextExpiry = new Date();
+        nextExpiry.setDate(nextExpiry.getDate() + 30);
+        store.setActiveOrg(
+          {
+            ...store.activeOrg,
+            subscription_status:
+              variables.status === "approved"
+                ? "active"
+                : store.activeOrg.subscription_status,
+            subscription_ends_at:
+              variables.status === "approved"
+                ? nextExpiry.toISOString()
+                : store.activeOrg.subscription_ends_at,
+          },
+          store.activeMember,
+        );
+      }
+    },
+  });
+}
+
+export function useSubmitSubscriptionPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      payload: Omit<SubscriptionPayment, "id" | "status" | "submitted_at">,
+    ) => {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("subscription_payments")
+          .insert({
+            ...payload,
+            status: "awaiting_approval",
+            submitted_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        return data as SubscriptionPayment;
+      }
+      await delay();
+      const pays = MockDB.getSubPayments();
+      const newPay: SubscriptionPayment = {
+        ...payload,
+        id: "sub-pay-" + Math.random().toString(36).substr(2, 9),
+        status: "awaiting_approval",
+        submitted_at: new Date().toISOString(),
+      };
+      pays.push(newPay);
+      MockDB.saveSubPayments(pays);
+      return newPay;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+    },
+  });
+}
+
+export function useUpdatePlatformSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: PlatformSettings) => {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("platform_settings")
+          .upsert({ id: "global", ...payload })
+          .select()
+          .single();
+        if (error) throw error;
+        return data as PlatformSettings;
+      }
+      await delay();
+      MockDB.savePlatformSettings(payload);
+      return payload;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+    },
+  });
+}
+
+// ==========================================
+// V2 ADDONS REACT-QUERY HOOKS
+// ==========================================
+
+// 1. Audit Logging helper inside Hook level to log actions cleanly
+export function useCreateAuditLog() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Omit<AuditLog, "id" | "created_at">) => {
+      const newLog: AuditLog = {
+        id: "audit-" + Math.random().toString(36).substring(2, 11),
+        created_at: new Date().toISOString(),
+        ...payload,
+      };
+
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("audit_logs")
+            .insert(newLog)
+            .select()
+            .single();
+          if (!error && data) {
+            return data as AuditLog;
+          }
+        } catch (dbErr) {
+          console.warn("[Audit] Direct insert notice, attempting server API dispatch:", dbErr);
+        }
+
+        // Server API fallback
+        try {
+          const resp = await fetch("/api/audit-logs/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newLog),
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            return data.log as AuditLog;
+          }
+        } catch (apiErr) {
+          console.warn("[Audit API] Write error:", apiErr);
+        }
+      }
+
+      await delay(50);
+      const logs = MockDB.getAuditLogs();
+      logs.unshift(newLog);
+      MockDB.saveAuditLogs(logs);
+      return newLog;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["audit_logs", variables.org_id],
+      });
+    },
+  });
+}
+
+export function useAuditLogs(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["audit_logs", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("audit_logs")
+          .select("*")
+          .eq("org_id", orgId)
+          .order("created_at", { ascending: false })
+          .limit(100);
+        if (error) throw error;
+        return data as AuditLog[];
+      }
+      await delay(150);
+      return MockDB.getAuditLogs().filter((l) => l.org_id === orgId);
+    },
+    enabled: !!orgId,
+  });
+}
+
+// 2. Chat V2 Poll Hooks
+export function usePollMessages(channelId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!channelId || !isSupabaseConfigured) return;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      const channelName = `polls_rt_${channelId}_${Math.random().toString(36).substring(2, 9)}`;
+      channel = supabase
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "polls", filter: `channel_id=eq.${channelId}` },
+          () => queryClient.invalidateQueries({ queryKey: ["polls", channelId] })
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn("[Realtime] Polls channel subscribe notice:", err);
+    }
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [channelId, queryClient]);
+
+  return useQuery({
+    queryKey: ["polls", channelId],
+    queryFn: async () => {
+      if (!channelId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("polls")
+          .select("*")
+          .eq("channel_id", channelId);
+        if (error) throw error;
+        return (data || []).map((item: any) => ({
+          ...item,
+          id: item.poll_id || item.id,
+        })) as PollMessage[];
+      }
+      return [];
+    },
+    enabled: !!channelId,
+  });
+}
+
+export function useCreatePoll() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      poll_id?: string;
+      message_id: string;
+      channel_id: string;
+      question: string;
+      options: string[];
+    }) => {
+      if (isSupabaseConfigured) {
+        const pId = payload.poll_id || "poll-" + Math.random().toString(36).substring(2, 9);
+        const { data, error } = await supabase
+          .from("polls")
+          .insert({
+            poll_id: pId,
+            message_id: payload.message_id,
+            channel_id: payload.channel_id,
+            question: payload.question,
+            options: payload.options
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        return {
+          ...data,
+          id: data.poll_id || data.id,
+        } as PollMessage;
+      }
+      return {} as PollMessage;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["polls", variables.channel_id] });
+    },
+  });
+}
+
+export function useVoteInPoll() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      poll_id: string;
+      user_id: string;
+      option_index: number;
+      retract?: boolean;
+    }) => {
+      if (isSupabaseConfigured) {
+        if (payload.retract) {
+          const { error } = await supabase
+            .from("poll_votes")
+            .delete()
+            .eq("poll_id", payload.poll_id)
+            .eq("user_id", payload.user_id);
+          if (error) throw error;
+          return { poll_id: payload.poll_id, user_id: payload.user_id, retracted: true } as any;
+        } else {
+          const { data: existing } = await supabase
+            .from("poll_votes")
+            .select("id")
+            .eq("poll_id", payload.poll_id)
+            .eq("user_id", payload.user_id)
+            .maybeSingle();
+
+          if (existing) {
+            const { data, error } = await supabase
+              .from("poll_votes")
+              .update({ option_index: payload.option_index })
+              .eq("poll_id", payload.poll_id)
+              .eq("user_id", payload.user_id)
+              .select()
+              .single();
+            if (error) throw error;
+            return data as PollVote;
+          } else {
+            const voteId = "vote-" + Math.random().toString(36).substring(2, 9);
+            const { data, error } = await supabase
+              .from("poll_votes")
+              .insert({
+                id: voteId,
+                poll_id: payload.poll_id,
+                user_id: payload.user_id,
+                option_index: payload.option_index
+              })
+              .select()
+              .single();
+            if (error) throw error;
+            return data as PollVote;
+          }
+        }
+      }
+      return {} as PollVote;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["poll_votes", variables.poll_id] });
+      queryClient.invalidateQueries({ queryKey: ["all_poll_votes"] });
+    },
+  });
+}
+
+export function usePollResponses(pollId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!pollId || !isSupabaseConfigured) return;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      const channelName = `poll_votes_rt_${pollId}_${Math.random().toString(36).substring(2, 9)}`;
+      channel = supabase
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "poll_votes", filter: `poll_id=eq.${pollId}` },
+          () => queryClient.invalidateQueries({ queryKey: ["poll_votes", pollId] })
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn("[Realtime] Poll votes channel subscribe notice:", err);
+    }
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [pollId, queryClient]);
+
+  return useQuery({
+    queryKey: ["poll_votes", pollId],
+    queryFn: async () => {
+      if (!pollId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("poll_votes")
+          .select("*")
+          .eq("poll_id", pollId);
+        if (error) throw error;
+        return data as PollVote[];
+      }
+      return [];
+    },
+    enabled: !!pollId,
+    refetchInterval: 2000, // Instant live poll updates fallback
+  });
+}
+
+export function useAllPollResponses() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      const channelName = `all_poll_votes_rt_${Math.random().toString(36).substring(2, 9)}`;
+      channel = supabase
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "poll_votes" },
+          () => queryClient.invalidateQueries({ queryKey: ["all_poll_votes"] })
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn("[Realtime] All poll votes subscribe notice:", err);
+    }
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [queryClient]);
+
+  return useQuery({
+    queryKey: ["all_poll_votes"],
+    queryFn: async () => {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("poll_votes")
+          .select("*");
+        if (error) throw error;
+        return data as PollVote[];
+      }
+      return [];
+    },
+    refetchInterval: 2000, // Instant live poll updates fallback
+  });
+}
+
+// 3. Activity Tracking beyond meetings
+export function useActivityLogs(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["activity_logs", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("activity_logs")
+          .select("*")
+          .eq("org_id", orgId)
+          .order("activity_date", { ascending: false })
+          .limit(100);
+        if (error) throw error;
+        return data as ActivityLog[];
+      }
+      await delay(200);
+      return MockDB.getActivityLogs().filter((l) => l.org_id === orgId);
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useActivityAttendance(activityId: string | undefined) {
+  return useQuery({
+    queryKey: ["activity_attendance", activityId],
+    queryFn: async () => {
+      if (!activityId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("activity_attendance")
+          .select("*")
+          .eq("activity_id", activityId);
+        if (error) throw error;
+        return data as ActivityAttendance[];
+      }
+      await delay(100);
+      return MockDB.getActivityAttendance().filter(
+        (a) => a.activity_id === activityId,
+      );
+    },
+    enabled: !!activityId,
+  });
+}
+
+export function useSubmitActivityLog() {
+  const queryClient = useQueryClient();
+  const auditMutation = useCreateAuditLog();
+  return useMutation({
+    mutationFn: async (payload: {
+      org_id: string;
+      title: string;
+      description?: string;
+      location?: string;
+      activity_type?: string;
+      target_metric?: string;
+      present_member_ids?: string[];
+      absent_member_ids?: string[];
+      activity_date: string;
+      created_by: string;
+      attendees: string[]; // member ids
+    }) => {
+      const activityId = "act-" + Math.random().toString(36).substring(2, 9);
+      const newActivity: ActivityLog = {
+        id: activityId,
+        org_id: payload.org_id,
+        title: payload.title,
+        description: payload.description,
+        location: payload.location,
+        activity_type: payload.activity_type,
+        target_metric: payload.target_metric,
+        present_member_ids: payload.present_member_ids || payload.attendees,
+        absent_member_ids: payload.absent_member_ids || [],
+        attendees: payload.attendees,
+        activity_date: payload.activity_date,
+        created_by: payload.created_by,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured) {
+        try {
+          const { data: actData, error: actErr } = await supabase
+            .from("activity_logs")
+            .insert({
+              org_id: payload.org_id,
+              title: payload.title,
+              description: payload.description,
+              location: payload.location,
+              activity_date: payload.activity_date,
+              created_by: payload.created_by,
+            })
+            .select()
+            .single();
+          if (actErr) throw actErr;
+
+          if (payload.attendees.length > 0) {
+            const rows = payload.attendees.map((mId) => ({
+              activity_id: actData.id,
+              member_id: mId,
+              recorded_by: payload.created_by,
+            }));
+            const { error: attErr } = await supabase
+              .from("activity_attendance")
+              .insert(rows);
+            if (attErr) console.warn("Supabase activity_attendance warning:", attErr);
+          }
+          return {
+            ...actData,
+            activity_type: payload.activity_type,
+            target_metric: payload.target_metric,
+            present_member_ids: payload.present_member_ids || payload.attendees,
+            absent_member_ids: payload.absent_member_ids || [],
+          } as ActivityLog;
+        } catch (dbErr) {
+          console.warn("Supabase activity_logs insert warning, saving locally:", dbErr);
+        }
+      }
+
+      await delay(300);
+      const logs = MockDB.getActivityLogs();
+      logs.unshift(newActivity);
+      MockDB.saveActivityLogs(logs);
+
+      if (payload.attendees.length > 0) {
+        const attLogs = MockDB.getActivityAttendance();
+        payload.attendees.forEach((mId) => {
+          attLogs.push({
+            id: "att-" + Math.random().toString(36).substring(2, 9),
+            activity_id: activityId,
+            member_id: mId,
+            recorded_by: payload.created_by,
+            created_at: new Date().toISOString(),
+          });
+        });
+        MockDB.saveActivityAttendance(attLogs);
+      }
+
+      // Record Audit trail
+      await auditMutation.mutateAsync({
+        org_id: payload.org_id,
+        performed_by: payload.created_by,
+        action: "record_activity",
+        action_label: `Logged Activity Outreach: ${payload.title}`,
+        target_table: "activity_logs",
+        target_id: activityId,
+        target_label: payload.title,
+      });
+
+      return newActivity;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["activity_logs", data.org_id],
+      });
+    },
+  });
+}
+
+// 4. Message Templates System
+export function useMessageTemplates(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["msg_templates", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("message_templates")
+          .select("*")
+          .eq("org_id", orgId);
+        if (error) throw error;
+        return data as MessageTemplate[];
+      }
+      await delay(100);
+      return MockDB.getMessageTemplates().filter((t) => t.org_id === orgId);
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useSubmitMessageTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      payload: Partial<MessageTemplate> & {
+        org_id: string;
+        created_by: string;
+      },
+    ) => {
+      const templateId =
+        payload.id || "tmp-" + Math.random().toString(36).substring(2, 9);
+      const newTemplate: MessageTemplate = {
+        id: templateId,
+        org_id: payload.org_id,
+        name: payload.name || "Untitled Template",
+        occasion: payload.occasion || "General",
+        subject: payload.subject || "",
+        body: payload.body || "",
+        variables: payload.variables || [],
+        is_system_template: false,
+        created_by: payload.created_by,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("message_templates")
+          .upsert(newTemplate)
+          .select()
+          .single();
+        if (error) throw error;
+        return data as MessageTemplate;
+      }
+      await delay(200);
+      const list = MockDB.getMessageTemplates();
+      const idx = list.findIndex((t) => t.id === payload.id);
+      if (idx !== -1) {
+        list[idx] = {
+          ...list[idx],
+          ...payload,
+          updated_at: new Date().toISOString(),
+        };
+      } else {
+        list.push(newTemplate);
+      }
+      MockDB.saveMessageTemplates(list);
+      return newTemplate;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["msg_templates", data.org_id],
+      });
+    },
+  });
+}
+
+export function useDeleteMessageTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { id: string; org_id: string }) => {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase
+          .from("message_templates")
+          .delete()
+          .eq("id", payload.id);
+        if (error) throw error;
+        return payload.id;
+      }
+      await delay(100);
+      const list = MockDB.getMessageTemplates().filter(
+        (t) => t.id !== payload.id,
+      );
+      MockDB.saveMessageTemplates(list);
+      return payload.id;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["msg_templates", variables.org_id],
+      });
+    },
+  });
+}
+
+export function useBroadcastNotification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      org_id: string;
+      sent_by: string;
+      recipient_group: string;
+      recipient_count: number;
+      body_text: string;
+      activity_id?: string;
+      event_id?: string;
+      meeting_id?: string;
+    }) => {
+      const newSend: NotificationSend = {
+        id: "snd-" + Math.random().toString(36).substring(2, 9),
+        org_id: payload.org_id,
+        sent_by: payload.sent_by,
+        recipient_group: payload.recipient_group,
+        recipient_count: payload.recipient_count,
+        body_text: payload.body_text,
+        activity_id: payload.activity_id,
+        event_id: payload.event_id,
+        meeting_id: payload.meeting_id,
+        created_at: new Date().toISOString(),
+      };
+      if (isSupabaseConfigured) {
+        try {
+          const validSentBy = payload.sent_by && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.sent_by) ? payload.sent_by : null;
+          const { data, error } = await supabase
+            .from("notification_sends")
+            .insert({
+              id: newSend.id,
+              org_id: newSend.org_id,
+              sent_by: validSentBy,
+              variables_applied: {
+                recipient_group: payload.recipient_group,
+                recipient_count: payload.recipient_count,
+                body_text: payload.body_text,
+                activity_id: payload.activity_id,
+                event_id: payload.event_id,
+                meeting_id: payload.meeting_id
+              }
+            })
+            .select()
+            .single();
+          if (!error && data) {
+            return {
+              ...newSend,
+              ...data,
+              body_text: payload.body_text
+            } as NotificationSend;
+          }
+        } catch (e) {
+          console.warn("[Broadcast Notification] Remote insert notice error, falling back to local storage:", e);
+        }
+      }
+      await delay(150);
+      const sends = MockDB.getNotificationSends();
+      sends.unshift(newSend);
+      MockDB.saveNotificationSends(sends);
+      return newSend;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["notification_sends", data.org_id],
+      });
+    },
+  });
+}
+
+export function useNotificationSends(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["notification_sends", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("notification_sends")
+            .select("*")
+            .eq("org_id", orgId);
+          if (!error && data) {
+            const mapped = data.map((d: any) => ({
+              id: d.id,
+              org_id: d.org_id,
+              template_id: d.template_id,
+              sent_by: d.sent_by,
+              recipient_group: d.variables_applied?.recipient_group || d.recipient_group || "all",
+              recipient_count: d.variables_applied?.recipient_count || d.recipient_count || 1,
+              body_text: d.variables_applied?.body_text || d.body_text || "Notification dispatched",
+              created_at: d.created_at || d.sent_at || new Date().toISOString(),
+            }));
+            
+            const localSends = MockDB.getNotificationSends().filter((s: any) => s.org_id === orgId);
+            const map = new Map<string, any>();
+            mapped.forEach((m: any) => map.set(m.id, m));
+            localSends.forEach((l: any) => {
+              if (!map.has(l.id)) {
+                map.set(l.id, l);
+              }
+            });
+            return Array.from(map.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) as NotificationSend[];
+          }
+        } catch (e) {
+          console.warn("[Notification Sends] Remote fetch error, falling back to local storage:", e);
+        }
+      }
+      await delay(100);
+      return MockDB.getNotificationSends().filter((s: any) => s.org_id === orgId) as NotificationSend[];
+    },
+    enabled: !!orgId,
+  });
+}
+
+// 5. Event RSVP and Waitlist
+export function useEventRSVPs(eventId: string | undefined) {
+  return useQuery({
+    queryKey: ["event_v2_rsvps", eventId],
+    queryFn: async () => {
+      if (!eventId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("event_rsvps")
+          .select("*")
+          .eq("event_id", eventId);
+        if (error) throw error;
+        return data as EventRSVP[];
+      }
+      await delay(100);
+      return MockDB.getEventRSVPs().filter((r) => r.event_id === eventId);
+    },
+    enabled: !!eventId,
+  });
+}
+
+export function useSubmitRSVP() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      event_id: string;
+      member_id: string;
+      response: "yes" | "no" | "maybe";
+    }) => {
+      const newRSVP: EventRSVP = {
+        id: "rsvp-" + Math.random().toString(36).substring(2, 9),
+        event_id: payload.event_id,
+        member_id: payload.member_id,
+        response: payload.response,
+        responded_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("event_rsvps")
+          .upsert(newRSVP)
+          .select()
+          .single();
+        if (error) throw error;
+        return data as EventRSVP;
+      }
+      await delay(100);
+      const rsvps = MockDB.getEventRSVPs();
+      const existingIdx = rsvps.findIndex(
+        (r) =>
+          r.event_id === payload.event_id && r.member_id === payload.member_id,
+      );
+      if (existingIdx !== -1) {
+        rsvps[existingIdx] = {
+          ...rsvps[existingIdx],
+          response: payload.response,
+          updated_at: new Date().toISOString(),
+        };
+      } else {
+        rsvps.push(newRSVP);
+      }
+      MockDB.saveEventRSVPs(rsvps);
+      return newRSVP;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["event_v2_rsvps", data.event_id],
+      });
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+    },
+  });
+}
+
+export function useEventWaitlist(eventId: string | undefined) {
+  return useQuery({
+    queryKey: ["event_v2_waitlist", eventId],
+    queryFn: async () => {
+      if (!eventId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("event_waitlist")
+          .select("*")
+          .eq("event_id", eventId);
+        if (error) throw error;
+        return data as EventWaitlist[];
+      }
+      await delay(100);
+      return MockDB.getEventWaitlist().filter((w) => w.event_id === eventId);
+    },
+    enabled: !!eventId,
+  });
+}
+
+export function useJoinEventWaitlist() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { event_id: string; member_id: string }) => {
+      const newWait: EventWaitlist = {
+        id: "wait-" + Math.random().toString(36).substring(2, 9),
+        event_id: payload.event_id,
+        member_id: payload.member_id,
+        joined_at: new Date().toISOString(),
+      };
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("event_waitlist")
+          .upsert(newWait)
+          .select()
+          .single();
+        if (error) throw error;
+        return data as EventWaitlist;
+      }
+      await delay(100);
+      const waitlist = MockDB.getEventWaitlist();
+      const exists = waitlist.some(
+        (w) =>
+          w.event_id === payload.event_id && w.member_id === payload.member_id,
+      );
+      if (!exists) {
+        waitlist.push(newWait);
+        MockDB.saveEventWaitlist(waitlist);
+      }
+      return newWait;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["event_v2_waitlist", data.event_id],
+      });
+    },
+  });
+}
+
+// 6. Member Identity verification
+export function useIdentityVerifications(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["identity_verifications", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("identity_verifications")
+          .select("*")
+          .eq("org_id", orgId);
+        if (error) throw error;
+        return data as IdentityVerification[];
+      }
+      await delay(150);
+      return MockDB.getIdentityVerifications().filter((v) => v.org_id === orgId);
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useSubmitIdentityVerification() {
+  const queryClient = useQueryClient();
+  const auditMutation = useCreateAuditLog();
+  return useMutation({
+    mutationFn: async (payload: {
+      member_id: string;
+      org_id: string;
+      document_type: string;
+      document_url: string;
+      userId: string;
+    }) => {
+      const newVerify: IdentityVerification = {
+        id: "verify-" + Math.random().toString(36).substring(2, 9),
+        member_id: payload.member_id,
+        org_id: payload.org_id,
+        document_type: payload.document_type,
+        document_url: payload.document_url,
+        submitted_at: new Date().toISOString(),
+        status: "pending",
+      };
+
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("identity_verifications")
+          .insert(newVerify)
+          .select()
+          .single();
+        if (error) throw error;
+
+        // update member status pending document
+        await supabase
+          .from("org_members")
+          .update({ verification_status: "pending" })
+          .eq("id", payload.member_id);
+        return data as IdentityVerification;
+      }
+
+      await delay(200);
+      const list = MockDB.getIdentityVerifications();
+      list.push(newVerify);
+      MockDB.saveIdentityVerifications(list);
+
+      // Update mock member verification state
+      const members = MockDB.getMembers();
+      const idx = members.findIndex((m) => m.id === payload.member_id);
+      if (idx !== -1) {
+        members[idx].verification_status = "pending";
+        MockDB.saveMembers(members);
+      }
+
+      await auditMutation.mutateAsync({
+        org_id: payload.org_id,
+        performed_by: payload.userId,
+        action: "submit_id_document",
+        action_label: "Uploaded verification document photo",
+        target_table: "identity_verifications",
+        target_id: newVerify.id,
+        target_label: payload.document_type,
+      });
+
+      return newVerify;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["identity_verifications", data.org_id],
+      });
+      queryClient.invalidateQueries({ queryKey: ["members", data.org_id] });
+    },
+  });
+}
+
+export function useReviewIdentityVerification() {
+  const queryClient = useQueryClient();
+  const auditMutation = useCreateAuditLog();
+  return useMutation({
+    mutationFn: async (payload: {
+      id: string;
+      org_id: string;
+      member_id: string;
+      status: "approved" | "rejected";
+      reviewed_by: string;
+      review_notes?: string;
+    }) => {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("identity_verifications")
+          .update({
+            status: payload.status,
+            reviewed_at: new Date().toISOString(),
+            reviewed_by: payload.reviewed_by,
+            review_notes: payload.review_notes,
+          })
+          .eq("id", payload.id)
+          .select()
+          .single();
+        if (error) throw error;
+
+        await supabase
+          .from("org_members")
+          .update({
+            verification_status:
+              payload.status === "approved" ? "verified" : "rejected",
+          })
+          .eq("id", payload.member_id);
+        return data as IdentityVerification;
+      }
+
+      await delay(200);
+      const list = MockDB.getIdentityVerifications();
+      const vi = list.findIndex((v) => v.id === payload.id);
+      if (vi !== -1) {
+        list[vi] = {
+          ...list[vi],
+          status: payload.status,
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: payload.reviewed_by,
+          review_notes: payload.review_notes,
+        };
+        MockDB.saveIdentityVerifications(list);
+      }
+
+      const members = MockDB.getMembers();
+      const mi = members.findIndex((m) => m.id === payload.member_id);
+      if (mi !== -1) {
+        members[mi].verification_status =
+          payload.status === "approved" ? "verified" : "rejected";
+        MockDB.saveMembers(members);
+      }
+
+      await auditMutation.mutateAsync({
+        org_id: payload.org_id,
+        performed_by: payload.reviewed_by,
+        action: "review_id_document",
+        action_label: `Reviewed Identity verification document: ${payload.status.toUpperCase()}`,
+        target_table: "identity_verifications",
+        target_id: payload.id,
+        target_label: `Member verification review`,
+      });
+
+      return payload;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["identity_verifications", data.org_id],
+      });
+      queryClient.invalidateQueries({ queryKey: ["members", data.org_id] });
+    },
+  });
+}
+
+// 7. Secure Documents and Acknowledgements
+export function useV2Documents(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["v2_documents", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        let sbDocs: Document[] = [];
+        try {
+          const { data, error } = await supabase
+            .from("documents")
+            .select("*")
+            .eq("org_id", orgId);
+          if (!error && data) {
+            sbDocs = (data || []).map((doc: any) => ({
+              ...doc,
+              show_header: doc.file_url?.includes("show_header=false") ? false : true
+            })) as Document[];
+          }
+        } catch (dbErr) {
+          console.warn("Supabase fetch documents error:", dbErr);
+        }
+
+        const localDocs = MockDB.getDocuments().filter((d: any) => d.org_id === orgId) as Document[];
+        const resultMap = new Map<string, Document>();
+        localDocs.forEach((d) => resultMap.set(d.id, d));
+        sbDocs.forEach((d) => resultMap.set(d.id, d));
+
+        const unsynced = localDocs.filter((d) => !sbDocs.some((s) => s.id === d.id));
+        if (unsynced.length > 0) {
+          try {
+            await supabase.from("documents").upsert(unsynced);
+          } catch (syncErr) {
+            console.warn("[Documents Supabase Sync] Failed to sync local documents:", syncErr);
+          }
+        }
+        return Array.from(resultMap.values());
+      }
+      await delay(100);
+      return MockDB.getDocuments().filter((d: any) => d.org_id === orgId);
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useSubmitDocument() {
+  const queryClient = useQueryClient();
+  const auditMutation = useCreateAuditLog();
+  return useMutation({
+    mutationFn: async (payload: {
+      org_id: string;
+      name: string;
+      file_url?: string;
+      file_size?: string;
+      uploaded_by: string;
+      uploader_name: string;
+      requires_acknowledgement: boolean;
+      acknowledgement_deadline?: string;
+      content?: string;
+      file_type?: "word" | "excel" | "pdf" | "image" | "other";
+      recipient_member_ids?: string[];
+      is_letter?: boolean;
+      show_header?: boolean;
+      is_private?: boolean;
+    }) => {
+      const docId = "doc-" + Math.random().toString(36).substring(2, 9);
+      let finalFileUrl = payload.file_url || "";
+      
+      if (finalFileUrl.startsWith("data:")) {
+        const { data, contentType } = dataUrlToUint8Array(finalFileUrl);
+        const fileName = `${payload.org_id}/${docId}-${payload.name.replace(/\s+/g, "_")}`;
+        await uploadFile(fileName, data, contentType);
+        const { data: publicUrlData } = supabase.storage.from("impacto-files").getPublicUrl(fileName);
+        finalFileUrl = publicUrlData.publicUrl;
+      }
+      
+      const serializedFileUrl = finalFileUrl + "#show_header=" + (payload.show_header !== false);
+
+      const newDoc: Document = {
+        id: docId,
+        org_id: payload.org_id,
+        name: payload.name,
+        file_url: serializedFileUrl,
+        file_size: payload.file_size || "0.0 KB",
+        uploaded_by: payload.uploaded_by,
+        uploader_name: payload.uploader_name,
+        requires_acknowledgement: payload.requires_acknowledgement,
+        acknowledgement_deadline: payload.acknowledgement_deadline,
+        created_at: new Date().toISOString(),
+        content: payload.content,
+        file_type: payload.file_type || "other",
+        recipient_member_ids: payload.recipient_member_ids || [],
+        is_letter: !!payload.is_letter,
+        show_header: payload.show_header !== false, // default to true
+        is_private: !!payload.is_private,
+      };
+
+      if (isSupabaseConfigured) {
+        const { show_header, ...docForDb } = newDoc;
+        try {
+          const { data, error } = await supabase
+            .from("documents")
+            .insert(docForDb)
+            .select()
+            .single();
+          if (error) throw error;
+          return {
+            ...data,
+            show_header: payload.show_header !== false
+          } as Document;
+        } catch (dbErr: any) {
+          if (
+            dbErr.code === "PGRST204" ||
+            dbErr.code === "23503" ||
+            dbErr.message?.includes("uploader_name") ||
+            dbErr.message?.includes("uploaded_by")
+          ) {
+            const { uploader_name, uploaded_by, ...docWithoutUser } = docForDb;
+            const { data, error } = await supabase
+              .from("documents")
+              .insert(docWithoutUser)
+              .select()
+              .single();
+            if (error) throw error;
+            return {
+              ...data,
+              uploader_name: "Anonymous Representative",
+              show_header: payload.show_header !== false
+            } as Document;
+          }
+          throw dbErr;
+        }
+      }
+
+      await delay(150);
+      const docs = MockDB.getDocuments();
+      docs.unshift(newDoc);
+      MockDB.saveDocuments(docs);
+
+      await auditMutation.mutateAsync({
+        org_id: payload.org_id,
+        performed_by: payload.uploaded_by,
+        action: "upload_document",
+        action_label: `Uploaded Document: ${payload.name}`,
+        target_table: "documents",
+        target_id: docId,
+        target_label: payload.name,
+      });
+
+      return newDoc;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["v2_documents", data.org_id],
+      });
+    },
+  });
+}
+
+export function useUpdateDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      id: string;
+      org_id: string;
+      name?: string;
+      content?: string;
+      file_size?: string;
+      recipient_member_ids?: string[];
+      show_header?: boolean;
+      is_private?: boolean;
+    }) => {
+      if (isSupabaseConfigured) {
+        const { show_header, ...dbPayload } = payload as any;
+        if (show_header !== undefined) {
+          dbPayload.file_url = `#show_header=${show_header}`;
+        }
+        const { data, error } = await supabase
+          .from("documents")
+          .update(dbPayload)
+          .eq("id", payload.id)
+          .select()
+          .single();
+        if (error) throw error;
+        return {
+          ...data,
+          show_header: show_header !== undefined ? show_header : (data.file_url?.includes("show_header=false") ? false : true)
+        } as Document;
+      }
+
+      await delay(100);
+      const docs = MockDB.getDocuments();
+      const idx = docs.findIndex((d) => d.id === payload.id);
+      if (idx !== -1) {
+        docs[idx] = {
+          ...docs[idx],
+          ...payload,
+        };
+        MockDB.saveDocuments(docs);
+        return docs[idx];
+      }
+      throw new Error("Document not found");
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["v2_documents", data.org_id],
+      });
+    },
+  });
+}
+
+export function useDeleteDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, orgId }: { id: string; orgId: string }) => {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase
+          .from("documents")
+          .delete()
+          .eq("id", id);
+        if (error) throw error;
+        return { id, orgId };
+      }
+
+      await delay(100);
+      const docs = MockDB.getDocuments();
+      const filtered = docs.filter((d) => d.id !== id);
+      MockDB.saveDocuments(filtered);
+      return { id, orgId };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["v2_documents", data.orgId],
+      });
+    },
+  });
+}
+
+export function useDocumentAcknowledgements(documentId: string | undefined) {
+  return useQuery({
+    queryKey: ["document_acknowledgements", documentId],
+    queryFn: async () => {
+      if (!documentId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("document_acknowledgements")
+          .select("*")
+          .eq("document_id", documentId);
+        if (error) throw error;
+        return data as DocumentAcknowledgement[];
+      }
+      await delay(80);
+      return MockDB.getDocumentAcknowledgements().filter(
+        (a) => a.document_id === documentId,
+      );
+    },
+    enabled: !!documentId,
+  });
+}
+
+export function useAcknowledgeDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      document_id: string;
+      member_id: string;
+      org_id: string;
+      document_version: number;
+    }) => {
+      const newAck: DocumentAcknowledgement = {
+        id: "ack-" + Math.random().toString(36).substring(2, 9),
+        document_id: payload.document_id,
+        member_id: payload.member_id,
+        org_id: payload.org_id,
+        document_version: payload.document_version,
+        acknowledged_at: new Date().toISOString(),
+      };
+
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("document_acknowledgements")
+          .insert(newAck)
+          .select()
+          .single();
+        if (error) throw error;
+        return data as DocumentAcknowledgement;
+      }
+
+      await delay(150);
+      const list = MockDB.getDocumentAcknowledgements();
+      const existing = list.some(
+        (a) =>
+          a.document_id === payload.document_id &&
+          a.member_id === payload.member_id &&
+          a.document_version === payload.document_version,
+      );
+      if (!existing) {
+        list.push(newAck);
+        MockDB.saveDocumentAcknowledgements(list);
+      }
+      return newAck;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["document_acknowledgements", data.document_id],
+      });
+      queryClient.invalidateQueries({ queryKey: ["v2_documents"] });
+    },
+  });
+}
+
+// 8. Resignations and Exit offboarding
+export function useResignations(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["resignations", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("resignations")
+          .select("*")
+          .eq("org_id", orgId);
+        if (error) throw error;
+        return data as Resignation[];
+      }
+      await delay(150);
+      return MockDB.getResignations().filter((r) => r.org_id === orgId);
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useSubmitResignation() {
+  const queryClient = useQueryClient();
+  const auditMutation = useCreateAuditLog();
+  return useMutation({
+    mutationFn: async (payload: {
+      member_id: string;
+      org_id: string;
+      reason_category?: string;
+      reason_detail?: string;
+      userId: string;
+    }) => {
+      const resignId = "res-" + Math.random().toString(36).substring(2, 9);
+      const newResign: Resignation = {
+        id: resignId,
+        member_id: payload.member_id,
+        org_id: payload.org_id,
+        reason_category: payload.reason_category,
+        reason_detail: payload.reason_detail,
+        submitted_at: new Date().toISOString(),
+        status: "pending",
+      };
+
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("resignations")
+          .insert(newResign)
+          .select()
+          .single();
+        if (error) throw error;
+        await supabase
+          .from("org_members")
+          .update({ status: "resigned" })
+          .eq("id", payload.member_id);
+        return data as Resignation;
+      }
+
+      await delay(200);
+      const list = MockDB.getResignations();
+      list.unshift(newResign);
+      MockDB.saveResignations(list);
+
+      // update member status
+      const members = MockDB.getMembers();
+      const idx = members.findIndex((m) => m.id === payload.member_id);
+      if (idx !== -1) {
+        members[idx].status = "resigned";
+        MockDB.saveMembers(members);
+      }
+
+      await auditMutation.mutateAsync({
+        org_id: payload.org_id,
+        performed_by: payload.userId,
+        action: "member_resign",
+        action_label: "Submitted Membership Resignation Request",
+        target_table: "resignations",
+        target_id: resignId,
+        target_label: "Self offboarding submission",
+      });
+
+      return newResign;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["resignations", data.org_id],
+      });
+      queryClient.invalidateQueries({ queryKey: ["members", data.org_id] });
+    },
+  });
+}
+
+export function useFinalizeResignation() {
+  const queryClient = useQueryClient();
+  const auditMutation = useCreateAuditLog();
+  return useMutation({
+    mutationFn: async (payload: {
+      id: string;
+      org_id: string;
+      member_id: string;
+      admin_response?: string;
+      admin_responded_by: string;
+    }) => {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("resignations")
+          .update({
+            status: "finalized",
+            finalized_at: new Date().toISOString(),
+            admin_response: payload.admin_response,
+            admin_responded_at: new Date().toISOString(),
+            admin_responded_by: payload.admin_responded_by,
+          })
+          .eq("id", payload.id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data as Resignation;
+      }
+
+      await delay(150);
+      const list = MockDB.getResignations();
+      const idx = list.findIndex((r) => r.id === payload.id);
+      if (idx !== -1) {
+        list[idx] = {
+          ...list[idx],
+          status: "finalized",
+          finalized_at: new Date().toISOString(),
+          admin_response: payload.admin_response,
+          admin_responded_at: new Date().toISOString(),
+          admin_responded_by: payload.admin_responded_by,
+        };
+        MockDB.saveResignations(list);
+      }
+
+      await auditMutation.mutateAsync({
+        org_id: payload.org_id,
+        performed_by: payload.admin_responded_by,
+        action: "resign_finalized",
+        action_label: "Finalized member exit and logged survey",
+        target_table: "resignations",
+        target_id: payload.id,
+        target_label: "Final exit processed",
+      });
+
+      return payload;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["resignations", data.org_id],
+      });
+      queryClient.invalidateQueries({ queryKey: ["members", data.org_id] });
+    },
+  });
+}
+
+// ==========================================
+// 12. NEW SYSTEM ADVANCEMENTS: ATTENDANCE CHECKLIST, FEES, MARKETPLACE
+// ==========================================
+
+export function useEventAttendance(eventId: string | undefined) {
+  return useQuery({
+    queryKey: ["event_attendance", eventId],
+    queryFn: async () => {
+      if (!eventId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("event_attendance")
+          .select("*")
+          .eq("event_id", eventId);
+        if (error) throw error;
+        return data as EventAttendance[];
+      }
+      await delay(100);
+      return MockDB.getEventAttendance().filter(
+        (a) => a.event_id === eventId,
+      ) as EventAttendance[];
+    },
+    enabled: !!eventId,
+  });
+}
+
+export function useAllEventAttendance(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["all_event_attendance", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("event_attendance")
+            .select("*");
+          if (!error && data) return data as EventAttendance[];
+        } catch (e) {
+          console.warn("Failed fetching all event_attendance from supabase:", e);
+        }
+      }
+      await delay(100);
+      const orgEvents = MockDB.getEvents().filter((e) => e.org_id === orgId).map((e) => e.id);
+      return (MockDB.getEventAttendance() as EventAttendance[]).filter((a) =>
+        orgEvents.includes(a.event_id)
+      );
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useCheckOut() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      event_id,
+      member_id,
+    }: {
+      event_id: string;
+      member_id: string;
+    }) => {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase
+          .from("event_attendance")
+          .delete()
+          .eq("event_id", event_id)
+          .eq("member_id", member_id);
+        if (error) throw error;
+
+        // update attendees count in events
+        const { data: ev } = await supabase
+          .from("events")
+          .select("attendees_count, org_id")
+          .eq("id", event_id)
+          .single();
+        if (ev) {
+          const newCount = Math.max(0, (ev.attendees_count || 0) - 1);
+          await supabase
+            .from("events")
+            .update({ attendees_count: newCount })
+            .eq("id", event_id);
+          return { org_id: ev.org_id, event_id };
+        }
+        return { org_id: "", event_id };
+      }
+      await delay(100);
+      const events = MockDB.getEvents();
+      const idx = events.findIndex((e) => e.id === event_id);
+      if (idx !== -1) {
+        events[idx].attendees_count = Math.max(
+          0,
+          events[idx].attendees_count - 1,
+        );
+        MockDB.saveEvents(events);
+
+        // Remove local event attendance record
+        const att = MockDB.getEventAttendance().filter(
+          (a) => !(a.event_id === event_id && a.member_id === member_id),
+        );
+        MockDB.saveEventAttendance(att);
+
+        return { org_id: events[idx].org_id, event_id };
+      }
+      return { org_id: "", event_id };
+    },
+    onSuccess: (res) => {
+      if (res.org_id)
+        queryClient.invalidateQueries({ queryKey: ["events", res.org_id] });
+      queryClient.invalidateQueries({
+        queryKey: ["event_attendance", res.event_id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["all_event_attendance"],
+      });
+    },
+  });
+}
+
+export function useMemberFees(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["member_fees", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("member_fees")
+            .select("*")
+            .eq("org_id", orgId);
+          if (error) throw error;
+
+          // Fetch all members & users to accurately map member names
+          const { data: members } = await supabase
+            .from("org_members")
+            .select("id, user_id, role, status, org_id")
+            .eq("org_id", orgId);
+
+          const { data: usersData } = await supabase
+            .from("users")
+            .select("id, full_name, email");
+
+          const localMembers = MockDB.getMembers().filter((m) => m.org_id === orgId);
+          const localUsers = MockDB.getUsers();
+
+          let currentFees = data || [];
+
+          // Check if local MockDB already has fees for this specific org
+          const existingLocalFees = MockDB.getMemberFees().filter((f) => f.org_id === orgId);
+          if (currentFees.length === 0 && existingLocalFees.length > 0) {
+            currentFees = existingLocalFees;
+            // Push existing local fees to Supabase so remote database is populated
+            try {
+              const cleanPayloads = existingLocalFees.map((f) => ({
+                id: f.id,
+                org_id: f.org_id,
+                member_id: f.member_id,
+                amount: f.amount || 0,
+                currency: f.currency || "RWF",
+                payment_period: f.payment_period || "monthly",
+                period_date: f.period_date || new Date().toISOString().slice(0, 7),
+                status: f.status || "pending",
+                paid_at: f.paid_at || null,
+                paid_by_method: f.paid_by_method || null,
+                transaction_reference: f.transaction_reference || null,
+                sender_info: f.sender_info || null,
+                reported_at: f.reported_at || null,
+                report_note: f.report_note || null,
+                admin_note: f.admin_note || null,
+                proof_url: f.proof_url || null,
+                created_at: f.created_at || new Date().toISOString(),
+              }));
+              await supabase.from("member_fees").upsert(cleanPayloads);
+            } catch (syncErr) {
+              console.warn("[Fees Supabase Sync] Syncing local fees to remote failed:", syncErr);
+            }
+          }
+
+          const resultMap = new Map<string, MemberFee>();
+
+          currentFees.forEach((f) => {
+            const matchedMem =
+              (members || []).find((m) => m.id === f.member_id || m.user_id === f.member_id) ||
+              localMembers.find((m) => m.id === f.member_id || m.user_id === f.member_id);
+            const matchedUser = matchedMem
+              ? (usersData || []).find((u) => u.id === matchedMem.user_id) ||
+                localUsers.find((u) => u.id === matchedMem.user_id)
+              : (usersData || []).find((u) => u.id === f.member_id) ||
+                localUsers.find((u) => u.id === f.member_id);
+
+            const memberName = matchedUser?.full_name || (matchedMem as any)?.user?.full_name || "Cooperative Member";
+
+            resultMap.set(f.id, {
+              ...f,
+              member_name: memberName,
+            } as MemberFee);
+          });
+
+          // Merge local fees for this specific organization
+          const mockFees = MockDB.getMemberFees().filter((f) => f.org_id === orgId);
+          mockFees.forEach((mf) => {
+            if (resultMap.has(mf.id)) {
+              const existing = resultMap.get(mf.id)!;
+              resultMap.set(mf.id, {
+                ...existing,
+                ...mf,
+                status: mf.status || existing.status,
+              });
+            } else {
+              const matchedMem =
+                (members || []).find((m) => m.id === mf.member_id || m.user_id === mf.member_id) ||
+                localMembers.find((m) => m.id === mf.member_id || m.user_id === mf.member_id);
+              const matchedUser = matchedMem
+                ? (usersData || []).find((u) => u.id === matchedMem.user_id) ||
+                  localUsers.find((u) => u.id === matchedMem.user_id)
+                : (usersData || []).find((u) => u.id === mf.member_id) ||
+                  localUsers.find((u) => u.id === mf.member_id);
+              resultMap.set(mf.id, {
+                ...mf,
+                member_name: matchedUser?.full_name || (matchedMem as any)?.user?.full_name || "Cooperative Member",
+              });
+            }
+          });
+
+          return Array.from(resultMap.values());
+        } catch (e) {
+          console.warn("[Member Fees] Remote query error, falling back to local storage:", e);
+        }
+      }
+
+      await delay(150);
+      const fees = MockDB.getMemberFees().filter((f) => f.org_id === orgId);
+      const members = MockDB.getMembers().filter((m) => m.org_id === orgId);
+      const users = MockDB.getUsers();
+      return fees.map((f) => {
+        const matchedMem = members.find((m) => m.id === f.member_id || m.user_id === f.member_id);
+        const matchedUser = matchedMem ? users.find((u) => u.id === matchedMem.user_id) : null;
+        return {
+          ...f,
+          member_name: matchedUser?.full_name || "Cooperative Member",
+        } as MemberFee;
+      });
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useCreateMemberFee() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Omit<MemberFee, "id" | "created_at"> & { user_id?: string; actor_name?: string }) => {
+      const newId = `fee-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const createdAt = new Date().toISOString();
+      const { user_id, actor_name, ...restPayload } = payload;
+      const feeRow = { ...restPayload, id: newId, created_at: createdAt };
+
+      if (isSupabaseConfigured) {
+        try {
+          const resp = await fetch("/api/member-fees/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(feeRow),
+          });
+
+          if (resp.ok) {
+            const resData = await resp.json();
+            const createdFee = resData.fee || feeRow;
+
+            // Maintain local sync
+            const list = MockDB.getMemberFees();
+            list.push(createdFee as any);
+            MockDB.saveMemberFees(list);
+
+            // Audit log dispatch
+            fetch("/api/audit-logs/create", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                org_id: payload.org_id,
+                user_id: user_id || null,
+                actor_name: actor_name || "Accountant",
+                action_type: "fee_created",
+                description: `Created ${payload.payment_period} dues charge of ${Number(payload.amount).toLocaleString()} RWF for period ${payload.period_date || "N/A"}`,
+                metadata_json: { fee_id: newId, amount: payload.amount, member_id: payload.member_id },
+              }),
+            }).catch(() => {});
+
+            return createdFee as MemberFee;
+          }
+        } catch (e) {
+          console.warn("[Fee Creation] Remote insert fee error, falling back to local storage:", e);
+        }
+      }
+
+      await delay(100);
+      const list = MockDB.getMemberFees();
+      list.push(feeRow);
+      MockDB.saveMemberFees(list);
+
+      // Record in local Audit logs
+      const auditLogs = MockDB.getAuditLogs();
+      auditLogs.unshift({
+        id: "audit-" + Math.random().toString(36).substring(2, 9),
+        org_id: payload.org_id,
+        user_id: user_id || "admin",
+        actor_name: actor_name || "Accountant",
+        action_type: "fee_created",
+        description: `Created ${payload.payment_period} dues charge of ${Number(payload.amount).toLocaleString()} RWF for period ${payload.period_date || "N/A"}`,
+        metadata_json: { fee_id: newId, amount: payload.amount, member_id: payload.member_id },
+        created_at: new Date().toISOString(),
+      });
+      MockDB.saveAuditLogs(auditLogs);
+
+      if (payload.status === "paid") {
+        const members = MockDB.getMembers();
+        const users = MockDB.getUsers();
+        const matchedMem = members.find((m) => m.id === payload.member_id);
+        const matchedUser = matchedMem ? users.find((u) => u.id === matchedMem.user_id) : null;
+        const memberName = matchedUser?.full_name || matchedMem?.user?.full_name || "Cooperative Member";
+        const desc = `Member Fee Paid (${payload.payment_period.toUpperCase()}) - ${memberName} - Period: ${payload.period_date || 'N/A'}`;
+        const ref = `FEE-${newId.slice(0, 8)}`;
+        const dateVal = payload.paid_at ? payload.paid_at.split("T")[0] : new Date().toISOString().split("T")[0];
+
+        const ledger = MockDB.getLedger();
+        ledger.push({
+          id: "led-fee-" + Math.random().toString(36).substring(2, 9),
+          org_id: payload.org_id,
+          type: "income",
+          amount: payload.amount,
+          currency: payload.currency || "RWF",
+          category: "membership_fee",
+          description: desc,
+          date: dateVal,
+          reference: ref,
+        });
+        MockDB.saveLedger(ledger);
+      }
+
+      return feeRow as MemberFee;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["member_fees", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["member_fees"] });
+      queryClient.invalidateQueries({ queryKey: ["ledger", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_stats", data.org_id] });
+    },
+  });
+}
+
+export function useUpdateMemberFeeStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      org_id,
+      member_id,
+      amount,
+      payment_period,
+      period_date,
+      status,
+      paid_at,
+      paid_by_method,
+      transaction_reference,
+      sender_info,
+      reported_at,
+      report_note,
+      admin_note,
+      proof_url,
+      actor_name,
+      user_id,
+    }: {
+      id: string;
+      org_id: string;
+      member_id?: string;
+      amount?: number;
+      payment_period?: string;
+      period_date?: string;
+      status: "paid" | "pending" | "pending_confirmation";
+      paid_at?: string;
+      paid_by_method?: "MTN MoMo" | "Airtel Money" | "Bank Transfer" | "Cash" | string;
+      transaction_reference?: string;
+      sender_info?: string;
+      reported_at?: string;
+      report_note?: string;
+      admin_note?: string;
+      proof_url?: string;
+      actor_name?: string;
+      user_id?: string;
+    }) => {
+      if (isSupabaseConfigured) {
+        try {
+          const updatePayload: any = {
+            status,
+            paid_at: paid_at || null,
+            paid_by_method: paid_by_method || null,
+            transaction_reference: transaction_reference || null,
+            sender_info: sender_info || null,
+            reported_at: reported_at || null,
+            report_note: report_note || null,
+            admin_note: admin_note || null,
+            proof_url: proof_url || null,
+          };
+          if (org_id) updatePayload.org_id = org_id;
+          if (member_id) updatePayload.member_id = member_id;
+          if (amount !== undefined) updatePayload.amount = amount;
+          if (payment_period) updatePayload.payment_period = payment_period;
+          if (period_date) updatePayload.period_date = period_date;
+
+          await supabase.from("member_fees").update(updatePayload).eq("id", id);
+        } catch (sErr) {
+          console.warn("[Fees Supabase Direct] Direct update warning:", sErr);
+        }
+
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          await fetch("/api/member-fees/update", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {}),
+            },
+            body: JSON.stringify({
+              id,
+              org_id,
+              member_id,
+              amount,
+              payment_period,
+              period_date,
+              status,
+              paid_at,
+              paid_by_method,
+              transaction_reference,
+              sender_info,
+              reported_at,
+              report_note,
+              admin_note,
+              proof_url,
+            }),
+          });
+        } catch (e) {
+          console.warn("[Fees API] Remote update network error, falling back to local sync...", e);
+        }
+
+        // Audit log dispatch for status change
+        const actionDesc =
+          status === "paid"
+            ? `Verified and approved fee payment (${Number(amount || 0).toLocaleString()} RWF) via ${paid_by_method || "Payment"}`
+            : status === "pending_confirmation"
+            ? `Reported fee payment slip for verification (Ref: ${transaction_reference || "N/A"})`
+            : `Updated fee status to ${status}`;
+
+        fetch("/api/audit-logs/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            org_id,
+            user_id: user_id || null,
+            actor_name: actor_name || (status === "paid" ? "Accountant" : "Member"),
+            action_type: status === "paid" ? "fee_verified" : "fee_reported",
+            description: actionDesc,
+            metadata_json: { fee_id: id, status, amount, ref: transaction_reference },
+          }),
+        }).catch(() => {});
+      }
+
+      await delay(50);
+      const list = MockDB.getMemberFees();
+      const idx = list.findIndex((f) => f.id === id);
+      let updatedFee: MemberFee;
+      if (idx !== -1) {
+        const prevFee = list[idx];
+        updatedFee = {
+          ...prevFee,
+          status,
+          paid_at: paid_at || prevFee.paid_at,
+          paid_by_method: (paid_by_method as any) || prevFee.paid_by_method,
+          transaction_reference: transaction_reference || prevFee.transaction_reference,
+          sender_info: sender_info || prevFee.sender_info,
+          reported_at: reported_at || prevFee.reported_at,
+          report_note: report_note || prevFee.report_note,
+          admin_note: admin_note || prevFee.admin_note,
+          proof_url: proof_url || prevFee.proof_url,
+        };
+        list[idx] = updatedFee;
+      } else {
+        updatedFee = {
+          id,
+          org_id,
+          member_id: member_id || "",
+          amount: amount || 0,
+          currency: "RWF",
+          payment_period: (payment_period as any) || "monthly",
+          period_date: period_date || new Date().toISOString().slice(0, 7),
+          status,
+          paid_at,
+          paid_by_method: (paid_by_method as any) || "MTN MoMo",
+          transaction_reference,
+          sender_info,
+          reported_at,
+          report_note,
+          admin_note,
+          proof_url,
+          created_at: new Date().toISOString(),
+        } as MemberFee;
+        list.push(updatedFee);
+      }
+      MockDB.saveMemberFees(list);
+
+      // Local audit log
+      const auditLogs = MockDB.getAuditLogs();
+      auditLogs.unshift({
+        id: "audit-" + Math.random().toString(36).substring(2, 9),
+        org_id,
+        user_id: user_id || "system",
+        actor_name: actor_name || (status === "paid" ? "Accountant" : "Member"),
+        action_type: status === "paid" ? "fee_verified" : "fee_reported",
+        description:
+          status === "paid"
+            ? `Verified and approved fee payment (${Number(amount || 0).toLocaleString()} RWF) via ${paid_by_method || "Payment"}`
+            : `Updated fee status to ${status}`,
+        metadata_json: { fee_id: id, status, amount, ref: transaction_reference },
+        created_at: new Date().toISOString(),
+      });
+      MockDB.saveAuditLogs(auditLogs);
+
+      // If status turned to 'paid', document in accounting Ledger
+      if (status === "paid") {
+        const members = MockDB.getMembers();
+        const users = MockDB.getUsers();
+        const matchedMem = members.find((m) => m.id === updatedFee.member_id);
+        const matchedUser = matchedMem ? users.find((u) => u.id === matchedMem.user_id) : null;
+        const memberName = matchedUser?.full_name || matchedMem?.user?.full_name || updatedFee.member_name || "Cooperative Member";
+
+        const desc = `Member Fee Paid (${(updatedFee.payment_period || 'fee').toUpperCase()}) - ${memberName} - Period: ${updatedFee.period_date || 'N/A'}`;
+        const ref = transaction_reference || updatedFee.transaction_reference || `FEE-${id.slice(0, 8)}`;
+        const dateVal = paid_at ? paid_at.split("T")[0] : (updatedFee.paid_at ? updatedFee.paid_at.split("T")[0] : new Date().toISOString().split("T")[0]);
+
+        if (isSupabaseConfigured) {
+          try {
+            await supabase.from("ledger_entries").insert({
+              org_id: org_id,
+              type: "income",
+              amount: updatedFee.amount,
+              currency: updatedFee.currency || "RWF",
+              category: "membership_fee",
+              description: desc,
+              date: dateVal,
+              reference: ref,
+            });
+          } catch (e) {
+            console.warn("Supabase ledger auto-insert warning:", e);
+          }
+        }
+
+        const ledger = MockDB.getLedger();
+        const exists = ledger.some((l) => l.reference === ref && l.amount === updatedFee.amount);
+        if (!exists) {
+          ledger.push({
+            id: "led-fee-" + Math.random().toString(36).substring(2, 9),
+            org_id: org_id,
+            type: "income",
+            amount: updatedFee.amount,
+            currency: updatedFee.currency || "RWF",
+            category: "membership_fee",
+            description: desc,
+            date: dateVal,
+            reference: ref,
+          });
+          MockDB.saveLedger(ledger);
+        }
+      }
+      return { id, org_id };
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["member_fees", res.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["member_fees"] });
+      queryClient.invalidateQueries({ queryKey: ["ledger", res.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", res.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_stats", res.org_id] });
+    },
+  });
+}
+
+export function useDeleteMemberFee() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      org_id,
+      user_name,
+      user_id,
+      fee_amount,
+      fee_ref,
+      member_name,
+    }: {
+      id: string;
+      org_id: string;
+      user_name?: string;
+      user_id?: string;
+      fee_amount?: number;
+      fee_ref?: string;
+      member_name?: string;
+    }) => {
+      if (isSupabaseConfigured) {
+        try {
+          const resp = await fetch("/api/member-fees/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id,
+              org_id,
+              user_name,
+              user_id,
+              fee_amount,
+              fee_ref,
+              member_name,
+            }),
+          });
+          if (!resp.ok) {
+            await supabase.from("member_fees").delete().eq("id", id);
+          }
+        } catch (e) {
+          console.warn("[Fees API] Remote delete fallback to client supabase:", e);
+          try {
+            await supabase.from("member_fees").delete().eq("id", id);
+          } catch (inner) {
+            console.warn("[Fees API] Client delete warning:", inner);
+          }
+        }
+      }
+
+      await delay(50);
+      // Remove from MockDB fees
+      const list = MockDB.getMemberFees().filter((f) => f.id !== id);
+      MockDB.saveMemberFees(list);
+
+      // Clean up matching ledger entry
+      const ledger = MockDB.getLedger().filter((l) => {
+        if (l.org_id !== org_id) return true;
+        if (fee_ref && l.reference === fee_ref) return false;
+        if (l.reference && l.reference.includes(id.slice(0, 8))) return false;
+        return true;
+      });
+      MockDB.saveLedger(ledger);
+
+      // Write Audit log
+      const auditLogs = MockDB.getAuditLogs();
+      auditLogs.unshift({
+        id: "audit-" + Math.random().toString(36).substring(2, 9),
+        org_id,
+        user_id: user_id || "accountant",
+        actor_name: user_name || "Accountant",
+        action_type: "fee_deleted",
+        description: `Deleted fee due record (ID: ${id}) for member ${member_name || "N/A"} - Amount: ${fee_amount ? Number(fee_amount).toLocaleString() + " RWF" : "N/A"}`,
+        metadata_json: { fee_id: id, amount: fee_amount, ref: fee_ref },
+        created_at: new Date().toISOString(),
+      });
+      MockDB.saveAuditLogs(auditLogs);
+
+      return { id, org_id };
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["member_fees", res.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["member_fees"] });
+      queryClient.invalidateQueries({ queryKey: ["ledger", res.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", res.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_stats", res.org_id] });
+    },
+  });
+}
+
+export function useUpdateMemberFee() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      org_id,
+      amount,
+      payment_period,
+      period_date,
+      status,
+      title,
+    }: {
+      id: string;
+      org_id: string;
+      amount?: number;
+      payment_period?: string;
+      period_date?: string;
+      status?: "paid" | "pending" | "pending_confirmation";
+      title?: string;
+    }) => {
+      if (isSupabaseConfigured) {
+        try {
+          const updateObj: any = {};
+          if (amount !== undefined) updateObj.amount = amount;
+          if (payment_period) updateObj.payment_period = payment_period;
+          if (period_date) updateObj.period_date = period_date;
+          if (status) updateObj.status = status;
+          if (title) updateObj.title = title;
+          await supabase.from("member_fees").update(updateObj).eq("id", id);
+        } catch (e) {
+          console.warn("[Fees API] Remote fee update error", e);
+        }
+      }
+      await delay(50);
+      const list = MockDB.getMemberFees();
+      const idx = list.findIndex((f) => f.id === id);
+      if (idx !== -1) {
+        list[idx] = {
+          ...list[idx],
+          ...(amount !== undefined ? { amount } : {}),
+          ...(payment_period ? { payment_period: payment_period as any } : {}),
+          ...(period_date ? { period_date } : {}),
+          ...(status ? { status } : {}),
+          ...(title ? { title } : {}),
+        };
+        MockDB.saveMemberFees(list);
+      }
+      return { id, org_id };
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["member_fees", res.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["member_fees"] });
+      queryClient.invalidateQueries({ queryKey: ["ledger", res.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_stats", res.org_id] });
+    },
+  });
+}
+
+export function useMarketplaceProducts(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["marketplace_products", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        let sbProds: MarketplaceProduct[] = [];
+        try {
+          const { data, error } = await supabase
+            .from("marketplace_products")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("created_at", { ascending: false });
+          if (!error && data) {
+            sbProds = data as MarketplaceProduct[];
+          }
+        } catch (dbErr) {
+          console.warn("Supabase fetch products error:", dbErr);
+        }
+
+        const localProds = MockDB.getMarketplaceProducts().filter((p) => p.org_id === orgId) as MarketplaceProduct[];
+        const resultMap = new Map<string, MarketplaceProduct>();
+        localProds.forEach((p) => resultMap.set(p.id, p));
+        sbProds.forEach((p) => resultMap.set(p.id, p));
+
+        const unsynced = localProds.filter((p) => !sbProds.some((s) => s.id === p.id));
+        if (unsynced.length > 0) {
+          try {
+            await supabase.from("marketplace_products").upsert(unsynced);
+          } catch (syncErr) {
+            console.warn("[Products Supabase Sync] Failed to sync local products:", syncErr);
+          }
+        }
+        return Array.from(resultMap.values());
+      }
+      await delay(150);
+      return MockDB.getMarketplaceProducts().filter(
+        (p) => p.org_id === orgId,
+      ) as MarketplaceProduct[];
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useCreateMarketplaceProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      payload: Omit<MarketplaceProduct, "id" | "created_at">,
+    ) => {
+      const generateUUID = () => {
+        if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+          return crypto.randomUUID();
+        }
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          const v = c === "x" ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+      };
+      const newId = generateUUID();
+      const createdAt = new Date().toISOString();
+      const newProd = { ...payload, id: newId, created_at: createdAt };
+
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("marketplace_products")
+          .insert({
+            id: newId,
+            org_id: payload.org_id,
+            title: payload.title,
+            description: payload.description,
+            price: payload.price,
+            currency: payload.currency,
+            image_url: payload.image_url,
+            contact_info: payload.contact_info,
+            created_by: payload.created_by,
+            created_at: createdAt,
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        return data as MarketplaceProduct;
+      }
+      await delay(100);
+      const products = MockDB.getMarketplaceProducts();
+      products.push(newProd);
+      MockDB.saveMarketplaceProducts(products);
+      return newProd as MarketplaceProduct;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["marketplace_products", data.org_id],
+      });
+    },
+  });
+}
+
+export function useMarketplaceLeads(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["marketplace_leads", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("marketplace_leads")
+          .select(
+            "*, member:member_id(*, user:user_id(full_name, email)), product:product_id(title, org_id)",
+          )
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+
+        // Filter those belonging to this org
+        const filtered = (data || []).filter(
+          (l) => l.product?.org_id === orgId,
+        );
+        return filtered.map(
+          (l) =>
+            ({
+              id: l.id,
+              product_id: l.product_id,
+              member_id: l.member_id,
+              message: l.message,
+              created_at: l.created_at,
+              member_name: l.member?.user?.full_name || "Unknown Member",
+              member_email: l.member?.user?.email || "Unknown Email",
+              product_title: l.product?.title || "Unknown Product",
+            }) as MarketplaceLead,
+        );
+      }
+      await delay(150);
+      const leads = MockDB.getMarketplaceLeads();
+      const products = MockDB.getMarketplaceProducts().filter(
+        (p) => p.org_id === orgId,
+      );
+      const members = MockDB.getMembers().filter((m) => m.org_id === orgId);
+      const users = MockDB.getUsers();
+
+      return leads
+        .filter((l) => products.some((p) => p.id === l.product_id))
+        .map((l) => {
+          const prod = products.find((p) => p.id === l.product_id);
+          const mem = members.find((m) => m.id === l.member_id);
+          const usr = mem ? users.find((u) => u.id === mem.user_id) : null;
+
+          return {
+            ...l,
+            member_name: usr?.full_name || "Unknown Member",
+            member_email: usr?.email || "Unknown Email",
+            product_title: prod?.title || "Unknown Product",
+          } as MarketplaceLead;
+        });
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useExpressInterest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      org_id,
+      product_id,
+      member_id,
+      message,
+    }: {
+      org_id: string;
+      product_id: string;
+      member_id: string;
+      message: string;
+    }) => {
+      const generateUUID = () => {
+        if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+          return crypto.randomUUID();
+        }
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          const v = c === "x" ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+      };
+      const newId = generateUUID();
+      const createdAt = new Date().toISOString();
+      const leadRow = {
+        id: newId,
+        product_id,
+        member_id,
+        message,
+        created_at: createdAt,
+      };
+
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from("marketplace_leads").insert({
+          id: newId,
+          product_id,
+          member_id,
+          message,
+          created_at: createdAt,
+        });
+        if (error) throw error;
+        return { org_id, product_id };
+      }
+      await delay(100);
+      const leads = MockDB.getMarketplaceLeads();
+      leads.push(leadRow);
+      MockDB.saveMarketplaceLeads(leads);
+      return { org_id, product_id };
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({
+        queryKey: ["marketplace_leads", res.org_id],
+      });
+    },
+  });
+}
+
+// ==========================================
+// 15. MEETING ATTENDANCE & ORG PURGE HOOKS
+// ==========================================
+export function useMeetingAttendance(meetingId: string | undefined) {
+  return useQuery({
+    queryKey: ["meeting_attendance", meetingId],
+    queryFn: async () => {
+      if (!meetingId) return [];
+      const key = `meet_attn_${meetingId}`;
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        try {
+          return JSON.parse(stored) as string[]; // List of member_ids
+        } catch (e) {
+          return [];
+        }
+      }
+      return [];
+    },
+    enabled: !!meetingId,
+  });
+}
+
+export function useSaveMeetingAttendance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      meetingId,
+      memberIds,
+    }: {
+      meetingId: string;
+      memberIds: string[];
+    }) => {
+      const key = `meet_attn_${meetingId}`;
+      localStorage.setItem(key, JSON.stringify(memberIds));
+
+      // Update local storage meeting count to keep UI instantly synchronized
+      const meetings = MockDB.getMeetings();
+      const idx = meetings.findIndex((m) => m.id === meetingId);
+      if (idx !== -1) {
+        meetings[idx].attendance_count = memberIds.length;
+        MockDB.saveMeetings(meetings);
+      }
+      return { meetingId, memberIds };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["meeting_attendance", data.meetingId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+    },
+  });
+}
+
+export function useDeleteOrganization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (orgId: string) => {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase
+          .from("organizations")
+          .delete()
+          .eq("id", orgId);
+        if (error) throw error;
+        return orgId;
+      }
+      await delay(150);
+      const orgs = MockDB.getOrgs();
+      const filtered = orgs.filter((o) => o.id !== orgId);
+      MockDB.saveOrgs(filtered);
+      return orgId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
+    },
+  });
+}
+
+export function useUpdateUserProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      fullName,
+      avatarUrl,
+      preferredLanguage,
+      accessibilityFontSize,
+      accessibilityHighContrast,
+      bio,
+      phoneNumber,
+      jobTitle,
+      notificationEmail,
+      notificationSms,
+      uiDensity,
+      reducedMotion,
+      profileVisibility,
+      statusBadge
+    }: {
+      userId: string;
+      fullName: string;
+      avatarUrl?: string;
+      preferredLanguage?: "en" | "fr" | "rw";
+      accessibilityFontSize?: "normal" | "large" | "x-large";
+      accessibilityHighContrast?: boolean;
+      bio?: string;
+      phoneNumber?: string;
+      jobTitle?: string;
+      notificationEmail?: boolean;
+      notificationSms?: boolean;
+      uiDensity?: "normal" | "compact" | "spacious";
+      reducedMotion?: boolean;
+      profileVisibility?: "public" | "members_only" | "private";
+      statusBadge?: "active" | "remote" | "field" | "away";
+    }) => {
+      if (isSupabaseConfigured) {
+        const updatePayload: any = {
+          full_name: fullName,
+        };
+        if (avatarUrl !== undefined) updatePayload.avatar_url = avatarUrl;
+        if (preferredLanguage !== undefined) updatePayload.preferred_language = preferredLanguage;
+        if (accessibilityFontSize !== undefined) updatePayload.accessibility_font_size = accessibilityFontSize;
+        if (accessibilityHighContrast !== undefined) updatePayload.accessibility_high_contrast = accessibilityHighContrast;
+        if (bio !== undefined) updatePayload.bio = bio;
+        if (phoneNumber !== undefined) updatePayload.phone_number = phoneNumber;
+        if (jobTitle !== undefined) updatePayload.job_title = jobTitle;
+        if (notificationEmail !== undefined) updatePayload.notification_email = notificationEmail;
+        if (notificationSms !== undefined) updatePayload.notification_sms = notificationSms;
+        if (uiDensity !== undefined) updatePayload.ui_density = uiDensity;
+        if (reducedMotion !== undefined) updatePayload.reduced_motion = reducedMotion;
+        if (profileVisibility !== undefined) updatePayload.profile_visibility = profileVisibility;
+        if (statusBadge !== undefined) updatePayload.status_badge = statusBadge;
+
+        const { data, error } = await supabase
+          .from("users")
+          .update(updatePayload)
+          .eq("id", userId)
+          .select()
+          .single();
+        if (error) {
+          console.warn("Supabase user update note:", error);
+        }
+        return data || { id: userId, full_name: fullName, avatar_url: avatarUrl, preferred_language: preferredLanguage, bio, phone_number: phoneNumber, job_title: jobTitle };
+      } else {
+        await delay(150);
+        const users = MockDB.getUsers();
+        const user = users.find((u) => u.id === userId);
+        if (user) {
+          user.full_name = fullName;
+          if (avatarUrl !== undefined) user.avatar_url = avatarUrl;
+          if (preferredLanguage !== undefined) user.preferred_language = preferredLanguage;
+          if (accessibilityFontSize !== undefined) user.accessibility_font_size = accessibilityFontSize;
+          if (accessibilityHighContrast !== undefined) user.accessibility_high_contrast = accessibilityHighContrast;
+          if (bio !== undefined) user.bio = bio;
+          if (phoneNumber !== undefined) user.phone_number = phoneNumber;
+          if (jobTitle !== undefined) user.job_title = jobTitle;
+          if (notificationEmail !== undefined) user.notification_email = notificationEmail;
+          if (notificationSms !== undefined) user.notification_sms = notificationSms;
+          if (uiDensity !== undefined) user.ui_density = uiDensity;
+          if (reducedMotion !== undefined) user.reduced_motion = reducedMotion;
+          if (profileVisibility !== undefined) user.profile_visibility = profileVisibility;
+          if (statusBadge !== undefined) user.status_badge = statusBadge;
+          localStorage.setItem("impacto_mock_users", JSON.stringify(users));
+        }
+        return user;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["org_members"] });
+    }
+  });
+}

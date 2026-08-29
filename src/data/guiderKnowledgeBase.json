@@ -1,0 +1,1809 @@
+{
+  "version": "3.0.0",
+  "appName": "Impacto Cooperative ERP",
+  "systemDescription": {
+    "en": "Impacto is a comprehensive all-in-one cooperative management and ERP platform enabling cooperatives and grassroots organizations to manage members, financial ledgers, dues collections, in-app Word/Excel office documents, meetings with live minutes, events with QR attendance, chat, strategic goals, and public portals.",
+    "rw": "Impacto ni urubuga rwuzuye rwo gucunga koperative n'imiryango, rworohereza gucunga abanyamuryango, ibitabo by'imari, gukusanya imisanzu, inyandiko za Word na Excel, inama n'imyanzuro, ibikorwa n'ubwitabire bwa QR, ibiganiro, intego z'iterambere, n'urubuga rusange.",
+    "fr": "Impacto est une plateforme complète de gestion coopérative et d'ERP permettant aux coopératives et organisations de gérer les membres, la comptabilité financière, la collecte des cotisations, les documents bureautiques Word/Excel, les réunions et procès-verbaux, les événements avec présence QR, le chat, les objectifs stratégiques et le portail public."
+  },
+  "categories": [
+    {
+      "id": "all",
+      "labels": {
+        "en": "All Topics",
+        "rw": "Ibyiciro Byose",
+        "fr": "Tous les sujets"
+      },
+      "icon": "Layers"
+    },
+    {
+      "id": "finance",
+      "labels": {
+        "en": "Dues & Bookkeeping",
+        "rw": "Imisanzu n'Imari",
+        "fr": "Cotisations & Comptabilité"
+      },
+      "icon": "Wallet"
+    },
+    {
+      "id": "documents",
+      "labels": {
+        "en": "Documents & Office",
+        "rw": "Inyandiko & Office",
+        "fr": "Documents & Bureautique"
+      },
+      "icon": "FileText"
+    },
+    {
+      "id": "members",
+      "labels": {
+        "en": "Members & Roles",
+        "rw": "Abanyamuryango",
+        "fr": "Membres & Rôles"
+      },
+      "icon": "Users"
+    },
+    {
+      "id": "meetings",
+      "labels": {
+        "en": "Meetings & Minutes",
+        "rw": "Inama n'Imyanzuro",
+        "fr": "Réunions & Procès-verbaux"
+      },
+      "icon": "Calendar"
+    },
+    {
+      "id": "events",
+      "labels": {
+        "en": "Events & QR Attendance",
+        "rw": "Ibikorwa & QR",
+        "fr": "Événements & QR"
+      },
+      "icon": "Clock"
+    },
+    {
+      "id": "communication",
+      "labels": {
+        "en": "Chat & News",
+        "rw": "Ibiganiro & Amakuru",
+        "fr": "Chat & Actualités"
+      },
+      "icon": "MessageSquare"
+    },
+    {
+      "id": "goals",
+      "labels": {
+        "en": "Goals & Milestones",
+        "rw": "Intego & Iterambere",
+        "fr": "Objectifs & Jalons"
+      },
+      "icon": "Target"
+    },
+    {
+      "id": "marketplace",
+      "labels": {
+        "en": "Coop Marketplace",
+        "rw": "Isoko rya Koperative",
+        "fr": "Boutique Coopérative"
+      },
+      "icon": "ShoppingBag"
+    },
+    {
+      "id": "settings",
+      "labels": {
+        "en": "Settings & Security",
+        "rw": "Igenamiterere",
+        "fr": "Paramètres & Sécurité"
+      },
+      "icon": "Settings"
+    }
+  ],
+  "nodes": {
+    "root": {
+      "id": "root",
+      "text": {
+        "en": "Hello {userName}! I am Guider (Baza), your interactive assistant for Impacto. Here are customized guides and actions for you:",
+        "rw": "Muraho {userName}! Ndi Guider (Baza), umufasha wawe muri Impacto. Dore ibyo wakoreraho ako kanya:",
+        "fr": "Bonjour {userName} ! Je suis Guider (Baza), votre assistant pour Impacto. Voici les guides adaptés :"
+      },
+      "options": [
+        {
+          "id": "opt_dues",
+          "label": {
+            "en": "Cooperative Dues & Payments",
+            "rw": "Imisanzu & Kwishyura",
+            "fr": "Cotisations & Paiements"
+          },
+          "targetNode": "node_dues"
+        },
+        {
+          "id": "opt_documents",
+          "label": {
+            "en": "Documents & Office Workspace",
+            "rw": "Inyandiko & Office",
+            "fr": "Documents & Bureautique"
+          },
+          "targetNode": "node_documents"
+        },
+        {
+          "id": "opt_members",
+          "label": {
+            "en": "Member Roster & Roles",
+            "rw": "Abanyamuryango & Inshingano",
+            "fr": "Membres & Rôles"
+          },
+          "targetNode": "node_members"
+        },
+        {
+          "id": "opt_meetings",
+          "label": {
+            "en": "Meetings & Digital Minutes",
+            "rw": "Inama n'Imyanzuro",
+            "fr": "Réunions & Procès-verbaux"
+          },
+          "targetNode": "node_meetings"
+        },
+        {
+          "id": "opt_events",
+          "label": {
+            "en": "Events & QR Attendance",
+            "rw": "Ibikorwa & QR Scanner",
+            "fr": "Événements & QR"
+          },
+          "targetNode": "node_events"
+        }
+      ]
+    },
+    "node_dues": {
+      "id": "node_dues",
+      "text": {
+        "en": "###  Cooperative Dues Management\n\nAll members can view their personal dues standing and submit payment proofs regardless of role. What specific dues action would you like to explore?",
+        "rw": "###  Imicungire y'Imisanzu ya Koperative\n\nAbanyamuryango bose bashobora kureba imiterere y'imisanzu yabo no kohereza ibimenyetso by'ubwishyu bitagendeye ku nshingano bafite. Ni ikihe gikorwa wifuza kumenya?",
+        "fr": "###  Gestion des Cotisations Coopératives\n\nTous les membres peuvent consulter leur situation financière et envoyer leurs justificatifs. Quelle opération souhaitez-vous effectuer ?"
+      },
+      "roleSpecificNotes": {
+        "accountant": {
+          "en": "**Accountant Privilege**: You have access to the **Cooperative Dues Health & Collection Meter** and can approve/reject member payment slips, edit dues invoices, and reconcile the ledger.",
+          "rw": "**Umwihariko w'Umucungamari**: Ufite **Ipima ry'Imisanzu (Collection Meter)** kandi ushobora kwemeza/kwanga inyemezabwishyu z'abanyamuryango no guhindura fagitire.",
+          "fr": "**Privilège Comptable** : Vous disposez du **Compteur de recouvrement** et pouvez valider/rejeter les reçus et modifier le grand livre."
+        },
+        "org_admin": {
+          "en": "**Administrator Notice**: You oversee general organizational compliance and member records. The detailed Collection Health Meter is handled directly by your designated Accountant.",
+          "rw": "**Icyitonderwa cy'Umuyobozi**: Ugenzura imikorere y'umuryango muri rusange. Ipima ry'imisanzu rikorwa n'Umucungamari wa koperative.",
+          "fr": "**Note Administrateur** : Vous supervisez la conformité globale. Le compteur de recouvrement détaillé est géré par votre comptable."
+        },
+        "member": {
+          "en": "**Member Access**: You can inspect your individual **Personal Dues Standing & Compliance** card on the dashboard or navigate to **Fees & Dues** to clear pending cycles via MoMo/Bank.",
+          "rw": "**Umunyamuryango**: Ushobora kureba ikarita yawe ya **Personal Dues Standing** kuri dashboard cyangwa ukajya kuri **Fees & Dues** kwishyura kuri MoMo/Banki.",
+          "fr": "**Accès Membre** : Consultez votre relevé **Situation personnelle** sur le tableau de bord ou allez dans **Cotisations** pour régler via MoMo/Banque."
+        }
+      },
+      "options": [
+        {
+          "id": "opt_pay_dues",
+          "label": {
+            "en": "How to Pay & Settle Dues (All Members)",
+            "rw": "Uburyo bwo Kwishyura Imisanzu (Bose)",
+            "fr": "Comment payer les cotisations (Tous)"
+          },
+          "flowId": "record_dues_payment"
+        },
+        {
+          "id": "opt_view_statement",
+          "label": {
+            "en": "View Personal Statement & Dues Status",
+            "rw": "Kureba Fagitire & Imisanzu Yanjye",
+            "fr": "Voir mon relevé et statut"
+          },
+          "targetNode": "node_dues_statement"
+        },
+        {
+          "id": "opt_accountant_meter",
+          "label": {
+            "en": "Accountant Collection Meter & Approvals",
+            "rw": "Ipima ry'Umucungamari & Kwemeza",
+            "fr": "Compteur Comptable & Validations"
+          },
+          "targetNode": "node_accountant_meter"
+        },
+        {
+          "id": "opt_back_root_1",
+          "label": {
+            "en": "Back to Main Menu",
+            "rw": "Subira ku Ntangiriro",
+            "fr": "Retour au menu principal"
+          },
+          "targetNode": "root"
+        }
+      ]
+    },
+    "node_dues_statement": {
+      "id": "node_dues_statement",
+      "text": {
+        "en": "###  How to Check Your Dues Statement\n\n1. **On Dashboard**: Look for the **Personal Dues Standing & Compliance** card showing your total paid vs. outstanding balance.\n2. **On Fees & Dues Page**: Navigate to `/dashboard/fees`. The 'My Statement' tab displays every weekly, monthly, or flexible cycle assigned to your account with its current status ('Paid' or 'Pending').\n3. **Mobile Money Payment**: Click 'Pay via MoMo / Bank' next to any unpaid cycle, transfer to the cooperative's official number, and paste your transaction SMS code.",
+        "rw": "###  Uburyo bwo Kureba Imisanzu Yawe\n\n1. **Kuri Dashboard**: Reba ikarita ya **Personal Dues Standing & Compliance** yerekana amafaranga wishyuye n'asigaye.\n2. **Kuri Paji y'Imisanzu**: Jya kuri `/dashboard/fees`. Munsi y'Inyandiko Yanjye (My Statement) urasanga fagitire zose z'ibyumweru cyangwa amezi n'imiterere yazo (Yishuwe cyangwa Itarishyurwa).\n3. **Kwishyura kuri MoMo**: Kanda 'Pay via MoMo / Bank' ku misanzu itarishyurwa, ohereza amafaranga kuri nimero ya koperative maze wandike SMS wakiriye.",
+        "fr": "###  Comment consulter votre relevé de cotisations\n\n1. **Sur le tableau de bord** : Consultez l'encadré **Situation personnelle** avec le total réglé et le solde restant.\n2. **Page Cotisations** : Allez sur `/dashboard/fees`. L'onglet 'Mon relevé' liste chaque échéance avec son statut (Payé ou En attente).\n3. **Paiement MoMo** : Cliquez sur 'Payer par MoMo / Banque', effectuez le transfert vers le numéro officiel et collez votre SMS de confirmation."
+      },
+      "actionUrl": "/dashboard/fees",
+      "actionText": {
+        "en": "Go to Fees & Dues",
+        "rw": "Fungura Paji y'Imisanzu",
+        "fr": "Aller aux Cotisations"
+      },
+      "options": [
+        {
+          "id": "opt_start_dues_walkthrough",
+          "label": {
+            "en": "Launch Step-by-Step Payment Walkthrough",
+            "rw": "Tangira Imfashanyigisho y'Ubwishyu",
+            "fr": "Lancer le guide interactif de paiement"
+          },
+          "flowId": "record_dues_payment"
+        },
+        {
+          "id": "opt_back_dues",
+          "label": {
+            "en": "Back to Dues Menu",
+            "rw": "Subira ku Misanzu",
+            "fr": "Retour au menu Cotisations"
+          },
+          "targetNode": "node_dues"
+        }
+      ]
+    },
+    "node_accountant_meter": {
+      "id": "node_accountant_meter",
+      "text": {
+        "en": "###  Cooperative Dues Health & Collection Meter\n\n• **Exclusivity**: The real-time Collection Meter is displayed exclusively for **Accountants** on Growth and Pro subscription plans.\n• **Metrics Tracked**: Total Invoiced across all members, Total Collected & Settled, Percentage Collection Rate, Pending Collections, and Awaiting Verification submissions.\n• **Approvals Flow**: Go to `/dashboard/fees` > **Pending Approvals** tab to review submitted SMS receipts and verify them with one click.",
+        "rw": "###  Ipima ry'Imisanzu ry'Umucungamari (Collection Meter)\n\n• **Aho rigaragara**: Iri pima rigaragara gusa ku **Bacungamari (Accountants)** bari ku ifatabuguzi rya Growth cyangwa Pro.\n• **Ibyo ripima**: Amafaranga yose yishyuwe, ayasohotse, ijanisha ryo gukusanya (Collection Rate %), n'inyemezabwishyu zitegereje kwemezwa.\n• **Kwemezwa**: Jya kuri `/dashboard/fees` maze ukande kuri 'Pending Approvals' kwemeza ubutumwa bwa MoMo.",
+        "fr": "###  Compteur de recouvrement des cotisations\n\n• **Visibilité** : Réservé aux **Comptables** sur les forfaits Growth et Pro.\n• **Indicateurs** : Total facturé, Total encaissé, Taux de recouvrement (%), Reste à recouvrer et Pièces en attente de vérification.\n• **Validation** : Rendez-vous sur `/dashboard/fees` > onglet 'En attente' pour approuver les justificatifs MoMo."
+      },
+      "actionUrl": "/dashboard/fees",
+      "actionText": {
+        "en": "Open Accountant Ledger",
+        "rw": "Fungura Igitabo cy'Umucungamari",
+        "fr": "Ouvrir le registre comptable"
+      },
+      "options": [
+        {
+          "id": "opt_back_dues_2",
+          "label": {
+            "en": "Back to Dues Menu",
+            "rw": "Subira ku Misanzu",
+            "fr": "Retour au menu Cotisations"
+          },
+          "targetNode": "node_dues"
+        },
+        {
+          "id": "opt_back_root_2",
+          "label": {
+            "en": "Main Menu",
+            "rw": "Intangiriro",
+            "fr": "Menu principal"
+          },
+          "targetNode": "root"
+        }
+      ]
+    },
+    "node_documents": {
+      "id": "node_documents",
+      "text": {
+        "en": "###  Documents & In-App Office Workspace\n\nImpacto includes complete browser-based Word document formatting and Excel spreadsheet calculation engines with private access controls. What do you need help with?",
+        "rw": "###  Inyandiko & Porogaramu za Office\n\nImpacto irimo porogaramu zandika amabaruwa za Word n'imbonerahamwe za Excel zikorera mu mushakisha. Ni iki wifuza gusobanuza?",
+        "fr": "###  Documents & Espace Bureautique Intégré\n\nImpacto intègre un traitement de texte Word et un tableur Excel avec gestion des accès privés. Que souhaitez-vous faire ?"
+      },
+      "options": [
+        {
+          "id": "opt_flow_private_doc",
+          "label": {
+            "en": "Create Private Document & Restrict Access",
+            "rw": "Gukora Inyandiko y'Ibanga",
+            "fr": "Créer un document privé et restreint"
+          },
+          "flowId": "private_doc_access"
+        },
+        {
+          "id": "opt_flow_excel",
+          "label": {
+            "en": "In-App Excel Spreadsheets & Formulas",
+            "rw": "Imbonerahamwe za Excel muri Porogaramu",
+            "fr": "Tableur Excel et formules intégrées"
+          },
+          "flowId": "excel_office_ledger"
+        },
+        {
+          "id": "opt_back_root_3",
+          "label": {
+            "en": "Back to Main Menu",
+            "rw": "Subira ku Ntangiriro",
+            "fr": "Retour au menu principal"
+          },
+          "targetNode": "root"
+        }
+      ]
+    },
+    "node_members": {
+      "id": "node_members",
+      "text": {
+        "en": "###  Member Roster & Role Permissions\n\nManage cooperative members, import roster CSVs, and configure roles (Admin, Manager, Accountant, Participant).",
+        "rw": "###  Abanyamuryango & Inshingano\n\nCunga urutonde rw'abanyamuryango, injiza CSV, maze ushyireho inshingano z'imiyoborere.",
+        "fr": "###  Répertoire des Membres & Permissions\n\nGérez vos membres, importez des fichiers CSV et attribuez les rôles (Admin, Gestionnaire, Comptable, Membre)."
+      },
+      "options": [
+        {
+          "id": "opt_flow_members",
+          "label": {
+            "en": "How to Add Members & Assign Roles",
+            "rw": "Kwandika Umunyamuryango & Guha Inshingano",
+            "fr": "Ajouter des membres et définir les rôles"
+          },
+          "flowId": "member_management_roles"
+        },
+        {
+          "id": "opt_back_root_4",
+          "label": {
+            "en": "Back to Main Menu",
+            "rw": "Subira ku Ntangiriro",
+            "fr": "Retour au menu principal"
+          },
+          "targetNode": "root"
+        }
+      ]
+    },
+    "node_meetings": {
+      "id": "node_meetings",
+      "text": {
+        "en": "###  Meetings & Digital Minutes\n\nSchedule online video calls or physical assemblies, record live signed minutes, track agendas, and archive resolutions.",
+        "rw": "###  Inama n'Imyanzuro y'Inama\n\nTegura inama kuri interineti cyangwa amaso ku maso, andika imyanzuro n'amatora mu buryo buhoraho.",
+        "fr": "###  Réunions & Procès-verbaux Numériques\n\nPlanifiez vos réunions vidéo ou présentielles, rédigez les procès-verbaux en direct et archivez les résolutions."
+      },
+      "options": [
+        {
+          "id": "opt_flow_meetings",
+          "label": {
+            "en": "Schedule Meeting & Record Minutes",
+            "rw": "Gutegura Inama & Kwandika Imyanzuro",
+            "fr": "Planifier une réunion et rédiger le PV"
+          },
+          "flowId": "meetings_and_minutes"
+        },
+        {
+          "id": "opt_back_root_5",
+          "label": {
+            "en": "Back to Main Menu",
+            "rw": "Subira ku Ntangiriro",
+            "fr": "Retour au menu principal"
+          },
+          "targetNode": "root"
+        }
+      ]
+    },
+    "node_events": {
+      "id": "node_events",
+      "text": {
+        "en": "###  Events & QR Attendance\n\nCreate field activities, workshops, or assembly events. Generate instant cryptographic QR check-in posters and scan attendees with smartphone cameras.",
+        "rw": "###  Ibikorwa & Ubwitabire bwa QR\n\nTegura ibikorwa by'umuryango, kora impapuro za QR maze upime ubwitabire bw'abanyamuryango ukoresheje kamera ya telefoni.",
+        "fr": "###  Événements & Présence par QR Code\n\nOrganisez des ateliers et rassemblements. Générez des affiches QR de pointage et scannez les présences avec votre smartphone."
+      },
+      "options": [
+        {
+          "id": "opt_flow_events",
+          "label": {
+            "en": "Create Event & Setup QR Scanner",
+            "rw": "Gukora Igikorwa & Gushyiraho QR",
+            "fr": "Créer un événement & configurer le QR"
+          },
+          "flowId": "events_and_qr_attendance"
+        },
+        {
+          "id": "opt_back_root_6",
+          "label": {
+            "en": "Back to Main Menu",
+            "rw": "Subira ku Ntangiriro",
+            "fr": "Retour au menu principal"
+          },
+          "targetNode": "root"
+        }
+      ]
+    }
+  },
+  "flows": [
+    {
+      "id": "private_doc_access",
+      "category": "documents",
+      "titles": {
+        "en": "Create Private Document & Share with Members",
+        "rw": "Gukora Inyandiko y'Ibanga no Kuyisangiza Abanyamuryango",
+        "fr": "Créer un document privé et le partager avec des membres"
+      },
+      "descriptions": {
+        "en": "How to restrict access to a document so only you, admins, and specifically chosen members can read or edit it.",
+        "rw": "Uburyo bwo gushyiraho inyandiko y'ibanga igaragara gusa kuri wowe, abayobozi, n'abanyamuryango wahisemo.",
+        "fr": "Comment restreindre l'accès à un document afin que seuls vous, les administrateurs et les membres choisis puissent y accéder."
+      },
+      "targetUrl": "/dashboard/documents",
+      "keywords": {
+        "en": [
+          "private",
+          "document",
+          "word",
+          "excel",
+          "share",
+          "secret",
+          "access",
+          "lock",
+          "recipient",
+          "letter"
+        ],
+        "rw": [
+          "ibanga",
+          "inyandiko",
+          "gusangiza",
+          "umunyamuryango",
+          "guhisha",
+          "urupapuro",
+          "uburenganzira"
+        ],
+        "fr": [
+          "privé",
+          "document",
+          "partager",
+          "accès",
+          "confidentiel",
+          "verrouiller",
+          "destinataire",
+          "lettre"
+        ]
+      },
+      "explanation": {
+        "en": "Impacto provides granular document security. By default, general documents are visible to all registered cooperative members. When you mark a file as 'Private Document', it is encrypted from regular view. Only Administrators, Accountants, the original Author, and members selected in the 'Authorized Members' list can view or open the file.",
+        "rw": "Impacto itanga umutekano ukomeye w'inyandiko. Inyandiko zisanzwe zibonwa na buri munyamuryango. Iyo wahisemo 'Private Document', ihita igirwa ibanga. Igirwa icyegera cy'Abayobozi, Abacungamari, uwanditse inyandiko, n'abanyamuryango batoranyijwe gusa.",
+        "fr": "Impacto offre une sécurité documentaire granulaire. Par défaut, les documents généraux sont visibles par tous les membres. En cochant 'Document privé', le fichier devient restreint et uniquement accessible aux administrateurs, comptables, à l'auteur et aux membres autorisés."
+      },
+      "steps": [
+        {
+          "stepNumber": 1,
+          "title": {
+            "en": "Navigate to Documents Center",
+            "rw": "Jya mu Cyumba cy'Inyandiko",
+            "fr": "Accédez au Centre de Documents"
+          },
+          "action": {
+            "en": "Click 'Documents' in the left navigation sidebar.",
+            "rw": "Kanda kuri 'Inyandiko' muri menu yo ku ruhande.",
+            "fr": "Cliquez sur 'Documents' dans la barre latérale."
+          },
+          "targetElement": "Sidebar > Documents",
+          "tip": {
+            "en": "You can view all your stored folders, letters, spreadsheets, and PDF archive.",
+            "rw": "Urabona ububiko bwose bw'amabaruwa, Excel na PDF.",
+            "fr": "Vous y trouverez vos dossiers, lettres, tableurs et archives PDF."
+          }
+        },
+        {
+          "stepNumber": 2,
+          "title": {
+            "en": "Launch the In-App Office Editor",
+            "rw": "Fungura In-App Office",
+            "fr": "Ouvrez l'éditeur In-App Office"
+          },
+          "action": {
+            "en": "Click '+ New In-App File' or '+ Create Word/Letter' / '+ Create Spreadsheet'.",
+            "rw": "Kanda kuri '+ New In-App File' cyangwa '+ Create Word/Letter'.",
+            "fr": "Cliquez sur '+ Nouveau fichier In-App' ou '+ Créer Word/Lettre'."
+          },
+          "targetElement": "Header Button: + New In-App File",
+          "tip": {
+            "en": "Impacto includes full in-browser Word processing and Excel spreadsheet engines.",
+            "rw": "Harimo porogaramu zandika za Word n'imbonerahamwe za Excel.",
+            "fr": "Impacto intègre un traitement de texte Word et un tableur Excel complets."
+          }
+        },
+        {
+          "stepNumber": 3,
+          "title": {
+            "en": "Enable Private Document Mode",
+            "rw": "Shyiraho Ibanga (Private Document)",
+            "fr": "Activez le mode Document Privé"
+          },
+          "action": {
+            "en": "In the right-side Settings sidebar of the editor, locate 'Dissemination & Sharing' and check the 'Private Document' checkbox.",
+            "rw": "Muri menu y'iburyo, kanda agasanduku ka 'Private Document'.",
+            "fr": "Dans le panneau latéral droit de l'éditeur, cochez la case 'Document Privé'."
+          },
+          "targetElement": "Editor Settings > Private Document Checkbox",
+          "tip": {
+            "en": "A red lock icon confirms privacy mode is activated.",
+            "rw": "Ikirango cy'ingufuri gitukura kigaragaza ko ibanga ryakiriwe.",
+            "fr": "Un cadenas rouge confirme l'activation de la confidentialité."
+          }
+        },
+        {
+          "stepNumber": 4,
+          "title": {
+            "en": "Select Authorized Member Recipients",
+            "rw": "Hitamo Abanyamuryango Bemerewe",
+            "fr": "Sélectionnez les membres autorisés"
+          },
+          "action": {
+            "en": "Use the search bar to filter members and check the checkboxes next to individuals who should have read/edit access.",
+            "rw": "Koresha agasanduku ko gushakisha maze uhitemo abanyamuryango bahawe uburenganzira.",
+            "fr": "Utilisez le champ de recherche et cochez les membres devant avoir accès au fichier."
+          },
+          "targetElement": "Authorized Members Picker",
+          "tip": {
+            "en": "Only checked members will see this file in their document vault.",
+            "rw": "Abanyamuryango batoranyijwe bonyine nibo bazabona iyi nyandiko.",
+            "fr": "Seuls les membres cochés verront ce fichier dans leur espace."
+          }
+        },
+        {
+          "stepNumber": 5,
+          "title": {
+            "en": "Save & Disseminate",
+            "rw": "Bika Inyandiko",
+            "fr": "Enregistrez et diffusez"
+          },
+          "action": {
+            "en": "Enter a document title and click 'Save Document' or 'Download Official PDF'.",
+            "rw": "Andika umutwe w'inyandiko maze ukande 'Save Document'.",
+            "fr": "Donnez un nom au document puis cliquez sur 'Enregistrer le document'."
+          },
+          "targetElement": "Editor Topbar > Save Document Button",
+          "tip": {
+            "en": "You can edit permissions anytime via 'Manage Access' from the document list.",
+            "rw": "Ushobora guhindura uburenganzira igihe cyose.",
+            "fr": "Vous pouvez modifier les accès à tout moment via 'Gérer les accès'."
+          }
+        }
+      ],
+      "faq": [
+        {
+          "question": {
+            "en": "Can normal members see private files they aren't assigned to?",
+            "rw": "Ese abanyamuryango batatoranyijwe bashobora kubona inyandiko z'ibanga?",
+            "fr": "Les membres non autorisés peuvent-ils voir les fichiers privés ?"
+          },
+          "answer": {
+            "en": "No. Private documents are completely hidden from non-authorized members across all search and listing views.",
+            "rw": "Oya. Inyandiko z'ibanga zihishwa burundu abanyamuryango batabifitiye uburenganzira.",
+            "fr": "Non. Les documents privés sont totalement invisibles pour les membres non autorisés."
+          }
+        }
+      ]
+    },
+    {
+      "id": "record_dues_payment",
+      "category": "finance",
+      "titles": {
+        "en": "Record & Pay Cooperative Dues",
+        "rw": "Kwishyura & Kwandika Imisanzu ya Koperative",
+        "fr": "Enregistrer et payer les cotisations coopératives"
+      },
+      "descriptions": {
+        "en": "Step-by-step guide to clearing outstanding dues via Mobile Money (MTN MoMo/Airtel), bank transfer, or cash logging.",
+        "rw": "Intambwe ku yindi yo kwishyura imisanzu hakoreshejwe MTN MoMo, Airtel Money, banki cyangwa amafaranga mu ntoki.",
+        "fr": "Guide pour régler les cotisations par Mobile Money (MTN MoMo), virement bancaire ou espèces."
+      },
+      "targetUrl": "/dashboard/fees",
+      "keywords": {
+        "en": [
+          "dues",
+          "fees",
+          "payment",
+          "momo",
+          "invoice",
+          "receipt",
+          "accountant",
+          "settle",
+          "contribution",
+          "money",
+          "standing"
+        ],
+        "rw": [
+          "imisanzu",
+          "kwishyura",
+          "amafaranga",
+          "momo",
+          "umucungamari",
+          "fagitire",
+          "ubwishyu"
+        ],
+        "fr": [
+          "cotisation",
+          "payer",
+          "momo",
+          "facture",
+          "reçu",
+          "comptable",
+          "frais",
+          "argent",
+          "versement"
+        ]
+      },
+      "explanation": {
+        "en": "Cooperative members receive periodic fee notices (monthly dues, shares, emergency funds). All members can submit payments directly through MoMo/Bank with proof SMS/slips. The cooperative accountant or administrator verifies submitted payments to keep the member in Good Standing.",
+        "rw": "Abanyamuryango bakira fagitire z'imisanzu (ukwezi, imigabane, ikigega). Bashobora kwishyura bakoresheje MoMo maze bakohereza ubutumwa bwa SMS nk'ikimenyetso. Umucungamari aremeza ubwishyu.",
+        "fr": "Les membres reçoivent des avis de cotisation périodiques. Ils peuvent soumettre leur règlement via MoMo/Banque avec le message de confirmation. Le comptable vérifie ensuite pour valider le statut en règle."
+      },
+      "steps": [
+        {
+          "stepNumber": 1,
+          "title": {
+            "en": "Open Member Fees & Dues",
+            "rw": "Fungura Imisanzu (Fees & Dues)",
+            "fr": "Ouvrez Cotisations & Frais"
+          },
+          "action": {
+            "en": "Click 'Fees & Dues' on the navigation menu or the 'Pay Outstanding Dues' button on your dashboard.",
+            "rw": "Kanda kuri 'Fees & Dues' cyangwa buto ya 'Pay Outstanding Dues' kuri dashboard.",
+            "fr": "Cliquez sur 'Cotisations & Frais' dans le menu ou sur 'Payer les cotisations' sur le tableau de bord."
+          },
+          "targetElement": "Sidebar > Fees & Dues",
+          "tip": {
+            "en": "Your personal statement displays all paid and pending invoice cycles.",
+            "rw": "Imbonerahamwe yawe yerekana ibyishyuwe n'ibitarishyurwa.",
+            "fr": "Votre relevé individuel affiche les cotisations réglées et en attente."
+          }
+        },
+        {
+          "stepNumber": 2,
+          "title": {
+            "en": "Select the Pending Invoice",
+            "rw": "Hitamo Fagitire Itarishyurwa",
+            "fr": "Sélectionnez la cotisation impayée"
+          },
+          "action": {
+            "en": "Find your pending due row under 'Pending Invoices' and click 'Pay via MoMo / Bank'.",
+            "rw": "Shaka fagitire itarishyurwa maze ukande 'Pay via MoMo / Bank'.",
+            "fr": "Repérez la cotisation dans 'Factures en attente' et cliquez sur 'Payer par MoMo / Banque'."
+          },
+          "targetElement": "Pending Invoices Table > Pay Button",
+          "tip": {
+            "en": "You can pay multiple cycles in one transaction.",
+            "rw": "Ushobora kwishyura amezi menshi icyarimwe.",
+            "fr": "Vous pouvez payer plusieurs échéances en une seule fois."
+          }
+        },
+        {
+          "stepNumber": 3,
+          "title": {
+            "en": "Send Mobile Money & Paste SMS Reference",
+            "rw": "Ohereza MoMo maze wandike Ubutumwa",
+            "fr": "Transférez par MoMo et collez la référence SMS"
+          },
+          "action": {
+            "en": "Send the required amount to the cooperative's official MoMo/Bank number displayed on screen, then paste the transaction SMS confirmation code.",
+            "rw": "Ohereza amafaranga kuri nimero ya Koperative maze wandike kode ya SMS yo kwishyura.",
+            "fr": "Effectuez le transfert vers le compte de la coopérative et collez le code ou SMS de confirmation."
+          },
+          "targetElement": "Payment Modal > SMS Proof Input",
+          "tip": {
+            "en": "Including the sender phone number speeds up accountant verification.",
+            "rw": "Gushyiraho nimero ya telefoni byihutisha kwemezwa n'umucungamari.",
+            "fr": "Indiquer le numéro émetteur facilite la validation comptable."
+          }
+        },
+        {
+          "stepNumber": 4,
+          "title": {
+            "en": "Accountant Approval & Verification",
+            "rw": "Kwemezwa n'Umucungamari",
+            "fr": "Validation par le comptable"
+          },
+          "action": {
+            "en": "The submission enters the 'Awaiting Verification' queue. Once the accountant verifies the bank/MoMo log, your compliance status turns to 'Good Standing' immediately.",
+            "rw": "Ubwishyu buhita bugera ku mucungamari ngo abwemeze. Iyo byemejwe uhita ubona 'Good Standing'.",
+            "fr": "La preuve entre en file de vérification. Dès validation, votre statut passe immédiatement à 'En règle'."
+          },
+          "targetElement": "Accountant Ledger > Verification Tab",
+          "tip": {
+            "en": "Instant digital receipts are issued for download.",
+            "rw": "Inyemezabwishyu ihita iboneka yo gukuramo (download).",
+            "fr": "Un reçu numérique téléchargeable est émis instantanément."
+          }
+        }
+      ],
+      "faq": [
+        {
+          "question": {
+            "en": "Where do I see the Accountant Collection Meter?",
+            "rw": "Ipima ry'imisanzu ry'umucungamari riboneka he?",
+            "fr": "Où voir le compteur de recouvrement des cotisations ?"
+          },
+          "answer": {
+            "en": "The Cooperative Dues Health & Collection Meter is exclusively displayed on the dashboard for users with the 'Accountant' role. Admins and members see their respective compliance summaries.",
+            "rw": "Ipima ry'imisanzu rigaragara gusa kuri dashboard y'ufite inshingano z'Umucungamari (Accountant).",
+            "fr": "Le compteur de recouvrement est affiché exclusivement sur le tableau de bord du rôle Comptable."
+          }
+        }
+      ]
+    },
+    {
+      "id": "excel_office_ledger",
+      "category": "documents",
+      "titles": {
+        "en": "Create & Calculate In-App Excel Spreadsheets",
+        "rw": "Gukora Imbonerahamwe za Excel muri Porogaramu",
+        "fr": "Créer et calculer des tableurs Excel intégrés"
+      },
+      "descriptions": {
+        "en": "Build interactive spreadsheets with mathematical formulas (SUM, AVERAGE, MIN, MAX), custom cell colors, and CSV export.",
+        "rw": "Kora imbonerahamwe zirimo imibare na fformile (SUM, AVERAGE), amabara y'utuzu, no gukuramo CSV.",
+        "fr": "Concevez des feuilles de calcul interactives avec formules mathématiques (SOMME, MOYENNE), couleurs et export CSV."
+      },
+      "targetUrl": "/dashboard/documents",
+      "keywords": {
+        "en": [
+          "excel",
+          "spreadsheet",
+          "table",
+          "formula",
+          "sum",
+          "math",
+          "grid",
+          "calculation",
+          "cells",
+          "csv"
+        ],
+        "rw": [
+          "excel",
+          "imbonerahamwe",
+          "imibare",
+          "fomire",
+          "utuzu",
+          "kubara",
+          "koperative",
+          "csv"
+        ],
+        "fr": [
+          "excel",
+          "tableur",
+          "feuille",
+          "formule",
+          "somme",
+          "calcul",
+          "grille",
+          "cellules",
+          "csv"
+        ]
+      },
+      "explanation": {
+        "en": "Impacto includes a fully featured Excel spreadsheet workspace directly inside the browser. You do not need Microsoft Office or Google Sheets installed. You can define rows, columns, enter formulas like =SUM(A1:A10), customize headers, and save files directly to your cooperative repository.",
+        "rw": "Impacto irimo Excel yuzuye ikorera mu mushakisha. Nta mpamvu yo kugira Microsoft Office. Ushobora gushyiramo imbonerahamwe, gukora imibare nka =SUM(A1:A10), no kubika inyandiko mu bubiko bwa koperative.",
+        "fr": "Impacto embarque un tableur Excel complet dans votre navigateur sans logiciel tiers. Saisissez vos formules comme =SOMME(A1:A10), personnalisez les cellules et enregistrez vos classeurs directement."
+      },
+      "steps": [
+        {
+          "stepNumber": 1,
+          "title": {
+            "en": "Open In-App Office",
+            "rw": "Fungura In-App Office",
+            "fr": "Ouvrez l'In-App Office"
+          },
+          "action": {
+            "en": "Go to 'Documents' and click '+ New In-App File'.",
+            "rw": "Kanda kuri 'Documents' maze ukande '+ New In-App File'.",
+            "fr": "Allez dans 'Documents' et cliquez sur '+ Nouveau fichier In-App'."
+          },
+          "targetElement": "Documents Center > + New In-App File",
+          "tip": {
+            "en": "Select 'Excel Spreadsheet' under the File Format options.",
+            "rw": "Hitamo 'Excel Spreadsheet' mu bwoko bw'idosiye.",
+            "fr": "Sélectionnez 'Feuille de calcul Excel' dans le sélecteur de format."
+          }
+        },
+        {
+          "stepNumber": 2,
+          "title": {
+            "en": "Enter Data & Formulas",
+            "rw": "Injiza Amakuru & Fomire",
+            "fr": "Saisissez données et formules"
+          },
+          "action": {
+            "en": "Click on any grid cell to type numbers, text, or formulas like =SUM(B2:B10).",
+            "rw": "Kanda mu kazu maze wandikemo imibare, inyandiko cyangwa fomire nka =SUM(B2:B10).",
+            "fr": "Cliquez sur une cellule pour entrer du texte, des nombres ou des formules comme =SOMME(B2:B10)."
+          },
+          "targetElement": "Spreadsheet Grid Canvas",
+          "tip": {
+            "en": "Press Enter to compute and navigate to the next row.",
+            "rw": "Kanda Enter kugira ngo fomire ibare neza.",
+            "fr": "Appuyez sur Entrée pour valider le calcul automatique."
+          }
+        },
+        {
+          "stepNumber": 3,
+          "title": {
+            "en": "Format Columns & Add Rows",
+            "rw": "Tunganya Inkingi n'Imirongo",
+            "fr": "Formatez colonnes et lignes"
+          },
+          "action": {
+            "en": "Use '+ Row' or '+ Col' buttons to expand your table. Use the toolbar to style font weight and alignment.",
+            "rw": "Koresha buto za '+ Row' cyangwa '+ Col' kongera imirongo n'inkingi.",
+            "fr": "Utilisez les boutons '+ Ligne' ou '+ Colonne' pour agrandir le tableau."
+          },
+          "targetElement": "Spreadsheet Toolbar",
+          "tip": {
+            "en": "Click 'Export CSV' anytime to save a copy locally.",
+            "rw": "Kanda 'Export CSV' kubika kopi muri mudasobwa.",
+            "fr": "Cliquez sur 'Exporter CSV' pour télécharger une copie locale."
+          }
+        },
+        {
+          "stepNumber": 4,
+          "title": {
+            "en": "Save to Cooperative Repository",
+            "rw": "Bika muri Koperative",
+            "fr": "Enregistrez dans la coopérative"
+          },
+          "action": {
+            "en": "Type the file name in the top header and click 'Save Spreadsheet'.",
+            "rw": "Andika izina ry'idosiye hejuru maze ukande 'Save Spreadsheet'.",
+            "fr": "Entrez le nom du fichier et cliquez sur 'Enregistrer le tableur'."
+          },
+          "targetElement": "Topbar > Save Button",
+          "tip": {
+            "en": "Your teammates can open and collaborate on the sheet based on access permissions.",
+            "rw": "Abo mukorana bashobora kuyifungura hashingiwe ku burenganzira bahawe.",
+            "fr": "Vos collaborateurs pourront l'ouvrir selon les permissions attribuées."
+          }
+        }
+      ],
+      "faq": [
+        {
+          "question": {
+            "en": "Which formulas are supported in the In-App Excel?",
+            "rw": "Ni izihe fomire zemewe muri Excel yacu?",
+            "fr": "Quelles formules sont supportées dans le tableur Excel ?"
+          },
+          "answer": {
+            "en": "The engine supports SUM, AVERAGE, MIN, MAX, COUNT, basic arithmetic (+, -, *, /), percentage calculations, and cell reference ranges like A1:D10.",
+            "rw": "Hakoramo SUM, AVERAGE, MIN, MAX, COUNT, guteranya, gukuramo, gukuba, kugabanya n'ibipimo by'ijana.",
+            "fr": "Le moteur prend en charge SOMME, MOYENNE, MIN, MAX, NB, les opérations de base (+, -, *, /) et les plages de cellules."
+          }
+        }
+      ]
+    },
+    {
+      "id": "member_management_roles",
+      "category": "members",
+      "titles": {
+        "en": "Add Members & Assign Access Roles",
+        "rw": "Kwandika Abanyamuryango & Guha Inshingano",
+        "fr": "Ajouter des membres et attribuer des rôles"
+      },
+      "descriptions": {
+        "en": "How to register new cooperative members, import CSV rosters, and assign Admin, Manager, Accountant, or Member roles.",
+        "rw": "Uburyo bwo kwandika abanyamuryango bashya no kubaha inshingano z'Ubuyobozi, Imicungire, n'Ubucungamari.",
+        "fr": "Comment enregistrer de nouveaux membres, importer une liste CSV et définir les rôles Administrateur, Comptable ou Membre."
+      },
+      "targetUrl": "/dashboard/members",
+      "keywords": {
+        "en": [
+          "member",
+          "add member",
+          "role",
+          "admin",
+          "accountant",
+          "manager",
+          "csv",
+          "import",
+          "register",
+          "user"
+        ],
+        "rw": [
+          "umunyamuryango",
+          "kwandika",
+          "inshingano",
+          "umuyobozi",
+          "umucungamari",
+          "koperative",
+          "urutonde"
+        ],
+        "fr": [
+          "membre",
+          "ajouter",
+          "rôle",
+          "administrateur",
+          "comptable",
+          "gestionnaire",
+          "csv",
+          "inscrire"
+        ]
+      },
+      "explanation": {
+        "en": "Admins can add individual members with their full name, phone number, email, and cooperative ID, or import hundreds at once via CSV. Each member is assigned a specific role (Admin, Manager, Accountant, Member, Volunteer) that dynamically adapts their accessible views and security privileges.",
+        "rw": "Abayobozi bashobora kwandika abanyamuryango ku giti cyabo cyangwa benshi icyarimwe bakoresheje CSV. Buri wese ahabwa inshingano (Admin, Manager, Accountant, Member) zigenzura ibyo yemerewe kureba.",
+        "fr": "Les administrateurs peuvent inscrire des membres un par un ou par lot via CSV. Chaque profil reçoit un rôle spécifique déterminant automatiquement ses accès et permissions sécurisées."
+      },
+      "steps": [
+        {
+          "stepNumber": 1,
+          "title": {
+            "en": "Go to Members Directory",
+            "rw": "Jya ku Rutonde rw'Abanyamuryango",
+            "fr": "Accédez au Répertoire des Membres"
+          },
+          "action": {
+            "en": "Click 'Members' in the sidebar navigation.",
+            "rw": "Kanda kuri 'Members' muri menu yo ku ruhande.",
+            "fr": "Cliquez sur 'Membres' dans le menu latéral."
+          },
+          "targetElement": "Sidebar > Members",
+          "tip": {
+            "en": "You will see active member counts, verified IDs, and membership compliance.",
+            "rw": "Urabona umubare w'abanyamuryango bose n'imiterere yabo.",
+            "fr": "Visualisez les effectifs, statuts et pièces d'identité vérifiées."
+          }
+        },
+        {
+          "stepNumber": 2,
+          "title": {
+            "en": "Click Register New Member",
+            "rw": "Kanda Kwandika Umunyamuryango Mushya",
+            "fr": "Cliquez sur Inscrire un nouveau membre"
+          },
+          "action": {
+            "en": "Click the '+ Add Member' button on the top right.",
+            "rw": "Kanda kuri '+ Add Member' hejuru iburyo.",
+            "fr": "Cliquez sur le bouton '+ Ajouter un membre' en haut à droite."
+          },
+          "targetElement": "Members Page > + Add Member Button",
+          "tip": {
+            "en": "For bulk additions, click 'Bulk CSV Import' instead.",
+            "rw": "Ku bantu benshi icyarimwe, koresha 'Bulk CSV Import'.",
+            "fr": "Pour un ajout massif, utilisez plutôt 'Importation CSV'."
+          }
+        },
+        {
+          "stepNumber": 3,
+          "title": {
+            "en": "Fill Profile Details & Assign Role",
+            "rw": "Uzuza Imyirondoro & Inshingano",
+            "fr": "Renseignez le profil et le rôle"
+          },
+          "action": {
+            "en": "Enter the member's full name, phone number, national ID, and choose their role: Member, Accountant, Manager, or Admin.",
+            "rw": "Andika amazina, telefone, indangamuntu, maze uhitemo inshingano: Member, Accountant, Manager, cyangwa Admin.",
+            "fr": "Saisissez nom, téléphone, CNI, puis sélectionnez le rôle approprié."
+          },
+          "targetElement": "Member Form > Role Dropdown",
+          "tip": {
+            "en": "Accountant role unlocks the financial collection health meter and bookkeeping ledgers.",
+            "rw": "Inshingano y'Umucungamari ituma abona ipima ry'imisanzu n'ibitabo by'imari.",
+            "fr": "Le rôle Comptable active le tableau de bord de collecte financière et le grand livre."
+          }
+        },
+        {
+          "stepNumber": 4,
+          "title": {
+            "en": "Save & Send Invitation",
+            "rw": "Bika & Ohereza Ubutumire",
+            "fr": "Enregistrez et invitez"
+          },
+          "action": {
+            "en": "Click 'Confirm Registration'. An onboarding notice is generated.",
+            "rw": "Kanda 'Confirm Registration'.",
+            "fr": "Cliquez sur 'Confirmer l'inscription'."
+          },
+          "targetElement": "Modal > Submit Button",
+          "tip": {
+            "en": "The member can log in using their registered email/phone and start collaborating.",
+            "rw": "Umunyamuryango ashobora guhita yinjira agakoresha urubuga.",
+            "fr": "Le membre peut se connecter directement avec ses identifiants."
+          }
+        }
+      ],
+      "faq": []
+    },
+    {
+      "id": "meetings_and_minutes",
+      "category": "meetings",
+      "titles": {
+        "en": "Schedule Meetings & Record Signed Minutes",
+        "rw": "Gutegura Inama & Kwandika Imyanzuro Yemejwe",
+        "fr": "Planifier des réunions et rédiger des procès-verbaux"
+      },
+      "descriptions": {
+        "en": "Create virtual video calls (Google Meet / Jitsi) or in-person assemblies, take live minutes, and record member votes.",
+        "rw": "Tegura inama kuri interineti cyangwa amaso ku maso, andika imyanzuro n'amatora y'abanyamuryango.",
+        "fr": "Organisez des réunions vidéo ou présentielles, rédigez les comptes-rendus en direct et enregistrez les votes."
+      },
+      "targetUrl": "/dashboard/meetings",
+      "keywords": {
+        "en": [
+          "meeting",
+          "minutes",
+          "assembly",
+          "video",
+          "call",
+          "google meet",
+          "jitsi",
+          "resolutions",
+          "agenda",
+          "vote"
+        ],
+        "rw": [
+          "inama",
+          "imyanzuro",
+          "amatora",
+          "inteko",
+          "videwo",
+          "gahunda",
+          "koperative"
+        ],
+        "fr": [
+          "réunion",
+          "procès-verbal",
+          "assemblée",
+          "vidéo",
+          "meet",
+          "résolution",
+          "ordre du jour",
+          "vote"
+        ]
+      },
+      "explanation": {
+        "en": "Keep formal records of General Assemblies, Board Meetings, and Committee sessions. Impacto allows one-click generation of video call links, live collaborative minutes drafting, agenda tracking, and digital resolution voting.",
+        "rw": "Bika neza inyandiko z'inteko rusange n'inama za komite. Impacto itanga uburyo bwo gukora inama za videwo, kwandika imyanzuro mu nama no gukora amatora.",
+        "fr": "Conservez les traces officielles de vos assemblées générales et comités. Générez des liens vidéo en un clic, rédigez les procès-verbaux et organisez les votes de résolutions."
+      },
+      "steps": [
+        {
+          "stepNumber": 1,
+          "title": {
+            "en": "Navigate to Meetings Hub",
+            "rw": "Jya mu Cyumba cy'Inama",
+            "fr": "Accédez aux Réunions"
+          },
+          "action": {
+            "en": "Click 'Meetings' in the sidebar.",
+            "rw": "Kanda kuri 'Meetings' muri menu.",
+            "fr": "Cliquez sur 'Réunions' dans le menu latéral."
+          },
+          "targetElement": "Sidebar > Meetings",
+          "tip": {
+            "en": "Upcoming and past archived meetings are organized clearly.",
+            "rw": "Inama ziteganyijwe n'izahise zose ziteguye neza.",
+            "fr": "Les réunions futures et passées sont ordonnées chronologiquement."
+          }
+        },
+        {
+          "stepNumber": 2,
+          "title": {
+            "en": "Schedule New Assembly or Session",
+            "rw": "Tegura Inama Nshya",
+            "fr": "Planifiez une nouvelle session"
+          },
+          "action": {
+            "en": "Click '+ Schedule Meeting' button.",
+            "rw": "Kanda kuri '+ Schedule Meeting'.",
+            "fr": "Cliquez sur '+ Planifier une réunion'."
+          },
+          "targetElement": "Meetings Page > + Schedule Meeting",
+          "tip": {
+            "en": "Choose between 'Online Video Conference' and 'In-Person Venue'.",
+            "rw": "Hitamo niba ari inama kuri interineti cyangwa ahasanzwe.",
+            "fr": "Choisissez entre visioconférence en ligne et présentiel."
+          }
+        },
+        {
+          "stepNumber": 3,
+          "title": {
+            "en": "Set Agenda & Attendees",
+            "rw": "Shyiraho Gahunda n'Abitabira",
+            "fr": "Définissez l'ordre du jour et les participants"
+          },
+          "action": {
+            "en": "Enter the meeting title, date/time, agenda bullet points, and select participating committee members or all members.",
+            "rw": "Andika umutwe w'inama, itariki, ibizigwaho n'abatumirwa.",
+            "fr": "Indiquez l'intitulé, la date/heure, les points de l'ordre du jour et les invités."
+          },
+          "targetElement": "Meeting Modal > Agenda Inputs",
+          "tip": {
+            "en": "For online meetings, an auto-generated video room is created immediately.",
+            "rw": "Ku nama za videwo, icyumba cy'inama gihita gikurwaho ako kanya.",
+            "fr": "Un lien de visioconférence est généré automatiquement."
+          }
+        },
+        {
+          "stepNumber": 4,
+          "title": {
+            "en": "Take Live Minutes & Record Resolutions",
+            "rw": "Andika Imyanzuro y'Inama",
+            "fr": "Rédigez le PV et les résolutions"
+          },
+          "action": {
+            "en": "During or after the meeting, open the session and click 'Edit / Take Minutes' to record decisions, assign action items, and publish the signed record.",
+            "rw": "Mu nama cyangwa nyuma yayo, kanda 'Edit / Take Minutes' wandike ibyemejwe n'imyanzuro.",
+            "fr": "Pendant la session, cliquez sur 'Rédiger le PV' pour enregistrer les décisions et les publier."
+          },
+          "targetElement": "Meeting Card > Take Minutes",
+          "tip": {
+            "en": "Published minutes are permanently archived in the cooperative's legal records.",
+            "rw": "Imyanzuro yatangajwe ibikwa burundu mu mateka ya koperative.",
+            "fr": "Les procès-verbaux publiés sont archivés de façon permanente."
+          }
+        }
+      ],
+      "faq": []
+    },
+    {
+      "id": "events_and_qr_attendance",
+      "category": "events",
+      "titles": {
+        "en": "Create Events & Scan QR Attendance",
+        "rw": "Gukora Ibikorwa & Kwandika Ubwitabire bwa QR",
+        "fr": "Créer des événements et scanner la présence QR"
+      },
+      "descriptions": {
+        "en": "Organize community training, planting days, or outreach events with digital RSVP and instant QR code badge check-ins.",
+        "rw": "Tegura ibikorwa by'umuryango no kwandika ubwitabire bwihuse ukoresheje gupima kode ya QR.",
+        "fr": "Organisez des événements communautaires avec inscriptions et enregistrement instantané des présences par QR code."
+      },
+      "targetUrl": "/dashboard/events",
+      "keywords": {
+        "en": [
+          "event",
+          "qr code",
+          "attendance",
+          "check-in",
+          "scan",
+          "rsvp",
+          "training",
+          "assembly",
+          "calendar"
+        ],
+        "rw": [
+          "igikorwa",
+          "ubwitabire",
+          "qr kode",
+          "gusikana",
+          "kwiyandikisha",
+          "kalendari"
+        ],
+        "fr": [
+          "événement",
+          "qr code",
+          "présence",
+          "pointage",
+          "scanner",
+          "calendrier",
+          "inscription"
+        ]
+      },
+      "explanation": {
+        "en": "Impacto eliminates manual paper sign-in sheets. For any event, a unique cryptographic QR Check-in Code is generated. Organizers can print the QR check-in sheet or scan members' digital ID passes via smartphone camera to register timestamped attendance automatically.",
+        "rw": "Impacto ikuraho impapuro zo gusinyiraho. Buri gikorwa gihabwa kode ya QR idasanzwe. Ushobora gucapa urupapuro rwa QR cyangwa gupima indangamuntu y'umunyamuryango ukoresheje kamera ya telefoni.",
+        "fr": "Impacto remplace les feuilles d'émargement papier. Un QR code unique est généré pour chaque événement, permettant aux membres de badger instantanément avec leur smartphone."
+      },
+      "steps": [
+        {
+          "stepNumber": 1,
+          "title": {
+            "en": "Open Events & Calendar",
+            "rw": "Fungura Ibikorwa na Kalendari",
+            "fr": "Ouvrez Événements & Calendrier"
+          },
+          "action": {
+            "en": "Click 'Events & Calendar' from the sidebar.",
+            "rw": "Kanda kuri 'Events & Calendar' muri menu.",
+            "fr": "Cliquez sur 'Événements & Calendrier' dans le menu."
+          },
+          "targetElement": "Sidebar > Events",
+          "tip": {
+            "en": "View all scheduled workshops, field days, and coop assemblies.",
+            "rw": "Urabona gahunda zose z'amahugurwa n'ibikorwa bya koperative.",
+            "fr": "Consultez le calendrier des ateliers et rassemblements."
+          }
+        },
+        {
+          "stepNumber": 2,
+          "title": {
+            "en": "Create New Event",
+            "rw": "Kora Igikorwa Gishya",
+            "fr": "Créez un nouvel événement"
+          },
+          "action": {
+            "en": "Click '+ Create Event', fill in event title, location, date, capacity, and cover image.",
+            "rw": "Kanda '+ Create Event' maze wandike umutwe w'igikorwa, aho kizabera, n'itariki.",
+            "fr": "Cliquez sur '+ Créer un événement' et saisissez les informations."
+          },
+          "targetElement": "Events Page > + Create Event Button",
+          "tip": {
+            "en": "You can publish it publicly on your @slug portal or restrict to members.",
+            "rw": "Ushobora kubishyira ku rubuga rusange cyangwa ku banyamuryango gusa.",
+            "fr": "Vous pouvez le publier sur votre page publique @slug ou le réserver aux membres."
+          }
+        },
+        {
+          "stepNumber": 3,
+          "title": {
+            "en": "Generate QR Check-in Poster or Scanner",
+            "rw": "Kora Urupapuro rwa QR cyangwa Scanner",
+            "fr": "Générez le QR de présence ou ouvrez le scanner"
+          },
+          "action": {
+            "en": "Click on the created event card and select 'Print QR Check-in Poster' or 'Open QR Camera Scanner'.",
+            "rw": "Kanda ku gikorwa maze uhitemo 'Print QR Check-in Poster' cyangwa 'Open QR Camera Scanner'.",
+            "fr": "Cliquez sur l'événement et choisissez 'Imprimer l'affiche QR' ou 'Ouvrir le scanner'."
+          },
+          "targetElement": "Event Details > QR Actions",
+          "tip": {
+            "en": "Members scan the code on their phones to check in, or staff scans attendees.",
+            "rw": "Abanyamuryango bapima kode kuri telefoni zabo bakiyandikisha ako kanya.",
+            "fr": "Les membres scannent le code à l'entrée pour valider leur présence."
+          }
+        }
+      ],
+      "faq": []
+    },
+    {
+      "id": "financial_ledger_bookkeeping",
+      "category": "finance",
+      "titles": {
+        "en": "Double-Entry Financial Ledger & Bookkeeping",
+        "rw": "Igitabo cy'Imari & Ubucungamari bw'Umutungo",
+        "fr": "Grand Livre Financier & Comptabilité"
+      },
+      "descriptions": {
+        "en": "Log income, expenses, and asset transfers with receipt attachments, budget categories, and real-time balance calculations.",
+        "rw": "Kwandika amafaranga yinjiye n'ayasohotse, inyemezabwishyu, n'isuzuma ry'umutungo wa koperative.",
+        "fr": "Enregistrez entrées, dépenses et transferts avec pièces justificatives et calculs de solde en temps réel."
+      },
+      "targetUrl": "/dashboard/ledger",
+      "keywords": {
+        "en": [
+          "ledger",
+          "bookkeeping",
+          "income",
+          "expense",
+          "accounting",
+          "receipt",
+          "audit",
+          "balance",
+          "money",
+          "cash"
+        ],
+        "rw": [
+          "igitabo cy'imari",
+          "ubucungamari",
+          "amafaranga yinjiye",
+          "ayasohotse",
+          "inyemezabwishyu",
+          "isanduku"
+        ],
+        "fr": [
+          "grand livre",
+          "comptabilité",
+          "recettes",
+          "dépenses",
+          "justificatif",
+          "trésorerie",
+          "bilan"
+        ]
+      },
+      "explanation": {
+        "en": "The Financial Ledger provides total financial transparency. Accountants and managers can log all financial movements categorized by project, crop season, or operational expense. Receipts can be uploaded for audit compliance, and multi-currency balances (RWF/USD) are calculated instantly.",
+        "rw": "Igitabo cy'Imari gitanga umucyo usesuye ku mutungo wa koperative. Abacungamari bandika amafaranga yose yinjiye n'ayasohotse, bakongeraho inyemezabwishyu z'ibimenyetso.",
+        "fr": "Le Grand Livre garantit une transparence financière totale. Enregistrez chaque flux avec catégorisation et justificatifs pour des audits sereins."
+      },
+      "steps": [
+        {
+          "stepNumber": 1,
+          "title": {
+            "en": "Open Financial Ledger",
+            "rw": "Fungura Igitabo cy'Imari",
+            "fr": "Ouvrez le Grand Livre"
+          },
+          "action": {
+            "en": "Click 'Financial Ledger' in the sidebar menu.",
+            "rw": "Kanda kuri 'Financial Ledger' muri menu.",
+            "fr": "Cliquez sur 'Grand Livre Financier' dans la barre latérale."
+          },
+          "targetElement": "Sidebar > Financial Ledger",
+          "tip": {
+            "en": "Review total revenue, expenses, net balance, and monthly trend graphs.",
+            "rw": "Urabona amafaranga yose yinjiye, ayasohotse, n'isanduku ihari.",
+            "fr": "Consultez les revenus totaux, dépenses, solde net et graphiques d'évolution."
+          }
+        },
+        {
+          "stepNumber": 2,
+          "title": {
+            "en": "Record Income or Expense Transaction",
+            "rw": "Andika Amafaranga Yinjiye cyangwa Ayasohotse",
+            "fr": "Enregistrez une recette ou dépense"
+          },
+          "action": {
+            "en": "Click '+ Record Transaction' and select transaction type (Income, Expense, or Transfer).",
+            "rw": "Kanda '+ Record Transaction' maze uhitemo niba ari Income cyangwa Expense.",
+            "fr": "Cliquez sur '+ Enregistrer une transaction' et choisissez le type."
+          },
+          "targetElement": "Ledger Page > + Record Transaction",
+          "tip": {
+            "en": "Categorize appropriately (e.g. Fertilizer Purchases, Harvest Sales, Member Dues).",
+            "rw": "Hitamo icyiciro gikwiye (urugero: Ifumbire, Umusaruro, Imisanzu).",
+            "fr": "Catégorisez avec précision (achats d'intrants, ventes de récoltes, etc.)."
+          }
+        },
+        {
+          "stepNumber": 3,
+          "title": {
+            "en": "Attach Payment Proof & Save",
+            "rw": "Shyiraho Inyemezabwishyu maze Ubike",
+            "fr": "Joignez le justificatif et validez"
+          },
+          "action": {
+            "en": "Enter amount, date, description, attach receipt image or PDF, and click 'Save to Ledger'.",
+            "rw": "Andika umubare w'amafaranga, itariki, ushyireho ifoto y'inyemezabwishyu maze ukande 'Save'.",
+            "fr": "Indiquez le montant, la date, joignez le justificatif et cliquez sur 'Enregistrer'."
+          },
+          "targetElement": "Transaction Form > Save Button",
+          "tip": {
+            "en": "Financial statements update automatically for all authorized officers.",
+            "rw": "Raporo y'imari ihita yivugurura ako kanya.",
+            "fr": "Les rapports financiers se mettent à jour automatiquement."
+          }
+        }
+      ],
+      "faq": []
+    },
+    {
+      "id": "team_chat_and_channels",
+      "category": "communication",
+      "titles": {
+        "en": "Real-Time Chat & Department Channels",
+        "rw": "Ibiganiro bya Ako Kanya & Amatsinda",
+        "fr": "Messagerie instantanée & Salons thématiques"
+      },
+      "descriptions": {
+        "en": "Collaborate securely with cooperative members in general channels, department groups, or private one-on-one direct messages.",
+        "rw": "Kuvugana n'abanyamuryango muri rusange, mu matsinda yihariye cyangwa mu biganiro by'umuntu ku giti cye.",
+        "fr": "Échangez en temps réel avec vos membres dans des canaux généraux, groupes sectoriels ou messages privés."
+      },
+      "targetUrl": "/dashboard/chat",
+      "keywords": {
+        "en": [
+          "chat",
+          "message",
+          "channel",
+          "group",
+          "direct message",
+          "voice",
+          "audio",
+          "communication"
+        ],
+        "rw": [
+          "ubutumwa",
+          "ikiganiro",
+          "itsinda",
+          "kuvugana",
+          "ijwi",
+          "koperative"
+        ],
+        "fr": [
+          "chat",
+          "messagerie",
+          "salon",
+          "groupe",
+          "message direct",
+          "vocal",
+          "discussion"
+        ]
+      },
+      "explanation": {
+        "en": "The Chat system keeps all cooperative conversations safe in one place without needing external apps. You can create public or department-specific channels (e.g. #agriculture, #finance, #executive) and exchange rich text, image attachments, or recorded voice notes.",
+        "rw": "Uburyo bw'Ibiganiro butuma mutavanga imirimo n'izindi porogaramu. Ushobora gukora amatsinda yihariye (#ubuhinzi, #imari, #ubuyobozi) no koherezanya ubutumwa, amafoto n'amajwi.",
+        "fr": "Le Chat centralise toutes les communications coopératives. Créez des canaux par département (#agriculture, #comptabilité) et partagez textes, photos et notes vocales."
+      },
+      "steps": [
+        {
+          "stepNumber": 1,
+          "title": {
+            "en": "Open Chat Module",
+            "rw": "Fungura Ibiganiro",
+            "fr": "Ouvrez la messagerie"
+          },
+          "action": {
+            "en": "Click 'Chat & Channels' from the navigation menu.",
+            "rw": "Kanda kuri 'Chat & Channels' muri menu.",
+            "fr": "Cliquez sur 'Chat & Salons' dans le menu."
+          },
+          "targetElement": "Sidebar > Chat",
+          "tip": {
+            "en": "Unread message badges highlight active discussions.",
+            "rw": "Ubutumwa bushya bugaragazwa n'umubare w'umutuku.",
+            "fr": "Des pastilles indiquent les messages non lus."
+          }
+        },
+        {
+          "stepNumber": 2,
+          "title": {
+            "en": "Select or Create a Channel",
+            "rw": "Hitamo cyangwa Kora Itsinda",
+            "fr": "Rejoignez ou créez un salon"
+          },
+          "action": {
+            "en": "Click on any channel (e.g., #general, #leadership) or click '+' next to Channels to create a new team topic.",
+            "rw": "Kanda ku itsinda ushaka cyangwa ukande '+' gukora itsinda rishya.",
+            "fr": "Cliquez sur un salon existant ou sur '+' pour en créer un nouveau."
+          },
+          "targetElement": "Chat Sidebar > Channel List",
+          "tip": {
+            "en": "To message someone privately, select their name under Direct Messages.",
+            "rw": "Kuvugana n'umuntu ku giti cye, kanda ku izina rye munsi ya Direct Messages.",
+            "fr": "Pour un message privé, cliquez sur le nom du destinataire dans 'Messages directs'."
+          }
+        },
+        {
+          "stepNumber": 3,
+          "title": {
+            "en": "Send Messages, Images & Voice",
+            "rw": "Ohereza Ubutumwa, Amafoto n'Amajwi",
+            "fr": "Envoyez messages, images et notes vocales"
+          },
+          "action": {
+            "en": "Type in the bottom message bar, attach files with the paperclip, or hold the mic icon to record voice audio.",
+            "rw": "Andika ubutumwa hasi, shyiraho ifoto, cyangwa ukande ku ndangajwi kohereza ijwi.",
+            "fr": "Tapez votre message en bas, joignez des fichiers ou enregistrez une note vocale."
+          },
+          "targetElement": "Chat Input Bar",
+          "tip": {
+            "en": "Messages sync across all devices in real-time.",
+            "rw": "Ubutumwa bugera kuri bose ako kanya kuri mudasobwa na telefoni.",
+            "fr": "Les messages se synchronisent en direct sur tous les appareils."
+          }
+        }
+      ],
+      "faq": []
+    },
+    {
+      "id": "strategic_goals_and_impact",
+      "category": "goals",
+      "titles": {
+        "en": "Set Strategic Goals & Milestone Targets",
+        "rw": "Gushyiraho Intego Nyamukuru & Ibyiciro",
+        "fr": "Définir des objectifs stratégiques & jalons"
+      },
+      "descriptions": {
+        "en": "Track production yields, reforestation hectares, savings milestones, and publish impact metrics to donors and members.",
+        "rw": "Gukurikirana umusaruro, ubuso bw'ubuhinzi, ubwizigame bw'umuryango no kugaragaza ibyagezweho.",
+        "fr": "Suivez les rendements, les hectares reboisés, l'épargne et publiez vos métriques d'impact."
+      },
+      "targetUrl": "/dashboard/goals",
+      "keywords": {
+        "en": [
+          "goals",
+          "targets",
+          "kpi",
+          "milestones",
+          "impact",
+          "progress",
+          "metrics",
+          "bento",
+          "analytics"
+        ],
+        "rw": [
+          "intego",
+          "iterambere",
+          "umusaruro",
+          "ibipimo",
+          "ibyagezweho",
+          "koperative"
+        ],
+        "fr": [
+          "objectifs",
+          "cibles",
+          "jalons",
+          "impact",
+          "progrès",
+          "indicateurs",
+          "métriques"
+        ]
+      },
+      "explanation": {
+        "en": "Cooperative leadership can define measurable targets (e.g. 'Produce 50 Tons of Coffee', 'Train 200 Women Farmers'). Each goal tracks percentage progress, designated champions, target dates, and updates in real-time on visual Bento cards.",
+        "rw": "Ubuyobozi bwa koperative bushobora gushyiraho intego zifatika (urugero: 'Gusarura toni 50 z'ikawa', 'Guhugura abagore 200'). Buri ntego igaragaza ijanisha ry'ibyagezweho.",
+        "fr": "Définissez des objectifs mesurables (ex : 'Récolter 50 tonnes de café'). Chaque objectif affiche un pourcentage de progression en direct et des responsables assignés."
+      },
+      "steps": [
+        {
+          "stepNumber": 1,
+          "title": {
+            "en": "Open Strategic Goals Tracker",
+            "rw": "Fungura Intego z'Iterambere",
+            "fr": "Ouvrez les Objectifs Stratégiques"
+          },
+          "action": {
+            "en": "Click 'Goals & Targets' in the sidebar navigation.",
+            "rw": "Kanda kuri 'Goals & Targets' muri menu.",
+            "fr": "Cliquez sur 'Objectifs' dans la barre latérale."
+          },
+          "targetElement": "Sidebar > Goals",
+          "tip": {
+            "en": "Visual Bento dashboards display progress and key indicators.",
+            "rw": "Imbonerahamwe nziza zerekana aho buri ntego igeze.",
+            "fr": "Des tableaux de bord visuels affichent les indicateurs clés."
+          }
+        },
+        {
+          "stepNumber": 2,
+          "title": {
+            "en": "Create a New Goal Target",
+            "rw": "Kora Intego Nshya",
+            "fr": "Créez un nouvel objectif"
+          },
+          "action": {
+            "en": "Click '+ New Strategic Goal', enter target name, unit (e.g. Kg, USD, Hectares), starting and target values, and target completion date.",
+            "rw": "Kanda '+ New Strategic Goal' maze wandike izina ry'intego, ibipimo, n'itariki y'iherezo.",
+            "fr": "Cliquez sur '+ Nouvel objectif', saisissez l'intitulé, l'unité, la valeur cible et l'échéance."
+          },
+          "targetElement": "Goals Page > + New Strategic Goal",
+          "tip": {
+            "en": "Assign a goal lead from your active members list.",
+            "rw": "Shyiraho umunyamuryango ushinzwe gukurikirana iyo ntego.",
+            "fr": "Désignez un membre responsable du suivi."
+          }
+        },
+        {
+          "stepNumber": 3,
+          "title": {
+            "en": "Update Progress Milestones",
+            "rw": "Vugurura Ibyagezweho",
+            "fr": "Mettez à jour la progression"
+          },
+          "action": {
+            "en": "Click on any goal card to record intermediate achievements and update current metric values.",
+            "rw": "Kanda ku ntego maze wandike ibyagezweho bishya.",
+            "fr": "Cliquez sur un objectif pour actualiser la valeur actuelle atteinte."
+          },
+          "targetElement": "Goal Card > Update Progress Slider",
+          "tip": {
+            "en": "Completed goals can be published to your public @slug impact showcase.",
+            "rw": "Intego zagezweho zishobora kugaragara ku rubuga rusange rw'umuryango.",
+            "fr": "Les objectifs atteints peuvent être publiés sur votre vitrine publique."
+          }
+        }
+      ],
+      "faq": []
+    },
+    {
+      "id": "branding_and_settings",
+      "category": "settings",
+      "titles": {
+        "en": "Cooperative Branding, Logo & Settings",
+        "rw": "Kwiranga, Ikirango (Logo) n'Igenamiterere",
+        "fr": "Identité visuelle, Logo & Paramètres"
+      },
+      "descriptions": {
+        "en": "Customize primary brand colors, upload organization logos, choose dark/light theme, and configure your public URL slug (@slug).",
+        "rw": "Guhindura amabara ya koperative, gushyiraho ikirango (logo), amabara y'ijoro cyangwa umunsi, na aderesi y'urubuga.",
+        "fr": "Personnalisez les couleurs de votre marque, votre logo, le thème sombre/clair et votre adresse publique (@slug)."
+      },
+      "targetUrl": "/dashboard/settings",
+      "keywords": {
+        "en": [
+          "settings",
+          "branding",
+          "logo",
+          "color",
+          "theme",
+          "slug",
+          "public page",
+          "dark mode",
+          "light mode"
+        ],
+        "rw": [
+          "igenamiterere",
+          "amabara",
+          "logo",
+          "ikirango",
+          "umunsi",
+          "ijoro",
+          "urubuga"
+        ],
+        "fr": [
+          "paramètres",
+          "marque",
+          "logo",
+          "couleur",
+          "thème",
+          "slug",
+          "page publique",
+          "mode sombre"
+        ]
+      },
+      "explanation": {
+        "en": "Impacto gives every organization its own identity. In Organization Settings, administrators can upload custom logos, select primary and secondary brand colors, toggle currency (RWF / USD / EUR), and customize the public discoverable link (@your-coop).",
+        "rw": "Impacto iha buri muryango umwihariko wawo. Muri Settings, abayobozi bashobora gushyiraho logo, guhitamo amabara y'umuryango, guhindura ifaranga (RWF/USD), no guhindura aderesi y'urubuga.",
+        "fr": "Impacto permet une personnalisation complète. Définissez votre logo, vos couleurs dominantes, la devise par défaut et personnalisez votre lien public (@votre-coop)."
+      },
+      "steps": [
+        {
+          "stepNumber": 1,
+          "title": {
+            "en": "Navigate to Organization Settings",
+            "rw": "Jya muri Settings z'Umuryango",
+            "fr": "Allez dans les Paramètres"
+          },
+          "action": {
+            "en": "Click 'Settings' at the bottom of the navigation sidebar.",
+            "rw": "Kanda kuri 'Settings' hasi muri menu.",
+            "fr": "Cliquez sur 'Paramètres' en bas du menu."
+          },
+          "targetElement": "Sidebar > Settings",
+          "tip": {
+            "en": "Restricted to administrators and executive managers.",
+            "rw": "Bigenewe abayobozi n'abacungamari gusa.",
+            "fr": "Accessible aux administrateurs de l'organisation."
+          }
+        },
+        {
+          "stepNumber": 2,
+          "title": {
+            "en": "Upload Logo & Pick Primary Brand Color",
+            "rw": "Shyiraho Logo & Amabara",
+            "fr": "Téléversez votre logo et choisissez vos couleurs"
+          },
+          "action": {
+            "en": "Upload a high-resolution PNG/SVG logo and use the color picker to set your primary brand color.",
+            "rw": "Shyiraho ifoto ya logo maze uhitemo ibara rikuru rya koperative yawe.",
+            "fr": "Importez un logo et définissez la couleur principale via la palette."
+          },
+          "targetElement": "Settings Page > Brand Colors Card",
+          "tip": {
+            "en": "All buttons, headers, and exported letters automatically adopt your selected color.",
+            "rw": "Buto zose n'amabaruwa byahita bifata amabara wahisemo ako kanya.",
+            "fr": "L'ensemble de l'interface et des documents officiels s'adaptera instantanément."
+          }
+        },
+        {
+          "stepNumber": 3,
+          "title": {
+            "en": "Save Changes",
+            "rw": "Bika Ibyahinduwe",
+            "fr": "Enregistrez les modifications"
+          },
+          "action": {
+            "en": "Click 'Save Organization Profile' at the bottom of the page.",
+            "rw": "Kanda 'Save Organization Profile' hasi.",
+            "fr": "Cliquez sur 'Enregistrer le profil de l'organisation'."
+          },
+          "targetElement": "Settings > Save Button",
+          "tip": {
+            "en": "Branding updates across all members' devices in real time.",
+            "rw": "Ibyahinduwe bihita bigera ku banyamuryango bose.",
+            "fr": "Les changements s'appliquent immédiatement pour tous les membres."
+          }
+        }
+      ],
+      "faq": []
+    },
+    {
+      "id": "cooperative_marketplace_shop",
+      "category": "marketplace",
+      "titles": {
+        "en": "Cooperative Marketplace & Produce Catalog",
+        "rw": "Isoko rya Koperative & Kugurisha Umusaruro",
+        "fr": "Boutique & Catalogue de produits coopératifs"
+      },
+      "descriptions": {
+        "en": "List harvests, processed agro-goods, and crafts, manage inventories, and accept customer orders.",
+        "rw": "Kumurika umusaruro w'ubuhinzi n'ubworozi, gucunga ibihari no kwakira abaguzi.",
+        "fr": "Publiez vos récoltes et produits artisanaux, gérez les stocks et traitez les commandes clients."
+      },
+      "targetUrl": "/dashboard/marketplace",
+      "keywords": {
+        "en": [
+          "marketplace",
+          "shop",
+          "products",
+          "harvest",
+          "produce",
+          "sell",
+          "price",
+          "order",
+          "coffee",
+          "tea"
+        ],
+        "rw": [
+          "isoko",
+          "kugurisha",
+          "umusaruro",
+          "ibicuruzwa",
+          "ikawa",
+          "icyayi",
+          "ibiciro",
+          "abakiriya"
+        ],
+        "fr": [
+          "boutique",
+          "marché",
+          "produits",
+          "récolte",
+          "vente",
+          "prix",
+          "commandes",
+          "stock"
+        ]
+      },
+      "explanation": {
+        "en": "The Marketplace allows cooperatives to display their inventory to the public and institutional buyers. Set unit prices in RWF/USD, attach product photography, specify harvest certifications (Fairtrade, Organic), and manage incoming inquiries.",
+        "rw": "Isoko rifasha koperative kugaragaza umusaruro wayo ku baguzi n'inganda. Ushobora gushyiraho ibiciro mu mafaranga y'u Rwanda cyangwa Amadolari, amafoto, n'ibimenyetso by'ubuziranenge.",
+        "fr": "La boutique permet de valoriser les récoltes auprès d'acheteurs professionnels et particuliers. Gérez stocks, prix, photos et certifications (Bio, Commerce équitable)."
+      },
+      "steps": [
+        {
+          "stepNumber": 1,
+          "title": {
+            "en": "Open Marketplace Manager",
+            "rw": "Fungura Isoko rya Koperative",
+            "fr": "Ouvrez la Gestion de Boutique"
+          },
+          "action": {
+            "en": "Click 'Marketplace' in the sidebar.",
+            "rw": "Kanda kuri 'Marketplace' muri menu.",
+            "fr": "Cliquez sur 'Boutique' dans le menu."
+          },
+          "targetElement": "Sidebar > Marketplace",
+          "tip": {
+            "en": "View published produce and incoming purchase requests.",
+            "rw": "Urabona ibicuruzwa byose n'ababyifuza.",
+            "fr": "Consultez le catalogue et les commandes reçues."
+          }
+        },
+        {
+          "stepNumber": 2,
+          "title": {
+            "en": "Add New Product Item",
+            "rw": "Shyiraho Igicuruzwa Gishya",
+            "fr": "Ajoutez un nouveau produit"
+          },
+          "action": {
+            "en": "Click '+ Add Product', enter name, quantity in stock, price per unit, category, and upload photos.",
+            "rw": "Kanda '+ Add Product' maze wandike izina ry'igicuruzwa, ingano ihari, igiciro, n'ifoto.",
+            "fr": "Cliquez sur '+ Ajouter un produit', indiquez quantité, prix unitaire et photo."
+          },
+          "targetElement": "Marketplace > + Add Product",
+          "tip": {
+            "en": "Products instantly appear on your public portal @slug for buyers to discover.",
+            "rw": "Ibicuruzwa bihita bigaragara ku rubuga rusange rw'umuryango.",
+            "fr": "Les produits apparaissent instantanément sur votre page publique @slug."
+          }
+        }
+      ],
+      "faq": []
+    }
+  ],
+  "quickTips": [
+    {
+      "id": "tip_quick_nav",
+      "title": {
+        "en": "Keyboard Shortcuts & Instant Jump",
+        "rw": "Kugenda Byihuse muri Porogaramu",
+        "fr": "Raccourcis clavier et navigation rapide"
+      },
+      "content": {
+        "en": "You can jump to any section using the left sidebar or click the navigation shortcuts directly inside any Guider step.",
+        "rw": "Ushobora kujya ahantu hose ukoresheje menu y'ibumoso cyangwa ugakanda ku nzira ziri muri iyi mfashanyigisho.",
+        "fr": "Naviguez rapidement via le menu latéral ou en cliquant sur les boutons d'accès direct dans chaque étape du guide."
+      }
+    },
+    {
+      "id": "tip_offline_storage",
+      "title": {
+        "en": "Real-Time Cloud & Cross-Tab Sync",
+        "rw": "Kuvugurura Amakuru Ako Kanya",
+        "fr": "Synchronisation temps réel"
+      },
+      "content": {
+        "en": "All changes made in documents, dues, chat, and member tables synchronize immediately across all tabs and team members.",
+        "rw": "Impinduka zose zikozwe mu nyandiko, imisanzu n'ibiganiro zihita zigaragara ako kanya ku bandi bose.",
+        "fr": "Toutes les modifications apportées aux documents, cotisations et messages se synchronisent instantanément entre tous les membres."
+      }
+    }
+  ]
+}

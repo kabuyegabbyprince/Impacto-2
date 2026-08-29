@@ -1,0 +1,11 @@
+--- server.ts
++++ server.ts
+@@ -685,6 +685,8 @@
+     next();
+   });
+ 
++  app.use("/app", express.static(path.join(process.cwd(), "app")));
++
+   // Vite middleware for development, and static file server for production
+   if (process.env.NODE_ENV !== "production") {
+     const vite = await createViteServer({
