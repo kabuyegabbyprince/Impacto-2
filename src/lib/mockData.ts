@@ -150,4 +150,10 @@ export class MockDB {
 
   static getMarketplaceLeads(): any[] { return getLocal("impacto_mock_marketplace_leads", []); }
   static saveMarketplaceLeads(data: any[]) { saveLocal("impacto_mock_marketplace_leads", data); }
+
+  static getPolls(): any[] { return getLocal("impacto_mock_polls", []); }
+  static savePolls(data: any[]) { saveLocal("impacto_mock_polls", data); }
+
+  static getPollVotes(): any[] { return getLocal("impacto_mock_poll_votes", []); }
+  static savePollVotes(data: any[]) { saveLocal("impacto_mock_poll_votes", data); }
 }

@@ -2809,26 +2809,46 @@ export function useCreatePoll() {
       question: string;
       options: string[];
     }) => {
+      const pId = payload.poll_id || "poll-" + Math.random().toString(36).substring(2, 9);
+      const newPoll: PollMessage = {
+        id: pId,
+        poll_id: pId,
+        message_id: payload.message_id,
+        channel_id: payload.channel_id,
+        question: payload.question,
+        options: payload.options,
+        created_at: new Date().toISOString(),
+      };
+
       if (isSupabaseConfigured) {
-        const pId = payload.poll_id || "poll-" + Math.random().toString(36).substring(2, 9);
-        const { data, error } = await supabase
-          .from("polls")
-          .insert({
-            poll_id: pId,
-            message_id: payload.message_id,
-            channel_id: payload.channel_id,
-            question: payload.question,
-            options: payload.options
-          })
-          .select()
-          .single();
-        if (error) throw error;
-        return {
-          ...data,
-          id: data.poll_id || data.id,
-        } as PollMessage;
+        try {
+          const { data, error } = await supabase
+            .from("polls")
+            .insert({
+              poll_id: pId,
+              message_id: payload.message_id,
+              channel_id: payload.channel_id,
+              question: payload.question,
+              options: payload.options
+            })
+            .select()
+            .single();
+          if (!error && data) {
+            return {
+              ...data,
+              id: data.poll_id || data.id,
+            } as PollMessage;
+          }
+        } catch (sErr) {
+          console.warn("[Polls] Supabase insert warning:", sErr);
+        }
       }
-      return {} as PollMessage;
+
+      await delay(50);
+      const polls = MockDB.getPolls();
+      polls.push(newPoll);
+      MockDB.savePolls(polls);
+      return newPoll;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["polls", variables.channel_id] });
@@ -2846,50 +2866,74 @@ export function useVoteInPoll() {
       retract?: boolean;
     }) => {
       if (isSupabaseConfigured) {
-        if (payload.retract) {
-          const { error } = await supabase
-            .from("poll_votes")
-            .delete()
-            .eq("poll_id", payload.poll_id)
-            .eq("user_id", payload.user_id);
-          if (error) throw error;
-          return { poll_id: payload.poll_id, user_id: payload.user_id, retracted: true } as any;
-        } else {
-          const { data: existing } = await supabase
-            .from("poll_votes")
-            .select("id")
-            .eq("poll_id", payload.poll_id)
-            .eq("user_id", payload.user_id)
-            .maybeSingle();
-
-          if (existing) {
-            const { data, error } = await supabase
+        try {
+          if (payload.retract) {
+            const { error } = await supabase
               .from("poll_votes")
-              .update({ option_index: payload.option_index })
+              .delete()
+              .eq("poll_id", payload.poll_id)
+              .eq("user_id", payload.user_id);
+            if (error) console.warn("[Poll Vote] Supabase retract note:", error);
+          } else {
+            const { data: existing } = await supabase
+              .from("poll_votes")
+              .select("id")
               .eq("poll_id", payload.poll_id)
               .eq("user_id", payload.user_id)
-              .select()
-              .single();
-            if (error) throw error;
-            return data as PollVote;
-          } else {
-            const voteId = "vote-" + Math.random().toString(36).substring(2, 9);
-            const { data, error } = await supabase
-              .from("poll_votes")
-              .insert({
-                id: voteId,
-                poll_id: payload.poll_id,
-                user_id: payload.user_id,
-                option_index: payload.option_index
-              })
-              .select()
-              .single();
-            if (error) throw error;
-            return data as PollVote;
+              .maybeSingle();
+
+            if (existing) {
+              const { error } = await supabase
+                .from("poll_votes")
+                .update({ option_index: payload.option_index })
+                .eq("poll_id", payload.poll_id)
+                .eq("user_id", payload.user_id);
+              if (error) console.warn("[Poll Vote] Supabase update note:", error);
+            } else {
+              const voteId = "vote-" + Math.random().toString(36).substring(2, 9);
+              const { error } = await supabase
+                .from("poll_votes")
+                .insert({
+                  id: voteId,
+                  poll_id: payload.poll_id,
+                  user_id: payload.user_id,
+                  option_index: payload.option_index
+                });
+              if (error) console.warn("[Poll Vote] Supabase insert note:", error);
+            }
           }
+        } catch (err) {
+          console.warn("[Poll Vote] Supabase vote error:", err);
         }
       }
-      return {} as PollVote;
+
+      await delay(40);
+      const localVotes = MockDB.getPollVotes();
+      if (payload.retract) {
+        const filtered = localVotes.filter(
+          (v) => !(v.poll_id === payload.poll_id && v.user_id === payload.user_id)
+        );
+        MockDB.savePollVotes(filtered);
+        return { poll_id: payload.poll_id, user_id: payload.user_id, retracted: true } as any;
+      } else {
+        const idx = localVotes.findIndex(
+          (v) => v.poll_id === payload.poll_id && v.user_id === payload.user_id
+        );
+        const voteObj: PollVote = {
+          id: idx !== -1 ? localVotes[idx].id : "vote-" + Math.random().toString(36).substring(2, 9),
+          poll_id: payload.poll_id,
+          user_id: payload.user_id,
+          option_index: payload.option_index,
+          created_at: new Date().toISOString(),
+        };
+        if (idx !== -1) {
+          localVotes[idx] = voteObj;
+        } else {
+          localVotes.push(voteObj);
+        }
+        MockDB.savePollVotes(localVotes);
+        return voteObj;
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["poll_votes", variables.poll_id] });
@@ -2928,18 +2972,30 @@ export function usePollResponses(pollId: string | undefined) {
     queryKey: ["poll_votes", pollId],
     queryFn: async () => {
       if (!pollId) return [];
+      let sbVotes: PollVote[] = [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("poll_votes")
-          .select("*")
-          .eq("poll_id", pollId);
-        if (error) throw error;
-        return data as PollVote[];
+        try {
+          const { data, error } = await supabase
+            .from("poll_votes")
+            .select("*")
+            .eq("poll_id", pollId);
+          if (!error && data) {
+            sbVotes = data as PollVote[];
+          }
+        } catch (e) {
+          console.warn("Supabase fetch poll votes error:", e);
+        }
       }
-      return [];
+
+      const localVotes = MockDB.getPollVotes().filter((v) => v.poll_id === pollId);
+      const map = new Map<string, PollVote>();
+      localVotes.forEach((v) => map.set(v.user_id, v));
+      sbVotes.forEach((v) => map.set(v.user_id, v));
+
+      return Array.from(map.values());
     },
     enabled: !!pollId,
-    refetchInterval: 2000, // Instant live poll updates fallback
+    refetchInterval: 3000,
   });
 }
 
@@ -2972,16 +3028,26 @@ export function useAllPollResponses() {
   return useQuery({
     queryKey: ["all_poll_votes"],
     queryFn: async () => {
+      let sbVotes: PollVote[] = [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("poll_votes")
-          .select("*");
-        if (error) throw error;
-        return data as PollVote[];
+        try {
+          const { data, error } = await supabase
+            .from("poll_votes")
+            .select("*");
+          if (!error && data) {
+            sbVotes = data as PollVote[];
+          }
+        } catch (e) {
+          console.warn("Supabase all poll votes error:", e);
+        }
       }
-      return [];
+      const localVotes = MockDB.getPollVotes();
+      const map = new Map<string, PollVote>();
+      localVotes.forEach((v) => map.set(`${v.poll_id}_${v.user_id}`, v));
+      sbVotes.forEach((v) => map.set(`${v.poll_id}_${v.user_id}`, v));
+      return Array.from(map.values());
     },
-    refetchInterval: 2000, // Instant live poll updates fallback
+    refetchInterval: 3000,
   });
 }
 

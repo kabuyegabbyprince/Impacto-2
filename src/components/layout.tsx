@@ -33,7 +33,8 @@ import {
   HelpCircle,
   Building2,
   Check,
-  Sliders
+  Sliders,
+  Sparkles
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
@@ -648,6 +649,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     { name: t("nav.documents"), path: "/dashboard/documents", icon: FolderOpen },
     { name: "Marketplace", path: "/dashboard/marketplace", icon: ShoppingBag },
     { name: "Member Fees", path: "/dashboard/fees", icon: Coins },
+    { name: "V2 Add-ons & AI", path: "/dashboard/v2-addons", icon: Sparkles },
     // Admin & Management links:
     { name: "Organization Profile", path: "/dashboard/org-profile", icon: Building2 },
     { name: t("nav.members"), path: "/dashboard/members", icon: Users, admin: true },
@@ -818,7 +820,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
       const rate = platformSettings.usd_to_rwf_rate || 1350;
       let costUsd = 25;
       if (selectedTier.includes("Starter")) costUsd = 10;
-      if (selectedTier.includes("Enterprise")) costUsd = 50;
+      if (selectedTier.includes("Pro VIP") || selectedTier.includes("Enterprise")) costUsd = 40;
 
       const randomRef = "TXN" + Math.floor(100000000 + Math.random() * 900000000);
       const isMtn = momoPhone ? (momoPhone.startsWith("078") || momoPhone.startsWith("079")) : true;
@@ -859,7 +861,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
       const rate = platformSettings.usd_to_rwf_rate || 1350;
       let costUsd = 25;
       if (selectedTier.includes("Starter")) costUsd = 10;
-      if (selectedTier.includes("Enterprise")) costUsd = 50;
+      if (selectedTier.includes("Pro VIP") || selectedTier.includes("Enterprise")) costUsd = 40;
 
       const randomRef = "TXN" + Math.floor(100000000 + Math.random() * 900000000);
       const isMtn = momoPhone ? (momoPhone.startsWith("078") || momoPhone.startsWith("079")) : true;
@@ -970,7 +972,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       >
                         <option value="Starter Plan - $10/month">Starter Tier — $10 ({(10 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(10, 'USD'))})</option>
                         <option value="Growth Plan - $25/month">Growth Tier — $25 ({(25 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(25, 'USD'))})</option>
-                        <option value="Enterprise Plan - $50/month">Enterprise Monolith — $50 ({(50 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(50, 'USD'))})</option>
+                        <option value="Pro VIP Plan - $40/month">Pro VIP Room — $40 ({(40 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(40, 'USD'))})</option>
                       </select>
                     </div>
 
@@ -1054,7 +1056,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       >
                         <option value="Starter Plan - $10/month">Starter Tier — $10 ({(10 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(10, 'USD'))})</option>
                         <option value="Growth Plan - $25/month">Growth Tier — $25 ({(25 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(25, 'USD'))})</option>
-                        <option value="Enterprise Plan - $50/month">Enterprise Monolith — $50 ({(50 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(50, 'USD'))})</option>
+                        <option value="Pro VIP Plan - $40/month">Pro VIP Room — $40 ({(40 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(40, 'USD'))})</option>
                       </select>
                     </div>
 

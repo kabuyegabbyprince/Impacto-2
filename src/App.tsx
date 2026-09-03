@@ -42,6 +42,7 @@ import {
 
 import { OrganizationMarketplace } from "./pages/marketplace";
 import { OrganizationMemberFees } from "./pages/fees";
+import { V2AdvancedFeatures } from "./components/V2AdvancedFeatures";
 
 // Administrative Modules
 import {
@@ -67,15 +68,15 @@ import { DashboardLayout } from "./components/layout";
 import { ToastProvider } from "./components/Toast";
 import { initCrossTabSync } from "./lib/crossTabSync";
 
-// Prepare Query cache client
+// Prepare Query cache client with aggressive caching to minimize Supabase query frequency and egress
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: true,
-      refetchOnReconnect: true,
-      retry: false,
-      staleTime: 3000, // 3 seconds stale time for crisp cross-tab synchronization
-      gcTime: 5 * 60 * 1000, // 5 minutes garbage collection time
+      refetchOnWindowFocus: false, // Prevent refetching when window regains focus to save egress
+      refetchOnReconnect: false,   // Prevent refetching on network reconnect spikes
+      retry: 1,                    // Limit retries
+      staleTime: 5 * 60 * 1000,    // 5 minutes stale time so data is served from local cache instantly
+      gcTime: 30 * 60 * 1000,      // 30 minutes garbage collection cache retention
     }
   }
 });
@@ -228,6 +229,17 @@ export default function App() {
                 <OrgRoute>
                   <DashboardLayout>
                     <OrganizationMemberFees />
+                  </DashboardLayout>
+                </OrgRoute>
+              }
+            />
+
+            <Route
+              path="/dashboard/v2-addons"
+              element={
+                <OrgRoute>
+                  <DashboardLayout>
+                    <V2AdvancedFeatures />
                   </DashboardLayout>
                 </OrgRoute>
               }

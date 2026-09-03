@@ -125,7 +125,7 @@ export const GuiderAssistant: React.FC<GuiderAssistantProps> = ({ defaultOpen = 
     trial: { en: "Free Trial", rw: "Icyiciro cy'Igerageza", fr: "Essai Gratuit" },
     starter: { en: "Starter Tier ($10)", rw: "Ifatabuguzi rya Starter ($10)", fr: "Forfait Starter (10 $)" },
     growth: { en: "Growth Tier ($25)", rw: "Ifatabuguzi rya Growth ($25)", fr: "Forfait Growth (25 $)" },
-    enterprise: { en: "Pro Enterprise ($50)", rw: "Ifatabuguzi rya Pro ($50)", fr: "Forfait Pro (50 $)" }
+    enterprise: { en: "Pro VIP Room ($40)", rw: "Ifatabuguzi rya Pro VIP ($40)", fr: "Forfait Pro VIP (40 $)" }
   };
 
   const displayRoleName = roleLabels[userRole]?.[currentLang] || roleLabels.member[currentLang];

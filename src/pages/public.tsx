@@ -620,14 +620,14 @@ export const Landing: React.FC = () => {
 
           {/* Pricing Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16 select-none">
-            {/* 1. Trial */}
+            {/* 1. Free Forever */}
             <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-6 rounded-2xl flex flex-col justify-between hover:border-emerald-600 transition">
               <div>
-                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{isRw ? "Umushinga w'Ikigereranyo" : isFr ? "Projet Pilote" : "Pilot Project"}</span>
-                <h3 className="text-base font-extrabold text-gray-900 dark:text-white mt-1">{isRw ? "Uruhushya rw'Ikigereranyo" : isFr ? "Licence d'Essai" : "Trial License"}</h3>
+                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{isRw ? "Ubuntu" : isFr ? "Gratuit pour toujours" : "Free Forever"}</span>
+                <h3 className="text-base font-extrabold text-gray-900 dark:text-white mt-1">{isRw ? "Plan y'Ubuntu" : isFr ? "Plan Gratuit" : "Free Forever Plan"}</h3>
                 <p className="text-2xl font-black text-slate-950 dark:text-white mt-3">
                   {formatAmount(convertToRWF(0, "RWF"), "USD")}
-                  <span className="text-xs font-semibold text-gray-400">{isRw ? " / iminsi 30" : isFr ? " / 30 jours" : " / 30 days"}</span>
+                  <span className="text-xs font-semibold text-gray-400">{isRw ? " / burundu" : isFr ? " / pour toujours" : " / forever"}</span>
                 </p>
                 <p className="text-[10px] text-gray-400 font-mono mt-0.5">
                   {formatAmount(convertToRWF(0, "RWF"), activeCurrency)}
@@ -635,15 +635,15 @@ export const Landing: React.FC = () => {
                 <div className="mt-5 pt-4 border-t border-gray-100 dark:border-slate-800">
                   <p className="text-xs font-bold text-gray-800 dark:text-slate-200">{isRw ? "Ibikubiyemo:" : isFr ? "Comprend :" : "Includes:"}</p>
                   <ul className="text-[11px] text-slate-500 flex flex-col gap-2 mt-2 font-medium">
-                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> {isRw ? "Abanyamuryango banyuranye" : isFr ? "Membres illimités" : "Unlimited members"}</li>
-                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> {isRw ? "Ibikoresho byose birafunguye" : isFr ? "Tous les modules actifs" : "All modules active"}</li>
-                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> {isRw ? "500 MB y'ubushiko" : isFr ? "Stockage 500 Mo" : "500 MB storage cap"}</li>
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> {isRw ? "Kugeza ku banyamuryango 30" : isFr ? "Jusqu'à 30 membres" : "Up to 30 active members"}</li>
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> {isRw ? "Gucunga umuryango bwite" : isFr ? "Gestion basique" : "Basic directory & chat"}</li>
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> {isRw ? "Ubushobozi bw'ibanze (100MB)" : isFr ? "Stockage 100 Mo" : "100MB storage cap"}</li>
                   </ul>
                 </div>
               </div>
               <Link to="/register" className="mt-8">
                 <Button variant="outline" className="w-full text-xs font-bold py-2">
-                  {isRw ? "Kora Ikigereranyo" : isFr ? "Activer l'Essai" : "Activate Trial"}
+                  {isRw ? "Tangira Ubuntu" : isFr ? "Démarrer Gratuitement" : "Get Started Free"}
                 </Button>
               </Link>
             </div>
@@ -707,31 +707,33 @@ export const Landing: React.FC = () => {
               </Link>
             </div>
 
-            {/* 4. Pro */}
-            <div className="bg-[#0F172A] border border-slate-800 p-6 rounded-2xl flex flex-col justify-between text-white hover:border-[#15803D] transition">
+            {/* 4. Pro VIP */}
+            <div className="bg-[#0F172A] border-2 border-amber-500/80 p-6 rounded-2xl flex flex-col justify-between text-white hover:border-amber-400 transition shadow-lg relative">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 px-3 py-0.5 text-[8px] uppercase font-black tracking-widest rounded-full">VIP ROOM</span>
               <div>
-                <span className="text-[9px] font-bold text-amber-500 uppercase tracking-widest block font-bold">{isRw ? "Icyerekezo Cyagutse" : isFr ? "Horizon Infini" : "Infinite Horizon"}</span>
-                <h3 className="text-base font-extrabold text-slate-50 mt-1">{isRw ? "Ifatabuguzi rya Pro" : isFr ? "Licence Pro" : "Pro License"}</h3>
+                <span className="text-[9px] font-bold text-amber-400 uppercase tracking-widest block font-bold">{isRw ? "Icyerekezo Cyihariye" : isFr ? "VIP & Sécurité Maximale" : "VIP & Ultimate Security"}</span>
+                <h3 className="text-base font-extrabold text-slate-50 mt-1">{isRw ? "Ifatabuguzi rya Pro VIP" : isFr ? "Licence Pro VIP" : "Pro VIP License"}</h3>
                 <p className="text-2xl font-black text-white mt-3">
-                  {formatAmount(convertToRWF(50, "USD"), "USD")}
+                  {formatAmount(convertToRWF(40, "USD"), "USD")}
                   <span className="text-xs font-semibold text-slate-400">{isRw ? " / ukwezi" : isFr ? " / mois" : " / mo"}</span>
                 </p>
-                <p className="text-[10px] text-amber-500 font-mono font-bold mt-0.5">
-                  {formatAmount(convertToRWF(50, "USD"), activeCurrency)}
+                <p className="text-[10px] text-amber-400 font-mono font-bold mt-0.5">
+                  {formatAmount(convertToRWF(40, "USD"), activeCurrency)}
                 </p>
                 <div className="mt-5 pt-4 border-t border-slate-800">
-                  <p className="text-xs font-bold text-slate-200">{isRw ? "Ibikubiyemo:" : isFr ? "Comprend :" : "Includes:"}</p>
-                  <ul className="text-[11px] text-slate-400 flex flex-col gap-2 mt-2 font-medium">
-                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> {isRw ? "Abanyamuryango bose" : isFr ? "Membres illimités" : "Unlimited members"}</li>
-                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> {isRw ? "Ubufasha bwa Guider (Baza Assistant)" : isFr ? "Assistant Guider (Baza)" : "Guider (Baza Assistant)"}</li>
-                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> {isRw ? "Inyandiko za PDF n'Abaterankunga" : isFr ? "Compilateurs PDF & Donateurs" : "PDF compilers & Donors"}</li>
-                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> {isRw ? "20 GB y'ubushiko" : isFr ? "Stockage 20 Go" : "20 GB storage cap"}</li>
+                  <p className="text-xs font-bold text-slate-200">{isRw ? "Ibikubiyemo byose bya VIP:" : isFr ? "Avantages VIP :" : "VIP Features & Perks:"}</p>
+                  <ul className="text-[11px] text-slate-300 flex flex-col gap-2 mt-2 font-medium">
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> <strong>{isRw ? "Ubufasha bwihariye bw'end-to-end encryption" : "Highly secure end-to-end encryption"}</strong></li>
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> <strong>{isRw ? "Gucunga amakuru yihariye (Auto-personalized data management)" : "Auto-personalized data management"}</strong></li>
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> <strong>{isRw ? "Itsinda ry'icyubahiro (VIP Group Access)" : "Treated as VIP group tier"}</strong></li>
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> <strong>{isRw ? "Uburenganzira bwuzuye kuri buri kintu cyose (Unlimited all features)" : "Unlimited on all features & storage"}</strong></li>
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> <strong>{isRw ? "Umuhuza w'umuyobozi bwite (Admin direct contact VIP room)" : "Admin direct contact (VIP room)"}</strong></li>
                   </ul>
                 </div>
               </div>
               <Link to="/register" className="mt-8">
-                <Button variant="outline" className="w-full text-xs font-bold py-2 text-white border-slate-700 hover:bg-slate-800">
-                  {isRw ? "Tangiza Pro" : isFr ? "Activer Pro" : "Activate Pro"}
+                <Button className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black py-2.5 shadow-md">
+                  {isRw ? "Injira mu Cyumba cya VIP" : isFr ? "Rejoindre la Salle VIP" : "Join VIP Room"}
                 </Button>
               </Link>
             </div>

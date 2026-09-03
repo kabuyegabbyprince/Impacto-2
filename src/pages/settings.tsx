@@ -454,7 +454,7 @@ export const OrganizationSettingsPage: React.FC = () => {
       const rate = platformSettings.usd_to_rwf_rate || 1350;
       let costUsd = 25;
       if (subPlan.includes("Starter")) costUsd = 10;
-      if (subPlan.includes("Enterprise")) costUsd = 50;
+      if (subPlan.includes("Pro VIP") || subPlan.includes("Enterprise")) costUsd = 40;
 
       await submitPaymentMutation.mutateAsync({
         org_id: activeOrg?.id || "",
@@ -1128,79 +1128,63 @@ export const OrganizationSettingsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Enterprise Monolith */}
+              {/* Pro VIP Monolith */}
               <div className={`border rounded-2xl p-5 shadow-xs flex flex-col justify-between text-white transition ${
                 activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "enterprise"
-                  ? "border-emerald-500 bg-slate-900 shadow-md transform scale-102 ring-2 ring-emerald-500 ring-offset-2 ring-offset-slate-950"
-                  : "bg-slate-900 border-slate-800"
+                  ? "border-amber-500 bg-slate-900 shadow-md transform scale-102 ring-2 ring-amber-500 ring-offset-2 ring-offset-slate-950"
+                  : "bg-slate-900 border-amber-500/60"
               }`}>
                 <div>
                   <div className="flex justify-between items-center mb-4 leading-none select-none">
-                    <span className="text-[10px] uppercase tracking-widest text-[var(--org-primary)] font-mono font-bold">{t("lbl_unlimited_pro")}</span>
+                    <span className="text-[10px] uppercase tracking-widest text-amber-400 font-mono font-bold">VIP ROOM TIER</span>
                     {activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "enterprise" ? (
                       <Badge color="green">{t("ACTIVE NOW")}</Badge>
                     ) : (
-                      <Crown className="h-4.5 w-4.5 text-yellow-500" />
+                      <Crown className="h-4.5 w-4.5 text-amber-400" />
                     )}
                   </div>
-                  <h3 className="text-2xl font-extrabold font-display leading-none text-white">$50 <span className="text-xs font-normal text-slate-400">/ {t("month")} ({formatAmount(convertToRWF(50, "USD"))})</span></h3>
-                  <p className="text-[11px] text-[var(--org-primary)] font-bold mt-2 font-mono">{t("Ultimate V2 Modules, plus:")}</p>
+                  <h3 className="text-2xl font-extrabold font-display leading-none text-white">$40 <span className="text-xs font-normal text-slate-400">/ {t("month")} ({formatAmount(convertToRWF(40, "USD"))})</span></h3>
+                  <p className="text-[11px] text-amber-400 font-bold mt-2 font-mono">Pro VIP Exclusive Experience:</p>
                   <ul className="text-xs font-semibold text-slate-200 space-y-2 mt-3 leading-relaxed">
                     <li className="flex items-start gap-1">
-                      <span className="text-[var(--org-primary)] font-bold">✓</span>
-                      <span>{t("PWA Offline Mode & Sync Queue (for sector field work)")}</span>
+                      <span className="text-amber-400 font-bold">✓</span>
+                      <span><strong>{t("Highly secure end-to-end encryption")}</strong></span>
                     </li>
                     <li className="flex items-start gap-1">
-                      <span className="text-[var(--org-primary)] font-bold">✓</span>
-                      <span>{t("Member Identity Verification Verification Hub")}</span>
+                      <span className="text-amber-400 font-bold">✓</span>
+                      <span><strong>{t("Auto-personalized data management")}</strong></span>
                     </li>
                     <li className="flex items-start gap-1">
-                      <span className="text-[var(--org-primary)] font-bold">✓</span>
-                      <span>{t("Granular Roles & Manager Rights Checkbox")}</span>
+                      <span className="text-amber-400 font-bold">✓</span>
+                      <span><strong>{t("Treated as VIP group tier")}</strong></span>
                     </li>
                     <li className="flex items-start gap-1">
-                      <span className="text-[var(--org-primary)] font-bold">✓</span>
-                      <span>{t("Governance Quorum Meetings Validation")}</span>
+                      <span className="text-amber-400 font-bold">✓</span>
+                      <span><strong>{t("Unlimited on all features & storage")}</strong></span>
                     </li>
                     <li className="flex items-start gap-1">
-                      <span className="text-[var(--org-primary)] font-bold">✓</span>
-                      <span>{t("Dynamic Variable Message Templates Creator")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-[var(--org-primary)] font-bold">✓</span>
-                      <span>{t("Secure Document Signing & Version Acknowledgement")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-[var(--org-primary)] font-bold">✓</span>
-                      <span>{t("Full Audit Trail Historical Logs Tracker")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-[var(--org-primary)] font-bold">✓</span>
-                      <span>{t("3-Step Resignations & Exit offboarding surveys")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-[var(--org-primary)] font-bold">✓</span>
-                      <span>{t("24/7 priority line to Platform Superadmin")}</span>
+                      <span className="text-amber-400 font-bold">✓</span>
+                      <span><strong>{t("Admin direct contact (VIP room)")}</strong></span>
                     </li>
                   </ul>
                 </div>
                 <div>
                   {activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "enterprise" ? (
-                    <Button className="w-full mt-6 bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-extrabold cursor-default pointer-events-none">
+                    <Button className="w-full mt-6 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold cursor-default pointer-events-none">
                       ✓ {t("Your Active Plan")}
                     </Button>
                   ) : (
-                    <Button variant="outline" className="w-full mt-6 text-stone-900 bg-white hover:bg-gray-100" onClick={() => { setSubPlan("Enterprise Monolith - $50/month"); setOpenSubModal(true); }}>
-                      {t("Choose Enterprise")}
+                    <Button className="w-full mt-6 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold" onClick={() => { setSubPlan("Pro VIP Plan - $40/month"); setOpenSubModal(true); }}>
+                      {t("Join VIP Room")}
                     </Button>
                   )}
                   {/* Switch Link Option */}
                   <div className="text-center mt-3 select-none">
                     <span 
-                      onClick={() => { setSubPlan("Enterprise Monolith - $50/month"); setOpenSubModal(true); }}
-                      className="text-slate-300 hover:text-white text-[11px] font-bold underline cursor-pointer transition"
+                      onClick={() => { setSubPlan("Pro VIP Plan - $40/month"); setOpenSubModal(true); }}
+                      className="text-amber-400 hover:text-amber-300 text-[11px] font-bold underline cursor-pointer transition"
                     >
-                      {t("Change Subscription to Enterprise Pack")}
+                      {t("Change Subscription to Pro VIP")}
                     </span>
                   </div>
                 </div>

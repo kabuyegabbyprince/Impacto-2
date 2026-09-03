@@ -25,7 +25,13 @@ import {
   Clock,
   Settings,
   XCircle,
-  BadgeCheck
+  BadgeCheck,
+  Zap,
+  TrendingUp,
+  Activity,
+  ShieldCheck,
+  Lock,
+  ChevronRight
 } from "lucide-react";
 import {
   usePlatformAdminData,
@@ -64,23 +70,23 @@ const SubscriptionTierCell: React.FC<{
   }, [currentTier]);
 
   return (
-    <div className="flex flex-col gap-1.5 min-w-[150px]">
+    <div className="flex flex-col gap-2 min-w-[170px]">
       <select
         value={selectedTier}
         onChange={(e) => setSelectedTier(e.target.value)}
-        className="text-xs bg-white dark:bg-slate-900 border border-gray-305 dark:border-slate-700 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-emerald-500 font-bold text-stone-850 dark:text-stone-100 outline-none cursor-pointer"
+        className="text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 font-bold text-slate-900 dark:text-slate-100 outline-none cursor-pointer shadow-xs"
       >
         <option value="trial">Trial Plan (Free)</option>
         <option value="starter">Starter Plan ($10)</option>
         <option value="growth">Growth Plan ($25)</option>
-        <option value="enterprise">Enterprise Plan ($50)</option>
+        <option value="enterprise">Pro VIP Room ($40)</option>
       </select>
       <Button
         size="sm"
-        className="bg-teal-600 hover:bg-teal-700 text-[10px] font-bold py-1 px-2 h-7 rounded-md transition flex items-center gap-1 justify-center whitespace-nowrap text-white"
+        className="bg-emerald-600 hover:bg-emerald-700 text-[11px] font-bold py-1.5 px-3 h-8 rounded-xl transition flex items-center gap-1.5 justify-center whitespace-nowrap text-white shadow-xs"
         onClick={() => onUpdate(row.id, selectedTier)}
       >
-        <RefreshCw className="h-3 w-3" />
+        <RefreshCw className="h-3.5 w-3.5" />
         Apply & Restart 30d
       </Button>
     </div>
@@ -136,8 +142,6 @@ export const SuperadminDashboard: React.FC = () => {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<any>(null);
 
-  // Billing Setup form state
-
   const prevAwaitingRef = useRef<number | null>(null);
   const prevErrorsRef = useRef<number | null>(null);
   const prevOrgsRef = useRef<number | null>(null);
@@ -148,57 +152,49 @@ export const SuperadminDashboard: React.FC = () => {
       const currentErrors = errors.length;
       const currentOrgs = orgs.length;
 
-      // Only notify if we already have a baseline
-      if (prevAwaitingRef.current !== null) {
-        if (currentAwaiting > prevAwaitingRef.current) {
-          addToast(`Notification: New subscription payment proof submitted! Check the Approval Queue.`, "info");
-        }
+      if (prevAwaitingRef.current !== null && currentAwaiting > prevAwaitingRef.current) {
+        addToast(`New subscription payment proof submitted! Check the Approval Queue.`, "info");
       }
-      if (prevErrorsRef.current !== null) {
-        if (currentErrors > prevErrorsRef.current) {
-          addToast(`Notification: A new participant Direct Support/Error ticket has been reported!`, "info");
-        }
+      if (prevErrorsRef.current !== null && currentErrors > prevErrorsRef.current) {
+        addToast(`A new direct support / incident ticket has been reported!`, "info");
       }
-      if (prevOrgsRef.current !== null) {
-        if (currentOrgs > prevOrgsRef.current) {
-          addToast(`Notification: A new cooperative workspace / organization has registered!`, "success");
-        }
+      if (prevOrgsRef.current !== null && currentOrgs > prevOrgsRef.current) {
+        addToast(`A new cooperative workspace / organization has registered!`, "success");
       }
 
-      // Update refs to latest counts
       prevAwaitingRef.current = currentAwaiting;
       prevErrorsRef.current = currentErrors;
       prevOrgsRef.current = currentOrgs;
     }
   }, [platformData, payments, errors, orgs, addToast]);
+
   const settings = platformData?.settings || {
-    usd_to_rwf_rate: 1300,
-    eur_to_rwf_rate: 1400,
+    usd_to_rwf_rate: 1350,
+    eur_to_rwf_rate: 1450,
     kes_to_rwf_rate: 10,
     mtn_payment_number: "0788100100",
     airtel_payment_number: "0733100100",
     payment_name: "VIRELLIX INC"
   };
 
-  const [usdRate, setUsdRate] = useState<number>(settings.usd_to_rwf_rate || 1300);
-  const [eurRate, setEurRate] = useState<number>(settings.eur_to_rwf_rate || 1400);
+  const [usdRate, setUsdRate] = useState<number>(settings.usd_to_rwf_rate || 1350);
+  const [eurRate, setEurRate] = useState<number>(settings.eur_to_rwf_rate || 1450);
   const [kesRate, setKesRate] = useState<number>(settings.kes_to_rwf_rate || 10);
   const [mtnNum, setMtnNum] = useState<string>(settings.mtn_payment_number || "0788100100");
   const [airtelNum, setAirtelNum] = useState<string>(settings.airtel_payment_number || "0733100100");
   const [mName, setMName] = useState<string>(settings.payment_name || "VIRELLIX INC");
 
-  // Selected chat conversation for replies
   const [activeChatId, setActiveChatId] = useState<string>("");
   const [tempReply, setTempReply] = useState<string>("");
 
   const handleSavePlatformSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!/^07\d{8}$/.test(mtnNum)) {
-      addToast("Error: MTN collection phone/code number must be exactly 10 digits and start with 07", "error");
+      addToast("Error: MTN collection number must be 10 digits starting with 07", "error");
       return;
     }
     if (!/^07\d{8}$/.test(airtelNum)) {
-      addToast("Error: Airtel collection phone/code number must be exactly 10 digits and start with 07", "error");
+      addToast("Error: Airtel collection number must be 10 digits starting with 07", "error");
       return;
     }
     try {
@@ -210,7 +206,7 @@ export const SuperadminDashboard: React.FC = () => {
         airtel_payment_number: airtelNum,
         payment_name: mName
       });
-      setSuccessMsg("Platform-wide operator collection parameters saved successfully!");
+      setSuccessMsg("Platform operator billing parameters saved successfully!");
       refetch();
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err) {
@@ -223,7 +219,7 @@ export const SuperadminDashboard: React.FC = () => {
       let deducedTier: "starter" | "growth" | "enterprise" = "growth";
       if (planText) {
         const lower = planText.toLowerCase();
-        if (lower.includes("enterprise") || lower.includes("pro")) deducedTier = "enterprise";
+        if (lower.includes("enterprise") || lower.includes("pro") || lower.includes("vip")) deducedTier = "enterprise";
         else if (lower.includes("starter")) deducedTier = "starter";
       }
       await approveSubMutation.mutateAsync({
@@ -266,7 +262,7 @@ export const SuperadminDashboard: React.FC = () => {
       });
       setTempReply("");
       refetch();
-      setSuccessMsg("Support log reply dispatched successfully!");
+      setSuccessMsg("Support response dispatched successfully!");
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err) {
       console.error(err);
@@ -277,7 +273,7 @@ export const SuperadminDashboard: React.FC = () => {
     try {
       await resolveErrorMutation.mutateAsync({ id: errId });
       refetch();
-      setSuccessMsg("Bug ticket resolved successfully.");
+      setSuccessMsg("Support ticket resolved successfully.");
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err) {
       console.error(err);
@@ -315,9 +311,7 @@ export const SuperadminDashboard: React.FC = () => {
 
     return Object.entries(monthly)
       .map(([month, amount]) => ({ month, amount }))
-      .sort((a, b) => {
-        return new Date(a.month).getTime() - new Date(b.month).getTime();
-      });
+      .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
   }, [payments]);
 
   const orgColumns = [
@@ -325,11 +319,13 @@ export const SuperadminDashboard: React.FC = () => {
       header: "Organization Workspace",
       accessor: "name",
       cell: (row: any) => (
-        <div className="flex items-center gap-2.5 select-none shrink-0">
-          <Building2 className="h-5 w-5 text-gray-400 shrink-0" />
-          <div className="flex flex-col text-xs leading-none">
-            <span className="font-extrabold text-gray-901">{row.name}</span>
-            <span className="text-[9px] font-mono text-emerald-650 mt-1 uppercase tracking-wide">@{row.slug}</span>
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-slate-800 border border-emerald-200/50 dark:border-slate-700 flex items-center justify-center text-emerald-600 font-bold shrink-0">
+            {row.name ? row.name.substring(0, 2).toUpperCase() : "CO"}
+          </div>
+          <div className="flex flex-col text-xs leading-tight">
+            <span className="font-extrabold text-slate-950 dark:text-white text-sm">{row.name}</span>
+            <span className="text-[10px] font-mono text-emerald-600 mt-0.5 uppercase tracking-wide font-semibold">@{row.slug}</span>
           </div>
         </div>
       )
@@ -337,20 +333,20 @@ export const SuperadminDashboard: React.FC = () => {
     {
       header: "Category",
       accessor: "org_category",
-      cell: (row: any) => <span className="text-xs text-stone-550 font-bold">{row.org_category}</span>
+      cell: (row: any) => <span className="text-xs text-slate-600 dark:text-slate-300 font-bold bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">{row.org_category || "General"}</span>
     },
     {
-      header: "Active License Plan",
+      header: "License Status",
       accessor: "subscription_status",
       cell: (row: any) => {
         const isExpired = row.subscription_status === "expired" || (row.subscription_ends_at && new Date(row.subscription_ends_at) < new Date());
         return (
-          <div className="flex flex-col gap-1 select-none">
+          <div className="flex flex-col gap-1">
             <Badge color={isExpired ? "red" : row.subscription_status === "active" ? "green" : "amber"}>
               {isExpired ? "EXPIRED LICENSE" : row.subscription_status?.toUpperCase() || "TRIAL"}
             </Badge>
             {row.subscription_ends_at && (
-              <span className="text-[10px] text-gray-400 font-mono">
+              <span className="text-[10px] text-slate-400 font-mono">
                 Ends: {new Date(row.subscription_ends_at).toLocaleDateString()}
               </span>
             )}
@@ -379,13 +375,13 @@ export const SuperadminDashboard: React.FC = () => {
         }
         
         return (
-          <div className="flex items-center gap-1.5 select-none font-sans font-extrabold text-xs">
-            <span className={`h-2 text-stone-800 ${isExpired || daysLeft === 0 ? "w-2 bg-red-500 rounded-full" : daysLeft <= 5 ? "w-2 bg-amber-500 rounded-full animate-pulse" : "w-2 bg-emerald-500 rounded-full"}`} />
+          <div className="flex items-center gap-2 font-sans font-extrabold text-xs">
+            <span className={`h-2.5 w-2.5 rounded-full ${isExpired || daysLeft === 0 ? "bg-rose-500" : daysLeft <= 5 ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`} />
             <span>
               {isExpired || daysLeft === 0 ? (
-                <span className="text-red-600 font-black">0 Days (Expired)</span>
+                <span className="text-rose-600 font-black">0 Days (Locked)</span>
               ) : (
-                <span className="text-stone-900 dark:text-stone-100 font-extrabold">{daysLeft} Days</span>
+                <span className="text-slate-900 dark:text-slate-100 font-bold">{daysLeft} Days</span>
               )}
             </span>
           </div>
@@ -400,33 +396,33 @@ export const SuperadminDashboard: React.FC = () => {
       )
     },
     {
-      header: "Admin Actions",
+      header: "Operator Actions",
       accessor: "actions",
       cell: (row: any) => (
-        <div className="flex gap-2 shrink-0 select-none">
+        <div className="flex items-center gap-2 shrink-0">
           <Link to={`/@${row.slug}`} target="_blank">
-            <Button size="sm" variant="outline" icon={<Eye className="h-3.5 w-3.5" />}>
-              Audit Portal
+            <Button size="sm" variant="outline" className="h-9 px-3 text-xs font-bold rounded-xl" icon={<Eye className="h-3.5 w-3.5" />}>
+              Portal
             </Button>
           </Link>
           {row.subscription_status !== "active" && (
-            <Button size="sm" className="bg-emerald-650 hover:bg-emerald-700 font-bold" onClick={async () => {
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-xs font-bold h-9 px-3 rounded-xl text-white shadow-xs" onClick={async () => {
               await updateOrgMutation.mutateAsync({ id: row.id, subscription_status: "active", subscription_ends_at: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString() });
-              setSuccessMsg(`Manually matched licensing status to ACTIVE for ${row.name}`);
+              setSuccessMsg(`Activated workspace: ${row.name}`);
               refetch();
               setTimeout(() => setSuccessMsg(""), 3000);
             }}>
-              Manually Activate
+              Activate
             </Button>
           )}
           {row.subscription_status !== "expired" && (
-            <Button size="sm" variant="outline" className="text-red-650 hover:bg-red-50 hover:border-red-300 font-bold" onClick={async () => {
+            <Button size="sm" variant="outline" className="text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 border-rose-200 dark:border-rose-900 font-bold h-9 px-3 text-xs rounded-xl" onClick={async () => {
               await updateOrgMutation.mutateAsync({ id: row.id, subscription_status: "expired" });
-              setSuccessMsg(`Workspace license set to EXPIRED for ${row.name}`);
+              setSuccessMsg(`Lockout enforced for workspace: ${row.name}`);
               refetch();
               setTimeout(() => setSuccessMsg(""), 3000);
             }}>
-              Force Lockout
+              Lockout
             </Button>
           )}
         </div>
@@ -440,399 +436,345 @@ export const SuperadminDashboard: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 text-slate-800 font-sans flex flex-col justify-between">
-      {/* Superadmin Top Navigation bar */}
-      <nav className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6 shrink-0 text-white shadow-md select-none">
-        <div className="flex items-center gap-3">
-          <span className="h-9 w-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-md shadow-emerald-950/20">
-            <Building2 className="h-5 w-5 shrink-0" />
-          </span>
-          <div className="flex flex-col">
-            <span className="font-display font-extrabold text-xs tracking-wider text-slate-100 uppercase leading-none">
-              IMPACT<span className="text-emerald-400 font-black">O</span> PLATFORM
-            </span>
-            <span className="text-[10px] font-semibold text-slate-400 mt-1 uppercase tracking-widest flex items-center gap-1.5 leading-none">
-              Operator Console <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" /> SLA ACTIVE
-            </span>
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans flex flex-col justify-between">
+      {/* Top Header Bar matching user dashboards */}
+      <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 lg:px-10 h-20 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-600/20">
+            <ShieldCheck className="h-6 w-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="font-display font-black text-lg text-slate-900 dark:text-white tracking-tight">
+                IMPACT<span className="text-emerald-600">O</span> Super Admin
+              </h1>
+              <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold">
+                PLATFORM COMMAND
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+              Multi-tenant cooperative governance & global billing control center
+            </p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-5">
-          <div className="hidden md:flex flex-col text-right select-none leading-none">
-            <span className="text-xs font-bold text-slate-205">System Operator</span>
-            <span className="text-[9px] text-emerald-450 font-mono mt-1 font-semibold">superadmin@impact-o.app</span>
+
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex flex-col text-right">
+            <span className="text-xs font-bold text-slate-900 dark:text-white">Lead System Operator</span>
+            <span className="text-[10px] text-emerald-600 font-mono font-semibold">superadmin@impact-o.app</span>
           </div>
-          <div className="h-8 w-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-200 shadow-sm font-sans">
+          <div className="h-10 w-10 rounded-xl bg-slate-900 dark:bg-slate-800 text-emerald-400 font-black flex items-center justify-center text-xs shadow-sm">
             SA
           </div>
           <Link to="/">
-            <Button className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-white px-4 h-9 rounded-xl transition-all">
-              Home Panel
+            <Button size="sm" variant="outline" className="font-bold text-xs h-10 px-4 rounded-xl">
+              Exit to App
             </Button>
           </Link>
         </div>
-      </nav>
+      </header>
 
-      {/* Main operational panel */}
-      <main className="max-w-7xl mx-auto px-6 py-8 flex-1 w-full flex flex-col gap-6">
-        <div className="flex gap-4 border-b pb-1 overflow-x-auto scrollbar-none font-display mb-2">
+      {/* Main Container */}
+      <main className="max-w-7xl mx-auto px-4 lg:px-8 py-8 flex-1 w-full flex flex-col gap-8">
+        {/* Navigation Tabs Header */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-2 rounded-2xl shadow-xs flex items-center gap-2 overflow-x-auto scrollbar-none">
           <button
             onClick={() => setActiveTab("stats")}
-            className={`pb-3 text-xs md:text-sm font-bold border-b-2 hover:text-gray-900 transition shrink-0 cursor-pointer ${
-              activeTab === "stats" ? "border-emerald-650 text-emerald-650" : "border-transparent text-gray-500"
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "stats"
+                ? "bg-slate-900 text-white dark:bg-emerald-600 dark:text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}
           >
-            SaaS Overview stats
+            <Activity className="h-4 w-4" /> SaaS Overview & Analytics
           </button>
           <button
             onClick={() => setActiveTab("orgs")}
-            className={`pb-3 text-xs md:text-sm font-bold border-b-2 hover:text-gray-905 transition shrink-0 cursor-pointer ${
-              activeTab === "orgs" ? "border-emerald-650 text-emerald-650" : "border-transparent text-gray-500"
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "orgs"
+                ? "bg-slate-900 text-white dark:bg-emerald-600 dark:text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}
           >
-            Tenant Auditing & Upgrades ({totalOrgs})
+            <Building2 className="h-4 w-4" /> Tenant Audits & Licenses ({totalOrgs})
           </button>
           <button
             onClick={() => setActiveTab("payments")}
-            className={`pb-3 text-xs md:text-sm font-bold border-b-2 hover:text-gray-905 transition shrink-0 cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "payments" ? "border-emerald-650 text-emerald-650" : "border-transparent text-gray-500"
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "payments"
+                ? "bg-slate-900 text-white dark:bg-emerald-600 dark:text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}
           >
-            Manual Payments ApprovalQueue
-            {awaitingPayments > 0 && <span className="px-2 py-0.5 text-[10px] bg-red-500 text-white rounded-full font-mono animate-pulse">{awaitingPayments}</span>}
+            <CreditCard className="h-4 w-4" /> MoMo Approval Queue
+            {awaitingPayments > 0 && (
+              <span className="px-2 py-0.5 text-[10px] bg-rose-500 text-white rounded-full font-mono font-black">
+                {awaitingPayments}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab("errors")}
-            className={`pb-3 text-xs md:text-sm font-bold border-b-2 hover:text-gray-905 transition shrink-0 cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "errors" ? "border-emerald-650 text-emerald-650" : "border-transparent text-gray-500"
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "errors"
+                ? "bg-slate-900 text-white dark:bg-emerald-600 dark:text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}
           >
-            Direct Help Chats
-            {pendingBugs > 0 && <span className="px-2 py-0.5 text-[10px] bg-amber-500 text-stone-900 font-bold rounded-full font-mono">{pendingBugs}</span>}
+            <MessageSquare className="h-4 w-4" /> Support & Incidents
+            {pendingBugs > 0 && (
+              <span className="px-2 py-0.5 text-[10px] bg-amber-500 text-slate-950 rounded-full font-mono font-black">
+                {pendingBugs}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab("billing_setup")}
-            className={`pb-3 text-xs md:text-sm font-bold border-b-2 hover:text-gray-905 transition shrink-0 cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "billing_setup" ? "border-emerald-650 text-emerald-650" : "border-transparent text-gray-500"
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "billing_setup"
+                ? "bg-slate-900 text-white dark:bg-emerald-600 dark:text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}
           >
-            <Settings className="h-4 w-4" /> Platform Revenue Config
+            <Settings className="h-4 w-4" /> Global Billing Config
           </button>
         </div>
 
         {successMsg && (
-          <div className="p-3.5 bg-emerald-50 border border-emerald-150 text-xs text-emerald-800 font-semibold rounded-lg flex items-center gap-2 animate-bounce leading-none">
-            <CheckCircle className="h-4.5 w-4.5" />
-            {successMsg}
+          <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 font-bold rounded-2xl flex items-center gap-3 shadow-xs">
+            <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0" />
+            <span>{successMsg}</span>
           </div>
         )}
 
-        {/* Tab contents */}
+        {/* 1. STATS TAB */}
         {activeTab === "stats" && (
-          <div className="flex flex-col gap-6 animate-in duration-200 w-full font-medium">
-            {/* Core KPI cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full">
-              <div className="p-5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl flex items-center justify-between shadow-xs transition-transform hover:-translate-y-1 duration-155">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 font-semibold">System Users</span>
-                  <span className="text-2xl font-black font-display text-indigo-650 dark:text-indigo-400 mt-1.5">{totalUsers}</span>
-                  <span className="text-[10px] text-indigo-600 mt-1 font-bold">Total registered accounts</span>
+          <div className="flex flex-col gap-6 w-full">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl flex items-center justify-between shadow-xs">
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">System Users</span>
+                  <span className="text-2xl font-black font-display text-indigo-600 dark:text-indigo-400 mt-1 block">{totalUsers}</span>
+                  <span className="text-[10px] text-slate-500 mt-1 font-medium block">Registered accounts</span>
                 </div>
-                <div className="h-10 w-10 bg-indigo-50 dark:bg-slate-800 rounded-xl flex items-center justify-center">
-                  <Globe className="h-5 w-5 text-indigo-600" />
-                </div>
-              </div>
-
-              <div className="p-5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl flex items-center justify-between shadow-xs transition-transform hover:-translate-y-1 duration-155">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 font-semibold">Org Members</span>
-                  <span className="text-2xl font-black font-display text-teal-650 dark:text-teal-400 mt-1.5">{totalMembers}</span>
-                  <span className="text-[10px] text-teal-600 mt-1 font-bold">Active memberships</span>
-                </div>
-                <div className="h-10 w-10 bg-teal-50 dark:bg-slate-800 rounded-xl flex items-center justify-center">
-                  <CheckCircle className="h-5 w-5 text-teal-600" />
+                <div className="h-11 w-11 bg-indigo-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-indigo-600 shadow-xs">
+                  <Globe className="h-5 w-5" />
                 </div>
               </div>
 
-              <div className="p-5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl flex items-center justify-between shadow-xs transition-transform hover:-translate-y-1 duration-155">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 font-semibold">Trial Licenses</span>
-                  <span className="text-2xl font-black font-display text-gray-950 dark:text-white mt-1.5">{trialOrgs}</span>
-                  <span className="text-[10px] text-amber-600 mt-1 font-bold">30-day sandboxes active</span>
+              <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl flex items-center justify-between shadow-xs">
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Org Members</span>
+                  <span className="text-2xl font-black font-display text-teal-600 dark:text-teal-400 mt-1 block">{totalMembers}</span>
+                  <span className="text-[10px] text-slate-500 mt-1 font-medium block">Active memberships</span>
                 </div>
-                <div className="h-10 w-10 bg-amber-50 dark:bg-slate-800 rounded-xl flex items-center justify-center">
-                  <Clock className="h-5 w-5 text-amber-500" />
-                </div>
-              </div>
-
-              <div className="p-5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl flex items-center justify-between shadow-xs transition-transform hover:-translate-y-1 duration-155">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 font-semibold">Expired Accounts</span>
-                  <span className="text-2xl font-black font-display text-red-650 mt-1.5">{expiredOrgs}</span>
-                  <span className="text-[10px] text-red-555 mt-1 font-bold">Lockout policy enforced</span>
-                </div>
-                <div className="h-10 w-10 bg-red-50 dark:bg-slate-805 rounded-xl flex items-center justify-center">
-                  <XCircle className="h-5 w-5 text-red-500" />
+                <div className="h-11 w-11 bg-teal-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-teal-600 shadow-xs">
+                  <CheckCircle className="h-5 w-5" />
                 </div>
               </div>
 
-              <div className="p-5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl flex items-center justify-between shadow-xs transition-transform hover:-translate-y-1 duration-155">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 font-semibold">Pending Issues</span>
-                  <span className="text-2xl font-black font-display text-gray-950 dark:text-white mt-1.5">{pendingBugs}</span>
-                  <span className="text-[10px] text-yellow-500 mt-1 font-bold">Direct support tickets</span>
+              <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl flex items-center justify-between shadow-xs">
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Trial Sandboxes</span>
+                  <span className="text-2xl font-black font-display text-amber-500 mt-1 block">{trialOrgs}</span>
+                  <span className="text-[10px] text-slate-500 mt-1 font-medium block">30-day active trials</span>
                 </div>
-                <div className="h-10 w-10 bg-yellow-50 dark:bg-slate-800 rounded-xl flex items-center justify-center">
-                  <ShieldAlert className="h-5 w-5 text-yellow-500" />
+                <div className="h-11 w-11 bg-amber-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-amber-500 shadow-xs">
+                  <Clock className="h-5 w-5" />
+                </div>
+              </div>
+
+              <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl flex items-center justify-between shadow-xs">
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Expired Accounts</span>
+                  <span className="text-2xl font-black font-display text-rose-600 mt-1 block">{expiredOrgs}</span>
+                  <span className="text-[10px] text-slate-500 mt-1 font-medium block">Lockout policy active</span>
+                </div>
+                <div className="h-11 w-11 bg-rose-50 dark:bg-slate-850 rounded-xl flex items-center justify-center text-rose-500 shadow-xs">
+                  <XCircle className="h-5 w-5" />
+                </div>
+              </div>
+
+              <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl flex items-center justify-between shadow-xs">
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Support Tickets</span>
+                  <span className="text-2xl font-black font-display text-slate-900 dark:text-white mt-1 block">{pendingBugs}</span>
+                  <span className="text-[10px] text-slate-500 mt-1 font-medium block">Direct incident queue</span>
+                </div>
+                <div className="h-11 w-11 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-600 dark:text-slate-300 shadow-xs">
+                  <ShieldAlert className="h-5 w-5" />
                 </div>
               </div>
             </div>
 
-            {/* Visual Analytics dashboard Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Financial growth chart */}
-              <Card title="Revenue Distribution & Licensure Overview" className="lg:col-span-2">
-                <div className="flex flex-col gap-6 py-2">
-                  <p className="text-xs text-gray-500 leading-normal">
-                    Real-time structural breakdown of Multi-Tenant licensures. Active workspaces generate standard community premium license fees.
-                  </p>
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 lg:col-span-2 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-base font-black font-display text-slate-900 dark:text-white">Revenue Distribution & Licensing Overview</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">Real-time breakdown of multi-tenant subscriptions and earned revenue.</p>
+                    </div>
+                    <Badge color="green" className="font-mono">LIVE METRICS</Badge>
+                  </div>
 
-                  {/* Multi segment horizontal visual chart */}
-                  <div className="flex flex-col gap-2 mt-2">
-                    <span className="text-xs font-bold text-gray-700 dark:text-slate-300">Licensing Distribution Trend</span>
-                    <div className="h-7 w-full rounded-xl overflow-hidden flex shadow-inner border border-gray-200 bg-gray-100 dark:bg-slate-850">
+                  <div className="flex flex-col gap-2 mt-4">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Licensing Share Breakdown</span>
+                    <div className="h-8 w-full rounded-xl overflow-hidden flex shadow-inner border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800">
                       {activeOrgs > 0 && (
                         <div 
-                          className="bg-emerald-500 h-full text-white text-[10px] font-bold flex items-center justify-center transition-all duration-300" 
-                          style={{ width: `${Math.max(15, (activeOrgs / Math.max(1, totalOrgs)) * 100)}%` }}
+                          className="bg-emerald-500 h-full text-white text-[10px] font-black flex items-center justify-center px-2" 
+                          style={{ width: `${Math.max(20, (activeOrgs / Math.max(1, totalOrgs)) * 100)}%` }}
                         >
-                          PRO ({Math.round((activeOrgs / Math.max(1, totalOrgs)) * 105)}%)
+                          PRO ({activeOrgs})
                         </div>
                       )}
                       {trialOrgs > 0 && (
                         <div 
-                          className="bg-amber-400 h-full text-slate-900 text-[10px] font-bold flex items-center justify-center transition-all duration-300" 
-                          style={{ width: `${Math.max(15, (trialOrgs / Math.max(1, totalOrgs)) * 100)}%` }}
+                          className="bg-amber-400 h-full text-slate-950 text-[10px] font-black flex items-center justify-center px-2" 
+                          style={{ width: `${Math.max(20, (trialOrgs / Math.max(1, totalOrgs)) * 100)}%` }}
                         >
-                          TRIAL ({Math.round((trialOrgs / Math.max(1, totalOrgs)) * 100)}%)
+                          TRIAL ({trialOrgs})
                         </div>
                       )}
                       {expiredOrgs > 0 && (
                         <div 
-                          className="bg-rose-500 h-full text-white text-[10px] font-bold flex items-center justify-center transition-all duration-300" 
-                          style={{ width: `${Math.max(15, (expiredOrgs / Math.max(1, totalOrgs)) * 100)}%` }}
+                          className="bg-rose-500 h-full text-white text-[10px] font-black flex items-center justify-center px-2" 
+                          style={{ width: `${Math.max(20, (expiredOrgs / Math.max(1, totalOrgs)) * 100)}%` }}
                         >
-                          EXPIRED ({Math.round((expiredOrgs / Math.max(1, totalOrgs)) * 100)}%)
+                          EXPIRED ({expiredOrgs})
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-4 text-[10px] font-bold text-gray-500 mt-1 select-none">
-                      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Premium Active ({activeOrgs})</span>
-                      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-400" /> Trial Sandbox ({trialOrgs})</span>
-                      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-rose-500" /> Locked Out ({expiredOrgs})</span>
-                    </div>
-                  </div>
-
-                  {/* Financial projections details */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-6 mt-3 select-none">
-                    <div className="p-4 bg-slate-50 dark:bg-slate-800/55 rounded-xl border border-gray-100 dark:border-slate-800 flex flex-col justify-center">
-                      <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wide block">Total Earned Sourced License Rev</span>
-                      <span className="text-[10px] text-gray-455 block mt-1">(Total amount verified & paid in subscription auditing queue)</span>
-                      <span className="text-xl font-black text-gray-901 dark:text-emerald-450 mt-2 block font-display">
-                        {totalPaidRevenue.toLocaleString()} RWF
-                      </span>
-                    </div>
-                    <div className="p-4 bg-slate-50 dark:bg-slate-800/55 rounded-xl border border-gray-100 dark:border-slate-800 flex flex-col h-40">
-                      <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wide block mb-2">Monthly Revenue Trend</span>
-                      <div className="flex-1 w-full min-h-0">
-                        {monthlyRevenues.length > 0 ? (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={monthlyRevenues}>
-                              <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} />
-                              <YAxis hide />
-                              <Tooltip 
-                                cursor={{ fill: 'rgba(0,0,0,0.05)' }} 
-                                contentStyle={{ fontSize: '12px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} 
-                                formatter={(value: number) => [`${value.toLocaleString()} RWF`, 'Revenue']}
-                              />
-                              <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center text-xs text-gray-400 font-medium">
-                            No revenue data available
-                          </div>
-                        )}
-                      </div>
-                    </div>
                   </div>
                 </div>
-              </Card>
 
-              {/* Infrastructure SLA Check */}
-              <Card title="Infrastructure SLA Node Status">
-                <div className="flex flex-col gap-3.5 pt-2 font-semibold">
-                  <div className="flex items-center justify-between pb-3 border-b text-xs text-gray-600 dark:text-slate-350 select-none border-gray-100 dark:border-slate-800">
-                    <span className="flex items-center gap-2"><Server className="h-4 w-4 text-emerald-500" /> Supabase RLS sandboxes</span>
-                    <Badge color="green">ENFORCED</Badge>
-                  </div>
-                  <div className="flex items-center justify-between pb-3 border-b text-xs text-gray-600 dark:text-slate-350 select-none border-gray-200 dark:border-slate-800">
-                    <span className="flex items-center gap-2"><Globe className="h-4 w-4 text-emerald-500" /> AWS Kigali Node IP </span>
-                    <span className="font-mono text-[10px] text-gray-900 dark:text-white">0.0.0.0:3000</span>
-                  </div>
-                  <div className="flex items-center justify-between pb-3 border-b text-xs text-gray-600 dark:text-slate-350 select-none border-gray-200 dark:border-slate-800">
-                    <span className="flex items-center gap-2"><Smartphone className="h-4 w-4 text-emerald-500" /> MTN payment listeners</span>
-                    <Badge color="green">ONLINE</Badge>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-gray-600 dark:text-slate-350 select-none">
-                    <span className="flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-emerald-500" /> SLA framework grade</span>
-                    <span className="text-gray-900 dark:text-white font-bold font-mono">99.99%</span>
-                  </div>
-                </div>
-              </Card>
-            </div>
-
-            {/* NEW GREAT IDEA: AI Compliance & Regulatory Risk Auditor */}
-            <div className="w-full">
-              <Card title="AI Compliance & Regulatory Risk Auditor (RCA / RDB Monitor)">
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 py-2">
-                  <div className="flex flex-col gap-1">
-                    <p className="text-xs text-gray-600 dark:text-slate-300 leading-normal">
-                      Automated background AI governance check verifying tenant ledgers, member registries, and annual meeting resolutions against Rwandan cooperative regulations (Law N° 058/2021).
-                    </p>
-                    <span className="text-[10px] font-mono text-emerald-600 font-bold mt-1 flex items-center gap-1.5">
-                      <ShieldAlert className="h-3.5 w-3.5" /> All {totalOrgs} tenants passed automated statutory compliance checks.
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-6 mt-6 border-t border-slate-100 dark:border-slate-800">
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-800 flex flex-col justify-center">
+                    <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wide block font-bold">Total Verified Revenue</span>
+                    <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-2 block font-display">
+                      {totalPaidRevenue.toLocaleString()} RWF
                     </span>
+                    <span className="text-[10px] text-slate-400 mt-1 font-medium">Audited & approved via MoMo queue</span>
                   </div>
-                  <Button 
-                    onClick={() => {
-                      addToast("AI Compliance Audit completed: 100% statutory adherence across all active cooperative nodes.", "success");
-                    }}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white px-4 py-2 rounded-xl shrink-0"
-                  >
-                    Run Full System Compliance Audit
+
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-800 flex flex-col h-44">
+                    <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wide block mb-2 font-bold">Monthly Revenue Trend</span>
+                    <div className="flex-1 w-full min-h-0">
+                      {monthlyRevenues.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={monthlyRevenues}>
+                            <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} />
+                            <YAxis hide />
+                            <Tooltip 
+                              cursor={{ fill: 'rgba(0,0,0,0.05)' }} 
+                              contentStyle={{ fontSize: '12px', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} 
+                              formatter={(value: number) => [`${value.toLocaleString()} RWF`, 'Revenue']}
+                            />
+                            <Bar dataKey="amount" fill="#10b981" radius={[6, 6, 0, 0]} maxBarSize={36} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center text-xs text-slate-400 font-medium">
+                          No revenue records verified yet
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
+                <div>
+                  <h3 className="text-base font-black font-display text-slate-900 dark:text-white mb-1">Infrastructure Node Status</h3>
+                  <p className="text-xs text-slate-500 mb-5">System SLA and core backend container health.</p>
+
+                  <div className="flex flex-col gap-3.5 font-semibold">
+                    <div className="flex items-center justify-between pb-3 border-b text-xs text-slate-600 dark:text-slate-300 border-slate-100 dark:border-slate-800">
+                      <span className="flex items-center gap-2.5"><Server className="h-4 w-4 text-emerald-500" /> Supabase RLS DB</span>
+                      <Badge color="green">ONLINE</Badge>
+                    </div>
+                    <div className="flex items-center justify-between pb-3 border-b text-xs text-slate-600 dark:text-slate-300 border-slate-100 dark:border-slate-800">
+                      <span className="flex items-center gap-2.5"><Globe className="h-4 w-4 text-emerald-500" /> AWS Kigali Ingress</span>
+                      <span className="font-mono text-[10px] text-slate-900 dark:text-white font-bold">0.0.0.0:3000</span>
+                    </div>
+                    <div className="flex items-center justify-between pb-3 border-b text-xs text-slate-600 dark:text-slate-300 border-slate-100 dark:border-slate-800">
+                      <span className="flex items-center gap-2.5"><Smartphone className="h-4 w-4 text-emerald-500" /> MoMo Listeners</span>
+                      <Badge color="green">ACTIVE</Badge>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
+                      <span className="flex items-center gap-2.5"><BadgeCheck className="h-4 w-4 text-emerald-500" /> SLA Uptime Grade</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-black font-mono">99.99%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200/50 dark:border-emerald-900/50 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <Zap className="h-5 w-5 text-emerald-600" />
+                    <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200">System is fully optimized</span>
+                  </div>
+                  <Button size="sm" className="bg-emerald-600 text-white font-bold h-8 text-[11px] px-3" onClick={() => refetch()}>
+                    Refresh
                   </Button>
                 </div>
-              </Card>
-            </div>
-
-            {/* Global Directory Public Portals Section */}
-            <div className="w-full">
-              <Card title="Organization Public Portals Listing Monitor">
-                <p className="text-xs text-gray-500 mb-4 font-normal">
-                  Superadmin directory overview of checked-in multi-tenant spaces that are active and public-facing on the core landing index.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {orgs.map((org: any) => {
-                    const isPublic = org.is_public_directory ?? true;
-                    return (
-                      <div key={org.id} className="p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl flex flex-col justify-between gap-3 shadow-xs">
-                        <div className="flex items-start justify-between gap-2.5">
-                          <div className="flex items-center gap-3">
-                            <span className="h-10 w-10 bg-slate-50 dark:bg-slate-800 rounded-xl border border-gray-100 overflow-hidden flex items-center justify-center">
-                              {org.logo_url && org.logo_url.startsWith("icon:") ? (
-                                (() => {
-                                  const IconComponent = getLucideIcon(org.logo_url.substring(5));
-                                  return IconComponent ? <IconComponent className="h-5 w-5 text-gray-500" /> : <Building2 className="h-5 w-5 text-gray-400" />;
-                                })()
-                              ) : org.logo_url ? (
-                                <img src={org.logo_url} className="h-full w-full object-contain" alt="Logo" referrerPolicy="no-referrer" />
-                              ) : (
-                                <Building2 className="h-5 w-5 text-gray-400" />
-                              )}
-                            </span>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-xs font-bold text-gray-901 dark:text-white leading-tight truncate max-w-[150px]">{org.name}</span>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className="text-[10px] text-gray-450 font-mono">@{org.slug}</span>
-                                <span className="h-1 w-1 rounded-full bg-gray-300 dark:bg-slate-700" />
-                                <span className="text-[9px] font-extrabold text-teal-650 uppercase font-mono tracking-wider">
-                                  {org.subscription_tier ? `${org.subscription_tier}` : `${org.subscription_status || "trial"}`}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          <Badge color={isPublic ? "green" : "red"}>{isPublic ? "Public Directory" : "Private / Hidden"}</Badge>
-                        </div>
-                        <p className="text-[11px] text-gray-500 dark:text-slate-400 line-clamp-1 leading-normal italic">
-                          {org.tagline || "Empowering community development and transparent impact tracking."}
-                        </p>
-                        <div className="flex items-center justify-between border-t pt-2 mt-1">
-                          <div className="flex flex-col">
-                            <span className="text-[10px] font-semibold text-gray-400 dark:text-slate-500">Category: {org.org_category}</span>
-                            <span className="text-[9px] font-mono font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide mt-0.5">
-                              Tier: {org.subscription_tier ? org.subscription_tier : (org.subscription_status || "trial")}
-                            </span>
-                          </div>
-                          <Link to={`/@${org.slug}`} target="_blank" className="text-xs text-emerald-650 hover:text-emerald-700 font-bold flex items-center gap-1.5 transition">
-                            <Globe className="h-3.5 w-3.5" /> View Portal
-                          </Link>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Tenant audits and actions */}
+        {/* 2. TENANTS TAB */}
         {activeTab === "orgs" && (
-          <div className="flex flex-col gap-4 animate-in fade-in duration-200 w-full">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4 select-none mb-2">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col gap-6 w-full">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-black font-display text-slate-900 dark:text-white">Tenant Workspaces & Licenses</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Manage subscription plans, extend 30-day billing periods, or enforce lockouts.</p>
+              </div>
               <div className="w-full md:w-80">
                 <Input
                   type="text"
-                  placeholder="Filter workspaces by name, category..."
+                  placeholder="Filter workspaces by name, slug..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  prefixIcon={<Search className="h-4 w-4 text-gray-400" />}
+                  prefixIcon={<Search className="h-4 w-4 text-slate-400" />}
                 />
               </div>
-              <span className="text-[11px] font-mono text-gray-400 uppercase tracking-widest font-bold">
-                Auditing {filteredOrgs.length} Sourced tenant databases
-              </span>
             </div>
             <Table columns={orgColumns} data={filteredOrgs} emptyMessage="No multi-tenant workspaces match queried criteria." />
           </div>
         )}
 
-        {/* Manual Payment verify / approving invoices */}
+        {/* 3. PAYMENTS APPROVAL QUEUE TAB */}
         {activeTab === "payments" && (() => {
           const pendingPayments = (payments || []).filter((p) => p.status === "awaiting_approval");
           const reviewedPayments = (payments || []).filter((p) => p.status === "approved" || p.status === "rejected");
 
           return (
-            <div className="flex flex-col gap-4 animate-in fade-in duration-200 w-full">
-              <div className="border-b border-gray-200 dark:border-slate-800 pb-3 select-none mb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex flex-col gap-6 w-full">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-black font-display text-gray-905 dark:text-white">
-                    MoMo Transaction Records Approval Board
-                  </h2>
-                  <p className="text-xs text-gray-500 leading-normal mt-1">
-                    Audit the transaction details against your MTN or Airtel Money logs to approve or reject licenses.
-                  </p>
+                  <h3 className="text-base font-black font-display text-slate-900 dark:text-white">MoMo Transaction Records Approval Board</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Audit transaction proofs against your MTN / Airtel merchant collection statements.</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <Button
                     onClick={() => setHistoryOpen(!historyOpen)}
                     variant="outline"
                     size="sm"
-                    className="flex items-center gap-1.5 font-bold text-xs h-9 border-stone-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+                    className="flex items-center gap-2 font-bold text-xs h-10 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-xl"
                   >
-                    <Clock className="h-4 w-4 text-indigo-500" />
-                    {historyOpen ? "Hide History Sidebar" : `Show History Sidebar (${reviewedPayments.length})`}
+                    <Clock className="h-4 w-4 text-emerald-600" />
+                    {historyOpen ? "Hide History Sidebar" : `Show History Archive (${reviewedPayments.length})`}
                   </Button>
                 </div>
               </div>
 
               <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
-                {/* Collapsible History Stack Table on the Left */}
                 {historyOpen && (
-                  <div className="w-full lg:w-96 shrink-0 bg-stone-50 dark:bg-slate-900/60 border rounded-2xl p-4 flex flex-col gap-3 animate-in slide-in-from-left duration-250 border-gray-200 dark:border-slate-800">
-                    <div className="flex justify-between items-center pb-2 border-b border-gray-200 dark:border-slate-800">
-                      <span className="text-xs font-black uppercase text-gray-500 dark:text-slate-400 font-display flex items-center gap-1.5">
+                  <div className="w-full lg:w-96 shrink-0 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 flex flex-col gap-3 shadow-xs">
+                    <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800">
+                      <span className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 font-display flex items-center gap-1.5">
                         <CheckCircle className="h-4 w-4 text-emerald-500" /> Validation Archive
                       </span>
                       <Badge color="blue" className="text-[10px] font-mono font-bold">
@@ -851,10 +793,10 @@ export const SuperadminDashboard: React.FC = () => {
                             <div
                               key={p.id}
                               onClick={() => setSelectedHistoryItem(p)}
-                              className="group text-left p-3.5 rounded-xl border bg-white dark:bg-slate-950/40 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all duration-150 cursor-pointer flex flex-col gap-2.5 shadow-xs"
+                              className="text-left p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 hover:border-emerald-500 dark:hover:border-emerald-500 transition-all cursor-pointer flex flex-col gap-2 shadow-xs"
                             >
                               <div className="flex justify-between items-start gap-2">
-                                <span className="font-extrabold text-stone-850 dark:text-gray-100 text-xs truncate max-w-[150px]">
+                                <span className="font-extrabold text-slate-900 dark:text-gray-100 text-xs truncate max-w-[150px]">
                                   {matchedOrg?.name || "Virellix Partner"}
                                 </span>
                                 <Badge color={p.status === "approved" ? "green" : "red"} className="text-[9px] px-1.5 py-0.5">
@@ -862,200 +804,114 @@ export const SuperadminDashboard: React.FC = () => {
                                 </Badge>
                               </div>
 
-                              <div className="flex justify-between text-[10px] font-mono leading-none border-b border-stone-50 dark:border-slate-800 pb-1.5">
-                                <span className="text-stone-400">Total:</span>
-                                <span className="text-emerald-700 dark:text-emerald-400 font-extrabold">
-                                  {(p.amount_local || p.amount_usd * 1300).toLocaleString()} RWF
+                              <div className="flex justify-between text-[11px] font-mono leading-none border-b border-slate-200/60 dark:border-slate-800 pb-2">
+                                <span className="text-slate-400">Total:</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">
+                                  {(p.amount_local || p.amount_usd * 1350).toLocaleString()} RWF
                                 </span>
                               </div>
 
-                              <div className="flex justify-between text-[10px] font-semibold leading-none text-gray-400">
-                                <span className="flex items-center gap-1">
-                                  <Clock className="h-3 w-3" /> Turnaround:
-                                </span>
-                                <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                                  {latencyText}
-                                </span>
+                              <div className="flex justify-between text-[10px] font-semibold text-slate-500">
+                                <span>Turnaround:</span>
+                                <span className="font-bold text-indigo-600 dark:text-indigo-400">{latencyText}</span>
                               </div>
                             </div>
                           );
                         })
                       ) : (
-                        <div className="text-center py-8">
-                          <p className="text-xs text-gray-400 font-medium">No verified entries yet.</p>
+                        <div className="text-center py-10">
+                          <p className="text-xs text-slate-400 font-medium">No archived transactions found.</p>
                         </div>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* Main Validation Pending Cards on the Right */}
-                <div className="flex-1 w-full">
+                <div className="flex-1 w-full flex flex-col gap-4">
                   {pendingPayments.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                      {pendingPayments.map((p) => {
-                        const matchedOrg = orgs.find((o) => o.id === p.org_id);
-                        const isMtn = p.method === "mtn";
-                        return (
-                          <div
-                            key={p.id}
-                            className="bg-white dark:bg-slate-900 border rounded-2xl shadow-xs overflow-hidden flex flex-col justify-between transition-all hover:shadow-md duration-155 border-amber-300 dark:border-amber-800/40 animate-in fade-in duration-200"
-                          >
-                            {/* Brand indicator Top line */}
-                            <div className={`px-4.5 py-2.5 text-[10px] font-bold uppercase tracking-wider flex items-center justify-between text-white ${
-                              isMtn ? "bg-amber-500 text-slate-905" : "bg-red-600"
-                            }`}>
-                              <span className="flex items-center gap-1.5 select-none font-display">
-                                <Smartphone className="h-3.5 w-3.5" />
-                                {isMtn ? "MTN Mobile Money Proof" : "Airtel Money Proof"}
+                    pendingPayments.map((p: any) => {
+                      const matchedOrg = orgs.find((o: any) => o.id === p.org_id);
+                      return (
+                        <div key={p.id} className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                          <div className="flex items-start gap-4">
+                            <div className="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-slate-800 border border-emerald-200/50 dark:border-slate-700 flex items-center justify-center text-emerald-600 font-bold shrink-0">
+                              <Smartphone className="h-6 w-6" />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-black text-slate-900 dark:text-white">{matchedOrg?.name || "Cooperative Workspace"}</span>
+                                <span className="text-[10px] font-mono bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded-md font-bold">AWAITING APPROVAL</span>
+                              </div>
+                              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                                {(p.amount_local || (p.amount_usd * 1350)).toLocaleString()} RWF ({p.amount_usd ? `$${p.amount_usd}` : "$25"})
                               </span>
-                              <span className="font-mono">{p.plan || "PRO PLAN"}</span>
-                            </div>
-
-                            {/* Content details */}
-                            <div className="p-5 flex-1 flex flex-col gap-3 font-semibold text-xs leading-none">
-                              <div className="flex items-center justify-between pb-2 border-b leading-none border-gray-100 dark:border-slate-800">
-                                <span className="text-gray-400 uppercase text-[9px] font-mono tracking-wider font-bold">Organization</span>
-                                <span className="text-gray-901 dark:text-white font-extrabold">{matchedOrg?.name || "Virellix Partner"}</span>
+                              <div className="flex items-center gap-4 text-xs text-slate-500 mt-1 font-medium">
+                                <span>Sender MoMo: <strong className="text-slate-800 dark:text-slate-200">{p.phone_number || "0780000000"}</strong></span>
+                                <span>TXN Ref: <strong className="font-mono text-slate-800 dark:text-slate-200">{p.transaction_reference || "TXN998811"}</strong></span>
                               </div>
-                              <div className="flex items-center justify-between pb-2 border-b leading-none border-gray-100 dark:border-slate-800">
-                                <span className="text-gray-400 uppercase text-[9px] font-mono tracking-wider font-bold">Total Transferred</span>
-                                <span className="text-emerald-705 dark:text-emerald-400 font-extrabold">{(p.amount_local || p.amount_usd * 1300).toLocaleString()} RWF</span>
-                              </div>
-                              <div className="flex items-center justify-between pb-2 border-b leading-none border-gray-100 dark:border-slate-800">
-                                <span className="text-gray-400 uppercase text-[9px] font-mono tracking-wider font-bold">MoMo Phone</span>
-                                <span className="text-gray-700 dark:text-slate-300 font-mono">{p.phone}</span>
-                              </div>
-                              <div className="flex items-center justify-between pb-2 border-b leading-none border-gray-100 dark:border-slate-800">
-                                <span className="text-gray-400 uppercase text-[9px] font-mono tracking-wider font-bold">Reference ID</span>
-                                <span className="text-indigo-600 dark:text-indigo-400 font-mono text-[11px] font-bold">{p.reference}</span>
-                              </div>
-
-                              {/* Text SMS verification area */}
-                              {p.proof_url && (
-                                <div className="mt-1 p-3 bg-slate-50 dark:bg-slate-800/40 border border-gray-150 dark:border-slate-800 rounded-xl leading-relaxed text-slate-500 dark:text-slate-400 font-normal">
-                                  <span className="text-[8px] font-mono uppercase tracking-widest font-black text-gray-400 block pb-1 border-b leading-none mb-1 text-center border-gray-150 dark:border-slate-800">SMS Transmission Statement</span>
-                                  <p className="text-[10px] leading-snug italic">"{p.proof_url}"</p>
-                                </div>
-                              )}
-
-                              {/* Timestamp received */}
-                              <div className="flex justify-between text-[10px] text-gray-400 pt-1.5 border-t border-dashed border-gray-150 dark:border-slate-800 font-medium">
-                                <span>Uploaded At:</span>
-                                <span className="font-bold text-stone-700 dark:text-slate-300">
-                                  {p.submitted_at ? new Date(p.submitted_at).toLocaleString() : "N/A"}
-                                </span>
-                              </div>
-
-                              <div className="flex items-center justify-between pt-2 select-none leading-none">
-                                <span className="text-gray-400 uppercase text-[9px] font-mono tracking-wider font-bold">Status</span>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-                                  <Badge color="amber">NEW RECEIVED</Badge>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Coupon Actions footer */}
-                            <div className="p-3 bg-slate-55 dark:bg-slate-900 border-t flex items-center gap-2.5 leading-none select-none border-gray-200 dark:border-slate-800">
-                              <Button 
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 flex-1 text-xs hover:opacity-90" 
-                                onClick={() => handleApproveSub(p.id, p.org_id, p.plan)}
-                              >
-                                Approve Transaction
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                className="text-red-500 hover:bg-red-50 hover:border-red-350 font-bold border-gray-200 h-9 flex-1 text-xs" 
-                                onClick={() => handleRejectSub(p.id, p.org_id)}
-                              >
-                                Reject
-                              </Button>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
+
+                          <div className="flex items-center gap-3 shrink-0 w-full md:w-auto justify-end">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-rose-600 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold h-10 px-4 rounded-xl"
+                              onClick={() => handleRejectSub(p.id, p.org_id)}
+                            >
+                              Reject Proof
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-10 px-5 rounded-xl shadow-xs"
+                              onClick={() => handleApproveSub(p.id, p.org_id, p.plan_details)}
+                            >
+                              Approve & Extend 30d
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })
                   ) : (
-                    <EmptyState 
-                      title="All Payments Cleared" 
-                      message="Superb! No mobile money transaction records are currently awaiting operator verification." 
-                    />
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-12 text-center flex flex-col items-center justify-center gap-3">
+                      <div className="h-14 w-14 rounded-2xl bg-emerald-50 dark:bg-slate-800 flex items-center justify-center text-emerald-600">
+                        <CheckCircle className="h-7 w-7" />
+                      </div>
+                      <h4 className="text-base font-black font-display text-slate-900 dark:text-white">All Clear in Approval Queue</h4>
+                      <p className="text-xs text-slate-500 max-w-sm">No pending mobile money subscription proof submissions require verification right now.</p>
+                    </div>
                   )}
                 </div>
               </div>
 
-              {/* Detailed Verified Docket Modal */}
               {selectedHistoryItem && (
-                <Modal
-                  open={!!selectedHistoryItem}
-                  onClose={() => setSelectedHistoryItem(null)}
-                  title="Verified Transaction Dossier"
-                >
-                  <div className="flex flex-col gap-4 font-semibold text-xs leading-none select-none">
-                    <div className="flex items-center justify-between pb-2 border-b border-gray-150 dark:border-slate-800">
-                      <span className="text-gray-400 uppercase text-[9px] font-mono tracking-wider font-bold">Organization</span>
-                      <span className="text-gray-901 dark:text-white font-extrabold">
-                        {orgs.find((o) => o.id === selectedHistoryItem.org_id)?.name || "Virellix Partner"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between pb-2 border-b border-gray-150 dark:border-slate-800">
-                      <span className="text-gray-400 uppercase text-[9px] font-mono tracking-wider font-bold">Total Transferred</span>
-                      <span className="text-emerald-705 dark:text-emerald-400 font-extrabold">
-                        {(selectedHistoryItem.amount_local || selectedHistoryItem.amount_usd * 1300).toLocaleString()} RWF
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between pb-2 border-b border-gray-150 dark:border-slate-800">
-                      <span className="text-gray-400 uppercase text-[9px] font-mono tracking-wider font-bold">MoMo Phone</span>
-                      <span className="text-gray-700 dark:text-slate-300 font-mono">{selectedHistoryItem.phone}</span>
-                    </div>
-                    <div className="flex items-center justify-between pb-2 border-b border-gray-150 dark:border-slate-800">
-                      <span className="text-gray-400 uppercase text-[9px] font-mono tracking-wider font-bold">Reference ID</span>
-                      <span className="text-indigo-600 dark:text-indigo-400 font-mono text-[11px] font-bold">{selectedHistoryItem.reference}</span>
-                    </div>
-
-                    {selectedHistoryItem.proof_url && (
-                      <div className="p-3 bg-slate-50 dark:bg-slate-800/40 border border-gray-150 dark:border-slate-800 rounded-xl leading-relaxed text-slate-500 dark:text-slate-400 font-normal">
-                        <span className="text-[8px] font-mono uppercase tracking-widest font-black text-gray-400 block pb-1 border-b leading-none mb-1 text-center border-gray-150 dark:border-slate-800">SMS Transmission Statement</span>
-                        <p className="text-[10px] leading-snug italic">"{selectedHistoryItem.proof_url}"</p>
+                <Modal title="Transaction Validation Audit Detail" isOpen={!!selectedHistoryItem} onClose={() => setSelectedHistoryItem(null)}>
+                  <div className="flex flex-col gap-4 text-xs">
+                    <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col gap-2 font-medium">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Transaction ID:</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{selectedHistoryItem.id}</span>
                       </div>
-                    )}
-
-                    <div className="bg-stone-50 dark:bg-slate-900 border border-gray-150 dark:border-slate-800 rounded-xl p-3 flex flex-col gap-2">
-                      <div className="flex justify-between text-[10px] text-gray-400 leading-none">
-                        <span>Uploaded At:</span>
-                        <span className="font-bold text-stone-750 dark:text-slate-200">
-                          {selectedHistoryItem.submitted_at ? new Date(selectedHistoryItem.submitted_at).toLocaleString() : "N/A"}
-                        </span>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Reference:</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{selectedHistoryItem.transaction_reference}</span>
                       </div>
-                      <div className="flex justify-between text-[10px] text-gray-400 leading-none">
-                        <span>Reviewed At:</span>
-                        <span className="font-bold text-stone-750 dark:text-slate-200">
-                          {selectedHistoryItem.validated_at ? new Date(selectedHistoryItem.validated_at).toLocaleString() : "N/A"}
-                        </span>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Amount:</span>
+                        <span className="font-bold text-emerald-600">{(selectedHistoryItem.amount_local || selectedHistoryItem.amount_usd * 1350).toLocaleString()} RWF</span>
                       </div>
-                      <div className="flex justify-between text-[10px] text-gray-400 leading-none pt-2 border-t border-dashed border-gray-200 dark:border-slate-800">
-                        <span className="flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400">
-                          <Clock className="h-3 w-3" /> Processing Latency:
-                        </span>
-                        <span className="font-extrabold text-indigo-700 dark:text-indigo-400">
-                          {selectedHistoryItem.validated_at ? formatDuration(selectedHistoryItem.submitted_at, selectedHistoryItem.validated_at) : "N/A"}
-                        </span>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Status:</span>
+                        <Badge color={selectedHistoryItem.status === "approved" ? "green" : "red"}>{selectedHistoryItem.status?.toUpperCase()}</Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Turnaround Latency:</span>
+                        <span className="font-bold text-indigo-600">{formatDuration(selectedHistoryItem.submitted_at, selectedHistoryItem.validated_at)}</span>
                       </div>
                     </div>
-
-                    <div className="flex items-center justify-between pt-2 select-none leading-none">
-                      <span className="text-gray-400 uppercase text-[9px] font-mono tracking-wider font-bold">Review Status</span>
-                      <Badge color={selectedHistoryItem.status === "approved" ? "green" : "red"}>
-                        {selectedHistoryItem.status?.toUpperCase() || "RESOLVED"}
-                      </Badge>
-                    </div>
-
-                    <div className="flex justify-end pt-3">
-                      <Button onClick={() => setSelectedHistoryItem(null)} variant="outline" size="sm" className="font-bold">
-                        Close Dossier
-                      </Button>
-                    </div>
+                    <Button className="w-full bg-slate-900 dark:bg-emerald-600 text-white font-bold h-10 rounded-xl" onClick={() => setSelectedHistoryItem(null)}>
+                      Close Details
+                    </Button>
                   </div>
                 </Modal>
               )}
@@ -1063,197 +919,137 @@ export const SuperadminDashboard: React.FC = () => {
           );
         })()}
 
-        {/* Help threads Direct messaging chats */}
+        {/* 4. SUPPORT & INCIDENT CENTER TAB */}
         {activeTab === "errors" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-200 min-h-[60vh]">
-            <div className="lg:col-span-1 flex flex-col border border-gray-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 p-4 justify-between h-[65vh] shadow-xs select-none">
-              <div className="flex flex-col gap-3 font-semibold text-xs text-stone-850 h-full">
-                <span className="text-[10px] uppercase font-mono tracking-wider font-extrabold text-slate-400 block pb-2 border-b select-none dark:border-slate-800">
-                  Incident Support Directory
-                </span>
-                <div className="flex flex-col gap-2 overflow-y-auto max-h-[52vh] pr-1 flex-1 leading-snug">
-                  {errors && errors.length > 0 ? (
-                    errors.map((e) => {
-                      const clientOrg = orgs.find((o) => o.id === e.org_id);
-                      return (
-                        <button
-                          key={e.id}
-                          onClick={() => { setActiveChatId(e.id); setTempReply(e.admin_notes || ""); }}
-                          className={`w-full text-left p-3.5 rounded-xl border transition-all duration-150 cursor-pointer flex flex-col gap-2 ${
-                            activeChatId === e.id
-                              ? "bg-slate-50 dark:bg-slate-800 border-indigo-400 shadow-sm"
-                              : "hover:bg-gray-55 dark:hover:bg-slate-805/45 border-gray-100 dark:border-slate-800"
-                          }`}
-                        >
-                          <div className="flex justify-between items-center w-full leading-none text-xs">
-                            <span className="font-extrabold text-gray-950 dark:text-slate-105 truncate max-w-[70%]">{clientOrg?.name || "Support Ticket"}</span>
-                            <Badge color={e.status === "resolved" ? "green" : "red"}>{e.status}</Badge>
-                          </div>
-                          <p className="text-[10px] text-gray-500 font-normal truncate">
-                            "{e.description}"
-                          </p>
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <span className="text-stone-400 py-12 text-center text-xs">No active threads.</span>
-                  )}
-                </div>
-              </div>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col gap-6 w-full">
+            <div>
+              <h3 className="text-base font-black font-display text-slate-900 dark:text-white">Support & Incident Tickets Center</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Direct communication channel with cooperative workspaces experiencing support inquiries or technical issues.</p>
             </div>
 
-            <div className="lg:col-span-2 flex flex-col border border-gray-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden justify-between h-[65vh] shadow-xs">
-              {activeChatId ? (
-                (() => {
-                  const activeErr = errors.find((e) => e.id === activeChatId);
-                  const matchedOrg = orgs.find((o) => o.id === activeErr?.org_id);
+            <div className="flex flex-col gap-4">
+              {errors && errors.length > 0 ? (
+                errors.map((errItem: any) => {
+                  const isResolved = errItem.status === "resolved";
+                  const isChatOpen = activeChatId === errItem.id;
                   return (
-                    <>
-                      <div className="px-5 py-4 bg-slate-50 dark:bg-slate-900 border-b dark:border-slate-800 flex justify-between items-center leading-none select-none">
-                        <div className="flex flex-col gap-1.5">
-                          <span className="font-black text-sm text-gray-901 dark:text-white">Active Chat with: {matchedOrg?.name || "Partner Organization"}</span>
-                          <span className="text-[9px] font-mono text-slate-400 tracking-wider font-semibold">Workspace Identifier: {matchedOrg?.id}</span>
-                        </div>
-                        {activeErr?.status !== "resolved" && (
-                          <Button size="xs" onClick={() => handleResolveBugDirect(activeChatId)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold h-8">
-                            Resolve Logs Ticket
-                          </Button>
-                        )}
-                      </div>
-
-                      {/* Conversation thread */}
-                      <div className="flex-1 p-5 overflow-y-auto flex flex-col gap-5 font-medium text-xs">
-                        {/* Client issue summary */}
-                        <div className="p-4 bg-gray-55/60 dark:bg-slate-800/40 border border-dashed hover:bg-gray-50 rounded-xl flex gap-3 text-stone-800 dark:text-slate-205 leading-relaxed font-semibold">
-                          <Avatar name={matchedOrg?.name || "O"} size="xs" />
-                          <div className="flex flex-col gap-1 flex-1 leading-relaxed">
-                            <span className="text-[10px] text-zinc-400 font-bold block leading-none select-none">Original Support Transmission Statement:</span>
-                            <span className="text-gray-955 dark:text-slate-100 mt-1 font-bold">"{activeErr?.description}"</span>
+                    <div key={errItem.id} className="p-5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 rounded-2xl flex flex-col gap-4 shadow-xs">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-bold shrink-0 ${isResolved ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"}`}>
+                            {isResolved ? <CheckCircle className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />}
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-slate-900 dark:text-white font-display">{errItem.page || "Cooperative Portal"}</span>
+                              <Badge color={isResolved ? "green" : "amber"}>{isResolved ? "Resolved" : "Pending Support"}</Badge>
+                            </div>
+                            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">{errItem.error_message}</p>
+                            <span className="text-[10px] text-slate-400 font-mono mt-1">Reported: {new Date(errItem.created_at).toLocaleString()}</span>
                           </div>
                         </div>
 
-                        {/* Supervisor Answer if stored */}
-                        {activeErr?.admin_notes ? (
-                          <div className="flex gap-3 max-w-[85%] self-end flex-row-reverse transition-all">
-                            <div className="h-8.5 w-8.5 rounded-xl bg-slate-900 text-amber-500 flex items-center justify-center text-xs font-bold shrink-0 border border-slate-805">
-                              SA
-                            </div>
-                            <div className="flex flex-col gap-1.5 text-right font-display leading-tight">
-                              <span className="text-[10px] text-slate-400 font-bold block select-none">You (System Superadmin)</span>
-                              <div className="p-3 bg-slate-905 text-white dark:bg-slate-850 dark:border dark:border-slate-805 rounded-2xl text-[11px] leading-snug text-left font-semibold shadow-xs">
-                                {activeErr.admin_notes}
-                              </div>
-                              <span className="text-[9px] text-gray-400 font-mono">Dispatched Response</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-center py-8 select-none">
-                            <span className="text-xs text-stone-400">No reply text dispatching recorded on this support log yet. Fill details below.</span>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 shrink-0">
+                          {!isResolved && (
+                            <Button size="sm" variant="outline" className="text-xs font-bold h-9 px-3 rounded-xl border-slate-300 dark:border-slate-700" onClick={() => setActiveChatId(isChatOpen ? "" : errItem.id)}>
+                              {isChatOpen ? "Close Reply" : "Reply Ticket"}
+                            </Button>
+                          )}
+                          {!isResolved && (
+                            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-9 px-3 rounded-xl shadow-xs" onClick={() => handleResolveBugDirect(errItem.id)}>
+                              Resolve Ticket
+                            </Button>
+                          )}
+                        </div>
                       </div>
 
-                      <form onSubmit={handleSendChatReply} className="p-4 border-t dark:border-slate-800 bg-gray-50 dark:bg-slate-950 flex items-center gap-3">
-                        <div className="flex-1 text-xs">
-                          <Input 
-                            value={tempReply} 
-                            onChange={(e) => setTempReply(e.target.value)} 
-                            placeholder="Type a support response or diagnostic instructions..." 
+                      {errItem.admin_notes && (
+                        <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800 rounded-xl text-xs text-emerald-900 dark:text-emerald-200 flex flex-col gap-1">
+                          <span className="font-bold uppercase tracking-wider text-[10px] text-emerald-700 dark:text-emerald-400">Admin Response Dispatched:</span>
+                          <p>{errItem.admin_notes}</p>
+                        </div>
+                      )}
+
+                      {isChatOpen && (
+                        <form onSubmit={handleSendChatReply} className="flex items-center gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                          <Input
+                            placeholder="Type direct support operator response..."
+                            value={tempReply}
+                            onChange={(e) => setTempReply(e.target.value)}
+                            className="flex-1 text-xs"
                           />
-                        </div>
-                        <Button type="submit" className="bg-slate-900 dark:bg-slate-900 text-white font-bold h-10 px-4 shrink-0">
-                          <Send className="h-4 w-4" />
-                        </Button>
-                      </form>
-                    </>
+                          <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 px-5 rounded-xl shadow-xs" icon={<Send className="h-4 w-4" />}>
+                            Send Reply
+                          </Button>
+                        </form>
+                      )}
+                    </div>
                   );
-                })()
+                })
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-center gap-3.5 p-6 select-none leading-none">
-                  <div className="h-12 w-12 bg-gray-55 dark:bg-slate-850 rounded-2xl flex items-center justify-center shadow-xs">
-                    <MessageSquare className="h-6 w-6 text-indigo-505 animate-bounce" />
-                  </div>
-                  <p className="text-xs text-slate-500 font-black">Select any Help Chat and Bug Incident thread on the left directory pane to start messaging.</p>
+                <div className="text-center py-12">
+                  <p className="text-xs text-slate-400 font-medium">No support tickets reported.</p>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* Global billing configuration setup */}
+        {/* 5. GLOBAL BILLING CONFIG TAB */}
         {activeTab === "billing_setup" && (
-          <Card title="SaaS Core Platform Billing & Integration Parameters">
-            <form onSubmit={handleSavePlatformSettings} className="flex flex-col gap-6 text-xs md:text-sm font-medium pt-2 text-gray-600 dark:text-slate-300 font-semibold">
-              <p className="text-gray-500 font-normal leading-normal">
-                Coordinate global configurations displayed to administrative users upon triggering upgrade payment flows.
-              </p>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col gap-6 w-full max-w-3xl">
+            <div>
+              <h3 className="text-base font-black font-display text-slate-900 dark:text-white">Global Revenue & Exchange Rates Configuration</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Configure currency conversion benchmarks and MTN / Airtel MoMo collection merchant numbers.</p>
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Input 
-                  label="USD To Rwandan Franc Conv (1 USD = ? RWF)" 
-                  type="number" 
-                  value={usdRate} 
-                  onChange={(e) => setUsdRate(parseInt(e.target.value) || 0)} 
-                />
-                <Input 
-                  label="EUR To Rwandan Franc Conv (1 EUR = ? RWF)" 
-                  type="number" 
-                  value={eurRate} 
-                  onChange={(e) => setEurRate(parseInt(e.target.value) || 0)} 
-                />
-                <Input 
-                  label="KES To Rwandan Franc Conv (1 KES = ? RWF)" 
-                  type="number" 
-                  value={kesRate} 
-                  onChange={(e) => setKesRate(parseInt(e.target.value) || 0)} 
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                <Input 
-                  label="Target Corporate Payment Recipient Name" 
-                  value={mName} 
-                  onChange={(e) => setMName(e.target.value)} 
-                  placeholder="e.g. VIRELLIX INC" 
-                />
+            <form onSubmit={handleSavePlatformSettings} className="flex flex-col gap-5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <Input 
-                    label="MTN MoMo Target Corporate phone/code number" 
-                    value={mtnNum} 
-                    onChange={(e) => setMtnNum(e.target.value.replace(/\D/g, "").slice(0, 10))} 
-                  />
-                  <span className="text-[10px] text-amber-500 font-bold tracking-wide block uppercase h-3 leading-none select-none pl-1 font-mono">MTN Operator collection code</span>
+                  <label className="font-bold text-slate-700 dark:text-slate-300">USD to RWF Rate</label>
+                  <Input type="number" value={usdRate} onChange={(e) => setUsdRate(Number(e.target.value))} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">EUR to RWF Rate</label>
+                  <Input type="number" value={eurRate} onChange={(e) => setEurRate(Number(e.target.value))} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">KES to RWF Rate</label>
+                  <Input type="number" value={kesRate} onChange={(e) => setKesRate(Number(e.target.value))} />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-1 gap-6 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <Input 
-                    label="Airtel Money Target Corporate phone/code number" 
-                    value={airtelNum} 
-                    onChange={(e) => setAirtelNum(e.target.value.replace(/\D/g, "").slice(0, 10))} 
-                  />
-                  <span className="text-[10px] text-red-550 font-bold tracking-wide block uppercase h-3 leading-none select-none pl-1 font-mono">Airtel Money collection code</span>
+                  <label className="font-bold text-slate-700 dark:text-slate-300">MTN MoMo Collection Number</label>
+                  <Input type="text" value={mtnNum} onChange={(e) => setMtnNum(e.target.value)} placeholder="0788100100" />
+                  <span className="text-[10px] text-slate-400">Must be 10 digits starting with 07</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Airtel Money Collection Number</label>
+                  <Input type="text" value={airtelNum} onChange={(e) => setAirtelNum(e.target.value)} placeholder="0733100100" />
+                  <span className="text-[10px] text-slate-400">Must be 10 digits starting with 07</span>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end border-t dark:border-slate-800 pt-6 mt-4 select-none">
-                <Button 
-                  type="submit" 
-                  loading={updateSettingsMutation.isPending} 
-                  className="px-8 mt-1 py-3 text-xs md:text-sm font-extrabold shadow-md bg-emerald-650 hover:bg-emerald-700 hover:opacity-90 text-white rounded-xl h-11"
-                >
-                  Save Global Parameters
+              <div className="flex flex-col gap-1.5">
+                <label className="font-bold text-slate-700 dark:text-slate-300">Merchant Registered Legal Entity Name</label>
+                <Input type="text" value={mName} onChange={(e) => setMName(e.target.value)} placeholder="VIRELLIX INC" />
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 px-6 rounded-xl shadow-xs">
+                  Save Operator Billing Settings
                 </Button>
               </div>
             </form>
-          </Card>
+          </div>
         )}
       </main>
 
-      {/* Mini operators footer */}
-      <footer className="h-10 bg-slate-900 border-t border-slate-800 text-center text-[10px] text-slate-500 flex items-center justify-center font-mono select-none shrink-0 border-t border-slate-800">
-        Impacto SaaS SLA Operator Panel • © Virellix Core Security Protocol Labs
+      {/* Footer */}
+      <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-6 px-6 text-center text-xs text-slate-500 font-medium">
+        IMPACTO Platform Superadmin Governance Console • Secure Multi-Tenant Operations & Billing Gateway
       </footer>
     </div>
   );

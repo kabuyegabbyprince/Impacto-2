@@ -356,6 +356,7 @@ export interface SubscriptionPayment {
 
 export interface PollMessage {
   id: string;
+  poll_id?: string;
   message_id: string;
   channel_id: string;
   question: string;
