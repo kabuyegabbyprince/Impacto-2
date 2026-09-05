@@ -44,7 +44,11 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   PieChart,
-  Pencil
+  Pencil,
+  Star,
+  ClipboardList,
+  Settings,
+  Filter
 } from "lucide-react";
 import { useOrgStore } from "../store/orgStore";
 import { useAuthStore } from "../store/authStore";
@@ -266,6 +270,52 @@ export const MembersManagement: React.FC = () => {
   const mismatchPercent = totalResigns > 0 ? Math.round((mismatchCount / totalResigns) * 100) : 0;
   const schedulingPercent = totalResigns > 0 ? Math.round((schedulingCount / totalResigns) * 100) : 0;
   const healthPercent = totalResigns > 0 ? Math.round((healthCount / totalResigns) * 100) : 0;
+
+  const [surveyFilterCategory, setSurveyFilterCategory] = useState("all");
+  const [surveyFilterRating, setSurveyFilterRating] = useState("all");
+  const [surveySearch, setSurveySearch] = useState("");
+
+  const avgRating = totalResigns > 0 ? (resignations!.reduce((acc, r) => acc + (r.rating || 4), 0) / totalResigns).toFixed(1) : "5.0";
+  const rejoinPositiveCount = resignations ? resignations.filter(r => r.rejoin_intent === "yes" || r.rejoin_intent === "maybe" || !r.rejoin_intent).length : 0;
+  const rejoinPositivePercent = totalResigns > 0 ? Math.round((rejoinPositiveCount / totalResigns) * 100) : 100;
+
+  const rating5Count = resignations ? resignations.filter(r => (r.rating || 5) === 5).length : 0;
+  const rating4Count = resignations ? resignations.filter(r => r.rating === 4).length : 0;
+  const rating3Count = resignations ? resignations.filter(r => r.rating === 3).length : 0;
+  const ratingLowCount = resignations ? resignations.filter(r => (r.rating || 5) <= 2).length : 0;
+
+  const financialCount = resignations ? resignations.filter(r => r.reason_category?.includes("Financial") || r.reason_category?.includes("Fee") || r.reason?.toLowerCase().includes("fee")).length : 0;
+  const leadershipCount = resignations ? resignations.filter(r => r.reason_category?.includes("Leadership") || r.reason_category?.includes("Governance")).length : 0;
+  const otherCount = Math.max(0, totalResigns - relocationCount - mismatchCount - schedulingCount - healthCount - financialCount - leadershipCount);
+
+  const handleExportExitSurveyCSV = () => {
+    if (!resignations || resignations.length === 0) {
+      addToast("No exit survey submissions to export.", "info");
+      return;
+    }
+    const headers = ["ID", "Member Name", "Date", "Reason Category", "Detailed Reason", "Rating (1-5)", "Rejoin Likelihood", "Feedback Notes", "Status"];
+    const rows = resignations.map((r) => [
+      `"${r.id}"`,
+      `"${r.member_name || "Unknown Member"}"`,
+      `"${new Date(r.resignation_date || r.submitted_at || Date.now()).toLocaleDateString()}"`,
+      `"${(r.reason_category || r.reason || "").replace(/"/g, '""')}"`,
+      `"${(r.reason_detail || r.details || "").replace(/"/g, '""')}"`,
+      `"${r.rating || 5}"`,
+      `"${r.rejoin_intent || "N/A"}"`,
+      `"${(r.feedback || "").replace(/"/g, '""')}"`,
+      `"${r.status || "finalized"}"`
+    ]);
+    const csvContent = [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Exit_Survey_Report_${activeOrg?.name || "Org"}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addToast("Exit survey report exported to CSV successfully!", "success");
+  };
 
   const [openInviteModal, setOpenInviteModal] = useState(false);
   const [inviteName, setInviteName] = useState("");
@@ -824,80 +874,409 @@ export const MembersManagement: React.FC = () => {
       )}
 
       {activeTab === "resignations" && (
-        <PlanGatedView requiredTier="enterprise" featureName="3-Step Resignations Survey & Offboarding Analytics">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card title={t("resign_pending_title")}>
-              <div className="flex flex-col gap-4">
-                {resignations && resignations.filter((r) => r.status === "pending").length > 0 ? (
-                  resignations
-                    .filter((r) => r.status === "pending")
-                    .map((r) => {
-                      const matched = members?.find((m) => m.id === r.member_id);
-                      const name = matched?.user?.full_name || "Unknown Volunteer";
+        <PlanGatedView requiredTier="growth" featureName="Member Exit Survey & Retention Intelligence">
+          <div className="flex flex-col gap-6 animate-in fade-in duration-200">
+            {/* Top Header & Actions */}
+            <div className="p-5 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="h-11 w-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <ClipboardList className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <span>Exit Survey & Retention Intelligence Reports</span>
+                    <Badge color="green" className="text-xs">Live Analytics</Badge>
+                  </h3>
+                  <p className="text-xs text-gray-600 dark:text-slate-400 mt-1 leading-relaxed max-w-2xl">
+                    Analyze feedback collected from departing members, evaluate satisfaction ratings, identify retention risk factors, and inspect individual offboarding survey responses.
+                  </p>
+                </div>
+              </div>
 
+              <div className="flex flex-wrap items-center gap-2.5 self-start md:self-center shrink-0">
+                <Link
+                  to="/settings?tab=exit_survey"
+                  className="px-3.5 py-2 bg-white dark:bg-slate-900 text-gray-700 dark:text-gray-200 hover:text-emerald-700 dark:hover:text-emerald-400 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-3xs transition hover:border-emerald-300"
+                >
+                  <Settings className="h-3.5 w-3.5" /> Configure Survey
+                </Link>
+                <Button
+                  size="sm"
+                  onClick={handleExportExitSurveyCSV}
+                  icon={<Download className="h-3.5 w-3.5" />}
+                  className="px-3.5 py-2 text-xs font-bold"
+                >
+                  Export CSV Report
+                </Button>
+              </div>
+            </div>
+
+            {/* KPI Metric Summary Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-3xs flex flex-col gap-1">
+                <span className="text-xs font-bold text-gray-500 dark:text-slate-400">Total Survey Submissions</span>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-black text-gray-900 dark:text-white font-mono">{totalResigns}</span>
+                  <span className="text-xs font-medium text-slate-400">records</span>
+                </div>
+                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1">
+                  All departing members
+                </span>
+              </div>
+
+              <div className="p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-3xs flex flex-col gap-1">
+                <span className="text-xs font-bold text-gray-500 dark:text-slate-400">Avg Overall Experience</span>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-2xl font-black text-gray-900 dark:text-white font-mono">{avgRating}</span>
+                  <div className="flex items-center text-amber-500">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star
+                        key={star}
+                        className={`h-4 w-4 ${
+                          parseFloat(avgRating) >= star
+                            ? "fill-amber-400 text-amber-400"
+                            : "text-gray-300 dark:text-slate-700"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <span className="text-[11px] text-gray-500 dark:text-slate-400 font-medium mt-1">
+                  Based on 5-point rating scale
+                </span>
+              </div>
+
+              <div className="p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-3xs flex flex-col gap-1">
+                <span className="text-xs font-bold text-gray-500 dark:text-slate-400">Future Rejoin Openness</span>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                    {rejoinPositivePercent}%
+                  </span>
+                  <span className="text-xs font-medium text-slate-400">favorable</span>
+                </div>
+                <span className="text-[11px] text-gray-500 dark:text-slate-400 font-medium mt-1">
+                  {rejoinPositiveCount} of {totalResigns || 1} willing to return
+                </span>
+              </div>
+
+              <div className="p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-3xs flex flex-col gap-1">
+                <span className="text-xs font-bold text-gray-500 dark:text-slate-400">Pending Admin Processing</span>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-black text-rose-600 dark:text-rose-400 font-mono">
+                    {resignations ? resignations.filter((r) => r.status === "pending").length : 0}
+                  </span>
+                  <span className="text-xs font-medium text-slate-400">awaiting action</span>
+                </div>
+                <span className="text-[11px] text-gray-500 dark:text-slate-400 font-medium mt-1">
+                  Checklist & handover queue
+                </span>
+              </div>
+            </div>
+
+            {/* Visual Analytics Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Departure Reason Breakdown */}
+              <Card title="Primary Departure Factors">
+                <div className="flex flex-col gap-3.5 text-xs">
+                  <p className="text-xs text-gray-500 font-medium">
+                    Categorization of stated reasons members chose to leave the cooperative:
+                  </p>
+
+                  <div className="flex flex-col gap-2.5 pt-1">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex justify-between items-center text-xs font-semibold text-gray-800 dark:text-gray-200">
+                        <span>Relocation & Geographic Resettlement</span>
+                        <span className="font-mono text-emerald-600 dark:text-emerald-400">{relocationPercent}% ({relocationCount})</span>
+                      </div>
+                      <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${relocationPercent}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <div className="flex justify-between items-center text-xs font-semibold text-gray-800 dark:text-gray-200">
+                        <span>Schedule Conflicts & Workload</span>
+                        <span className="font-mono text-blue-600 dark:text-blue-400">{schedulingPercent}% ({schedulingCount})</span>
+                      </div>
+                      <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${schedulingPercent}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <div className="flex justify-between items-center text-xs font-semibold text-gray-800 dark:text-gray-200">
+                        <span>Personal / Health Reasons</span>
+                        <span className="font-mono text-purple-600 dark:text-purple-400">{healthPercent}% ({healthCount})</span>
+                      </div>
+                      <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-purple-500 rounded-full transition-all duration-500" style={{ width: `${healthPercent}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <div className="flex justify-between items-center text-xs font-semibold text-gray-800 dark:text-gray-200">
+                        <span>Role Mismatch & Goal Realignment</span>
+                        <span className="font-mono text-amber-600 dark:text-amber-400">{mismatchPercent}% ({mismatchCount})</span>
+                      </div>
+                      <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-500 rounded-full transition-all duration-500" style={{ width: `${mismatchPercent}%` }}></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Rating & Sentiment Distribution */}
+              <Card title="Member Experience Rating Distribution">
+                <div className="flex flex-col gap-3.5 text-xs">
+                  <p className="text-xs text-gray-500 font-medium">
+                    Overall satisfaction ratings awarded during the departure survey:
+                  </p>
+
+                  <div className="flex flex-col gap-2 pt-1">
+                    {[
+                      { stars: 5, label: "5 Stars - Outstanding Experience", count: rating5Count, color: "bg-emerald-500" },
+                      { stars: 4, label: "4 Stars - Good Experience", count: rating4Count, color: "bg-teal-500" },
+                      { stars: 3, label: "3 Stars - Neutral / Average", count: rating3Count, color: "bg-amber-500" },
+                      { stars: 2, label: "1-2 Stars - Dissatisfied", count: ratingLowCount, color: "bg-rose-500" },
+                    ].map((item) => {
+                      const pct = totalResigns > 0 ? Math.round((item.count / totalResigns) * 100) : 0;
                       return (
-                        <div key={r.id} className="p-4 border rounded-xl bg-stone-50/50 dark:bg-slate-900 flex flex-col gap-3">
-                          <div className="flex justify-between items-start">
-                            <div className="flex flex-col gap-1">
-                              <span className="text-xs font-bold text-stone-900 dark:text-stone-100">{name}</span>
-                              <span className="text-[10px] text-slate-400 font-semibold font-mono">{t("lbl_exit_date", { date: new Date(r.resignation_date).toLocaleDateString() })}</span>
-                            </div>
-                            <Badge color="red">{t("lbl_pending_processing")}</Badge>
+                        <div key={item.stars} className="flex flex-col gap-1">
+                          <div className="flex justify-between items-center text-xs font-semibold text-gray-800 dark:text-gray-200">
+                            <span className="flex items-center gap-1.5">
+                              <span>{item.label}</span>
+                            </span>
+                            <span className="font-mono text-gray-600 dark:text-gray-400">{pct}% ({item.count})</span>
                           </div>
-
-                          <div className="p-3 bg-red-50/20 dark:bg-red-950/10 border border-red-100/45 text-xs rounded-xl flex flex-col gap-1">
-                            <span className="font-extrabold text-red-800">{t("lbl_reason_leaving")}</span>
-                            <p className="text-slate-500 italic leading-relaxed font-semibold">"{r.reason}"</p>
-                          </div>
-
-                          {r.feedback && (
-                            <div className="p-3 bg-stone-100/50 dark:bg-slate-950 border text-xs rounded-xl flex flex-col gap-1">
-                              <span className="font-bold text-stone-605">{t("lbl_org_feedback")}</span>
-                              <p className="text-gray-500 leading-relaxed font-semibold">"{r.feedback}"</p>
-                            </div>
-                          )}
-
-                          <div className="flex justify-end gap-2 text-xs font-semibold">
-                            <Button size="sm" color="amber" variant="outline" onClick={() => handleProcessResignation(r.id, r.member_id, "active")}>
-                              {t("btn_retain_member")}
-                            </Button>
-                            <Button size="sm" onClick={() => handleProcessResignation(r.id, r.member_id, "suspended")}>
-                              {t("btn_process_checklist")}
-                            </Button>
+                          <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div className={`h-full ${item.color} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }}></div>
                           </div>
                         </div>
                       );
-                    })
-                ) : (
-                  <EmptyState title={t("empty_pending_resigns")} message={t("empty_pending_resigns_msg")} />
-                )}
-              </div>
-            </Card>
-
-            <Card title={t("resign_metrics_title", { count: totalResigns })}>
-              <div className="flex flex-col gap-4">
-                <p className="text-xs text-gray-500 font-semibold leading-relaxed">
-                  {t("resign_metrics_subtitle")}
-                </p>
-
-                <div className="flex flex-col gap-3 font-mono text-[10px] text-gray-450 pt-2 border-t w-full">
-                  <div className="flex justify-between items-center bg-stone-50 dark:bg-slate-950 p-2.5 rounded-xl border">
-                    <span>{t("trend_relocation")}</span>
-                    <span className="font-extrabold text-stone-800 dark:text-stone-100">{t("trend_count_logs", { percent: relocationPercent, count: relocationCount })}</span>
-                  </div>
-                  <div className="flex justify-between items-center bg-stone-50 dark:bg-slate-950 p-2.5 rounded-xl border">
-                    <span>{t("trend_mismatch")}</span>
-                    <span className="font-extrabold text-stone-800 dark:text-stone-100">{t("trend_count_comments", { percent: mismatchPercent, count: mismatchCount })}</span>
-                  </div>
-                  <div className="flex justify-between items-center bg-stone-50 dark:bg-slate-950 p-2.5 rounded-xl border">
-                    <span>{t("trend_scheduling")}</span>
-                    <span className="font-extrabold text-stone-800 dark:text-stone-100">{t("trend_count_comments", { percent: schedulingPercent, count: schedulingCount })}</span>
-                  </div>
-                  <div className="flex justify-between items-center bg-stone-50 dark:bg-slate-950 p-2.5 rounded-xl border">
-                    <span>{t("trend_health")}</span>
-                    <span className="font-extrabold text-stone-800 dark:text-stone-100">{t("trend_count_metrics", { percent: healthPercent, count: healthCount })}</span>
+                    })}
                   </div>
                 </div>
+              </Card>
+            </div>
+
+            {/* Submissions & Survey Reports List */}
+            <Card title={`Collected Exit Surveys & Detailed Feedback (${totalResigns})`}>
+              <div className="flex flex-col gap-4">
+                {/* Search & Filter Bar */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pb-2 border-b border-gray-100 dark:border-slate-800">
+                  <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={surveySearch}
+                      onChange={(e) => setSurveySearch(e.target.value)}
+                      placeholder="Search member, feedback or reason..."
+                      className="w-full pl-9 pr-3.5 py-2 text-xs bg-slate-50 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[var(--org-primary)] focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Filter className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                    <select
+                      value={surveyFilterCategory}
+                      onChange={(e) => setSurveyFilterCategory(e.target.value)}
+                      className="px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none font-medium"
+                    >
+                      <option value="all">All Departure Reasons</option>
+                      <option value="Relocation">Relocation</option>
+                      <option value="Scheduling">Scheduling / Conflict</option>
+                      <option value="Health">Health / Personal</option>
+                      <option value="Mismatch">Role Mismatch</option>
+                      <option value="Financial">Financial / Dues</option>
+                    </select>
+
+                    <select
+                      value={surveyFilterRating}
+                      onChange={(e) => setSurveyFilterRating(e.target.value)}
+                      className="px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/80 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none font-medium"
+                    >
+                      <option value="all">All Ratings</option>
+                      <option value="5">5 Stars</option>
+                      <option value="4">4 Stars</option>
+                      <option value="3">3 Stars</option>
+                      <option value="low">1-2 Stars</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Submissions Cards */}
+                {resignations && resignations.length > 0 ? (
+                  <div className="flex flex-col gap-4">
+                    {resignations
+                      .filter((r) => {
+                        if (surveyFilterCategory !== "all") {
+                          if (!r.reason_category?.toLowerCase().includes(surveyFilterCategory.toLowerCase()) &&
+                              !r.reason?.toLowerCase().includes(surveyFilterCategory.toLowerCase())) {
+                            return false;
+                          }
+                        }
+                        if (surveyFilterRating !== "all") {
+                          if (surveyFilterRating === "low") {
+                            if ((r.rating || 5) > 2) return false;
+                          } else {
+                            if ((r.rating || 5) !== parseInt(surveyFilterRating)) return false;
+                          }
+                        }
+                        if (surveySearch.trim()) {
+                          const query = surveySearch.toLowerCase();
+                          const matchedMember = members?.find((m) => m.id === r.member_id);
+                          const memberName = matchedMember?.user?.full_name || r.member_name || "";
+                          const matches =
+                            memberName.toLowerCase().includes(query) ||
+                            (r.reason || "").toLowerCase().includes(query) ||
+                            (r.reason_detail || "").toLowerCase().includes(query) ||
+                            (r.feedback || "").toLowerCase().includes(query);
+                          if (!matches) return false;
+                        }
+                        return true;
+                      })
+                      .map((r) => {
+                        const matched = members?.find((m) => m.id === r.member_id);
+                        const name = matched?.user?.full_name || r.member_name || "Departed Member";
+                        const dateStr = new Date(r.resignation_date || r.submitted_at || Date.now()).toLocaleDateString();
+
+                        return (
+                          <div
+                            key={r.id}
+                            className="p-4 sm:p-5 border border-gray-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 shadow-3xs flex flex-col gap-3.5 hover:border-gray-300 dark:hover:border-slate-700 transition"
+                          >
+                            {/* Card Top: Member & Status */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 dark:border-slate-800/80 pb-3">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold flex items-center justify-center text-sm shrink-0">
+                                  {name.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    {name}
+                                    {r.rejoin_intent && (
+                                      <span
+                                        className={`px-2 py-0.5 text-[10px] font-bold rounded-md uppercase tracking-wider ${
+                                          r.rejoin_intent === "yes"
+                                            ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300"
+                                            : r.rejoin_intent === "maybe"
+                                            ? "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300"
+                                            : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                                        }`}
+                                      >
+                                        Rejoin Intent: {r.rejoin_intent}
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="text-[11px] text-gray-400 font-medium">
+                                    Departed on {dateStr}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3 self-start sm:self-center">
+                                {/* Rating Stars */}
+                                <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800/60 px-2.5 py-1 rounded-lg">
+                                  <div className="flex items-center text-amber-500">
+                                    {[1, 2, 3, 4, 5].map((s) => (
+                                      <Star
+                                        key={s}
+                                        className={`h-3.5 w-3.5 ${
+                                          (r.rating || 5) >= s
+                                            ? "fill-amber-400 text-amber-400"
+                                            : "text-gray-300 dark:text-slate-700"
+                                        }`}
+                                      />
+                                    ))}
+                                  </div>
+                                  <span className="text-xs font-bold text-amber-800 dark:text-amber-300 ml-1">
+                                    {r.rating || 5}.0
+                                  </span>
+                                </div>
+
+                                {r.status === "pending" ? (
+                                  <Badge color="red">Pending Processing</Badge>
+                                ) : (
+                                  <Badge color="green">Exit Finalized</Badge>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Stated Reason & Detailed Comments */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 rounded-xl flex flex-col gap-1">
+                                <span className="text-[11px] font-bold text-gray-600 dark:text-slate-300 uppercase tracking-wider">
+                                  Primary Reason for Leaving
+                                </span>
+                                <p className="text-gray-800 dark:text-gray-200 font-semibold">
+                                  {r.reason_category || r.reason || "General departure"}
+                                </p>
+                                {(r.reason_detail || (r.reason && r.reason !== r.reason_category)) && (
+                                  <p className="text-gray-500 dark:text-slate-400 italic text-[11px] mt-0.5">
+                                    "{r.reason_detail || r.reason}"
+                                  </p>
+                                )}
+                              </div>
+
+                              {r.feedback && (
+                                <div className="p-3 bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 rounded-xl flex flex-col gap-1">
+                                  <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
+                                    Feedback & Suggestions for Leadership
+                                  </span>
+                                  <p className="text-gray-700 dark:text-slate-300 font-medium text-xs leading-relaxed">
+                                    "{r.feedback}"
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Custom dynamic survey question answers if present */}
+                            {r.custom_answers && Object.keys(r.custom_answers).length > 0 && (
+                              <div className="p-3 bg-stone-50/70 dark:bg-slate-950 border border-stone-200/60 dark:border-slate-800 rounded-xl flex flex-col gap-2 text-xs">
+                                <span className="text-[11px] font-bold text-stone-600 dark:text-stone-300 uppercase tracking-wider">
+                                  Custom Survey Question Responses
+                                </span>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {Object.entries(r.custom_answers).map(([key, val]: [string, any]) => (
+                                    <div key={key} className="flex flex-col bg-white dark:bg-slate-900 p-2 rounded-lg border border-gray-100 dark:border-slate-800">
+                                      <span className="text-[10px] text-gray-400 font-semibold">{key}</span>
+                                      <span className="text-xs font-bold text-gray-800 dark:text-gray-200 mt-0.5">{String(val)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Pending actions */}
+                            {r.status === "pending" && (
+                              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-slate-800 text-xs font-semibold">
+                                <Button
+                                  size="sm"
+                                  color="amber"
+                                  variant="outline"
+                                  onClick={() => handleProcessResignation(r.id, r.member_id, "active")}
+                                >
+                                  {t("btn_retain_member")}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleProcessResignation(r.id, r.member_id, "suspended")}
+                                >
+                                  {t("btn_process_checklist")}
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <EmptyState
+                    title="No Exit Survey Submissions"
+                    message="When members exit this workspace, their offboarding survey responses and retention feedback will appear here."
+                  />
+                )}
               </div>
             </Card>
           </div>

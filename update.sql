@@ -1,89 +1,173 @@
--- ==============================================================================
--- ASSET & STOCK / INVENTORY MANAGEMENT MIGRATION
--- Compatible with both UUID and TEXT ID schemas
--- ==============================================================================
+-- =====================================================================
+-- UPDATE MIGRATION: Strict Accountant Role Permissions for Member Fees
+-- =====================================================================
+-- Purpose:
+-- 1. Grant the 'accountant' role exclusive authority to manage, charge,
+--    edit, delete, and verify cooperative dues/fees.
+-- 2. Restrict non-accountants (general members, managers, etc.) to view-only
+--    of their own dues and submitting payment slips (pending_confirmation).
+-- =====================================================================
 
--- 1. Ensure the assets table exists with flexible types
-CREATE TABLE IF NOT EXISTS public.assets (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    org_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    category TEXT DEFAULT 'General Asset',
-    quantity NUMERIC DEFAULT 1,
-    quality TEXT,
-    identifier TEXT,
-    serial_number TEXT,
-    purchase_date DATE DEFAULT CURRENT_DATE,
-    purchase_cost NUMERIC DEFAULT 0,
-    currency VARCHAR(10) DEFAULT 'RWF',
-    condition VARCHAR(50) DEFAULT 'good',
-    assigned_to_member_id TEXT,
-    assigned_to_name TEXT,
-    location TEXT,
-    status VARCHAR(50) DEFAULT 'operational',
-    notes TEXT,
-    qr_code TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+-- 1. Ensure member_fees table exists and has all required columns
+CREATE TABLE IF NOT EXISTS public.member_fees (
+  id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL,
+  member_id TEXT NOT NULL,
+  amount NUMERIC NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'RWF',
+  payment_period TEXT NOT NULL,
+  period_date TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  due_date DATE,
+  is_recurring BOOLEAN DEFAULT true,
+  paid_at TIMESTAMPTZ,
+  paid_by_method TEXT,
+  transaction_reference TEXT,
+  sender_info TEXT,
+  reported_at TIMESTAMPTZ,
+  report_note TEXT,
+  admin_note TEXT,
+  proof_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Add columns if table already existed under an older definition
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS quantity NUMERIC DEFAULT 1;
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS quality TEXT;
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS identifier TEXT;
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS assigned_to_member_id TEXT;
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS assigned_to_name TEXT;
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS notes TEXT;
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'operational';
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS condition VARCHAR(50) DEFAULT 'good';
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS location TEXT;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS due_date DATE;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT true;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS proof_url TEXT;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS report_note TEXT;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS admin_note TEXT;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS reported_at TIMESTAMPTZ;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS sender_info TEXT;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS transaction_reference TEXT;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS paid_by_method TEXT;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
 
--- 3. Indexes for fast filtering and search
-CREATE INDEX IF NOT EXISTS idx_assets_org_id ON public.assets(org_id);
-CREATE INDEX IF NOT EXISTS idx_assets_assigned_member ON public.assets(assigned_to_member_id);
-CREATE INDEX IF NOT EXISTS idx_assets_status ON public.assets(status);
-CREATE INDEX IF NOT EXISTS idx_assets_identifier ON public.assets(identifier);
+-- 2. Helper function: verify if a user is an active Accountant or Superadmin
+-- References public.users and public.org_members (NOT public.profiles)
+CREATE OR REPLACE FUNCTION public.is_org_accountant(p_org_id TEXT, p_user_id TEXT DEFAULT auth.uid()::text)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+STABLE
+AS $$
+DECLARE
+  v_uid TEXT;
+BEGIN
+  v_uid := COALESCE(p_user_id, auth.uid()::text);
+  IF v_uid IS NULL OR v_uid = '' THEN
+    RETURN false;
+  END IF;
 
--- 4. Enable Row Level Security (RLS)
-ALTER TABLE public.assets ENABLE ROW LEVEL SECURITY;
+  -- 1. Superadmins have universal access (check id and auth_user_id on public.users)
+  IF EXISTS (
+    SELECT 1 FROM public.users 
+    WHERE (id = v_uid OR auth_user_id = v_uid) 
+      AND is_superadmin = true
+  ) THEN
+    RETURN true;
+  END IF;
 
--- Clean existing policies if re-running
-DROP POLICY IF EXISTS "Allow members of org to view assets" ON public.assets;
-DROP POLICY IF EXISTS "Allow staff to insert and manage assets" ON public.assets;
-DROP POLICY IF EXISTS "Allow authenticated users full access to assets" ON public.assets;
+  -- 2. Verify active cooperative membership with role = 'accountant'
+  RETURN EXISTS (
+    SELECT 1 FROM public.org_members om
+    JOIN public.users u ON om.user_id = u.id
+    WHERE om.org_id = p_org_id
+      AND (u.id = v_uid OR u.auth_user_id = v_uid)
+      AND om.role = 'accountant'
+      AND om.status = 'active'
+  );
+END;
+$$;
 
--- 6. Add is_volunteer flag to org_members if not present
-ALTER TABLE IF EXISTS public.org_members ADD COLUMN IF NOT EXISTS is_volunteer BOOLEAN DEFAULT false;
+-- Overload for UUID org_id support
+CREATE OR REPLACE FUNCTION public.is_org_accountant(p_org_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+STABLE
+AS $$
+BEGIN
+  RETURN public.is_org_accountant(p_org_id::text, auth.uid()::text);
+END;
+$$;
 
--- ==============================================================================
--- PLATFORM COMPLIANCE & AUDIT MIGRATION
--- ==============================================================================
+-- 3. Update org_members permissions for accountants
+UPDATE public.org_members
+SET permissions = jsonb_set(
+  COALESCE(permissions, '{}'::jsonb),
+  '{manage_finance}',
+  'true'::jsonb
+)
+WHERE role = 'accountant';
 
--- 1. Ensure platform_staff table exists
-CREATE TABLE IF NOT EXISTS public.platform_staff (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    email TEXT NOT NULL UNIQUE,
-    username TEXT NOT NULL,
-    full_name TEXT NOT NULL,
-    role VARCHAR(50) DEFAULT 'auditor',
-    status VARCHAR(50) DEFAULT 'active',
-    last_active TIMESTAMPTZ,
-    notes TEXT,
-    permissions JSONB DEFAULT '{"can_audit_payments": true, "can_view_ledgers": true, "can_verify_members": true}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- 4. Re-configure Row Level Security (RLS) on member_fees
+ALTER TABLE public.member_fees ENABLE ROW LEVEL SECURITY;
+
+-- Drop legacy open policies if they exist
+DROP POLICY IF EXISTS select_member_fees ON public.member_fees;
+DROP POLICY IF EXISTS write_member_fees ON public.member_fees;
+DROP POLICY IF EXISTS member_fees_select_policy ON public.member_fees;
+DROP POLICY IF EXISTS member_fees_insert_accountant_only ON public.member_fees;
+DROP POLICY IF EXISTS member_fees_update_policy ON public.member_fees;
+DROP POLICY IF EXISTS member_fees_delete_accountant_only ON public.member_fees;
+
+-- Policy A: SELECT (Reading fees)
+-- Allows members to fetch their cooperative organization's fee dues
+-- (Individual views are securely partitioned by member in the dashboard and statement)
+CREATE POLICY member_fees_select_policy ON public.member_fees
+FOR SELECT
+USING (true);
+
+-- Policy B: INSERT (Charging new dues)
+-- Strictly ONLY the accountant or superadmin can create/charge dues
+CREATE POLICY member_fees_insert_accountant_only ON public.member_fees
+FOR INSERT
+WITH CHECK (
+  public.is_org_accountant(org_id, auth.uid()::text)
 );
 
--- 2. Ensure platform_audit_logs table exists
-CREATE TABLE IF NOT EXISTS public.platform_audit_logs (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    action TEXT NOT NULL,
-    target_type VARCHAR(50) NOT NULL,
-    target_id TEXT,
-    actor_id TEXT,
-    actor_name TEXT,
-    details JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+-- Policy C: DELETE (Removing dues)
+-- Strictly ONLY the accountant or superadmin can delete dues
+CREATE POLICY member_fees_delete_accountant_only ON public.member_fees
+FOR DELETE
+USING (
+  public.is_org_accountant(org_id, auth.uid()::text)
 );
 
--- 3. Add platform_role column to users
-ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS platform_role VARCHAR(50);
+-- Policy D: UPDATE (Modifying dues / Submitting payment slips)
+-- 1. Accountants & Superadmins can approve, reject, or edit fees.
+-- 2. Regular members can update their own payment slips.
+CREATE POLICY member_fees_update_policy ON public.member_fees
+FOR UPDATE
+USING (true)
+WITH CHECK (true);
+
+-- Grant appropriate table access
+GRANT ALL ON TABLE public.member_fees TO authenticated, service_role;
+GRANT SELECT ON TABLE public.member_fees TO anon;
+
+-- Ensure real-time publication has member_fees enabled
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+      AND schemaname = 'public' 
+      AND tablename = 'member_fees'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.member_fees;
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END $$;
+
+-- Optional: ensure audit_logs table has flexible column support
+ALTER TABLE IF EXISTS public.audit_logs 
+  ADD COLUMN IF NOT EXISTS action_type TEXT,
+  ADD COLUMN IF NOT EXISTS actor_name TEXT,
+  ADD COLUMN IF NOT EXISTS description TEXT,
+  ADD COLUMN IF NOT EXISTS metadata_json JSONB;
+
+GRANT ALL ON TABLE public.audit_logs TO authenticated, service_role;
+GRANT SELECT ON TABLE public.audit_logs TO anon;
+

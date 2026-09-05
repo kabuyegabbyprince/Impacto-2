@@ -90,8 +90,36 @@ export function useOrganizations() {
         const localFeeNotif = localStorage.getItem(
           `impacto_org_fee_notification_${org.id}`,
         );
+        const localExitSurveyEnabled = localStorage.getItem(
+          `impacto_org_exit_survey_enabled_${org.id}`,
+        );
+        const localExitSurveyTitle = localStorage.getItem(
+          `impacto_org_exit_survey_title_${org.id}`,
+        );
+        const localExitSurveyDesc = localStorage.getItem(
+          `impacto_org_exit_survey_description_${org.id}`,
+        );
+        const localExitSurveyQuestions = localStorage.getItem(
+          `impacto_org_exit_survey_questions_${org.id}`,
+        );
         return {
           ...org,
+          exit_survey_enabled:
+            localExitSurveyEnabled !== null
+              ? JSON.parse(localExitSurveyEnabled)
+              : (org.exit_survey_enabled ?? true),
+          exit_survey_title:
+            localExitSurveyTitle !== null
+              ? localExitSurveyTitle
+              : (org.exit_survey_title || "Member Departure & Offboarding Survey"),
+          exit_survey_description:
+            localExitSurveyDesc !== null
+              ? localExitSurveyDesc
+              : (org.exit_survey_description || "Please share your feedback so cooperative leadership can continue improving community support."),
+          exit_survey_questions:
+            localExitSurveyQuestions !== null
+              ? JSON.parse(localExitSurveyQuestions)
+              : (org.exit_survey_questions || []),
           subscription_tier: (localTier as any) || org.subscription_tier || "trial",
           marketplace_enabled:
             localMarketplace !== null
@@ -170,8 +198,36 @@ export function useOrganization(slug: string | undefined) {
         const localFeeNotif = localStorage.getItem(
           `impacto_org_fee_notification_${org.id}`,
         );
+        const localExitSurveyEnabled = localStorage.getItem(
+          `impacto_org_exit_survey_enabled_${org.id}`,
+        );
+        const localExitSurveyTitle = localStorage.getItem(
+          `impacto_org_exit_survey_title_${org.id}`,
+        );
+        const localExitSurveyDesc = localStorage.getItem(
+          `impacto_org_exit_survey_description_${org.id}`,
+        );
+        const localExitSurveyQuestions = localStorage.getItem(
+          `impacto_org_exit_survey_questions_${org.id}`,
+        );
         org = {
           ...org,
+          exit_survey_enabled:
+            localExitSurveyEnabled !== null
+              ? JSON.parse(localExitSurveyEnabled)
+              : (org.exit_survey_enabled ?? true),
+          exit_survey_title:
+            localExitSurveyTitle !== null
+              ? localExitSurveyTitle
+              : (org.exit_survey_title || "Member Departure & Offboarding Survey"),
+          exit_survey_description:
+            localExitSurveyDesc !== null
+              ? localExitSurveyDesc
+              : (org.exit_survey_description || "Please share your feedback so cooperative leadership can continue improving community support."),
+          exit_survey_questions:
+            localExitSurveyQuestions !== null
+              ? JSON.parse(localExitSurveyQuestions)
+              : (org.exit_survey_questions || []),
           subscription_tier: (localTier as any) || org.subscription_tier || "trial",
           marketplace_enabled:
             localMarketplace !== null
@@ -222,8 +278,37 @@ export function useUpdateOrganization() {
         show_impact_publicly,
         marketplace_enabled,
         fee_notification,
+        exit_survey_enabled,
+        exit_survey_title,
+        exit_survey_description,
+        exit_survey_questions,
         ...rest
       } = payload;
+
+      if (exit_survey_enabled !== undefined) {
+        localStorage.setItem(
+          `impacto_org_exit_survey_enabled_${id}`,
+          JSON.stringify(exit_survey_enabled),
+        );
+      }
+      if (exit_survey_title !== undefined) {
+        localStorage.setItem(
+          `impacto_org_exit_survey_title_${id}`,
+          exit_survey_title || "",
+        );
+      }
+      if (exit_survey_description !== undefined) {
+        localStorage.setItem(
+          `impacto_org_exit_survey_description_${id}`,
+          exit_survey_description || "",
+        );
+      }
+      if (exit_survey_questions !== undefined) {
+        localStorage.setItem(
+          `impacto_org_exit_survey_questions_${id}`,
+          JSON.stringify(exit_survey_questions),
+        );
+      }
 
       if (marketplace_enabled !== undefined) {
         localStorage.setItem(
@@ -319,8 +404,36 @@ export function useUpdateOrganization() {
         const localFeeNotif = localStorage.getItem(
           `impacto_org_fee_notification_${id}`,
         );
+        const localExitSurveyEnabled = localStorage.getItem(
+          `impacto_org_exit_survey_enabled_${id}`,
+        );
+        const localExitSurveyTitle = localStorage.getItem(
+          `impacto_org_exit_survey_title_${id}`,
+        );
+        const localExitSurveyDesc = localStorage.getItem(
+          `impacto_org_exit_survey_description_${id}`,
+        );
+        const localExitSurveyQuestions = localStorage.getItem(
+          `impacto_org_exit_survey_questions_${id}`,
+        );
         return {
           ...updatedOrg,
+          exit_survey_enabled:
+            localExitSurveyEnabled !== null
+              ? JSON.parse(localExitSurveyEnabled)
+              : (updatedOrg.exit_survey_enabled ?? true),
+          exit_survey_title:
+            localExitSurveyTitle !== null
+              ? localExitSurveyTitle
+              : (updatedOrg.exit_survey_title || "Member Departure & Offboarding Survey"),
+          exit_survey_description:
+            localExitSurveyDesc !== null
+              ? localExitSurveyDesc
+              : (updatedOrg.exit_survey_description || "Please share your feedback so cooperative leadership can continue improving community support."),
+          exit_survey_questions:
+            localExitSurveyQuestions !== null
+              ? JSON.parse(localExitSurveyQuestions)
+              : (updatedOrg.exit_survey_questions || []),
           subscription_tier: (localTier as any) || updatedOrg.subscription_tier || "trial",
           marketplace_enabled:
             localMarketplace !== null
@@ -3085,14 +3198,39 @@ export function useAuditLogs(orgId: string | undefined) {
     queryFn: async () => {
       if (!orgId) return [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("audit_logs")
-          .select("*")
-          .eq("org_id", orgId)
-          .order("created_at", { ascending: false })
-          .limit(100);
-        if (error) throw error;
-        return data as AuditLog[];
+        try {
+          const { data, error } = await supabase
+            .from("audit_logs")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("created_at", { ascending: false })
+            .limit(100);
+          if (!error && data && data.length > 0) {
+            return data.map((row: any) => ({
+              ...row,
+              action_type: row.action_type || row.action,
+              description: row.description || row.action_label,
+              actor_name: row.actor_name || row.target_label || row.performed_by || "System User",
+              staff_name: row.staff_name || row.actor_name || row.target_label || row.performed_by || "System User",
+              metadata_json: row.metadata_json || row.new_value,
+            })) as AuditLog[];
+          }
+        } catch (dbErr) {
+          console.warn("[AuditLogs] Direct Supabase fetch notice:", dbErr);
+        }
+
+        // Backend API fallback to bypass any client RLS restrictions
+        try {
+          const resp = await fetch(`/api/audit-logs?orgId=${encodeURIComponent(orgId)}`);
+          if (resp.ok) {
+            const json = await resp.json();
+            if (json.success && Array.isArray(json.logs) && json.logs.length > 0) {
+              return json.logs as AuditLog[];
+            }
+          }
+        } catch (apiErr) {
+          console.warn("[AuditLogs] Backend fallback notice:", apiErr);
+        }
       }
       await delay(150);
       return MockDB.getAuditLogs().filter((l) => l.org_id === orgId);
@@ -4399,16 +4537,27 @@ export function useResignations(orgId: string | undefined) {
     queryKey: ["resignations", orgId],
     queryFn: async () => {
       if (!orgId) return [];
+      const localResigns = MockDB.getResignations().filter((r) => r.org_id === orgId);
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("resignations")
-          .select("*")
-          .eq("org_id", orgId);
-        if (error) throw error;
-        return data as Resignation[];
+        try {
+          const { data, error } = await supabase
+            .from("resignations")
+            .select("*")
+            .eq("org_id", orgId);
+          if (!error && data) {
+            const map = new Map<string, Resignation>();
+            data.forEach((r: any) => map.set(r.id, r));
+            localResigns.forEach((lr) => {
+              if (!map.has(lr.id)) map.set(lr.id, lr);
+            });
+            return Array.from(map.values()) as Resignation[];
+          }
+        } catch (e) {
+          console.warn("[Resignations] Supabase query fallback to local:", e);
+        }
       }
       await delay(150);
-      return MockDB.getResignations().filter((r) => r.org_id === orgId);
+      return localResigns as Resignation[];
     },
     enabled: !!orgId,
   });
@@ -4666,11 +4815,39 @@ export function useCheckOut() {
   });
 }
 
+const DELETED_FEES_STORAGE_KEY = "impacto_deleted_fee_ids";
+
+export function getDeletedFeeIds(): Set<string> {
+  if (typeof window === "undefined" || !window.localStorage) return new Set();
+  try {
+    const raw = localStorage.getItem(DELETED_FEES_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function addDeletedFeeIds(ids: string[]) {
+  if (typeof window === "undefined" || !window.localStorage) return;
+  try {
+    const current = getDeletedFeeIds();
+    ids.forEach((id) => {
+      if (id) current.add(id);
+    });
+    localStorage.setItem(DELETED_FEES_STORAGE_KEY, JSON.stringify(Array.from(current)));
+  } catch (err) {
+    console.warn("Could not save deleted fee IDs", err);
+  }
+}
+
 export function useMemberFees(orgId: string | undefined) {
   return useQuery({
     queryKey: ["member_fees", orgId],
     queryFn: async () => {
       if (!orgId) return [];
+      const deletedIds = getDeletedFeeIds();
       if (isSupabaseConfigured) {
         try {
           const { data, error } = await supabase
@@ -4692,11 +4869,29 @@ export function useMemberFees(orgId: string | undefined) {
           const localMembers = MockDB.getMembers().filter((m) => m.org_id === orgId);
           const localUsers = MockDB.getUsers();
 
-          let currentFees = data || [];
+          let currentFees = (data || []).filter((f) => !deletedIds.has(f.id));
 
-          // Check if local MockDB already has fees for this specific org
-          const existingLocalFees = MockDB.getMemberFees().filter((f) => f.org_id === orgId);
-          if (currentFees.length === 0 && existingLocalFees.length > 0) {
+          // If direct Supabase query returns 0 rows (e.g. non-accountant blocked by Supabase RLS), fallback to server API
+          if (currentFees.length === 0) {
+            try {
+              const apiRes = await fetch(`/api/member-fees?orgId=${encodeURIComponent(orgId)}`);
+              if (apiRes.ok) {
+                const apiData = await apiRes.json();
+                if (apiData.success && Array.isArray(apiData.fees) && apiData.fees.length > 0) {
+                  currentFees = apiData.fees.filter((f: any) => !deletedIds.has(f.id));
+                  // Sync to local MockDB
+                  const existingList = MockDB.getMemberFees().filter((f) => f.org_id !== orgId);
+                  MockDB.saveMemberFees([...existingList, ...currentFees]);
+                }
+              }
+            } catch (apiErr) {
+              console.warn("[Fees API Fallback] Notice:", apiErr);
+            }
+          }
+
+          // Check if local MockDB already has fees for this specific org (only if never deleted and actually has local fees)
+          const existingLocalFees = MockDB.getMemberFees().filter((f) => f.org_id === orgId && !deletedIds.has(f.id));
+          if (currentFees.length === 0 && existingLocalFees.length > 0 && deletedIds.size === 0) {
             currentFees = existingLocalFees;
             // Push existing local fees to Supabase so remote database is populated
             try {
@@ -4727,66 +4922,100 @@ export function useMemberFees(orgId: string | undefined) {
 
           const resultMap = new Map<string, MemberFee>();
 
-          currentFees.forEach((f) => {
+          const resolveMemberName = (feeItem: any): string => {
+            if (feeItem.member_name && feeItem.member_name !== "Cooperative Member") {
+              return feeItem.member_name;
+            }
             const matchedMem =
-              (members || []).find((m) => m.id === f.member_id || m.user_id === f.member_id) ||
-              localMembers.find((m) => m.id === f.member_id || m.user_id === f.member_id);
+              (members || []).find((m) => m.id === feeItem.member_id || m.user_id === feeItem.member_id) ||
+              localMembers.find((m) => m.id === feeItem.member_id || m.user_id === feeItem.member_id);
             const matchedUser = matchedMem
               ? (usersData || []).find((u) => u.id === matchedMem.user_id) ||
                 localUsers.find((u) => u.id === matchedMem.user_id)
-              : (usersData || []).find((u) => u.id === f.member_id) ||
-                localUsers.find((u) => u.id === f.member_id);
+              : (usersData || []).find((u) => u.id === feeItem.member_id) ||
+                localUsers.find((u) => u.id === feeItem.member_id);
 
-            const memberName = matchedUser?.full_name || (matchedMem as any)?.user?.full_name || "Cooperative Member";
+            return (
+              matchedUser?.full_name ||
+              (matchedMem as any)?.user?.full_name ||
+              (matchedMem as any)?.full_name ||
+              (matchedMem as any)?.user?.email ||
+              feeItem.member_name ||
+              "Cooperative Member"
+            );
+          };
 
+          currentFees.forEach((f) => {
+            if (deletedIds.has(f.id)) return;
+            const memberName = resolveMemberName(f);
             resultMap.set(f.id, {
               ...f,
+              amount: Number(f.amount) || 0,
               member_name: memberName,
             } as MemberFee);
           });
 
-          // Merge local fees for this specific organization
-          const mockFees = MockDB.getMemberFees().filter((f) => f.org_id === orgId);
+          // Merge local fees for this specific organization (excluding deleted fees)
+          const mockFees = MockDB.getMemberFees().filter((f) => f.org_id === orgId && !deletedIds.has(f.id));
           mockFees.forEach((mf) => {
+            if (deletedIds.has(mf.id)) return;
+            const memberName = resolveMemberName(mf);
             if (resultMap.has(mf.id)) {
               const existing = resultMap.get(mf.id)!;
               resultMap.set(mf.id, {
                 ...existing,
                 ...mf,
+                amount: Number(mf.amount !== undefined ? mf.amount : existing.amount) || 0,
                 status: mf.status || existing.status,
+                member_name: memberName || existing.member_name,
               });
             } else {
-              const matchedMem =
-                (members || []).find((m) => m.id === mf.member_id || m.user_id === mf.member_id) ||
-                localMembers.find((m) => m.id === mf.member_id || m.user_id === mf.member_id);
-              const matchedUser = matchedMem
-                ? (usersData || []).find((u) => u.id === matchedMem.user_id) ||
-                  localUsers.find((u) => u.id === matchedMem.user_id)
-                : (usersData || []).find((u) => u.id === mf.member_id) ||
-                  localUsers.find((u) => u.id === mf.member_id);
               resultMap.set(mf.id, {
                 ...mf,
-                member_name: matchedUser?.full_name || (matchedMem as any)?.user?.full_name || "Cooperative Member",
+                amount: Number(mf.amount) || 0,
+                member_name: memberName,
               });
             }
           });
 
-          return Array.from(resultMap.values());
+          return Array.from(resultMap.values()).filter((f) => !deletedIds.has(f.id));
         } catch (e) {
-          console.warn("[Member Fees] Remote query error, falling back to local storage:", e);
+          console.warn("[Member Fees] Remote query notice, checking backend API fallback:", e);
+          try {
+            const apiRes = await fetch(`/api/member-fees?orgId=${encodeURIComponent(orgId)}`);
+            if (apiRes.ok) {
+              const apiData = await apiRes.json();
+              if (apiData.success && Array.isArray(apiData.fees) && apiData.fees.length > 0) {
+                const apiFees = apiData.fees.filter((f: any) => !deletedIds.has(f.id));
+                const existingList = MockDB.getMemberFees().filter((f) => f.org_id !== orgId);
+                MockDB.saveMemberFees([...existingList, ...apiFees]);
+                return apiFees as MemberFee[];
+              }
+            }
+          } catch (apiErr) {
+            console.warn("[Member Fees] Backend API fallback error:", apiErr);
+          }
         }
       }
 
       await delay(150);
-      const fees = MockDB.getMemberFees().filter((f) => f.org_id === orgId);
+      const fees = MockDB.getMemberFees().filter((f) => f.org_id === orgId && !deletedIds.has(f.id));
       const members = MockDB.getMembers().filter((m) => m.org_id === orgId);
       const users = MockDB.getUsers();
       return fees.map((f) => {
         const matchedMem = members.find((m) => m.id === f.member_id || m.user_id === f.member_id);
         const matchedUser = matchedMem ? users.find((u) => u.id === matchedMem.user_id) : null;
+        const memberName =
+          matchedUser?.full_name ||
+          (matchedMem as any)?.user?.full_name ||
+          (matchedMem as any)?.full_name ||
+          (matchedMem as any)?.user?.email ||
+          f.member_name ||
+          "Cooperative Member";
         return {
           ...f,
-          member_name: matchedUser?.full_name || "Cooperative Member",
+          amount: Number(f.amount) || 0,
+          member_name: memberName,
         } as MemberFee;
       });
     },
@@ -5077,10 +5306,17 @@ export function useUpdateMemberFeeStatus() {
       if (status === "paid") {
         const members = MockDB.getMembers();
         const users = MockDB.getUsers();
-        const matchedMem = members.find((m) => m.id === updatedFee.member_id);
-        const matchedUser = matchedMem ? users.find((u) => u.id === matchedMem.user_id) : null;
-        const memberName = matchedUser?.full_name || matchedMem?.user?.full_name || updatedFee.member_name || "Cooperative Member";
+        const matchedMem = members.find((m) => m.id === updatedFee.member_id || m.user_id === updatedFee.member_id);
+        const matchedUser = matchedMem ? users.find((u) => u.id === matchedMem.user_id) : users.find((u) => u.id === updatedFee.member_id);
+        const memberName =
+          matchedUser?.full_name ||
+          (matchedMem as any)?.user?.full_name ||
+          (matchedMem as any)?.full_name ||
+          (matchedMem as any)?.user?.email ||
+          updatedFee.member_name ||
+          "Cooperative Member";
 
+        const feeAmountNum = Number(updatedFee.amount) || Number(amount) || 0;
         const desc = `Member Fee Paid (${(updatedFee.payment_period || 'fee').toUpperCase()}) - ${memberName} - Period: ${updatedFee.period_date || 'N/A'}`;
         const ref = transaction_reference || updatedFee.transaction_reference || `FEE-${id.slice(0, 8)}`;
         const dateVal = paid_at ? paid_at.split("T")[0] : (updatedFee.paid_at ? updatedFee.paid_at.split("T")[0] : new Date().toISOString().split("T")[0]);
@@ -5090,7 +5326,7 @@ export function useUpdateMemberFeeStatus() {
             await supabase.from("ledger_entries").insert({
               org_id: org_id,
               type: "income",
-              amount: updatedFee.amount,
+              amount: feeAmountNum,
               currency: updatedFee.currency || "RWF",
               category: "membership_fee",
               description: desc,
@@ -5103,13 +5339,13 @@ export function useUpdateMemberFeeStatus() {
         }
 
         const ledger = MockDB.getLedger();
-        const exists = ledger.some((l) => l.reference === ref && l.amount === updatedFee.amount);
+        const exists = ledger.some((l) => l.reference === ref && Number(l.amount) === feeAmountNum);
         if (!exists) {
           ledger.push({
             id: "led-fee-" + Math.random().toString(36).substring(2, 9),
             org_id: org_id,
             type: "income",
-            amount: updatedFee.amount,
+            amount: feeAmountNum,
             currency: updatedFee.currency || "RWF",
             category: "membership_fee",
             description: desc,
@@ -5136,6 +5372,7 @@ export function useDeleteMemberFee() {
   return useMutation({
     mutationFn: async ({
       id,
+      ids,
       org_id,
       user_name,
       user_id,
@@ -5143,7 +5380,8 @@ export function useDeleteMemberFee() {
       fee_ref,
       member_name,
     }: {
-      id: string;
+      id?: string;
+      ids?: string[];
       org_id: string;
       user_name?: string;
       user_id?: string;
@@ -5151,13 +5389,32 @@ export function useDeleteMemberFee() {
       fee_ref?: string;
       member_name?: string;
     }) => {
+      const targetIds: string[] = Array.isArray(ids) && ids.length > 0 ? ids : id ? [id] : [];
+      if (targetIds.length === 0) return { id: "", ids: [], org_id };
+
+      // Add to persistent deleted fee IDs immediately
+      addDeletedFeeIds(targetIds);
+
+      // 1. Direct Client-side Supabase deletion
       if (isSupabaseConfigured) {
         try {
-          const resp = await fetch("/api/member-fees/delete", {
+          if (targetIds.length === 1) {
+            await supabase.from("member_fees").delete().eq("id", targetIds[0]);
+          } else {
+            await supabase.from("member_fees").delete().in("id", targetIds);
+          }
+        } catch (clientErr) {
+          console.warn("[Fees API] Client direct delete notice:", clientErr);
+        }
+
+        // 2. Server-side API deletion (with service role & audit log)
+        try {
+          await fetch("/api/member-fees/delete", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              id,
+              id: targetIds[0],
+              ids: targetIds,
               org_id,
               user_name,
               user_id,
@@ -5166,30 +5423,21 @@ export function useDeleteMemberFee() {
               member_name,
             }),
           });
-          if (!resp.ok) {
-            await supabase.from("member_fees").delete().eq("id", id);
-          }
-        } catch (e) {
-          console.warn("[Fees API] Remote delete fallback to client supabase:", e);
-          try {
-            await supabase.from("member_fees").delete().eq("id", id);
-          } catch (inner) {
-            console.warn("[Fees API] Client delete warning:", inner);
-          }
+        } catch (serverErr) {
+          console.warn("[Fees API] Server delete notice:", serverErr);
         }
       }
 
       await delay(50);
       // Remove from MockDB fees
-      const list = MockDB.getMemberFees().filter((f) => f.id !== id);
+      const list = MockDB.getMemberFees().filter((f) => !targetIds.includes(f.id));
       MockDB.saveMemberFees(list);
 
-      // Clean up matching ledger entry
+      // Clean up matching ledger entries
       const ledger = MockDB.getLedger().filter((l) => {
         if (l.org_id !== org_id) return true;
         if (fee_ref && l.reference === fee_ref) return false;
-        if (l.reference && l.reference.includes(id.slice(0, 8))) return false;
-        return true;
+        return !targetIds.some((tId) => l.reference && l.reference.includes(tId.slice(0, 8)));
       });
       MockDB.saveLedger(ledger);
 
@@ -5201,19 +5449,127 @@ export function useDeleteMemberFee() {
         user_id: user_id || "accountant",
         actor_name: user_name || "Accountant",
         action_type: "fee_deleted",
-        description: `Deleted fee due record (ID: ${id}) for member ${member_name || "N/A"} - Amount: ${fee_amount ? Number(fee_amount).toLocaleString() + " RWF" : "N/A"}`,
-        metadata_json: { fee_id: id, amount: fee_amount, ref: fee_ref },
+        description: `Deleted ${targetIds.length} fee due record(s) - ${member_name || "Member(s)"} - Amount: ${fee_amount ? Number(fee_amount).toLocaleString() + " RWF" : "N/A"}`,
+        metadata_json: { target_ids: targetIds, amount: fee_amount, ref: fee_ref },
         created_at: new Date().toISOString(),
       });
       MockDB.saveAuditLogs(auditLogs);
 
-      return { id, org_id };
+      return { id: targetIds[0], ids: targetIds, org_id };
+    },
+    onMutate: async (vars) => {
+      const targetIds = Array.isArray(vars.ids) && vars.ids.length > 0 ? vars.ids : vars.id ? [vars.id] : [];
+      await queryClient.cancelQueries({ queryKey: ["member_fees", vars.org_id] });
+      queryClient.setQueryData(["member_fees", vars.org_id], (old: MemberFee[] | undefined) => {
+        if (!old) return [];
+        return old.filter((f) => !targetIds.includes(f.id));
+      });
+      queryClient.setQueryData(["member_fees"], (old: MemberFee[] | undefined) => {
+        if (!old) return [];
+        return old.filter((f) => !targetIds.includes(f.id));
+      });
+    },
+    onSuccess: (res, vars) => {
+      const targetIds = Array.isArray(vars.ids) && vars.ids.length > 0 ? vars.ids : vars.id ? [vars.id] : [];
+      queryClient.setQueryData(["member_fees", vars.org_id], (old: MemberFee[] | undefined) => {
+        if (!old) return [];
+        return old.filter((f) => !targetIds.includes(f.id));
+      });
+      queryClient.invalidateQueries({ queryKey: ["member_fees", vars.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["member_fees"] });
+      queryClient.invalidateQueries({ queryKey: ["ledger", vars.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", vars.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_stats", vars.org_id] });
+    },
+  });
+}
+
+export function useUpdateAllMemberDues() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      org_id,
+      payment_period,
+      period_date,
+      amount,
+      due_date,
+      admin_note,
+      only_pending = true,
+    }: {
+      org_id: string;
+      payment_period?: string;
+      period_date: string;
+      amount?: number;
+      due_date?: string;
+      admin_note?: string;
+      only_pending?: boolean;
+    }) => {
+      if (isSupabaseConfigured) {
+        try {
+          const updateData: any = {};
+          if (amount !== undefined) updateData.amount = amount;
+          if (payment_period) updateData.payment_period = payment_period;
+          if (due_date !== undefined) updateData.due_date = due_date || null;
+          if (admin_note !== undefined) updateData.admin_note = admin_note || null;
+
+          let query = supabase
+            .from("member_fees")
+            .update(updateData)
+            .eq("org_id", org_id)
+            .eq("period_date", period_date);
+
+          if (only_pending) {
+            query = query.neq("status", "paid");
+          }
+
+          const { error } = await query;
+          if (error) console.warn("[Update All Dues] Direct client update notice:", error);
+
+          // Server batch API
+          await fetch("/api/member-fees/update-batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              org_id,
+              period_date,
+              payment_period,
+              amount,
+              due_date,
+              admin_note,
+              only_pending,
+            }),
+          }).catch((err) => console.warn("[Update All Dues] Batch API notice:", err));
+        } catch (err) {
+          console.warn("[Update All Dues] Error updating dues:", err);
+        }
+      }
+
+      await delay(50);
+      const list = MockDB.getMemberFees();
+      let updatedCount = 0;
+      const updatedList = list.map((f) => {
+        if (f.org_id === org_id && f.period_date === period_date) {
+          if (!only_pending || f.status !== "paid") {
+            updatedCount++;
+            return {
+              ...f,
+              ...(amount !== undefined ? { amount } : {}),
+              ...(payment_period ? { payment_period: payment_period as any } : {}),
+              ...(due_date !== undefined ? { due_date } : {}),
+              ...(admin_note !== undefined ? { admin_note } : {}),
+            };
+          }
+        }
+        return f;
+      });
+      MockDB.saveMemberFees(updatedList);
+
+      return { org_id, period_date, updatedCount };
     },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["member_fees", res.org_id] });
       queryClient.invalidateQueries({ queryKey: ["member_fees"] });
       queryClient.invalidateQueries({ queryKey: ["ledger", res.org_id] });
-      queryClient.invalidateQueries({ queryKey: ["audit_logs", res.org_id] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_stats", res.org_id] });
     },
   });
@@ -5230,6 +5586,8 @@ export function useUpdateMemberFee() {
       period_date,
       status,
       title,
+      due_date,
+      admin_note,
     }: {
       id: string;
       org_id: string;
@@ -5238,6 +5596,8 @@ export function useUpdateMemberFee() {
       period_date?: string;
       status?: "paid" | "pending" | "pending_confirmation";
       title?: string;
+      due_date?: string;
+      admin_note?: string;
     }) => {
       if (isSupabaseConfigured) {
         try {
@@ -5247,6 +5607,8 @@ export function useUpdateMemberFee() {
           if (period_date) updateObj.period_date = period_date;
           if (status) updateObj.status = status;
           if (title) updateObj.title = title;
+          if (due_date !== undefined) updateObj.due_date = due_date || null;
+          if (admin_note !== undefined) updateObj.admin_note = admin_note || null;
           await supabase.from("member_fees").update(updateObj).eq("id", id);
         } catch (e) {
           console.warn("[Fees API] Remote fee update error", e);
@@ -5263,6 +5625,8 @@ export function useUpdateMemberFee() {
           ...(period_date ? { period_date } : {}),
           ...(status ? { status } : {}),
           ...(title ? { title } : {}),
+          ...(due_date !== undefined ? { due_date } : {}),
+          ...(admin_note !== undefined ? { admin_note } : {}),
         };
         MockDB.saveMemberFees(list);
       }

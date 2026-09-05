@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { KeyRound, Mail, User as UserIcon, Building2, ChevronRight, CornerDownRight, Landmark, ArrowLeft, ChevronLeft, Check, Sparkles, Globe, Search, LogOut, Clock, CheckCircle, AlertTriangle, ShieldCheck, RefreshCw } from "lucide-react";
+import { KeyRound, Mail, User as UserIcon, Building2, ChevronRight, CornerDownRight, Landmark, ArrowLeft, ChevronLeft, Check, Sparkles, Globe, Search, LogOut, Clock, CheckCircle, AlertTriangle, ShieldCheck, RefreshCw, UserMinus, Star, MessageSquare, HelpCircle, X, ShieldAlert, Sparkle, HeartHandshake } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
 import { LogoLoader } from "../components/LogoLoader";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { useOrganizations, useMembers, useUserMemberships } from "../hooks/useImpactoData";
-import { Button, Input, Card, Badge, Avatar } from "../components/ui";
+import { Button, Input, Card, Badge, Avatar, Modal } from "../components/ui";
 import { MockDB } from "../lib/mockData";
 import { useToast } from "../components/Toast";
 
@@ -1538,6 +1538,36 @@ export const OrgPicker: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [localMemberships, setLocalMemberships] = useState<any[]>([]);
 
+  // Exit Organization & Survey States
+  const [exitTarget, setExitTarget] = useState<{ org: any; member: any } | null>(null);
+  const [showSurveyModal, setShowSurveyModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [exitReason, setExitReason] = useState("Relocation or Resettlement");
+  const [exitCustomReason, setExitCustomReason] = useState("");
+  const [exitRating, setExitRating] = useState<number>(5);
+  const [exitRatingHover, setExitRatingHover] = useState<number | null>(null);
+  const [exitFeedback, setExitFeedback] = useState("");
+  const [rejoinIntent, setRejoinIntent] = useState<"yes" | "maybe" | "no">("yes");
+  const [exitSurveyAnswers, setExitSurveyAnswers] = useState<Record<string, any>>({});
+  const [confirmAcknowledge, setConfirmAcknowledge] = useState(false);
+  const [isSubmittingExit, setIsSubmittingExit] = useState(false);
+  const [deletedSuccessModalOpen, setDeletedSuccessModalOpen] = useState(false);
+  const [deletedOrgName, setDeletedOrgName] = useState("");
+
+  const isGrowthOrProTier = (org: any) => {
+    if (!org) return false;
+    if (org.exit_survey_enabled) return true;
+    const tier = (org.subscription_tier || org.subscription_plan || "").toLowerCase();
+    return (
+      tier === "growth" ||
+      tier === "pro" ||
+      tier === "enterprise" ||
+      tier.includes("growth") ||
+      tier.includes("pro") ||
+      tier.includes("enterprise")
+    );
+  };
+
   // Compute memberships reactively from database / mockData
   const memberships = React.useMemo(() => {
     if (!user) return [];
@@ -1582,6 +1612,161 @@ export const OrgPicker: React.FC = () => {
     const org = orgs?.find((o) => o.id === memberRow.org_id) || MockDB.getOrgs().find((o) => o.id === memberRow.org_id) || null;
     setActiveOrg(org, memberRow);
     navigate("/dashboard");
+  };
+
+  const handleInitiateExit = (org: any, memberRow: any) => {
+    setExitTarget({ org, member: memberRow });
+    setExitReason("Relocation or Resettlement");
+    setExitCustomReason("");
+    setExitRating(5);
+    setExitRatingHover(null);
+    setExitFeedback("");
+    setRejoinIntent("yes");
+    setExitSurveyAnswers({});
+    setConfirmAcknowledge(false);
+
+    if (isGrowthOrProTier(org)) {
+      setShowSurveyModal(true);
+    } else {
+      setShowConfirmModal(true);
+    }
+  };
+
+  const handleExecuteExit = async (isSurvey: boolean = false) => {
+    if (!exitTarget || !user) return;
+    setIsSubmittingExit(true);
+    const { org, member } = exitTarget;
+    const finalReason = exitReason === "Other" && exitCustomReason ? `Other: ${exitCustomReason}` : exitReason;
+    const nowIso = new Date().toISOString();
+
+    try {
+      // 1. Record exit / resignation & survey (vital for Growth/Pro metrics, admin reporting and retention audits)
+      const newResignation = {
+        id: `resign-${Date.now()}`,
+        org_id: org.id,
+        member_id: member.id,
+        user_id: user.id,
+        member_name: user.full_name || user.email || "Member",
+        reason: finalReason,
+        reason_category: finalReason,
+        reason_detail: exitFeedback || (isSurvey ? "Completed offboarding exit survey" : "Exited from organization picker"),
+        details: exitFeedback || (isSurvey ? "Completed offboarding exit survey" : "Exited from organization picker"),
+        feedback: exitFeedback,
+        rating: isSurvey ? exitRating : 5,
+        rejoin_intent: isSurvey ? rejoinIntent : "maybe",
+        custom_answers: exitSurveyAnswers,
+        submitted_at: nowIso,
+        resignation_date: nowIso,
+        created_at: nowIso,
+        finalized_at: nowIso,
+        status: "finalized" as const,
+      };
+      
+      const resignations = MockDB.getResignations();
+      resignations.unshift(newResignation);
+      MockDB.saveResignations(resignations);
+
+      // Audit Log
+      const auditLogs = MockDB.getAuditLogs();
+      auditLogs.unshift({
+        id: `audit-${Date.now()}`,
+        org_id: org.id,
+        user_id: user.id,
+        performed_by: user.full_name || user.email || "Member",
+        action: isSurvey ? "exit_survey_submitted" : "member_self_exited",
+        action_label: isSurvey 
+          ? `Completed Offboarding Exit Survey & Exited (Rating: ${exitRating}/5, Reason: ${finalReason})`
+          : `Member exited organization (${finalReason})`,
+        target_table: "resignations",
+        target_id: newResignation.id,
+        target_label: `Account offboarding for ${user.full_name || user.email}`,
+        created_at: nowIso
+      });
+      MockDB.saveAuditLogs(auditLogs);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("resignations").insert(newResignation);
+        } catch (e) {
+          console.warn("Supabase resignation insert fallback:", e);
+        }
+      }
+
+      // 2. Delete membership from MockDB
+      const allMembers = MockDB.getMembers().filter(
+        (m) => m.id !== member.id && !(m.user_id === user.id && m.org_id === org.id)
+      );
+      MockDB.saveMembers(allMembers);
+
+      // 3. Delete membership from Supabase if configured
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("org_members").delete().eq("id", member.id);
+          await supabase.from("org_members").delete().match({ user_id: user.id, org_id: org.id });
+        } catch (e) {
+          console.warn("Supabase org_members delete fallback:", e);
+        }
+      }
+
+      // 4. Update user's joined_org_ids and primary_org_id
+      const updatedJoined = (user.joined_org_ids || []).filter((id) => id !== org.id);
+      let updatedPrimary = user.primary_org_id;
+      if (updatedPrimary === org.id) {
+        updatedPrimary = updatedJoined.length > 0 ? updatedJoined[0] : undefined;
+      }
+
+      const updatedUser = {
+        ...user,
+        primary_org_id: updatedPrimary,
+        joined_org_ids: updatedJoined,
+      };
+
+      const users = MockDB.getUsers();
+      const uIdx = users.findIndex((u) => u.id === user.id);
+      if (uIdx >= 0) {
+        users[uIdx] = {
+          ...users[uIdx],
+          primary_org_id: updatedPrimary,
+          joined_org_ids: updatedJoined,
+        };
+        MockDB.saveUsers(users);
+      }
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase
+            .from("users")
+            .update({
+              primary_org_id: updatedPrimary,
+              joined_org_ids: updatedJoined,
+            })
+            .eq("id", user.id);
+        } catch (e) {
+          console.warn("Supabase user update fallback:", e);
+        }
+      }
+
+      setUser(updatedUser);
+
+      // 5. Clear activeOrg if user was currently in it
+      const currentActive = useOrgStore.getState().activeOrg;
+      if (currentActive?.id === org.id) {
+        useOrgStore.getState().clearOrg();
+      }
+
+      // 6. Update local state
+      setLocalMemberships((prev) => prev.filter((m) => m.id !== member.id && m.org_id !== org.id));
+
+      setDeletedOrgName(org.name);
+      setDeletedSuccessModalOpen(true);
+      setShowSurveyModal(false);
+      setShowConfirmModal(false);
+      setExitTarget(null);
+    } catch (err: any) {
+      addToast(err?.message || "Failed to exit organization.", "error");
+    } finally {
+      setIsSubmittingExit(false);
+    }
   };
 
   const handleApplyJoin = (orgId: string) => {
@@ -1667,13 +1852,47 @@ export const OrgPicker: React.FC = () => {
     }
   };
 
-  const handleLeaveOrCancel = (memberId: string) => {
-    const list = MockDB.getMembers().filter(m => m.id !== memberId);
+  const handleLeaveOrCancel = async (memberId: string, orgId?: string) => {
+    const list = MockDB.getMembers().filter(m => m.id !== memberId && !(orgId && m.org_id === orgId && m.user_id === user?.id));
     MockDB.saveMembers(list);
     setLocalMemberships(list.filter(m => m.user_id === user?.id));
-    if (isSupabaseConfigured) {
-      supabase.from("org_members").delete().eq("id", memberId);
+
+    if (orgId && user) {
+      const updatedJoined = (user.joined_org_ids || []).filter((id) => id !== orgId);
+      let updatedPrimary = user.primary_org_id;
+      if (updatedPrimary === orgId) {
+        updatedPrimary = updatedJoined.length > 0 ? updatedJoined[0] : undefined;
+      }
+      const updatedUser = {
+        ...user,
+        primary_org_id: updatedPrimary,
+        joined_org_ids: updatedJoined,
+      };
+      const users = MockDB.getUsers();
+      const uIdx = users.findIndex((u) => u.id === user.id);
+      if (uIdx >= 0) {
+        users[uIdx] = { ...users[uIdx], primary_org_id: updatedPrimary, joined_org_ids: updatedJoined };
+        MockDB.saveUsers(users);
+      }
+      setUser(updatedUser);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("users").update({ primary_org_id: updatedPrimary, joined_org_ids: updatedJoined }).eq("id", user.id);
+        } catch (e) {
+          console.warn("Supabase user update fallback:", e);
+        }
+      }
     }
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from("org_members").delete().eq("id", memberId);
+      } catch (e) {
+        console.warn("Supabase org_members delete fallback:", e);
+      }
+    }
+    addToast("Application request removed.", "info");
   };
 
   const handleLogout = () => {
@@ -1722,6 +1941,14 @@ export const OrgPicker: React.FC = () => {
     return list.slice(0, 6);
   })();
 
+  const ratingDescriptions: Record<number, string> = {
+    1: "1 - Very Dissatisfied",
+    2: "2 - Dissatisfied",
+    3: "3 - Neutral / Average",
+    4: "4 - Satisfied",
+    5: "5 - Very Satisfied"
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 flex flex-col justify-center items-center p-4">
       <div className="w-full max-w-2xl flex flex-col gap-6 my-8">
@@ -1730,55 +1957,86 @@ export const OrgPicker: React.FC = () => {
             Workspace Hub
           </h2>
           <p className="text-xs md:text-sm text-gray-500 mt-1 max-w-md mx-auto">
-            Hello, <strong className="text-emerald-700 dark:text-emerald-400">{user?.full_name}</strong>. Choose an active workspace, check pending applications, or apply to other verified Organizations.
+            Hello, <strong className="text-emerald-700 dark:text-emerald-400">{user?.full_name}</strong>. Choose an active workspace, manage your affiliations, check pending applications, or apply to other verified Organizations.
           </p>
         </div>
 
         {/* 1. ACTIVE MEMBERSHIPS */}
         <div className="flex flex-col gap-3">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-none select-none">
-            Active Workspaces ({activeMemberships.length})
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-none select-none">
+              Active Workspaces ({activeMemberships.length})
+            </h3>
+            {activeMemberships.length > 0 && (
+              <span className="text-[10px] text-gray-400 font-medium">
+                Click card to open workspace or use Exit button to leave
+              </span>
+            )}
+          </div>
           {activeMemberships.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full select-none">
               {activeMemberships.map((row) => {
                 const org = orgs?.find((o) => o.id === row.org_id) || MockDB.getOrgs().find((o) => o.id === row.org_id);
                 if (!org) return null;
                 const isPrimary = user?.primary_org_id === row.org_id || (!user?.primary_org_id && activeMemberships[0]?.id === row.id);
+                const hasGrowthOrPro = isGrowthOrProTier(org);
 
                 return (
                   <div
                     key={row.id}
                     onClick={() => handleSelect(row)}
-                    className={`p-5 rounded-2xl shadow-xs transition cursor-pointer flex flex-col gap-4 group justify-between ${
+                    className={`p-5 rounded-2xl shadow-xs transition cursor-pointer flex flex-col gap-4 group justify-between relative ${
                       isPrimary 
                         ? "bg-emerald-50/40 dark:bg-emerald-950/20 border-2 border-emerald-600 dark:border-emerald-500 hover:shadow-md" 
                         : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-emerald-600 hover:shadow-md"
                     }`}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="h-11 w-11 rounded-lg overflow-hidden shrink-0 bg-emerald-50 border border-emerald-100 flex items-center justify-center">
-                        {org.logo_url ? (
-                          <img src={org.logo_url} alt={org.name} className="h-full w-full object-cover" />
-                        ) : (
-                          <Building2 className="h-5 w-5 text-emerald-600" />
-                        )}
-                      </div>
-                      <div className="flex flex-col truncate flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-display font-bold text-sm text-gray-900 dark:text-white truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
-                            {org.name}
-                          </span>
-                          {isPrimary && (
-                            <span className="text-[9px] font-mono font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-full shrink-0 flex items-center gap-0.5">
-                              ✓ Default Member
-                            </span>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div className="h-11 w-11 rounded-lg overflow-hidden shrink-0 bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                          {org.logo_url ? (
+                            <img src={org.logo_url} alt={org.name} className="h-full w-full object-cover" />
+                          ) : (
+                            <Building2 className="h-5 w-5 text-emerald-600" />
                           )}
                         </div>
-                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-0.5">
-                          {org.org_category}
-                        </span>
+                        <div className="flex flex-col truncate flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-display font-bold text-sm text-gray-900 dark:text-white truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+                              {org.name}
+                            </span>
+                            {isPrimary && (
+                              <span className="text-[9px] font-mono font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-full shrink-0 flex items-center gap-0.5">
+                                ✓ Default
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                              {org.org_category}
+                            </span>
+                            {hasGrowthOrPro && (
+                              <span className="text-[9px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/60 dark:border-indigo-800/40 px-1.5 py-0.2 rounded">
+                                {org.subscription_tier === "growth" ? "Growth Plan" : "Pro Plan"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
+
+                      {/* Exit Organization button on card */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleInitiateExit(org, row);
+                        }}
+                        title={`Exit ${org.name} and delete membership`}
+                        className="shrink-0 p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-900/50 transition flex items-center gap-1 text-[10px] font-bold"
+                      >
+                        <UserMinus className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Exit</span>
+                      </button>
                     </div>
 
                     <div className="flex items-center justify-between border-t border-gray-150 dark:border-slate-750 pt-3">
@@ -1813,7 +2071,7 @@ export const OrgPicker: React.FC = () => {
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
               {pendingMemberships.map((row) => {
-                const org = orgs?.find((o) => o.id === row.org_id);
+                const org = orgs?.find((o) => o.id === row.org_id) || MockDB.getOrgs().find((o) => o.id === row.org_id);
                 if (!org) return null;
 
                 return (
@@ -1841,8 +2099,8 @@ export const OrgPicker: React.FC = () => {
                         Pending approval
                       </span>
                       <button
-                        onClick={() => handleLeaveOrCancel(row.id)}
-                        className="text-[10px] font-bold text-red-500 hover:text-red-700 hover:underline"
+                        onClick={() => handleLeaveOrCancel(row.id, row.org_id)}
+                        className="text-[10px] font-bold text-red-500 hover:text-red-700 hover:underline cursor-pointer"
                       >
                         Retract Request
                       </button>
@@ -1862,7 +2120,7 @@ export const OrgPicker: React.FC = () => {
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
               {rejectedMemberships.map((row) => {
-                const org = orgs?.find((o) => o.id === row.org_id);
+                const org = orgs?.find((o) => o.id === row.org_id) || MockDB.getOrgs().find((o) => o.id === row.org_id);
                 if (!org) return null;
 
                 return (
@@ -1889,8 +2147,8 @@ export const OrgPicker: React.FC = () => {
                         Rejected
                       </span>
                       <button
-                        onClick={() => handleLeaveOrCancel(row.id)}
-                        className="text-[10px] font-bold text-red-500 hover:text-red-700 hover:underline"
+                        onClick={() => handleLeaveOrCancel(row.id, row.org_id)}
+                        className="text-[10px] font-bold text-red-500 hover:text-red-700 hover:underline cursor-pointer"
                       >
                         Dismiss
                       </button>
@@ -1902,7 +2160,7 @@ export const OrgPicker: React.FC = () => {
           </div>
         )}
 
-        {/* 3. SEARCHABLE DIRECTORY */}
+        {/* 4. SEARCHABLE DIRECTORY */}
         <div className="flex flex-col gap-4 border-t border-gray-200 dark:border-slate-800 pt-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -1982,6 +2240,391 @@ export const OrgPicker: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {/* ========================================== */}
+      {/* 5. GROWTH & PRO PLAN OFFBOARDING SURVEY MODAL */}
+      {/* ========================================== */}
+      <Modal
+        open={showSurveyModal}
+        onClose={() => {
+          if (!isSubmittingExit) setShowSurveyModal(false);
+        }}
+        title={`Exit Workspace: ${exitTarget?.org?.name || "Organization"}`}
+        size="lg"
+      >
+        <div className="flex flex-col gap-4">
+          {/* Header Banner */}
+          <div className="p-4 bg-gradient-to-r from-indigo-50/90 to-purple-50/90 dark:from-indigo-950/40 dark:to-purple-950/40 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-indigo-600 text-white rounded-lg">
+                  <Sparkles className="h-4 w-4" />
+                </span>
+                <div>
+                  <h4 className="font-extrabold text-sm text-indigo-950 dark:text-indigo-200">
+                    Growth & Pro Plan Member Exit Survey
+                  </h4>
+                  <span className="text-[11px] text-indigo-700 dark:text-indigo-400 font-semibold">
+                    {exitTarget?.org?.name} • Tier: {exitTarget?.org?.subscription_tier?.toUpperCase() || "GROWTH"}
+                  </span>
+                </div>
+              </div>
+              <span className="text-[10px] font-mono font-bold bg-indigo-200/80 dark:bg-indigo-900 text-indigo-900 dark:text-indigo-200 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                Required Survey
+              </span>
+            </div>
+            <p className="text-xs text-indigo-900/80 dark:text-indigo-300 leading-relaxed font-medium mt-1">
+              Because this cooperative operates on a Growth or Pro Plan, member exit surveys are collected to provide aggregated analytics to cooperative leadership on member satisfaction, retention causes, and community improvements before deleting your account affiliation.
+            </p>
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (confirmAcknowledge) {
+                handleExecuteExit(true);
+              }
+            }}
+            className="flex flex-col gap-4"
+          >
+            {/* 1. Reason for Leaving */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-gray-800 dark:text-slate-200 flex items-center justify-between">
+                <span>1. Primary Reason for Leaving / Offboarding <span className="text-red-500">*</span></span>
+              </label>
+              <select
+                value={exitReason}
+                onChange={(e) => setExitReason(e.target.value)}
+                className="w-full text-xs font-semibold rounded-xl border bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700 px-3.5 py-2.5 text-gray-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              >
+                <option value="Relocation or Resettlement">Relocation or Moved outside the district/sector</option>
+                <option value="Completed project / Seasonal cycle end">Completed program / Seasonal agricultural cycle concluded</option>
+                <option value="Mismatch with cooperative goals or farming targets">Mismatch with agropastoral targets or cooperative mission</option>
+                <option value="Scheduling Conflicts / Lack of time">Scheduling conflicts / Limited personal time</option>
+                <option value="Financial / membership fee constraints">Financial constraints or membership dues difficulty</option>
+                <option value="Health or personal circumstances">Health or personal circumstances</option>
+                <option value="Joined another cooperative or organization">Joined another cooperative / local entity</option>
+                <option value="Dissatisfied with leadership communication">Dissatisfied with operations or leadership communication</option>
+                <option value="Other">Other specific reason</option>
+              </select>
+            </div>
+
+            {exitReason === "Other" && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-gray-700 dark:text-slate-300">
+                  Please specify your reason <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={exitCustomReason}
+                  onChange={(e) => setExitCustomReason(e.target.value)}
+                  placeholder="e.g. Pursuing full-time study in Kigali"
+                  className="w-full text-xs font-semibold rounded-xl border bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700 px-3.5 py-2.5 text-gray-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+            )}
+
+            {/* 2. Overall Experience Star Rating */}
+            <div className="flex flex-col gap-2 p-3.5 bg-gray-50 dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800">
+              <label className="text-xs font-bold text-gray-800 dark:text-slate-200 flex items-center justify-between">
+                <span>2. Overall Experience with {exitTarget?.org?.name} <span className="text-red-500">*</span></span>
+                <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                  {ratingDescriptions[exitRatingHover || exitRating]}
+                </span>
+              </label>
+              <div className="flex items-center gap-2 pt-1">
+                {[1, 2, 3, 4, 5].map((starVal) => {
+                  const isFilled = starVal <= (exitRatingHover || exitRating);
+                  return (
+                    <button
+                      key={starVal}
+                      type="button"
+                      onClick={() => setExitRating(starVal)}
+                      onMouseEnter={() => setExitRatingHover(starVal)}
+                      onMouseLeave={() => setExitRatingHover(null)}
+                      className="p-1 rounded-lg hover:scale-110 transition-transform focus:outline-none cursor-pointer"
+                      title={`${starVal} Star`}
+                    >
+                      <Star
+                        className={`h-6 w-6 ${
+                          isFilled
+                            ? "text-amber-400 fill-amber-400"
+                            : "text-gray-300 dark:text-slate-700"
+                        }`}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 3. Feedback Textarea */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-gray-800 dark:text-slate-200">
+                3. Constructive Feedback & Suggestions
+              </label>
+              <textarea
+                value={exitFeedback}
+                onChange={(e) => setExitFeedback(e.target.value)}
+                placeholder="What could leadership or the cooperative do to better support remaining members and improve future operations?"
+                className="w-full text-xs font-semibold rounded-xl border bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700 p-3 min-h-20 text-gray-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500"
+                rows={2}
+              />
+            </div>
+
+            {/* 4. Rejoin Intent */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-gray-800 dark:text-slate-200">
+                4. Would you consider participating or rejoining in the future?
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { value: "yes", label: "Yes, definitely" },
+                  { value: "maybe", label: "Maybe later" },
+                  { value: "no", label: "Unlikely" }
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setRejoinIntent(opt.value as any)}
+                    className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                      rejoinIntent === opt.value
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                        : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 5. Custom Configured Questions by Admin */}
+            {exitTarget?.org?.exit_survey_questions && exitTarget.org.exit_survey_questions.length > 0 && (
+              <div className="flex flex-col gap-3 pt-2 border-t border-gray-200 dark:border-slate-800">
+                <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
+                  Additional Cooperative Questions ({exitTarget.org.exit_survey_questions.length})
+                </span>
+                {exitTarget.org.exit_survey_questions.map((q: any, qIdx: number) => (
+                  <div key={q.id || qIdx} className="flex flex-col gap-1.5 p-3 bg-gray-50/80 dark:bg-slate-900/60 rounded-xl border border-gray-200 dark:border-slate-800">
+                    <label className="text-xs font-bold text-gray-800 dark:text-slate-200">
+                      {qIdx + 5}. {q.question} {q.required && <span className="text-red-500">*</span>}
+                    </label>
+
+                    {q.type === "rating" ? (
+                      <div className="flex items-center gap-2 pt-1">
+                        {[1, 2, 3, 4, 5].map((num) => (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() =>
+                              setExitSurveyAnswers((prev) => ({
+                                ...prev,
+                                [q.id || `q_${qIdx}`]: num,
+                              }))
+                            }
+                            className={`h-8 w-8 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                              exitSurveyAnswers[q.id || `q_${qIdx}`] === num
+                                ? "bg-indigo-600 text-white border-indigo-600"
+                                : "bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-200"
+                            }`}
+                          >
+                            {num}
+                          </button>
+                        ))}
+                      </div>
+                    ) : q.type === "multiple_choice" && q.options && q.options.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                        {q.options.map((opt: string) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() =>
+                              setExitSurveyAnswers((prev) => ({
+                                ...prev,
+                                [q.id || `q_${qIdx}`]: opt,
+                              }))
+                            }
+                            className={`p-2 text-left text-xs font-medium rounded-lg border transition-all cursor-pointer ${
+                              exitSurveyAnswers[q.id || `q_${qIdx}`] === opt
+                                ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-500 text-indigo-900 dark:text-indigo-200 font-bold"
+                                : "bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-100"
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={exitSurveyAnswers[q.id || `q_${qIdx}`] || ""}
+                        onChange={(e) =>
+                          setExitSurveyAnswers((prev) => ({
+                            ...prev,
+                            [q.id || `q_${qIdx}`]: e.target.value,
+                          }))
+                        }
+                        placeholder="Your response..."
+                        required={q.required}
+                        className="w-full text-xs font-semibold rounded-xl border bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700 px-3.5 py-2 text-gray-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 6. Warning & Confirmation Checkbox */}
+            <div className="p-3 bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl flex items-start gap-2.5">
+              <input
+                type="checkbox"
+                id="growthProConfirmExit"
+                checked={confirmAcknowledge}
+                onChange={(e) => setConfirmAcknowledge(e.target.checked)}
+                className="h-4 w-4 mt-0.5 rounded border-rose-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                required
+              />
+              <label htmlFor="growthProConfirmExit" className="text-xs font-semibold text-rose-900 dark:text-rose-200 leading-snug cursor-pointer">
+                I understand that submitting this survey will permanently delete my member affiliation from <strong>{exitTarget?.org?.name}</strong> and remove my account from this workspace.
+              </label>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-200 dark:border-slate-800">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSurveyModal(false)}
+                disabled={isSubmittingExit}
+              >
+                Cancel / Keep Membership
+              </Button>
+              <Button
+                type="submit"
+                variant="danger"
+                size="sm"
+                loading={isSubmittingExit}
+                disabled={!confirmAcknowledge}
+                icon={<UserMinus className="h-3.5 w-3.5" />}
+              >
+                Submit Survey & Exit Organization
+              </Button>
+            </div>
+          </form>
+        </div>
+      </Modal>
+
+      {/* ========================================== */}
+      {/* 6. STANDARD EXIT CONFIRMATION MODAL */}
+      {/* ========================================== */}
+      <Modal
+        open={showConfirmModal}
+        onClose={() => {
+          if (!isSubmittingExit) setShowConfirmModal(false);
+        }}
+        title={`Exit Workspace: ${exitTarget?.org?.name || "Organization"}`}
+        size="md"
+      >
+        <div className="flex flex-col gap-4">
+          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-xl flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex flex-col gap-1 text-xs text-amber-900 dark:text-amber-200 leading-relaxed font-medium">
+              <p>
+                Are you sure you want to exit <strong>{exitTarget?.org?.name}</strong>?
+              </p>
+              <p className="text-[11px] text-amber-800/80 dark:text-amber-300">
+                This will delete your account affiliation from this organization's workspace and remove your access. You can always apply or register again later if public joining is permitted.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-gray-700 dark:text-slate-300">
+              Reason for departure (Optional)
+            </label>
+            <input
+              type="text"
+              value={exitReason}
+              onChange={(e) => setExitReason(e.target.value)}
+              placeholder="e.g. Relocation, scheduling conflicts, or completed term"
+              className="w-full text-xs rounded-xl border bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700 px-3 py-2 text-gray-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-rose-500"
+            />
+          </div>
+
+          <div className="flex items-start gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="standardConfirmExit"
+              checked={confirmAcknowledge}
+              onChange={(e) => setConfirmAcknowledge(e.target.checked)}
+              className="h-4 w-4 mt-0.5 rounded border-gray-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+            />
+            <label htmlFor="standardConfirmExit" className="text-xs text-gray-700 dark:text-slate-300 font-medium cursor-pointer">
+              I confirm I am no longer a member of <strong>{exitTarget?.org?.name}</strong> and want to remove my account affiliation.
+            </label>
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-150 dark:border-slate-800">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowConfirmModal(false)}
+              disabled={isSubmittingExit}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              loading={isSubmittingExit}
+              disabled={!confirmAcknowledge}
+              onClick={() => handleExecuteExit(false)}
+              icon={<UserMinus className="h-3.5 w-3.5" />}
+            >
+              Confirm Exit & Delete Membership
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ========================================== */}
+      {/* 7. ACCOUNT DELETION SUCCESS POPUP MODAL */}
+      {/* ========================================== */}
+      <Modal
+        open={deletedSuccessModalOpen}
+        onClose={() => setDeletedSuccessModalOpen(false)}
+        title="Account Affiliation Deleted"
+        size="md"
+      >
+        <div className="flex flex-col items-center text-center p-4 gap-4">
+          <div className="h-14 w-14 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-200 dark:border-emerald-800">
+            <CheckCircle className="h-7 w-7" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <h3 className="font-extrabold text-base text-gray-900 dark:text-slate-100">
+              Account Successfully Deleted
+            </h3>
+            <p className="text-xs text-gray-600 dark:text-slate-300 leading-relaxed max-w-md">
+              Your member account affiliation with <strong>{deletedOrgName}</strong> has been successfully deleted. Your exit survey responses and offboarding feedback have been securely archived in the cooperative's resignation records for administrative reporting.
+            </p>
+          </div>
+          <div className="w-full pt-2">
+            <Button
+              type="button"
+              className="w-full py-2.5 font-bold"
+              onClick={() => setDeletedSuccessModalOpen(false)}
+            >
+              Return to Workspace Directory
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

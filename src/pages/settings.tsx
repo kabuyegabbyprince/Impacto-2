@@ -26,7 +26,18 @@ import {
   Eye,
   Type,
   Languages,
-  X
+  X,
+  UserMinus,
+  ClipboardList,
+  Trash2,
+  Star,
+  CheckCircle2,
+  ListPlus,
+  FileText,
+  BarChart2,
+  ArrowUp,
+  ArrowDown,
+  Edit3
 } from "lucide-react";
 import { useOrgStore } from "../store/orgStore";
 import { useCurrencyStore } from "../store/currencyStore";
@@ -66,12 +77,51 @@ export const OrganizationSettingsPage: React.FC = () => {
   const canAccessMomo = activeMember?.role === "org_admin" || activeMember?.role === "accountant";
   const canAccessSupport = activeMember?.role === "org_admin";
   const canAccessSubscription = activeMember?.role === "org_admin" || activeMember?.role === "accountant" || !!user?.is_superadmin;
+  const canAccessExitSurvey = activeMember?.role === "org_admin" || activeMember?.role === "manager" || !!user?.is_superadmin || !isSupabaseConfigured;
   const hasProPlan = activeOrg?.subscription_tier === "enterprise" || (activeOrg as any)?.subscription_tier === "pro";
 
-  const [activeTab, setActiveTab] = useState<"general" | "public_portal" | "members_dashboard" | "momo" | "subscription" | "support" | "profile">(() => {
+  const defaultExitQuestions = [
+    {
+      id: "q_reason",
+      question: "Primary reason for leaving or offboarding",
+      type: "choice" as const,
+      options: [
+        "Relocation or Resettlement",
+        "Mismatch with agropastoral targets",
+        "Scheduling Conflicts / Lack of time",
+        "Health/Personal Circumstances",
+        "Financial / Membership Fee Concerns",
+        "Leadership or Governance Concerns",
+        "Other"
+      ],
+      required: true
+    },
+    {
+      id: "q_rating",
+      question: "Overall cooperative experience & leadership support rating",
+      type: "rating" as const,
+      required: true
+    },
+    {
+      id: "q_feedback",
+      question: "Constructive feedback or suggestions for cooperative leadership",
+      type: "text" as const,
+      required: false
+    },
+    {
+      id: "q_rejoin",
+      question: "Would you consider participating or rejoining this cooperative in the future?",
+      type: "choice" as const,
+      options: ["Yes, definitely", "Maybe in the future", "No, unlikely"],
+      required: true
+    }
+  ];
+
+  const [activeTab, setActiveTab] = useState<"general" | "public_portal" | "exit_survey" | "members_dashboard" | "momo" | "subscription" | "support" | "profile">(() => {
     const tabParam = searchParams.get("tab");
     if (tabParam === "profile" || tabParam === "accessibility") return "profile";
     if (tabParam === "momo") return "momo";
+    if (tabParam === "exit_survey" || tabParam === "survey" || tabParam === "offboarding") return "exit_survey";
     if (tabParam === "subscription" || tabParam === "billing") {
       return (activeMember?.role === "org_admin" || activeMember?.role === "accountant" || !!user?.is_superadmin) ? "subscription" : "general";
     }
@@ -83,6 +133,8 @@ export const OrganizationSettingsPage: React.FC = () => {
     const tabParam = searchParams.get("tab");
     if (tabParam === "profile" || tabParam === "accessibility") {
       setActiveTab("profile");
+    } else if (tabParam === "exit_survey" || tabParam === "survey" || tabParam === "offboarding") {
+      setActiveTab("exit_survey");
     } else if ((tabParam === "subscription" || tabParam === "billing") && canAccessSubscription) {
       setActiveTab("subscription");
     } else if (tabParam === "momo" && canAccessMomo) {
@@ -270,6 +322,24 @@ export const OrganizationSettingsPage: React.FC = () => {
   const [dashboardLogo, setDashboardLogo] = useState(activeOrg?.dashboard_logo || "/logo.png");
   const [marketplaceEnabled, setMarketplaceEnabled] = useState(activeOrg?.marketplace_enabled ?? true);
 
+  // Exit Survey Settings Form
+  const [exitSurveyEnabled, setExitSurveyEnabled] = useState<boolean>(activeOrg?.exit_survey_enabled ?? true);
+  const [exitSurveyTitle, setExitSurveyTitle] = useState<string>(activeOrg?.exit_survey_title || "Member Departure & Offboarding Survey");
+  const [exitSurveyDesc, setExitSurveyDesc] = useState<string>(activeOrg?.exit_survey_description || "Please share your candid feedback so cooperative leadership can continue improving operations and community support.");
+  const [exitSurveyQuestions, setExitSurveyQuestions] = useState<any[]>(
+    activeOrg?.exit_survey_questions && activeOrg.exit_survey_questions.length > 0
+      ? activeOrg.exit_survey_questions
+      : defaultExitQuestions
+  );
+
+  // Question modal state
+  const [showQuestionModal, setShowQuestionModal] = useState(false);
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
+  const [qText, setQText] = useState("");
+  const [qType, setQType] = useState<"text" | "rating" | "choice" | "boolean">("text");
+  const [qOptions, setQOptions] = useState("");
+  const [qRequired, setQRequired] = useState(false);
+
   // MoMo merchant details form
   const [mName, setMName] = useState(activeOrg?.donation_account_name || "");
   const [mtnNum, setMtnNum] = useState(activeOrg?.donation_mtn_number || "");
@@ -341,6 +411,14 @@ export const OrganizationSettingsPage: React.FC = () => {
       setMtnNum(activeOrg.donation_mtn_number || "");
       setAirtelNum(activeOrg.donation_airtel_number || "");
       setEnableDonations(activeOrg.donations_enabled || false);
+      setExitSurveyEnabled(activeOrg.exit_survey_enabled ?? true);
+      setExitSurveyTitle(activeOrg.exit_survey_title || "Member Departure & Offboarding Survey");
+      setExitSurveyDesc(activeOrg.exit_survey_description || "Please share your candid feedback so cooperative leadership can continue improving operations and community support.");
+      if (activeOrg.exit_survey_questions && activeOrg.exit_survey_questions.length > 0) {
+        setExitSurveyQuestions(activeOrg.exit_survey_questions);
+      } else {
+        setExitSurveyQuestions(defaultExitQuestions);
+      }
     }
   }, [activeOrg]);
 
@@ -422,6 +500,120 @@ export const OrganizationSettingsPage: React.FC = () => {
       console.error(err);
       addToast(err?.message || "Failed to update dashboard theme settings.", "error");
     }
+  };
+
+  const handleSaveExitSurvey = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!exitSurveyTitle.trim()) {
+      addToast("Exit survey title cannot be empty.", "error");
+      return;
+    }
+    try {
+      const updated = await updateMutation.mutateAsync({
+        id: activeOrg?.id || "",
+        exit_survey_enabled: exitSurveyEnabled,
+        exit_survey_title: exitSurveyTitle.trim(),
+        exit_survey_description: exitSurveyDesc.trim(),
+        exit_survey_questions: exitSurveyQuestions
+      });
+      setActiveOrg(updated, useOrgStore.getState().activeMember);
+      addToast("Exit Survey & Offboarding settings successfully saved live!", "success");
+    } catch (err: any) {
+      console.error(err);
+      addToast(err?.message || "Failed to save Exit Survey settings.", "error");
+    }
+  };
+
+  const handleOpenAddQuestion = () => {
+    setEditingQuestionId(null);
+    setQText("");
+    setQType("choice");
+    setQOptions("Relocation, Personal Reasons, Financial, Lack of time, Other");
+    setQRequired(true);
+    setShowQuestionModal(true);
+  };
+
+  const handleOpenEditQuestion = (q: any) => {
+    setEditingQuestionId(q.id);
+    setQText(q.question);
+    setQType(q.type || "text");
+    setQOptions((q.options || []).join(", "));
+    setQRequired(!!q.required);
+    setShowQuestionModal(true);
+  };
+
+  const handleSaveQuestion = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!qText.trim()) {
+      addToast("Question prompt text is required.", "error");
+      return;
+    }
+
+    const parsedOptions =
+      qType === "choice"
+        ? qOptions
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined;
+
+    if (qType === "choice" && (!parsedOptions || parsedOptions.length < 2)) {
+      addToast("Multiple choice questions require at least 2 comma-separated options.", "error");
+      return;
+    }
+
+    if (editingQuestionId) {
+      setExitSurveyQuestions((prev) =>
+        prev.map((item) =>
+          item.id === editingQuestionId
+            ? {
+                ...item,
+                question: qText.trim(),
+                type: qType,
+                options: parsedOptions,
+                required: qRequired
+              }
+            : item
+        )
+      );
+      addToast("Survey question updated. Click 'Save Exit Survey Settings' to persist.", "info");
+    } else {
+      const newQuestion = {
+        id: `q_custom_${Date.now()}`,
+        question: qText.trim(),
+        type: qType,
+        options: parsedOptions,
+        required: qRequired
+      };
+      setExitSurveyQuestions((prev) => [...prev, newQuestion]);
+      addToast("New survey question added! Click 'Save Exit Survey Settings' to persist.", "info");
+    }
+    setShowQuestionModal(false);
+  };
+
+  const handleDeleteQuestion = (id: string) => {
+    if (exitSurveyQuestions.length <= 1) {
+      addToast("You must keep at least 1 question in the offboarding survey.", "error");
+      return;
+    }
+    setExitSurveyQuestions((prev) => prev.filter((q) => q.id !== id));
+    addToast("Question removed from survey draft.", "info");
+  };
+
+  const handleMoveQuestion = (index: number, direction: "up" | "down") => {
+    const targetIdx = direction === "up" ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= exitSurveyQuestions.length) return;
+    const updated = [...exitSurveyQuestions];
+    const [moved] = updated.splice(index, 1);
+    updated.splice(targetIdx, 0, moved);
+    setExitSurveyQuestions(updated);
+  };
+
+  const handleResetDefaultQuestions = () => {
+    setExitSurveyQuestions(defaultExitQuestions);
+    setExitSurveyTitle("Member Departure & Offboarding Survey");
+    setExitSurveyDesc("Please share your candid feedback so cooperative leadership can continue improving operations and community support.");
+    addToast("Reset to recommended standard exit survey questions.", "info");
   };
 
   const handleSaveMomo = async (e: React.FormEvent) => {
@@ -592,6 +784,19 @@ export const OrganizationSettingsPage: React.FC = () => {
         >
           <Globe className="h-3.5 w-3.5" /> {t("set_tab_public")}
         </button>
+
+        {canAccessExitSurvey && (
+          <button
+            onClick={() => setActiveTab("exit_survey")}
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
+              activeTab === "exit_survey"
+                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+            }`}
+          >
+            <ClipboardList className="h-3.5 w-3.5" /> {t("Exit Survey & Offboarding")}
+          </button>
+        )}
 
         {canAccessMomo && (
           <button
@@ -952,6 +1157,305 @@ export const OrganizationSettingsPage: React.FC = () => {
               </Button>
             </form>
           </Card>
+        )}
+
+        {/* Exit Survey & Offboarding Tab */}
+        {activeTab === "exit_survey" && canAccessExitSurvey && (
+          <div className="flex flex-col gap-6 pb-8">
+            <Card title="Exit Survey & Offboarding Configuration">
+              <form onSubmit={handleSaveExitSurvey} className="flex flex-col gap-6 text-xs md:text-sm font-medium">
+                {/* Header overview & link to report */}
+                <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3.5">
+                    <div className="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-3xs">
+                      <ClipboardList className="h-5 w-5" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-gray-900 dark:text-white">
+                        Offboarding Survey & Member Retention Analytics
+                      </span>
+                      <p className="text-xs text-gray-600 dark:text-slate-400 mt-0.5">
+                        Define questions asked to members when they choose to exit this organization workspace. Responses are compiled into executive retention reports.
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    to="/admin-modules?tab=resignations"
+                    className="px-4 py-2 bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-800 border border-emerald-300 dark:border-emerald-700 font-bold text-xs rounded-xl flex items-center gap-1.5 self-start sm:self-center shadow-3xs transition whitespace-nowrap"
+                  >
+                    <BarChart2 className="h-4 w-4" /> View Survey Reports
+                  </Link>
+                </div>
+
+                {/* Master switch */}
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/60 border border-gray-200 dark:border-slate-800 rounded-2xl flex items-center justify-between gap-4">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-bold text-gray-900 dark:text-white">
+                      Enable Departure Survey for Exiting Members
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-slate-400">
+                      When enabled, members exiting from the Organization Switcher (/org-picker) or submitting a resignation will be prompted to answer the survey questions before membership deletion is finalized.
+                    </span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={exitSurveyEnabled}
+                      onChange={(e) => setExitSurveyEnabled(e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-[var(--org-primary)]"></div>
+                  </label>
+                </div>
+
+                {/* Survey metadata */}
+                <div className="grid grid-cols-1 gap-4">
+                  <Input
+                    label="Survey Title"
+                    value={exitSurveyTitle}
+                    onChange={(e) => setExitSurveyTitle(e.target.value)}
+                    placeholder="e.g. Member Departure & Offboarding Survey"
+                  />
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-gray-755 dark:text-slate-300">
+                      Survey Instructions & Greeting Message
+                    </label>
+                    <textarea
+                      value={exitSurveyDesc}
+                      onChange={(e) => setExitSurveyDesc(e.target.value)}
+                      rows={2}
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-xs md:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[var(--org-primary)] focus:outline-none resize-none font-medium"
+                      placeholder="e.g. Please share your feedback so cooperative leadership can continue improving community support."
+                    />
+                  </div>
+                </div>
+
+                {/* Questions Header & Actions */}
+                <div className="border-t border-gray-200 dark:border-slate-800 pt-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <span>Configured Survey Questions</span>
+                        <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[11px] font-bold rounded-full">
+                          {exitSurveyQuestions.length} Questions
+                        </span>
+                      </h3>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                        Customize, reorder, or add custom multiple choice and rating prompts to ask departing members.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleResetDefaultQuestions}
+                        className="px-3 py-1.5 text-xs font-semibold text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition"
+                      >
+                        Reset Defaults
+                      </button>
+                      <Button
+                        type="button"
+                        onClick={handleOpenAddQuestion}
+                        icon={<Plus className="h-3.5 w-3.5" />}
+                        className="px-3.5 py-1.5 text-xs font-bold"
+                      >
+                        Add Question
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Question Cards List */}
+                  <div className="flex flex-col gap-3">
+                    {exitSurveyQuestions.map((q, idx) => (
+                      <div
+                        key={q.id || idx}
+                        className="p-4 bg-white dark:bg-slate-900/90 border border-gray-200 dark:border-slate-800 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-3xs hover:border-gray-300 dark:hover:border-slate-700 transition"
+                      >
+                        <div className="flex items-start gap-3 flex-1">
+                          <div className="h-7 w-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                            {idx + 1}
+                          </div>
+                          <div className="flex flex-col gap-1.5 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-bold text-gray-900 dark:text-white">
+                                {q.question}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 text-[10px] font-bold rounded-md uppercase tracking-wider ${
+                                  q.type === "rating"
+                                    ? "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+                                    : q.type === "choice"
+                                    ? "bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                                    : q.type === "boolean"
+                                    ? "bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                                }`}
+                              >
+                                {q.type === "rating" ? "5-Star Rating" : q.type === "choice" ? "Choice" : q.type === "boolean" ? "Yes/No" : "Text"}
+                              </span>
+                              {q.required ? (
+                                <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 rounded">
+                                  Required
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-medium text-gray-400 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                  Optional
+                                </span>
+                              )}
+                            </div>
+
+                            {q.type === "choice" && q.options && q.options.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-0.5">
+                                {q.options.map((opt: string, optIdx: number) => (
+                                  <span
+                                    key={optIdx}
+                                    className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-[11px] text-slate-600 dark:text-slate-400 rounded-md font-medium"
+                                  >
+                                    {opt}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1 self-end md:self-center shrink-0 border-t md:border-t-0 pt-2 md:pt-0">
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => handleMoveQuestion(idx, "up")}
+                            title="Move Up"
+                            className="p-1.5 text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition"
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === exitSurveyQuestions.length - 1}
+                            onClick={() => handleMoveQuestion(idx, "down")}
+                            title="Move Down"
+                            className="p-1.5 text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition"
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditQuestion(q)}
+                            title="Edit Question"
+                            className="p-1.5 text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg transition"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteQuestion(q.id)}
+                            title="Delete Question"
+                            className="p-1.5 text-rose-600 hover:text-rose-800 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between border-t border-gray-200 dark:border-slate-800 pt-4 mt-2">
+                  <span className="text-xs text-gray-500 dark:text-slate-400">
+                    Changes take effect immediately for all departing cooperative members.
+                  </span>
+                  <Button
+                    type="submit"
+                    loading={updateMutation.isPending}
+                    icon={<Save className="h-4.5 w-4.5" />}
+                    className="px-7 py-2.5"
+                  >
+                    Save Exit Survey Settings
+                  </Button>
+                </div>
+              </form>
+            </Card>
+
+            {/* Question Modal */}
+            {showQuestionModal && (
+              <Modal
+                isOpen={showQuestionModal}
+                onClose={() => setShowQuestionModal(false)}
+                title={editingQuestionId ? "Edit Survey Question" : "Add Custom Survey Question"}
+              >
+                <form onSubmit={handleSaveQuestion} className="flex flex-col gap-4 text-xs md:text-sm font-medium">
+                  <Input
+                    label="Question Prompt"
+                    value={qText}
+                    onChange={(e) => setQText(e.target.value)}
+                    placeholder="e.g. How satisfied were you with committee transparency?"
+                    required
+                  />
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-gray-755 dark:text-slate-300">
+                      Question Answer Format
+                    </label>
+                    <select
+                      value={qType}
+                      onChange={(e) => setQType(e.target.value as any)}
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-xs md:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[var(--org-primary)] focus:outline-none font-medium"
+                    >
+                      <option value="choice">Multiple Choice (Single Option Select)</option>
+                      <option value="rating">5-Star Satisfaction Rating</option>
+                      <option value="text">Open Text Response</option>
+                      <option value="boolean">Yes / No Binary Response</option>
+                    </select>
+                  </div>
+
+                  {qType === "choice" && (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-gray-755 dark:text-slate-300">
+                        Answer Options (Comma-separated)
+                      </label>
+                      <input
+                        type="text"
+                        value={qOptions}
+                        onChange={(e) => setQOptions(e.target.value)}
+                        placeholder="e.g. Excellent, Good, Fair, Needs Improvement"
+                        className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-xs md:text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-[var(--org-primary)] focus:outline-none font-medium"
+                      />
+                      <span className="text-[11px] text-gray-400">
+                        Separate choices with a comma (e.g., Option A, Option B, Option C)
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2.5 py-1">
+                    <input
+                      type="checkbox"
+                      id="q_req_checkbox"
+                      checked={qRequired}
+                      onChange={(e) => setQRequired(e.target.checked)}
+                      className="h-4 w-4 text-[var(--org-primary)] focus:ring-[var(--org-primary)] border-gray-300 rounded cursor-pointer"
+                    />
+                    <label htmlFor="q_req_checkbox" className="text-xs font-semibold text-gray-800 dark:text-gray-200 cursor-pointer select-none">
+                      Make this question mandatory (Required)
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-200 dark:border-slate-800">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowQuestionModal(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit">
+                      {editingQuestionId ? "Update Question" : "Add to Survey"}
+                    </Button>
+                  </div>
+                </form>
+              </Modal>
+            )}
+          </div>
         )}
 
         {/* Momo credentials setup */}

@@ -58,6 +58,17 @@ export interface Organization {
   dashboard_logo?: string;
   is_public_directory?: boolean;
   allow_public_joining?: boolean;
+  // Exit Survey & Offboarding settings
+  exit_survey_enabled?: boolean;
+  exit_survey_title?: string;
+  exit_survey_description?: string;
+  exit_survey_questions?: Array<{
+    id: string;
+    question: string;
+    type: "text" | "rating" | "choice" | "boolean";
+    options?: string[];
+    required?: boolean;
+  }>;
   // V2 highlights
   quorum_type?: "absolute" | "percentage";
   quorum_value?: number;
@@ -530,9 +541,19 @@ export interface Resignation {
   id: string;
   member_id: string;
   org_id: string;
+  user_id?: string;
+  member_name?: string;
+  reason?: string;
   reason_category?: string;
   reason_detail?: string;
-  submitted_at: string;
+  details?: string;
+  feedback?: string;
+  rating?: number;
+  rejoin_intent?: "yes" | "maybe" | "no";
+  custom_answers?: Record<string, any>;
+  submitted_at?: string;
+  resignation_date?: string;
+  created_at?: string;
   finalized_at?: string;
   cancelled_at?: string;
   status: "pending" | "finalized" | "cancelled";

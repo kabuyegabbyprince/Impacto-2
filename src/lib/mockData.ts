@@ -127,7 +127,83 @@ export class MockDB {
   static getDocumentAcknowledgements(): any[] { return getLocal("impacto_mock_document_acknowledgements", []); }
   static saveDocumentAcknowledgements(data: any[]) { saveLocal("impacto_mock_document_acknowledgements", data); }
 
-  static getResignations(): any[] { return getLocal("impacto_mock_resignations", []); }
+  static getResignations(): any[] {
+    const defaultResignations = [
+      {
+        id: "resign-seed-1",
+        org_id: "org-1",
+        member_id: "member-sample-1",
+        user_id: "user-sample-1",
+        member_name: "Eric Munyaneza",
+        reason: "Relocation or Resettlement",
+        reason_category: "Relocation or Resettlement",
+        reason_detail: "Moving to Eastern Province for agricultural training fellowship.",
+        details: "Moving to Eastern Province for agricultural training fellowship.",
+        feedback: "The cooperative leadership was exceptionally supportive with seasonal seed distributions. Hoping to rejoin when I return.",
+        rating: 5,
+        rejoin_intent: "yes",
+        custom_answers: {
+          q_support_rating: "5",
+          q_equipment: "Yes",
+          q_recommend: "High"
+        },
+        submitted_at: new Date(Date.now() - 4 * 86400000).toISOString(),
+        resignation_date: new Date(Date.now() - 4 * 86400000).toISOString(),
+        created_at: new Date(Date.now() - 4 * 86400000).toISOString(),
+        finalized_at: new Date(Date.now() - 4 * 86400000).toISOString(),
+        status: "finalized"
+      },
+      {
+        id: "resign-seed-2",
+        org_id: "org-1",
+        member_id: "member-sample-2",
+        user_id: "user-sample-2",
+        member_name: "Aline Uwase",
+        reason: "Scheduling Conflicts / Lack of time",
+        reason_category: "Scheduling Conflicts / Lack of time",
+        reason_detail: "New employment schedule clashes with Saturday general assemblies.",
+        details: "New employment schedule clashes with Saturday general assemblies.",
+        feedback: "Please consider providing digital voting and evening committee meetings for working members.",
+        rating: 4,
+        rejoin_intent: "maybe",
+        custom_answers: {
+          q_support_rating: "4",
+          q_equipment: "Yes",
+          q_recommend: "Medium"
+        },
+        submitted_at: new Date(Date.now() - 9 * 86400000).toISOString(),
+        resignation_date: new Date(Date.now() - 9 * 86400000).toISOString(),
+        created_at: new Date(Date.now() - 9 * 86400000).toISOString(),
+        finalized_at: new Date(Date.now() - 9 * 86400000).toISOString(),
+        status: "finalized"
+      },
+      {
+        id: "resign-seed-3",
+        org_id: "org-1",
+        member_id: "member-sample-3",
+        user_id: "user-sample-3",
+        member_name: "Emmanuel Hakizimana",
+        reason: "Mismatch with agropastoral targets",
+        reason_category: "Mismatch with agropastoral targets",
+        reason_detail: "Transitioned farm focus from coffee harvesting to horticulture.",
+        details: "Transitioned farm focus from coffee harvesting to horticulture.",
+        feedback: "Great bookkeeping and transparency from the accounting committee.",
+        rating: 4,
+        rejoin_intent: "yes",
+        custom_answers: {
+          q_support_rating: "4",
+          q_equipment: "Yes",
+          q_recommend: "High"
+        },
+        submitted_at: new Date(Date.now() - 15 * 86400000).toISOString(),
+        resignation_date: new Date(Date.now() - 15 * 86400000).toISOString(),
+        created_at: new Date(Date.now() - 15 * 86400000).toISOString(),
+        finalized_at: new Date(Date.now() - 15 * 86400000).toISOString(),
+        status: "finalized"
+      }
+    ];
+    return getLocal("impacto_mock_resignations", defaultResignations);
+  }
   static saveResignations(data: any[]) { saveLocal("impacto_mock_resignations", data); }
 
   static getAuditLogs(): any[] { return getLocal("impacto_mock_audit_logs", []); }

@@ -38,6 +38,17 @@ export interface Organization {
   show_impact_publicly?: boolean;
   fee_notification?: string;
   marketplace_enabled?: boolean;
+  // Exit Survey & Offboarding settings
+  exit_survey_enabled?: boolean;
+  exit_survey_title?: string;
+  exit_survey_description?: string;
+  exit_survey_questions?: Array<{
+    id: string;
+    question: string;
+    type: "text" | "rating" | "choice" | "boolean";
+    options?: string[];
+    required?: boolean;
+  }>;
 }
 
 export interface OrgMember {

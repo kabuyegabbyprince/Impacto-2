@@ -430,10 +430,11 @@ export const DashboardHome: React.FC = () => {
   const myMemberRecord = React.useMemo(() => {
     if (!members) return null;
     return members.find(m => 
-      m.user_id === user?.id || 
-      m.id === activeMember?.id || 
-      m.user_id === activeMember?.user_id ||
-      (user?.email && m.user?.email === user.email)
+      (user?.id && (m.user_id === user.id || m.id === user.id)) || 
+      (activeMember?.id && m.id === activeMember.id) || 
+      (activeMember?.user_id && (m.user_id === activeMember.user_id || m.id === activeMember.user_id)) ||
+      (user?.email && (m.user?.email?.toLowerCase() === user.email.toLowerCase() || (m as any).email?.toLowerCase() === user.email.toLowerCase())) ||
+      (user?.full_name && (m.user?.full_name?.toLowerCase().trim() === user.full_name.toLowerCase().trim() || (m as any).full_name?.toLowerCase().trim() === user.full_name.toLowerCase().trim()))
     );
   }, [members, user, activeMember]);
 
@@ -442,34 +443,52 @@ export const DashboardHome: React.FC = () => {
     if (activeMember?.id) ids.add(activeMember.id);
     if (activeMember?.user_id) ids.add(activeMember.user_id);
     if (user?.id) ids.add(user.id);
+    if ((user as any)?.auth_user_id) ids.add((user as any).auth_user_id);
     if (myMemberRecord?.id) ids.add(myMemberRecord.id);
     if (myMemberRecord?.user_id) ids.add(myMemberRecord.user_id);
+
+    // Also include all member records that match current user's profile
+    if (members && Array.isArray(members)) {
+      members.forEach((m) => {
+        const matchesUser =
+          (user?.id && (m.user_id === user.id || m.id === user.id)) ||
+          (user?.email && (m.user?.email?.toLowerCase() === user.email.toLowerCase() || (m as any).email?.toLowerCase() === user.email.toLowerCase())) ||
+          (user?.full_name && (m.user?.full_name?.toLowerCase().trim() === user.full_name.toLowerCase().trim() || (m as any).full_name?.toLowerCase().trim() === user.full_name.toLowerCase().trim()));
+        if (matchesUser) {
+          if (m.id) ids.add(m.id);
+          if (m.user_id) ids.add(m.user_id);
+        }
+      });
+    }
+
     return ids;
-  }, [activeMember, user, myMemberRecord]);
+  }, [activeMember, user, myMemberRecord, members]);
+
+  // Comprehensive helper to match fee to current user across multiple identifiers
+  const isFeeForMe = React.useCallback((f: any) => {
+    if (!f) return false;
+    if (f.member_id && myMemberIds.has(f.member_id)) return true;
+    for (const id of myMemberIds) {
+      if (id && f.member_id && (f.member_id.includes(id) || id.includes(f.member_id))) return true;
+    }
+    if (user?.full_name && f.member_name && f.member_name.toLowerCase().trim() === user.full_name.toLowerCase().trim()) {
+      return true;
+    }
+    if (user?.email && f.sender_info && f.sender_info.toLowerCase().includes(user.email.toLowerCase())) {
+      return true;
+    }
+    return false;
+  }, [myMemberIds, user]);
 
   const myPendingDues = React.useMemo(() => {
     if (!fees) return [];
-    return fees.filter((f) => {
-      if (!f.member_id || f.status !== "pending") return false;
-      if (myMemberIds.has(f.member_id)) return true;
-      for (const id of myMemberIds) {
-        if (id && (f.member_id.includes(id) || id.includes(f.member_id))) return true;
-      }
-      return false;
-    });
-  }, [fees, myMemberIds]);
+    return fees.filter((f) => f.status === "pending" && isFeeForMe(f));
+  }, [fees, isFeeForMe]);
 
   const myAwaitingConfirmationDues = React.useMemo(() => {
     if (!fees) return [];
-    return fees.filter((f) => {
-      if (!f.member_id || f.status !== "pending_confirmation") return false;
-      if (myMemberIds.has(f.member_id)) return true;
-      for (const id of myMemberIds) {
-        if (id && (f.member_id.includes(id) || id.includes(f.member_id))) return true;
-      }
-      return false;
-    });
-  }, [fees, myMemberIds]);
+    return fees.filter((f) => f.status === "pending_confirmation" && isFeeForMe(f));
+  }, [fees, isFeeForMe]);
 
   const adminPendingConfirmationDues = React.useMemo(() => {
     const roleStr = (activeMember?.role as string) || "";
@@ -623,12 +642,12 @@ export const DashboardHome: React.FC = () => {
   }, [fees]);
 
   const myFeeStats = React.useMemo(() => {
-    const myPaidList = (fees || []).filter(f => f.status === "paid" && myMemberIds.has(f.member_id));
+    const myPaidList = (fees || []).filter(f => f.status === "paid" && isFeeForMe(f));
     const myPaidTotal = myPaidList.reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
     const myPendingTotal = myPendingDues.reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
     const isGoodStanding = myPendingDues.length === 0;
     return { myPaidTotal, myPendingTotal, isGoodStanding, paidCount: myPaidList.length };
-  }, [fees, myMemberIds, myPendingDues]);
+  }, [fees, isFeeForMe, myPendingDues]);
 
   // 3. Organization Goal Metrics
   const goalsOverview = React.useMemo(() => {
@@ -697,23 +716,23 @@ export const DashboardHome: React.FC = () => {
       </div>
 
       {/* High priority fee warning barrier */}
-      {activeOrg?.fee_notification && myPendingDues.length > 0 && (
+      {myPendingDues.length > 0 && (
         <div className="bg-red-50 dark:bg-rose-950/20 border-l-4 border-rose-600 p-4.5 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-4 shadow-sm shrink-0" id="dashboard-due-fees-reminder">
           <div className="flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
             <div className="flex flex-col">
               <span className="font-extrabold text-[10px] uppercase tracking-wider text-rose-800 dark:text-rose-450">{t("URGENT REMINDER")}: {t("OUTSTANDING BALANCE DETECTED")}</span>
               <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1">
-                {activeOrg.fee_notification}
+                {activeOrg?.fee_notification || "Cooperative dues have been invoiced for your membership account."}
               </p>
               <p className="text-[10px] text-gray-500 mt-0.5 leading-normal font-semibold">
-                {t("You have")} <span className="font-black text-rose-600">{myPendingDues.length} {t("pending micro-payment invoices")}</span> {t("awaiting settlement. Keep your active status in green compliance by clearing them.")}
+                {t("You have")} <span className="font-black text-rose-600">{myPendingDues.length} {t("pending micro-payment invoices")}</span> ({formatAmount(myFeeStats.myPendingTotal)}) {t("awaiting settlement. Keep your active status in green compliance by clearing them.")}
               </p>
             </div>
           </div>
           <button 
             type="button"
-            className="self-start md:self-center bg-rose-600 hover:bg-rose-700 text-white font-extrabold px-5 py-2 rounded-xl text-xs flex items-center gap-1.5 shrink-0 transition"
+            className="self-start md:self-center bg-rose-600 hover:bg-rose-700 text-white font-extrabold px-5 py-2 rounded-xl text-xs flex items-center gap-1.5 shrink-0 transition cursor-pointer"
             onClick={() => navigate("/dashboard/fees")}
           >
             {t("btn_pay_now_direct", "Pay My Dues")} →
@@ -897,47 +916,47 @@ export const DashboardHome: React.FC = () => {
       </div>
 
       {/* ========================================== */}
-      {/* 1. FINANCIAL STANDING & DUES HEALTH (ACCOUNTANT COLLECTION METER OR MEMBER PERSONAL STANDING) */}
+      {/* 1. FINANCIAL STANDING & DUES HEALTH (COOPERATIVE COLLECTION METER OR MEMBER PERSONAL STANDING) */}
       {/* ========================================== */}
-      {(isAccountant || !isAdmin) && (
-        <div className="bg-white dark:bg-slate-850 border border-gray-200 dark:border-slate-800 rounded-2xl p-5 shadow-3xs">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-800 pb-4 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center shrink-0">
-                <Wallet className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                    {isAccountant ? "Cooperative Dues Health & Collection Meter" : "Personal Dues Standing & Compliance"}
-                  </h3>
-                  {isAccountant ? (
-                    <Badge color={financialStats.collectionRate >= 80 ? "green" : "amber"}>
-                      {financialStats.collectionRate}% Collection Rate
-                    </Badge>
-                  ) : myFeeStats.isGoodStanding ? (
-                    <Badge color="green">Good Standing</Badge>
-                  ) : (
-                    <Badge color="amber">Action Needed</Badge>
-                  )}
-                </div>
-                <p className="text-xs text-gray-450 mt-0.5">
-                  {isAccountant
-                    ? "Real-time aggregation of invoiced periodic contributions across all registered accounts."
-                    : "Transparent account balance and settlement status for your membership account."}
-                </p>
-              </div>
+      <div className="bg-white dark:bg-slate-850 border border-gray-200 dark:border-slate-800 rounded-2xl p-5 shadow-3xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-800 pb-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center shrink-0">
+              <Wallet className="h-5 w-5" />
             </div>
-
-            <Link
-              to="/dashboard/fees"
-              className="self-start md:self-auto inline-flex items-center gap-1.5 text-xs font-bold text-[var(--org-primary)] hover:underline"
-            >
-              {isAccountant ? "Manage Fee Ledger" : "View Statement"} <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                  {isAccountant || isAdmin ? "Cooperative Dues Health & Collection Meter" : "Personal Dues Standing & Compliance"}
+                </h3>
+                {isAccountant || isAdmin ? (
+                  <Badge color={financialStats.collectionRate >= 80 ? "green" : "amber"}>
+                    {financialStats.collectionRate}% Collection Rate
+                  </Badge>
+                ) : myFeeStats.isGoodStanding ? (
+                  <Badge color="green">Good Standing</Badge>
+                ) : (
+                  <Badge color="amber">Action Needed</Badge>
+                )}
+              </div>
+              <p className="text-xs text-gray-450 mt-0.5">
+                {isAccountant || isAdmin
+                  ? "Real-time aggregation of invoiced periodic contributions across all registered accounts."
+                  : "Transparent account balance and settlement status for your membership account."}
+              </p>
+            </div>
           </div>
 
-          {isAccountant ? (
+          <Link
+            to="/dashboard/fees"
+            className="self-start md:self-auto inline-flex items-center gap-1.5 text-xs font-bold text-[var(--org-primary)] hover:underline"
+          >
+            {isAccountant || isAdmin ? "Manage Fee Ledger" : "View Statement"} <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        {isAccountant || isAdmin ? (
+          <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750">
                 <span className="text-[10px] font-mono uppercase text-gray-400 block font-bold">Total Invoiced</span>
@@ -971,40 +990,59 @@ export const DashboardHome: React.FC = () => {
                 <span className="text-[10px] text-gray-450 mt-0.5 block">MoMo / Bank slips submitted</span>
               </div>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
-              <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750">
-                <span className="text-[10px] font-mono uppercase text-gray-400 block font-bold">Total Settled Contributions</span>
-                <span className="text-lg font-bold text-emerald-600 font-display mt-0.5 block">
-                  {formatAmount(myFeeStats.myPaidTotal)}
-                </span>
-                <span className="text-[10px] text-gray-450 mt-0.5 block">{myFeeStats.paidCount} verified payment cycles</span>
-              </div>
 
-              <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750">
-                <span className="text-[10px] font-mono uppercase text-gray-400 block font-bold">Outstanding Balance</span>
-                <span className={`text-lg font-bold font-display mt-0.5 block ${myFeeStats.myPendingTotal > 0 ? "text-rose-600" : "text-gray-900 dark:text-white"}`}>
-                  {formatAmount(myFeeStats.myPendingTotal)}
-                </span>
-                <span className="text-[10px] text-gray-450 mt-0.5 block">
-                  {myFeeStats.isGoodStanding ? "No dues currently pending" : `${myPendingDues.length} invoices to clear`}
-                </span>
-              </div>
-
-              <div className="flex flex-col gap-2">
+            {/* If admin also has personal pending dues */}
+            {myPendingDues.length > 0 && (
+              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 p-3 rounded-xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <Coins className="h-4 w-4 text-amber-600 shrink-0" />
+                  <span className="text-xs text-amber-850 dark:text-amber-300 font-medium">
+                    You have <strong>{myPendingDues.length} personal dues invoice(s)</strong> pending ({formatAmount(myFeeStats.myPendingTotal)}).
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={() => navigate("/dashboard/fees")}
-                  className="w-full bg-[var(--org-primary)] text-white font-bold py-2.5 px-4 rounded-xl text-xs hover:opacity-90 transition flex items-center justify-center gap-2 cursor-pointer shadow-3xs"
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shrink-0 transition"
                 >
-                  <Coins className="h-4 w-4" />
-                  {myFeeStats.myPendingTotal > 0 ? "Pay Outstanding Dues" : "View Payment History"}
+                  Pay My Dues
                 </button>
               </div>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750">
+              <span className="text-[10px] font-mono uppercase text-gray-400 block font-bold">Total Settled Contributions</span>
+              <span className="text-lg font-bold text-emerald-600 font-display mt-0.5 block">
+                {formatAmount(myFeeStats.myPaidTotal)}
+              </span>
+              <span className="text-[10px] text-gray-450 mt-0.5 block">{myFeeStats.paidCount} verified payment cycles</span>
             </div>
-          )}
-        </div>
-      )}
+
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750">
+              <span className="text-[10px] font-mono uppercase text-gray-400 block font-bold">Outstanding Balance</span>
+              <span className={`text-lg font-bold font-display mt-0.5 block ${myFeeStats.myPendingTotal > 0 ? "text-rose-600" : "text-gray-900 dark:text-white"}`}>
+                {formatAmount(myFeeStats.myPendingTotal)}
+              </span>
+              <span className="text-[10px] text-gray-450 mt-0.5 block">
+                {myFeeStats.isGoodStanding ? "No dues currently pending" : `${myPendingDues.length} invoices to clear`}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => navigate("/dashboard/fees")}
+                className="w-full bg-[var(--org-primary)] text-white font-bold py-2.5 px-4 rounded-xl text-xs hover:opacity-90 transition flex items-center justify-center gap-2 cursor-pointer shadow-3xs"
+              >
+                <Coins className="h-4 w-4" />
+                {myFeeStats.myPendingTotal > 0 ? "Pay Outstanding Dues" : "View Payment History"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* ========================================== */}
       {/* 3. MAIN DASHBOARD CONTENT GRID */}

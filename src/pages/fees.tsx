@@ -9,6 +9,7 @@ import {
   useUpdateMemberFeeStatus,
   useUpdateMemberFee,
   useDeleteMemberFee,
+  useUpdateAllMemberDues,
   useUpdateOrganization,
   useBroadcastNotification
 } from "../hooks/useImpactoData";
@@ -40,7 +41,17 @@ import {
   Trash2,
   BarChart3,
   TrendingUp,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  ListFilter,
+  CheckSquare,
+  Square,
+  ArrowUpDown,
+  SlidersHorizontal,
+  Layers,
+  FileSpreadsheet,
+  CheckCheck,
+  AlertTriangle,
+  Users
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -87,9 +98,14 @@ export const OrganizationMemberFees: React.FC = () => {
   const { user } = useAuthStore();
   const { addToast } = useToast();
 
-  const roleStr = (activeMember?.role as string) || "";
+  const roleStr = (activeMember?.role as string)?.toLowerCase() || "";
+  // Strictly enforce that ONLY the accountant (or platform superadmin) has permission to manage and charge dues
   const isAccountant = roleStr === "accountant" || !!user?.is_superadmin;
-  const isAdmin = roleStr === "org_admin" || !!user?.is_superadmin;
+  const isAdmin =
+    roleStr === "org_admin" ||
+    roleStr === "admin" ||
+    roleStr === "president" ||
+    !!user?.is_superadmin;
 
   // Data fetching
   const { data: members, isLoading: loadingMembers } = useMembers(activeOrg?.id);
@@ -100,11 +116,18 @@ export const OrganizationMemberFees: React.FC = () => {
   const updateFeeStatusMutation = useUpdateMemberFeeStatus();
   const updateFeeMutation = useUpdateMemberFee();
   const deleteFeeMutation = useDeleteMemberFee();
+  const updateAllDuesMutation = useUpdateAllMemberDues();
   const updateOrgMutation = useUpdateOrganization();
   const broadcastMutation = useBroadcastNotification();
 
   const [noticeText, setNoticeText] = useState(activeOrg?.fee_notification || "");
   const [isBroadcasting, setIsBroadcasting] = useState(false);
+
+  // View mode for Master Ledger: "schemes" (grouped master dues as created from form) or "invoices" (all individual member lines)
+  const [ledgerViewMode, setLedgerViewMode] = useState<"schemes" | "invoices">("schemes");
+
+  // Receipt view state for members & accountants
+  const [viewingReceiptFee, setViewingReceiptFee] = useState<MemberFee | null>(null);
 
   // Edit & Delete states for Accountants
   const [editingFee, setEditingFee] = useState<MemberFee | null>(null);
@@ -112,8 +135,29 @@ export const OrganizationMemberFees: React.FC = () => {
   const [editPeriod, setEditPeriod] = useState<"weekly" | "monthly" | "flexible">("weekly");
   const [editPeriodDate, setEditPeriodDate] = useState("");
   const [editStatus, setEditStatus] = useState<"paid" | "pending" | "pending_confirmation">("pending");
+  const [editDueDate, setEditDueDate] = useState("");
+  const [editAdminNote, setEditAdminNote] = useState("");
+  const [editApplyToAllUsers, setEditApplyToAllUsers] = useState(true);
 
   const [deletingFee, setDeletingFee] = useState<MemberFee | null>(null);
+  const [deleteScope, setDeleteScope] = useState<"single" | "cycle">("single");
+  const [deletingCycle, setDeletingCycle] = useState<{
+    period_date: string;
+    payment_period: string;
+    count: number;
+    total_amount: number;
+    ids: string[];
+  } | null>(null);
+
+  // Manage All Dues Modal & Bulk Operation States
+  const [showAllDuesModal, setShowAllDuesModal] = useState(false);
+  const [allDuesSearch, setAllDuesSearch] = useState("");
+  const [allDuesStatusFilter, setAllDuesStatusFilter] = useState<"all" | "paid" | "pending" | "pending_confirmation">("all");
+  const [allDuesPeriodFilter, setAllDuesPeriodFilter] = useState<"all" | "weekly" | "monthly" | "flexible">("all");
+  const [allDuesSortBy, setAllDuesSortBy] = useState<"newest" | "oldest" | "highest" | "lowest" | "member_asc" | "member_desc" | "due_date">("newest");
+  const [selectedBulkFeeIds, setSelectedBulkFeeIds] = useState<string[]>([]);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Basic filters & views
   const [activeTab, setActiveTab] = useState<"ledger" | "pending_approvals" | "my_dues">(() => {
@@ -173,10 +217,11 @@ export const OrganizationMemberFees: React.FC = () => {
   const myMemberRecord = React.useMemo(() => {
     if (!members) return null;
     return members.find(m => 
-      m.user_id === user?.id || 
-      m.id === activeMember?.id || 
-      m.user_id === activeMember?.user_id ||
-      (user?.email && m.user?.email === user.email)
+      (user?.id && (m.user_id === user.id || m.id === user.id)) || 
+      (activeMember?.id && m.id === activeMember.id) || 
+      (activeMember?.user_id && (m.user_id === activeMember.user_id || m.id === activeMember.user_id)) ||
+      (user?.email && (m.user?.email?.toLowerCase() === user.email.toLowerCase() || (m as any).email?.toLowerCase() === user.email.toLowerCase())) ||
+      (user?.full_name && (m.user?.full_name?.toLowerCase().trim() === user.full_name.toLowerCase().trim() || (m as any).full_name?.toLowerCase().trim() === user.full_name.toLowerCase().trim()))
     );
   }, [members, user, activeMember]);
 
@@ -185,23 +230,45 @@ export const OrganizationMemberFees: React.FC = () => {
     if (activeMember?.id) ids.add(activeMember.id);
     if (activeMember?.user_id) ids.add(activeMember.user_id);
     if (user?.id) ids.add(user.id);
+    if ((user as any)?.auth_user_id) ids.add((user as any).auth_user_id);
     if (myMemberRecord?.id) ids.add(myMemberRecord.id);
     if (myMemberRecord?.user_id) ids.add(myMemberRecord.user_id);
+
+    // Also include all member records that match current user's profile
+    if (members && Array.isArray(members)) {
+      members.forEach((m) => {
+        const matchesUser =
+          (user?.id && (m.user_id === user.id || m.id === user.id)) ||
+          (user?.email && (m.user?.email?.toLowerCase() === user.email.toLowerCase() || (m as any).email?.toLowerCase() === user.email.toLowerCase())) ||
+          (user?.full_name && (m.user?.full_name?.toLowerCase().trim() === user.full_name.toLowerCase().trim() || (m as any).full_name?.toLowerCase().trim() === user.full_name.toLowerCase().trim()));
+        if (matchesUser) {
+          if (m.id) ids.add(m.id);
+          if (m.user_id) ids.add(m.user_id);
+        }
+      });
+    }
+
     return ids;
-  }, [activeMember, user, myMemberRecord]);
+  }, [activeMember, user, myMemberRecord, members]);
 
   // Dues assigned specific to current logged-in member or admin
   const myDues = React.useMemo(() => {
     if (!fees) return [];
     return fees.filter((f) => {
-      if (!f.member_id) return false;
-      if (myMemberIds.has(f.member_id)) return true;
+      if (!f) return false;
+      if (f.member_id && myMemberIds.has(f.member_id)) return true;
       for (const id of myMemberIds) {
-        if (id && (f.member_id.includes(id) || id.includes(f.member_id))) return true;
+        if (id && f.member_id && (f.member_id.includes(id) || id.includes(f.member_id))) return true;
+      }
+      if (user?.full_name && f.member_name && f.member_name.toLowerCase().trim() === user.full_name.toLowerCase().trim()) {
+        return true;
+      }
+      if (user?.email && f.sender_info && f.sender_info.toLowerCase().includes(user.email.toLowerCase())) {
+        return true;
       }
       return false;
     });
-  }, [fees, myMemberIds]);
+  }, [fees, myMemberIds, user]);
 
   // Autogenerate payment deadline date based on start date and cycle type (+7 days for weekly, +30 days for monthly)
   useEffect(() => {
@@ -334,6 +401,10 @@ export const OrganizationMemberFees: React.FC = () => {
   const handleCreateFee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeOrg) return;
+    if (!isAccountant) {
+      addToast("Permission Denied: Only the cooperative accountant can charge dues.", "error");
+      return;
+    }
     
     const finalPeriodDate = formPeriod === "flexible" ? "Anytime" : formPeriodDate;
     if (!formAmount || !finalPeriodDate) {
@@ -531,13 +602,17 @@ export const OrganizationMemberFees: React.FC = () => {
 
   // Administrator resolves/approves reported payments
   const handleResolvePaymentReport = async (approve: boolean) => {
+    if (!isAccountant) {
+      addToast("Permission Denied: Only the cooperative accountant can verify payments.", "error");
+      return;
+    }
     if (!reviewingFee) return;
     setIsSubmittingReview(true);
 
     try {
       const finalStatus = approve ? "paid" : "pending";
       const paidAt = approve ? new Date().toISOString() : undefined;
-      const noteText = adminNoteInput || (approve ? "Approved by supervisor" : "Rejected: Verification slip invalid");
+      const noteText = adminNoteInput || (approve ? "Approved and cleared by accountant" : "Rejected: Verification slip invalid");
 
       await updateFeeStatusMutation.mutateAsync({
         id: reviewingFee.id,
@@ -586,19 +661,54 @@ export const OrganizationMemberFees: React.FC = () => {
     }
   };
 
+  const openEditModal = (fee: MemberFee, defaultApplyAll = false) => {
+    if (!isAccountant) return;
+    setEditingFee(fee);
+    setEditAmount(fee.amount.toString());
+    setEditPeriod((fee.payment_period as any) || "weekly");
+    setEditPeriodDate(fee.period_date || "");
+    setEditStatus(fee.status || "pending");
+    setEditDueDate(fee.due_date || "");
+    setEditAdminNote(fee.admin_note || "");
+    setEditApplyToAllUsers(defaultApplyAll);
+  };
+
   const handleSaveEditFee = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAccountant) {
+      addToast("Permission Denied: Only the cooperative accountant can edit dues.", "error");
+      return;
+    }
     if (!editingFee || !activeOrg?.id) return;
     try {
-      await updateFeeMutation.mutateAsync({
-        id: editingFee.id,
-        org_id: activeOrg.id,
-        amount: parseFloat(editAmount) || 0,
-        payment_period: editPeriod,
-        period_date: editPeriodDate,
-        status: editStatus,
-      });
-      addToast("Fee due updated successfully!", "success");
+      const parsedAmount = parseFloat(editAmount) || 0;
+      if (editApplyToAllUsers) {
+        await updateAllDuesMutation.mutateAsync({
+          org_id: activeOrg.id,
+          period_date: editingFee.period_date,
+          payment_period: editPeriod,
+          amount: parsedAmount,
+          due_date: editDueDate || undefined,
+          admin_note: editAdminNote || undefined,
+          only_pending: true,
+        });
+        addToast(
+          `Updated due and synchronized changes to all members for cycle "${editPeriodDate || editingFee.period_date}"!`,
+          "success"
+        );
+      } else {
+        await updateFeeMutation.mutateAsync({
+          id: editingFee.id,
+          org_id: activeOrg.id,
+          amount: parsedAmount,
+          payment_period: editPeriod,
+          period_date: editPeriodDate,
+          status: editStatus,
+          due_date: editDueDate,
+          admin_note: editAdminNote,
+        });
+        addToast("Fee due updated successfully!", "success");
+      }
     } catch (err: any) {
       addToast(sanitizeError(err, "Failed to update fee due."), "error");
     } finally {
@@ -606,23 +716,150 @@ export const OrganizationMemberFees: React.FC = () => {
     }
   };
 
-  const handleConfirmDeleteFee = async () => {
-    if (!deletingFee || !activeOrg?.id) return;
+  const handleBulkDeleteFees = async () => {
+    if (!isAccountant) {
+      addToast("Permission Denied: Only the cooperative accountant can delete dues.", "error");
+      return;
+    }
+    if (selectedBulkFeeIds.length === 0 || !activeOrg?.id) return;
+    setIsBulkDeleting(true);
     try {
       await deleteFeeMutation.mutateAsync({
-        id: deletingFee.id,
+        ids: selectedBulkFeeIds,
         org_id: activeOrg.id,
         user_name: user?.full_name || (activeMember as any)?.user?.full_name || "Accountant",
         user_id: user?.id || activeMember?.id,
-        fee_amount: deletingFee.amount,
-        fee_ref: deletingFee.transaction_reference,
-        member_name: deletingFee.member_name,
+        fee_amount: selectedBulkFeeIds.reduce((sum, id) => {
+          const feeObj = fees?.find((f) => f.id === id);
+          return sum + (feeObj?.amount || 0);
+        }, 0),
       });
-      addToast("Fee record deleted and ledger synchronized successfully!", "success");
+      addToast(`Successfully removed ${selectedBulkFeeIds.length} dues charge(s)!`, "success");
+      setSelectedBulkFeeIds([]);
+      setShowBulkDeleteConfirm(false);
+    } catch (err: any) {
+      addToast(sanitizeError(err, "Failed to delete selected dues."), "error");
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const handleBulkMarkAsPaid = async () => {
+    if (!isAccountant) {
+      addToast("Permission Denied: Only the cooperative accountant can verify dues.", "error");
+      return;
+    }
+    if (selectedBulkFeeIds.length === 0 || !activeOrg?.id) return;
+    try {
+      for (const feeId of selectedBulkFeeIds) {
+        const feeObj = fees?.find((f) => f.id === feeId);
+        if (feeObj && feeObj.status !== "paid") {
+          await updateFeeStatusMutation.mutateAsync({
+            id: feeId,
+            org_id: activeOrg.id,
+            status: "paid",
+            amount: feeObj.amount,
+            paid_by_method: "Bank Transfer",
+            paid_at: new Date().toISOString(),
+            actor_name: user?.full_name || "Accountant",
+            user_id: user?.id,
+          });
+        }
+      }
+      addToast(`Marked ${selectedBulkFeeIds.length} dues as Cleared / Paid!`, "success");
+      setSelectedBulkFeeIds([]);
+    } catch (err: any) {
+      addToast(sanitizeError(err, "Failed to update dues."), "error");
+    }
+  };
+
+  const toggleSelectFee = (feeId: string) => {
+    if (!isAccountant) return;
+    setSelectedBulkFeeIds((prev) =>
+      prev.includes(feeId) ? prev.filter((id) => id !== feeId) : [...prev, feeId]
+    );
+  };
+
+  const toggleSelectAllDues = (allIds: string[]) => {
+    if (!isAccountant) return;
+    if (allIds.every((id) => selectedBulkFeeIds.includes(id))) {
+      setSelectedBulkFeeIds((prev) => prev.filter((id) => !allIds.includes(id)));
+    } else {
+      setSelectedBulkFeeIds((prev) => Array.from(new Set([...prev, ...allIds])));
+    }
+  };
+
+  const handleConfirmDeleteFee = async () => {
+    if (!isAccountant) return;
+    if (!deletingFee || !activeOrg?.id) return;
+    try {
+      if (deleteScope === "cycle") {
+        const cycleFees = (fees || []).filter(
+          (f) => f.org_id === activeOrg.id && f.period_date === deletingFee.period_date
+        );
+        const idsToDelete = cycleFees.map((f) => f.id);
+        await deleteFeeMutation.mutateAsync({
+          ids: idsToDelete,
+          org_id: activeOrg.id,
+          user_name: user?.full_name || (activeMember as any)?.user?.full_name || "Accountant",
+          user_id: user?.id || activeMember?.id,
+          fee_amount: deletingFee.amount * idsToDelete.length,
+        });
+        addToast(`Due cycle "${deletingFee.period_date}" removed and all ${idsToDelete.length} member charges deleted!`, "success");
+      } else {
+        await deleteFeeMutation.mutateAsync({
+          id: deletingFee.id,
+          ids: [deletingFee.id],
+          org_id: activeOrg.id,
+          user_name: user?.full_name || (activeMember as any)?.user?.full_name || "Accountant",
+          user_id: user?.id || activeMember?.id,
+          fee_amount: deletingFee.amount,
+          fee_ref: deletingFee.transaction_reference,
+          member_name: deletingFee.member_name,
+        });
+        addToast("Fee record deleted and ledger synchronized successfully!", "success");
+      }
     } catch (err: any) {
       addToast(sanitizeError(err, "Failed to delete fee due."), "error");
     } finally {
       setDeletingFee(null);
+      setDeleteScope("single");
+    }
+  };
+
+  const handleDeleteCycleDirect = (scheme: {
+    period_date: string;
+    payment_period: string;
+    member_count: number;
+    total_expected: number;
+    members: MemberFee[];
+  }) => {
+    if (!isAccountant) return;
+    setDeletingCycle({
+      period_date: scheme.period_date,
+      payment_period: scheme.payment_period,
+      count: scheme.member_count,
+      total_amount: scheme.total_expected,
+      ids: scheme.members.map((m) => m.id),
+    });
+  };
+
+  const handleConfirmDeleteCycle = async () => {
+    if (!isAccountant) return;
+    if (!deletingCycle || !activeOrg?.id) return;
+    try {
+      await deleteFeeMutation.mutateAsync({
+        ids: deletingCycle.ids,
+        org_id: activeOrg.id,
+        user_name: user?.full_name || (activeMember as any)?.user?.full_name || "Accountant",
+        user_id: user?.id || activeMember?.id,
+        fee_amount: deletingCycle.total_amount,
+      });
+      addToast(`Due cycle "${deletingCycle.period_date}" and all ${deletingCycle.count} charges deleted!`, "success");
+    } catch (err: any) {
+      addToast(sanitizeError(err, "Failed to delete due cycle."), "error");
+    } finally {
+      setDeletingCycle(null);
     }
   };
 
@@ -663,11 +900,11 @@ export const OrganizationMemberFees: React.FC = () => {
   const pendingDuesList = fees?.filter((f) => f.status === "pending" || f.status === "pending_confirmation") || [];
   const awaitingVerificationList = fees?.filter((f) => f.status === "pending_confirmation") || [];
 
-  const paidSumRwf = paidDuesList.reduce((acc, current) => acc + current.amount, 0);
-  const pendingSumRwf = pendingDuesList.reduce((acc, current) => acc + current.amount, 0);
+  const paidSumRwf = paidDuesList.reduce((acc, current) => acc + (Number(current.amount) || 0), 0);
+  const pendingSumRwf = pendingDuesList.reduce((acc, current) => acc + (Number(current.amount) || 0), 0);
 
-  const myPaidSumRwf = myDues.filter((f) => f.status === "paid").reduce((acc, curr) => acc + curr.amount, 0);
-  const myPendingSumRwf = myDues.filter((f) => f.status === "pending" || f.status === "pending_confirmation").reduce((acc, curr) => acc + curr.amount, 0);
+  const myPaidSumRwf = myDues.filter((f) => f.status === "paid").reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+  const myPendingSumRwf = myDues.filter((f) => f.status === "pending" || f.status === "pending_confirmation").reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
   const myAwaitingCount = myDues.filter((f) => f.status === "pending_confirmation").length;
 
   // Chart Data preparation for Accountants
@@ -677,15 +914,16 @@ export const OrganizationMemberFees: React.FC = () => {
     
     fees.forEach((f) => {
       const key = f.period_date || f.payment_period || "General";
+      const amt = Number(f.amount) || 0;
       if (!map[key]) {
         map[key] = { period: key, paid: 0, awaiting: 0, unpaid: 0 };
       }
       if (f.status === "paid") {
-        map[key].paid += f.amount;
+        map[key].paid += amt;
       } else if (f.status === "pending_confirmation") {
-        map[key].awaiting += f.amount;
+        map[key].awaiting += amt;
       } else {
-        map[key].unpaid += f.amount;
+        map[key].unpaid += amt;
       }
     });
 
@@ -699,20 +937,21 @@ export const OrganizationMemberFees: React.FC = () => {
     let unpaidCount = 0, unpaidAmount = 0;
 
     fees.forEach((f) => {
+      const amt = Number(f.amount) || 0;
       if (f.status === "paid" || f.status === "pending_confirmation") {
         if (f.paid_by_method?.includes("MoMo") || f.paid_by_method?.includes("Airtel") || f.paid_by_method?.includes("MTN")) {
           momoCount++;
-          momoAmount += f.amount;
+          momoAmount += amt;
         } else if (f.paid_by_method?.includes("Cash")) {
           cashCount++;
-          cashAmount += f.amount;
+          cashAmount += amt;
         } else {
           momoCount++;
-          momoAmount += f.amount;
+          momoAmount += amt;
         }
       } else {
         unpaidCount++;
-        unpaidAmount += f.amount;
+        unpaidAmount += amt;
       }
     });
 
@@ -724,29 +963,175 @@ export const OrganizationMemberFees: React.FC = () => {
   }, [fees]);
 
   // Filters computed across all ledger entries (or user specific ledger)
-  const isViewMyDues = activeTab === "my_dues";
+  const isViewMyDues = !isAccountant || activeTab === "my_dues";
   const sourceList = isViewMyDues ? myDues : fees || [];
 
   const filteredFees = sourceList.filter((f) => {
     // Tab filtering (pending approvals tab shows ONLY payments waiting for accountant confirmation)
-    if (activeTab === "pending_approvals" && f.status !== "pending_confirmation") {
-      return false;
+    if (activeTab === "pending_approvals") {
+      if (f.status !== "pending_confirmation") return false;
     }
     const matchesPeriod = periodFilter === "all" || f.payment_period === periodFilter;
     const matchesStatus = 
       activeTab === "pending_approvals" 
-        ? (statusFilter === "all" || f.status === statusFilter)
+        ? true
         : (statusFilter === "all" || f.status === statusFilter || (statusFilter === "pending" && (f.status === "pending" || f.status === "pending_confirmation")));
     
     const term = searchQuery.toLowerCase();
     const matchesSearch = searchQuery === "" || 
       f.member_name?.toLowerCase().includes(term) || 
-      f.period_date.toLowerCase().includes(term) ||
+      f.period_date?.toLowerCase().includes(term) ||
       f.paid_by_method?.toLowerCase().includes(term) ||
       f.transaction_reference?.toLowerCase().includes(term);
 
     return matchesPeriod && matchesStatus && matchesSearch;
   });
+
+  // Computed list for the Manage All Dues Modal with multi-filters and sorting
+  const allDuesFilteredList = React.useMemo(() => {
+    if (!fees) return [];
+    let list = [...fees];
+
+    // Status filter
+    if (allDuesStatusFilter !== "all") {
+      list = list.filter((f) => f.status === allDuesStatusFilter);
+    }
+
+    // Period filter
+    if (allDuesPeriodFilter !== "all") {
+      list = list.filter((f) => f.payment_period === allDuesPeriodFilter);
+    }
+
+    // Search query
+    if (allDuesSearch.trim()) {
+      const term = allDuesSearch.toLowerCase().trim();
+      list = list.filter((f) => {
+        return (
+          f.member_name?.toLowerCase().includes(term) ||
+          f.period_date?.toLowerCase().includes(term) ||
+          f.transaction_reference?.toLowerCase().includes(term) ||
+          f.paid_by_method?.toLowerCase().includes(term) ||
+          f.admin_note?.toLowerCase().includes(term) ||
+          f.report_note?.toLowerCase().includes(term) ||
+          f.amount.toString().includes(term)
+        );
+      });
+    }
+
+    // Sorting
+    list.sort((a, b) => {
+      if (allDuesSortBy === "newest") {
+        return new Date(b.created_at || "").getTime() - new Date(a.created_at || "").getTime();
+      }
+      if (allDuesSortBy === "oldest") {
+        return new Date(a.created_at || "").getTime() - new Date(b.created_at || "").getTime();
+      }
+      if (allDuesSortBy === "highest") {
+        return b.amount - a.amount;
+      }
+      if (allDuesSortBy === "lowest") {
+        return a.amount - b.amount;
+      }
+      if (allDuesSortBy === "member_asc") {
+        return (a.member_name || "").localeCompare(b.member_name || "");
+      }
+      if (allDuesSortBy === "member_desc") {
+        return (b.member_name || "").localeCompare(a.member_name || "");
+      }
+      if (allDuesSortBy === "due_date") {
+        const da = a.due_date ? new Date(a.due_date).getTime() : Infinity;
+        const db = b.due_date ? new Date(b.due_date).getTime() : Infinity;
+        return da - db;
+      }
+      return 0;
+    });
+
+    return list;
+  }, [fees, allDuesStatusFilter, allDuesPeriodFilter, allDuesSearch, allDuesSortBy]);
+
+  // Master Dues Schemes (Grouped as created from the dues form)
+  const duesSchemes = React.useMemo(() => {
+    if (!fees || fees.length === 0) return [];
+    const map = new Map<string, {
+      key: string;
+      period_date: string;
+      payment_period: string;
+      rate_amount: number;
+      due_date?: string;
+      is_recurring?: boolean;
+      admin_note?: string;
+      created_at?: string;
+      total_expected: number;
+      total_cleared: number;
+      total_pending: number;
+      total_review: number;
+      member_count: number;
+      cleared_count: number;
+      pending_count: number;
+      review_count: number;
+      members: MemberFee[];
+    }>();
+
+    fees.forEach((f) => {
+      const pDate = f.period_date || "Flexible";
+      const pPeriod = f.payment_period || "monthly";
+      const key = `${pDate}:::${pPeriod}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          period_date: pDate,
+          payment_period: pPeriod,
+          rate_amount: Number(f.amount) || 0,
+          due_date: f.due_date,
+          is_recurring: f.is_recurring,
+          admin_note: f.admin_note,
+          created_at: f.created_at,
+          total_expected: 0,
+          total_cleared: 0,
+          total_pending: 0,
+          total_review: 0,
+          member_count: 0,
+          cleared_count: 0,
+          pending_count: 0,
+          review_count: 0,
+          members: [],
+        });
+      }
+
+      const scheme = map.get(key)!;
+      scheme.member_count += 1;
+      scheme.total_expected += Number(f.amount) || 0;
+      scheme.members.push(f);
+      if (!scheme.due_date && f.due_date) scheme.due_date = f.due_date;
+      if (!scheme.admin_note && f.admin_note) scheme.admin_note = f.admin_note;
+
+      if (f.status === "paid") {
+        scheme.cleared_count += 1;
+        scheme.total_cleared += Number(f.amount) || 0;
+      } else if (f.status === "pending_confirmation") {
+        scheme.review_count += 1;
+        scheme.total_review += Number(f.amount) || 0;
+      } else {
+        scheme.pending_count += 1;
+        scheme.total_pending += Number(f.amount) || 0;
+      }
+    });
+
+    let list = Array.from(map.values());
+    if (periodFilter !== "all") {
+      list = list.filter((s) => s.payment_period === periodFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (s) =>
+          s.period_date.toLowerCase().includes(q) ||
+          s.payment_period.toLowerCase().includes(q) ||
+          (s.admin_note && s.admin_note.toLowerCase().includes(q))
+      );
+    }
+    return list.sort((a, b) => b.period_date.localeCompare(a.period_date));
+  }, [fees, periodFilter, searchQuery]);
 
   return (
     <div className="space-y-6 md:space-y-8 container mx-auto max-w-7xl px-4 py-6 font-sans select-none" id="fees-management-container">
@@ -766,9 +1151,26 @@ export const OrganizationMemberFees: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2">
           {isAccountant && (
-            <Button onClick={() => setShowAddModal(true)} className="flex items-center gap-1.5 py-2.5 bg-emerald-700 hover:bg-emerald-800 font-bold rounded-xl" id="btn-add-fee">
-              <Plus className="h-4 w-4" /> {t("fees_charge_new_btn")}
-            </Button>
+            <>
+              <Button onClick={() => setShowAddModal(true)} className="flex items-center gap-1.5 py-2.5 bg-emerald-700 hover:bg-emerald-800 font-bold rounded-xl shadow-xs" id="btn-add-fee">
+                <Plus className="h-4 w-4" /> {t("fees_charge_new_btn")}
+              </Button>
+              <Button 
+                onClick={() => {
+                  setSelectedBulkFeeIds([]);
+                  setShowAllDuesModal(true);
+                }} 
+                variant="outline" 
+                className="flex items-center gap-1.5 py-2.5 font-bold rounded-xl border-emerald-600/30 dark:border-slate-700 text-stone-800 dark:text-slate-100 hover:bg-emerald-50/50 dark:hover:bg-slate-800 shadow-3xs" 
+                id="btn-show-all-dues"
+              >
+                <ListFilter className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                Manage All Dues
+                <span className="ml-1 px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                  {fees?.length || 0}
+                </span>
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -1004,14 +1406,14 @@ export const OrganizationMemberFees: React.FC = () => {
               />
               <div 
                 className="bg-amber-400 h-full transition-all duration-500" 
-                style={{ width: `${Math.min(100, (awaitingVerificationList.reduce((a, b) => a + b.amount, 0) / ((paidSumRwf + pendingSumRwf) || 1)) * 100)}%` }}
+                style={{ width: `${Math.min(100, (awaitingVerificationList.reduce((a, b) => a + (Number(b.amount) || 0), 0) / ((paidSumRwf + pendingSumRwf) || 1)) * 100)}%` }}
                 title="Awaiting Verification"
               />
             </div>
             <div className="flex flex-wrap items-center gap-4 text-[10px] text-gray-500 font-semibold pt-1">
               <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Cleared Paid ({paidSumRwf.toLocaleString()} RWF)</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" /> Submitted Awaiting Review ({awaitingVerificationList.reduce((a, b) => a + b.amount, 0).toLocaleString()} RWF)</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" /> Unpaid Outstanding ({(fees?.filter(f => f.status === "pending").reduce((a, b) => a + b.amount, 0) || 0).toLocaleString()} RWF)</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" /> Submitted Awaiting Review ({awaitingVerificationList.reduce((a, b) => a + (Number(b.amount) || 0), 0).toLocaleString()} RWF)</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" /> Unpaid Outstanding ({(fees?.filter(f => f.status === "pending").reduce((a, b) => a + (Number(b.amount) || 0), 0) || 0).toLocaleString()} RWF)</span>
             </div>
           </div>
 
@@ -1138,6 +1540,39 @@ export const OrganizationMemberFees: React.FC = () => {
         </div>
       )}
 
+      {/* Member Portal Banner - Shown to Non-Accountants */}
+      {!isAccountant && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/40 rounded-2xl shadow-3xs" id="member-portal-banner">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold shrink-0">
+              <Smartphone className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-black text-stone-900 dark:text-white flex items-center gap-2">
+                My Member Statement & Payment Portal
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+                  Member Access
+                </span>
+              </h2>
+              <p className="text-xs text-stone-600 dark:text-slate-400 font-medium mt-0.5">
+                View your personal cooperative dues, payment history, and submit transaction slips for accountant verification.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {myDues.filter(f => f.status === "pending").length === 0 ? (
+              <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-extrabold bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-xl text-xs shadow-3xs">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" /> All Dues Up To Date
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-rose-700 dark:text-rose-300 font-extrabold bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 px-3 py-1.5 rounded-xl text-xs shadow-3xs">
+                <AlertCircle className="h-4 w-4 text-rose-600" /> {myDues.filter(f => f.status === "pending").length} Payment(s) Due
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Filters panel */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-3xs select-none" id="fees-filters-bar">
         <div className="flex flex-wrap items-center gap-4">
@@ -1219,8 +1654,190 @@ export const OrganizationMemberFees: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Roster Tracking Table view or My account view */}
-      {loadingFees ? (
+      {/* Accountant View Mode Toggle: Schemes & Cycles vs Member Invoices */}
+      {isAccountant && activeTab === "ledger" && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-stone-50 dark:bg-slate-900/90 rounded-2xl border border-stone-200/80 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-stone-700 dark:text-slate-300">View Format:</span>
+            <div className="p-1 bg-white dark:bg-slate-950 rounded-xl border border-gray-200 dark:border-slate-800 inline-flex items-center gap-1 text-xs shadow-xs">
+              <button
+                type="button"
+                id="btn-view-schemes"
+                onClick={() => setLedgerViewMode("schemes")}
+                className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                  ledgerViewMode === "schemes"
+                    ? "bg-emerald-700 text-white shadow-xs"
+                    : "text-stone-600 dark:text-slate-400 hover:text-stone-900 dark:hover:text-white"
+                }`}
+              >
+                <Layers className="h-3.5 w-3.5" /> Dues Schemes & Cycles
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                  ledgerViewMode === "schemes"
+                    ? "bg-emerald-800 text-white"
+                    : "bg-gray-100 dark:bg-slate-800 text-stone-700 dark:text-slate-300"
+                }`}>
+                  {duesSchemes.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                id="btn-view-invoices"
+                onClick={() => setLedgerViewMode("invoices")}
+                className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                  ledgerViewMode === "invoices"
+                    ? "bg-emerald-700 text-white shadow-xs"
+                    : "text-stone-600 dark:text-slate-400 hover:text-stone-900 dark:hover:text-white"
+                }`}
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" /> Individual Member Invoices
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                  ledgerViewMode === "invoices"
+                    ? "bg-emerald-800 text-white"
+                    : "bg-gray-100 dark:bg-slate-800 text-stone-700 dark:text-slate-300"
+                }`}>
+                  {filteredFees.length}
+                </span>
+              </button>
+            </div>
+          </div>
+          <div className="text-[11px] text-gray-500 dark:text-slate-400">
+            {ledgerViewMode === "schemes"
+              ? "Showing master dues schemes created by accountant. Updating a scheme updates all users."
+              : "Showing individual invoice rows for all members."}
+          </div>
+        </div>
+      )}
+
+      {/* Main Roster Tracking Table view or Master Schemes view */}
+      {isAccountant && activeTab === "ledger" && ledgerViewMode === "schemes" ? (
+        loadingFees ? (
+          <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-xl" id="div-schemes-loading">
+            <Clock className="h-8 w-8 text-emerald-600 animate-spin mx-auto mb-3" />
+            <p className="text-xs text-gray-400 animate-pulse font-bold tracking-wider">Loading dues schemes & cycles...</p>
+          </div>
+        ) : duesSchemes.length > 0 ? (
+          <div className="space-y-4" id="dues-schemes-container">
+            <div className="grid grid-cols-1 gap-3">
+              {duesSchemes.map((scheme) => {
+                const percentPaid = Math.round((scheme.cleared_count / (scheme.member_count || 1)) * 100);
+                const isOverdue = scheme.due_date && new Date(scheme.due_date).getTime() < Date.now();
+                return (
+                  <div
+                    key={scheme.key}
+                    className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-3xs hover:border-emerald-500/50 transition"
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                      {/* Left: Scheme Info */}
+                      <div className="space-y-1.5 min-w-[240px]">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900">
+                            {scheme.payment_period}
+                          </span>
+                          <h3 className="text-base font-bold text-stone-900 dark:text-white">
+                            {scheme.period_date}
+                          </h3>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-slate-400 font-medium">
+                          <span>
+                            Rate: <strong className="font-mono text-stone-900 dark:text-white">{scheme.rate_amount.toLocaleString()} RWF</strong> / member
+                          </span>
+                          <span>•</span>
+                          <span>
+                            Assigned: <strong className="text-stone-900 dark:text-white">{scheme.member_count} members</strong>
+                          </span>
+                          {scheme.due_date && (
+                            <>
+                              <span>•</span>
+                              <span className={`inline-flex items-center gap-1 font-bold ${
+                                isOverdue ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
+                              }`}>
+                                <Clock className="h-3 w-3" />
+                                Due: {new Date(scheme.due_date).toLocaleDateString()}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        {scheme.admin_note && (
+                          <p className="text-[11px] text-gray-400 dark:text-slate-500 italic">
+                            Note: {scheme.admin_note}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Middle: Collection Progress */}
+                      <div className="flex-1 max-w-md bg-stone-50 dark:bg-slate-950/60 p-3 rounded-xl border border-gray-100 dark:border-slate-800/80">
+                        <div className="flex items-center justify-between text-xs font-bold mb-1.5">
+                          <span className="text-stone-700 dark:text-slate-300">
+                            Collections: <span className="text-emerald-600 font-mono">{scheme.total_cleared.toLocaleString()} RWF</span> / {scheme.total_expected.toLocaleString()} RWF
+                          </span>
+                          <span className="text-emerald-600 font-mono font-bold">{percentPaid}% Cleared</span>
+                        </div>
+                        <div className="w-full bg-stone-200 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden flex">
+                          <div
+                            className="bg-emerald-500 h-full transition-all duration-500"
+                            style={{ width: `${percentPaid}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-slate-400 font-semibold mt-1.5">
+                          <span className="text-emerald-600 font-bold">{scheme.cleared_count} Paid</span>
+                          {scheme.review_count > 0 && (
+                            <span className="text-amber-500 font-bold">{scheme.review_count} In Review</span>
+                          )}
+                          <span className="text-rose-600 font-bold">{scheme.pending_count} Unpaid</span>
+                        </div>
+                      </div>
+
+                      {/* Right: Actions */}
+                      <div className="flex items-center gap-2 self-end lg:self-center shrink-0">
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() => {
+                            setSearchQuery(scheme.period_date);
+                            setLedgerViewMode("invoices");
+                          }}
+                          className="flex items-center gap-1 text-xs font-bold"
+                          title="View all member slips for this cycle"
+                        >
+                          <Users className="h-3.5 w-3.5 text-emerald-600" /> Member Slips ({scheme.member_count})
+                        </Button>
+
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() => openEditModal(scheme.members[0], true)}
+                          className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 border-blue-200 dark:border-blue-900/50"
+                          title="Edit this due and update all users"
+                        >
+                          <Pencil className="h-3.5 w-3.5" /> Edit & Update All
+                        </Button>
+
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() => handleDeleteCycleDirect(scheme)}
+                          className="flex items-center gap-1 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-900/50"
+                          title="Delete this due cycle for all members"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Delete Due
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-20 bg-white dark:bg-slate-900 border rounded-xl" id="empty-dues-schemes">
+            <Coins className="h-12 w-12 text-gray-300 dark:text-slate-720 mx-auto mb-3" />
+            <h3 className="text-base font-bold text-stone-800 dark:text-white">No Dues Schemes Recorded</h3>
+            <p className="text-xs text-gray-450 mt-1 max-w-sm mx-auto">
+              Charge new dues from the button above to set up a collection cycle for cooperative members.
+            </p>
+          </div>
+        )
+      ) : loadingFees ? (
         <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-xl" id="div-fees-loading">
           <Clock className="h-8 w-8 text-emerald-600 animate-spin mx-auto mb-3" />
           <p className="text-xs text-gray-400 animate-pulse font-bold tracking-wider">Retrieving cooperative dues and receipts...</p>
@@ -1242,7 +1859,7 @@ export const OrganizationMemberFees: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-200/70 dark:divide-slate-800/80 text-stone-800 dark:text-slate-100 font-medium">
                 {filteredFees.map((fee) => {
-                  const isMyOwn = fee.member_id === activeMember?.id;
+                  const isMyOwn = !isAccountant || myMemberIds.has(fee.member_id) || fee.member_id === activeMember?.id;
                   
                   return (
                     <tr key={fee.id} className={`hover:bg-gray-50/50 dark:hover:bg-slate-850/20 transition-colors ${isMyOwn ? "bg-emerald-50/20 dark:bg-emerald-950/5" : ""}`}>
@@ -1250,15 +1867,15 @@ export const OrganizationMemberFees: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <span className={`h-2 w-2 rounded-full shrink-0 ${
                             fee.status === "paid" 
-                              ? "bg-emerald-505 bg-emerald-500" 
+                              ? "bg-emerald-500" 
                               : fee.status === "pending_confirmation" 
                                 ? "bg-amber-500 animate-ping" 
                                 : "bg-rose-500"
                           }`} />
                           <div className="flex flex-col">
                             <span className="font-bold flex items-center gap-1.5">
-                              {isAccountant ? fee.member_name : "Membership Dues"}
-                              {isMyOwn && <span className="bg-emerald-2 px-1 bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 text-emerald-800 rounded text-[9px] font-black uppercase">Me</span>}
+                              {isAccountant ? fee.member_name : `Cooperative Dues (${fee.period_date})`}
+                              {isMyOwn && isAccountant && <span className="bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 text-emerald-800 px-1 rounded text-[9px] font-black uppercase">Me</span>}
                             </span>
                           </div>
                         </div>
@@ -1342,7 +1959,7 @@ export const OrganizationMemberFees: React.FC = () => {
                             <Button 
                               id={`btn-member-pay-${fee.id}`}
                               size="xs" 
-                              className="bg-emerald-700 hover:bg-emerald-850 flex items-center gap-1 text-[11px] font-extrabold"
+                              className="bg-emerald-700 hover:bg-emerald-850 flex items-center gap-1 text-[11px] font-extrabold rounded-lg shadow-xs"
                               onClick={() => {
                                 setSelectedFeeToPay(fee);
                                 setPayMethod("MTN MoMo / Airtel");
@@ -1352,13 +1969,20 @@ export const OrganizationMemberFees: React.FC = () => {
                             </Button>
                           )}
 
+                          {/* Member slip under review indicator */}
+                          {!isAccountant && fee.status === "pending_confirmation" && (
+                            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-bold flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-900/40">
+                              <Clock className="h-3 w-3 animate-spin text-amber-600" /> Slip Under Review
+                            </span>
+                          )}
+
                           {/* Accountant Review & Verify actions */}
                           {isAccountant && (fee.status === "pending_confirmation" || fee.status === "pending") && (
                             <Button
                               id={`btn-admin-review-${fee.id}`}
                               size="xs"
                               variant="secondary"
-                              className={`flex items-center gap-1 font-bold text-[11px] ${
+                              className={`flex items-center gap-1 font-bold text-[11px] rounded-lg ${
                                 fee.status === "pending_confirmation"
                                   ? "bg-amber-600 hover:bg-amber-700 text-stone-900"
                                   : "bg-emerald-700 hover:bg-emerald-800 text-white"
@@ -1373,17 +1997,11 @@ export const OrganizationMemberFees: React.FC = () => {
                             </Button>
                           )}
 
-                          {/* Edit Due for accountants */}
+                          {/* Edit Due for accountants only */}
                           {isAccountant && (
                             <button
                               id={`btn-edit-fee-${fee.id}`}
-                              onClick={() => {
-                                setEditingFee(fee);
-                                setEditAmount(fee.amount.toString());
-                                setEditPeriod(fee.payment_period as any);
-                                setEditPeriodDate(fee.period_date || "");
-                                setEditStatus(fee.status);
-                              }}
+                              onClick={() => openEditModal(fee)}
                               className="p-1.5 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 transition flex items-center gap-1 font-bold text-[10px]"
                               title="Edit Due/Charge Details"
                             >
@@ -1391,7 +2009,7 @@ export const OrganizationMemberFees: React.FC = () => {
                             </button>
                           )}
 
-                          {/* Delete Due for accountants */}
+                          {/* Delete Due for accountants only */}
                           {isAccountant && (
                             <button
                               id={`btn-delete-fee-${fee.id}`}
@@ -1415,16 +2033,17 @@ export const OrganizationMemberFees: React.FC = () => {
                             </button>
                           )}
 
-                          {fee.status === "pending_confirmation" && isMyOwn && (
-                            <span className="text-[10px] text-amber-500 font-black flex items-center gap-1.5 animate-pulse select-none">
-                              <Clock className="h-3 w-3" /> Submitted
-                            </span>
-                          )}
-
+                          {/* View Official Receipt button for paid dues */}
                           {fee.status === "paid" && (
-                            <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1 select-none">
-                              <Check className="h-3 w-3" /> Settled
-                            </span>
+                            <Button
+                              id={`btn-receipt-${fee.id}`}
+                              size="xs"
+                              variant="outline"
+                              className="border-emerald-600/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 flex items-center gap-1 text-[10px] font-bold h-7 px-2 rounded-lg"
+                              onClick={() => setViewingReceiptFee(fee)}
+                            >
+                              <Receipt className="h-3 w-3" /> Receipt
+                            </Button>
                           )}
                         </div>
                       </td>
@@ -1448,8 +2067,8 @@ export const OrganizationMemberFees: React.FC = () => {
         </div>
       )}
 
-      {/* Record Contribution modal (Admin workspace) */}
-      {showAddModal && (
+      {/* Record Contribution modal (Accountant workspace) */}
+      {showAddModal && isAccountant && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in" id="add-fee-modal">
           <div className="bg-white dark:bg-slate-900 border rounded-xl shadow-lg w-full max-w-md p-6 relative">
             <h2 className="text-lg font-bold text-stone-900 dark:text-white flex items-center gap-1.5 mb-4">
@@ -1867,8 +2486,8 @@ export const OrganizationMemberFees: React.FC = () => {
 
 
 
-      {/* Admin Review / Resolve Payment Report Modal */}
-      {reviewingFee && (
+      {/* Accountant Review / Resolve Payment Report Modal */}
+      {reviewingFee && isAccountant && (
         <div className="fixed inset-0 bg-stone-950/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in" id="admin-review-modal">
           <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
             <div className="px-5 py-4 bg-slate-100 dark:bg-slate-950 border-b dark:border-slate-850 flex items-center justify-between select-none">
@@ -1980,10 +2599,431 @@ export const OrganizationMemberFees: React.FC = () => {
         </div>
       )}
 
+      {/* Manage All Dues Modal */}
+      {showAllDuesModal && isAccountant && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 md:p-6 z-50 animate-in fade-in" id="manage-all-dues-modal">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden relative">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/50 dark:bg-slate-950/40 shrink-0">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
+                    <ListFilter className="h-4 w-4" />
+                  </div>
+                  <h2 className="text-lg sm:text-xl font-bold font-display text-stone-900 dark:text-white">
+                    All Member Dues & Charges Registry
+                  </h2>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 font-medium">
+                  Review all issued dues, update parameters, or delete individual or bulk charges.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-center">
+                <Button
+                  size="xs"
+                  onClick={() => {
+                    setShowAllDuesModal(false);
+                    setShowAddModal(true);
+                  }}
+                  className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold flex items-center gap-1 text-xs py-2 px-3 rounded-lg"
+                  id="btn-all-dues-charge-new"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Charge New Due
+                </Button>
+                <button
+                  onClick={() => setShowAllDuesModal(false)}
+                  className="h-8 w-8 rounded-lg border border-gray-200 dark:border-slate-800 hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-center text-gray-500 dark:text-slate-400 transition"
+                  id="btn-close-all-dues-modal"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Stats Strip */}
+            <div className="px-4 py-2.5 bg-gray-100/60 dark:bg-slate-950/60 border-b border-gray-200 dark:border-slate-800 flex flex-wrap items-center gap-2 sm:gap-4 text-xs shrink-0">
+              <div className="flex items-center gap-1.5 font-medium text-stone-700 dark:text-slate-300">
+                <span className="text-gray-400">Total Records:</span>
+                <span className="font-bold text-stone-900 dark:text-white font-mono bg-white dark:bg-slate-800 px-2 py-0.5 rounded-md border border-gray-200 dark:border-slate-700">
+                  {fees?.length || 0}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
+                <span className="text-gray-400">Cleared:</span>
+                <span className="font-bold font-mono bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/40">
+                  {fees?.filter((f) => f.status === "paid").length || 0}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 font-medium text-rose-700 dark:text-rose-400">
+                <span className="text-gray-400">Unpaid / Pending:</span>
+                <span className="font-bold font-mono bg-rose-50 dark:bg-rose-950/50 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800/40">
+                  {fees?.filter((f) => f.status === "pending").length || 0}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+                <span className="text-gray-400">Under Review:</span>
+                <span className="font-bold font-mono bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800/40">
+                  {fees?.filter((f) => f.status === "pending_confirmation").length || 0}
+                </span>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white dark:bg-slate-900 shrink-0">
+              <div className="relative flex-1">
+                <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search member, cycle, payment reference, remarks..."
+                  value={allDuesSearch}
+                  onChange={(e) => setAllDuesSearch(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-stone-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                  id="input-all-dues-search"
+                />
+                {allDuesSearch && (
+                  <button
+                    onClick={() => setAllDuesSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-stone-700 dark:hover:text-slate-200"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={allDuesStatusFilter}
+                  onChange={(e) => setAllDuesStatusFilter(e.target.value as any)}
+                  className="text-xs rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 px-3 py-2 text-stone-800 dark:text-slate-200 font-medium outline-none focus:ring-1 focus:ring-emerald-600"
+                  id="select-all-dues-status-filter"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="pending">Unpaid (Pending)</option>
+                  <option value="paid">Cleared (Paid)</option>
+                  <option value="pending_confirmation">Pending Slip Review</option>
+                </select>
+
+                <select
+                  value={allDuesPeriodFilter}
+                  onChange={(e) => setAllDuesPeriodFilter(e.target.value as any)}
+                  className="text-xs rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 px-3 py-2 text-stone-800 dark:text-slate-200 font-medium outline-none focus:ring-1 focus:ring-emerald-600"
+                  id="select-all-dues-period-filter"
+                >
+                  <option value="all">All Periods</option>
+                  <option value="weekly">Weekly Cycles</option>
+                  <option value="monthly">Monthly Cycles</option>
+                  <option value="flexible">Flexible / One-off</option>
+                </select>
+
+                <select
+                  value={allDuesSortBy}
+                  onChange={(e) => setAllDuesSortBy(e.target.value as any)}
+                  className="text-xs rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 px-3 py-2 text-stone-800 dark:text-slate-200 font-medium outline-none focus:ring-1 focus:ring-emerald-600"
+                  id="select-all-dues-sort"
+                >
+                  <option value="newest">Sort: Newest First</option>
+                  <option value="oldest">Sort: Oldest First</option>
+                  <option value="highest">Sort: Highest Amount</option>
+                  <option value="lowest">Sort: Lowest Amount</option>
+                  <option value="member_asc">Member Name: A to Z</option>
+                  <option value="member_desc">Member Name: Z to A</option>
+                  <option value="due_date">Due Date: Earliest First</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Bulk Action Toolbar */}
+            {selectedBulkFeeIds.length > 0 && (
+              <div className="px-4 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200 dark:border-emerald-800/50 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <CheckSquare className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                  <span className="font-bold text-emerald-900 dark:text-emerald-200">
+                    {selectedBulkFeeIds.length} due charge{selectedBulkFeeIds.length > 1 ? "s" : ""} selected
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    onClick={handleBulkMarkAsPaid}
+                    className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 bg-white dark:bg-slate-900"
+                    id="btn-bulk-mark-paid"
+                  >
+                    <CheckCheck className="h-3.5 w-3.5" /> Mark Cleared
+                  </Button>
+                  <Button
+                    size="xs"
+                    onClick={() => setShowBulkDeleteConfirm(true)}
+                    className="flex items-center gap-1 text-[11px] font-bold bg-rose-600 hover:bg-rose-700 text-white"
+                    id="btn-bulk-delete-dues"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Delete Selected ({selectedBulkFeeIds.length})
+                  </Button>
+                  <button
+                    onClick={() => setSelectedBulkFeeIds([])}
+                    className="text-xs text-gray-500 dark:text-slate-400 hover:text-stone-900 dark:hover:text-white underline ml-1"
+                  >
+                    Clear selection
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Table of All Dues */}
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {allDuesFilteredList.length === 0 ? (
+                <div className="py-16 text-center text-gray-400 dark:text-slate-500 flex flex-col items-center justify-center">
+                  <FileText className="h-10 w-10 stroke-1 mb-2 opacity-60" />
+                  <p className="text-sm font-semibold text-stone-700 dark:text-slate-300">
+                    No dues records match the filter criteria
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 max-w-sm">
+                    Try clearing search query or adjusting status / cycle filters to display all member dues.
+                  </p>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    className="mt-4 text-xs font-bold"
+                    onClick={() => {
+                      setAllDuesSearch("");
+                      setAllDuesStatusFilter("all");
+                      setAllDuesPeriodFilter("all");
+                    }}
+                  >
+                    Reset Filters
+                  </Button>
+                </div>
+              ) : (
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-gray-50/80 dark:bg-slate-950/80 text-gray-500 dark:text-slate-400 uppercase tracking-wider font-extrabold sticky top-0 z-10 border-b border-gray-200 dark:border-slate-800 text-[10px]">
+                    <tr>
+                      <th className="py-3 px-4 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={
+                            allDuesFilteredList.length > 0 &&
+                            allDuesFilteredList.every((f) => selectedBulkFeeIds.includes(f.id))
+                          }
+                          onChange={() =>
+                            toggleSelectAllDues(allDuesFilteredList.map((f) => f.id))
+                          }
+                          className="rounded border-gray-300 dark:border-slate-700 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5 cursor-pointer"
+                          title="Select all"
+                        />
+                      </th>
+                      <th className="py-3 px-4">Member Name</th>
+                      <th className="py-3 px-4">Cycle & Period</th>
+                      <th className="py-3 px-4">Amount</th>
+                      <th className="py-3 px-4">Due Date</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-slate-800/60 font-medium">
+                    {allDuesFilteredList.map((fee) => {
+                      const isSelected = selectedBulkFeeIds.includes(fee.id);
+                      const deadlineInfo = getFeeDeadlineInfo(fee);
+                      return (
+                        <tr
+                          key={fee.id}
+                          className={`hover:bg-gray-50/70 dark:hover:bg-slate-800/40 transition group ${
+                            isSelected ? "bg-emerald-50/40 dark:bg-emerald-950/20" : ""
+                          }`}
+                        >
+                          <td className="py-3 px-4 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelectFee(fee.id)}
+                              className="rounded border-gray-300 dark:border-slate-700 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5 cursor-pointer"
+                            />
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <div className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 flex items-center justify-center font-bold text-xs shrink-0">
+                                {(fee.member_name || "M").charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-stone-900 dark:text-white">
+                                  {fee.member_name || "Unknown Member"}
+                                </span>
+                                {fee.member_id && (
+                                  <span className="text-[10px] text-gray-400 font-mono">
+                                    ID: {fee.member_id.slice(0, 8)}...
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-bold text-stone-800 dark:text-slate-200">
+                                {fee.period_date || "Standard Cycle"}
+                              </span>
+                              <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                                {fee.payment_period || "weekly"}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 font-mono font-extrabold text-stone-900 dark:text-white">
+                            {fee.amount.toLocaleString()} <span className="text-[9px] font-bold text-gray-500">RWF</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            {fee.status === "paid" ? (
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                                <CheckCircle2 className="h-3 w-3 shrink-0" /> Settled
+                              </span>
+                            ) : (
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold inline-flex items-center gap-1 ${deadlineInfo.badgeClass}`}>
+                                <Clock className="h-3 w-3 shrink-0" />
+                                {fee.due_date ? new Date(fee.due_date).toLocaleDateString() : deadlineInfo.label}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                fee.status === "paid"
+                                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                  : fee.status === "pending_confirmation"
+                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                                  : "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300"
+                              }`}
+                            >
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${
+                                  fee.status === "paid"
+                                    ? "bg-emerald-600"
+                                    : fee.status === "pending_confirmation"
+                                    ? "bg-amber-600 animate-pulse"
+                                    : "bg-rose-600"
+                                }`}
+                              />
+                              {fee.status === "paid"
+                                ? "Cleared"
+                                : fee.status === "pending_confirmation"
+                                ? "Under Review"
+                                : "Unpaid"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {/* Edit Fee */}
+                              <button
+                                id={`btn-all-dues-edit-${fee.id}`}
+                                onClick={() => openEditModal(fee)}
+                                className="p-1.5 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 transition flex items-center gap-1 font-bold text-[10px]"
+                                title="Edit Due Details"
+                              >
+                                <Pencil className="h-3.5 w-3.5" /> Edit
+                              </button>
+
+                              {/* Delete Fee */}
+                              <button
+                                id={`btn-all-dues-delete-${fee.id}`}
+                                onClick={() => setDeletingFee(fee)}
+                                className="p-1.5 text-rose-600 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-200 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition flex items-center gap-1 font-bold text-[10px]"
+                                title="Delete Due"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Delete
+                              </button>
+
+                              {/* Quick Toggle Status */}
+                              <button
+                                id={`btn-all-dues-toggle-${fee.id}`}
+                                onClick={() => handleToggleStatusLegacy(fee)}
+                                className="p-1.5 text-gray-400 hover:text-emerald-700 dark:hover:text-emerald-400 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition"
+                                title="Toggle Cleared / Unpaid"
+                              >
+                                <CheckCircle2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 sm:p-4 border-t border-gray-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 bg-gray-50/50 dark:bg-slate-950/40 shrink-0 text-xs">
+              <div className="text-gray-500 dark:text-slate-400">
+                Showing <span className="font-bold text-stone-900 dark:text-white">{allDuesFilteredList.length}</span> of{" "}
+                <span className="font-bold text-stone-900 dark:text-white">{fees?.length || 0}</span> dues charges{" "}
+                (Total value:{" "}
+                <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                  {allDuesFilteredList.reduce((sum, f) => sum + f.amount, 0).toLocaleString()} RWF
+                </span>
+                )
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => setShowAllDuesModal(false)}
+                  className="px-4 py-2 text-xs font-bold"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteConfirm && isAccountant && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-[80] animate-in fade-in" id="bulk-delete-confirm-modal">
+          <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 relative">
+            <div className="h-12 w-12 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto mb-3">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+            <h2 className="text-base font-bold text-stone-900 dark:text-white text-center mb-1">
+              Delete {selectedBulkFeeIds.length} Selected Dues?
+            </h2>
+            <p className="text-xs text-stone-600 dark:text-slate-300 text-center mb-5">
+              Are you sure you want to permanently remove all{" "}
+              <span className="font-bold text-stone-900 dark:text-white">{selectedBulkFeeIds.length}</span> selected dues records? This action cannot be undone.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowBulkDeleteConfirm(false)}
+                disabled={isBulkDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center justify-center gap-1.5"
+                onClick={handleBulkDeleteFees}
+                disabled={isBulkDeleting}
+                id="btn-confirm-bulk-delete"
+              >
+                {isBulkDeleting ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-3 w-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Deleting...
+                  </span>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" /> Confirm Delete
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit Fee Modal */}
-      {editingFee && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in" id="edit-fee-modal">
-          <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl shadow-lg w-full max-w-md p-6 relative">
+      {editingFee && isAccountant && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-in fade-in" id="edit-fee-modal">
+          <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 relative">
             <h2 className="text-lg font-bold text-stone-900 dark:text-white flex items-center gap-1.5 mb-1">
               <Pencil className="h-5 w-5 text-blue-600" /> Edit Member Fee / Charge
             </h2>
@@ -2041,6 +3081,45 @@ export const OrganizationMemberFees: React.FC = () => {
                 </select>
               </div>
 
+              <Input
+                label="Due Date / Deadline (Optional)"
+                type="date"
+                value={editDueDate ? editDueDate.split("T")[0] : ""}
+                onChange={(e) => setEditDueDate(e.target.value)}
+                id="input-edit-fee-due-date"
+              />
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700 dark:text-slate-300 block">
+                  Accountant / Admin Note (Optional)
+                </label>
+                <textarea
+                  value={editAdminNote}
+                  onChange={(e) => setEditAdminNote(e.target.value)}
+                  placeholder="e.g. Adjusted due for special community project"
+                  rows={2}
+                  className="w-full text-xs rounded-lg border bg-white dark:bg-slate-950 border-gray-300 dark:border-slate-800 p-2.5 outline-none focus:ring-1 focus:ring-blue-600 text-stone-800 dark:text-white font-medium resize-none"
+                  id="textarea-edit-fee-admin-note"
+                />
+              </div>
+
+              {/* Sync to all members option */}
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-900/50 flex items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  id="checkbox-edit-apply-all"
+                  checked={editApplyToAllUsers}
+                  onChange={(e) => setEditApplyToAllUsers(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                />
+                <label htmlFor="checkbox-edit-apply-all" className="text-xs text-blue-950 dark:text-blue-200 cursor-pointer">
+                  <span className="font-bold block">Update & apply to all cooperative members</span>
+                  <span className="text-[11px] text-blue-700 dark:text-blue-300 block">
+                    Automatically update the dues amount ({editAmount ? `${Number(editAmount).toLocaleString()} RWF` : "—"}) and deadline for all members charged under cycle "{editPeriodDate || editingFee?.period_date}".
+                  </span>
+                </label>
+              </div>
+
               <div className="grid grid-cols-2 gap-3 pt-3 border-t dark:border-slate-800">
                 <Button
                   type="button"
@@ -2063,24 +3142,69 @@ export const OrganizationMemberFees: React.FC = () => {
       )}
 
       {/* Delete Fee Confirmation Modal */}
-      {deletingFee && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in" id="delete-fee-modal">
-          <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl shadow-lg w-full max-w-sm p-6 relative">
+      {deletingFee && isAccountant && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-in fade-in" id="delete-fee-modal">
+          <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 relative">
             <div className="h-12 w-12 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto mb-3">
               <Trash2 className="h-6 w-6" />
             </div>
             <h2 className="text-base font-bold text-stone-900 dark:text-white text-center mb-1">
               Delete Member Due?
             </h2>
-            <p className="text-xs text-stone-600 dark:text-slate-300 text-center mb-5">
-              Are you sure you want to remove this charge of <span className="font-mono font-bold text-stone-900 dark:text-white">{deletingFee.amount.toLocaleString()} RWF</span> for <span className="font-bold text-stone-900 dark:text-white">{deletingFee.member_name || "Member"}</span>? This action cannot be undone.
+            <p className="text-xs text-stone-600 dark:text-slate-300 text-center mb-4">
+              Remove charge of <span className="font-mono font-bold text-stone-900 dark:text-white">{deletingFee.amount.toLocaleString()} RWF</span> for <span className="font-bold text-stone-900 dark:text-white">{deletingFee.member_name || "Member"}</span> (Cycle: <span className="font-mono font-bold">{deletingFee.period_date}</span>)?
             </p>
+
+            <div className="space-y-2 mb-5">
+              <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition ${
+                deleteScope === "single"
+                  ? "border-rose-400 bg-rose-50/60 dark:bg-rose-950/40"
+                  : "border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950"
+              }`}>
+                <input
+                  type="radio"
+                  name="deleteScope"
+                  value="single"
+                  checked={deleteScope === "single"}
+                  onChange={() => setDeleteScope("single")}
+                  className="text-rose-600 focus:ring-rose-500 cursor-pointer"
+                />
+                <div className="text-xs">
+                  <span className="font-bold text-stone-900 dark:text-white block">Delete only this member's charge</span>
+                  <span className="text-gray-500 text-[11px]">Remove due for {deletingFee.member_name || "this member"} only.</span>
+                </div>
+              </label>
+
+              <label className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition ${
+                deleteScope === "cycle"
+                  ? "border-rose-400 bg-rose-50/60 dark:bg-rose-950/40"
+                  : "border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950"
+              }`}>
+                <input
+                  type="radio"
+                  name="deleteScope"
+                  value="cycle"
+                  checked={deleteScope === "cycle"}
+                  onChange={() => setDeleteScope("cycle")}
+                  className="text-rose-600 focus:ring-rose-500 cursor-pointer"
+                />
+                <div className="text-xs">
+                  <span className="font-bold text-rose-900 dark:text-rose-200 block">Delete entire Due Cycle for ALL members</span>
+                  <span className="text-rose-700 dark:text-rose-300 text-[11px]">
+                    Remove cycle "{deletingFee.period_date}" across all cooperative members.
+                  </span>
+                </div>
+              </label>
+            </div>
 
             <div className="grid grid-cols-2 gap-3">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setDeletingFee(null)}
+                onClick={() => {
+                  setDeletingFee(null);
+                  setDeleteScope("single");
+                }}
               >
                 Cancel
               </Button>
@@ -2090,7 +3214,151 @@ export const OrganizationMemberFees: React.FC = () => {
                 onClick={handleConfirmDeleteFee}
                 id="btn-confirm-delete-fee"
               >
-                <Trash2 className="h-4 w-4" /> Delete
+                <Trash2 className="h-4 w-4" /> Confirm Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Entire Cycle Direct Modal */}
+      {deletingCycle && isAccountant && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-in fade-in" id="delete-cycle-modal">
+          <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl shadow-2xl w-full max-w-sm p-6 relative">
+            <div className="h-12 w-12 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto mb-3">
+              <Trash2 className="h-6 w-6" />
+            </div>
+            <h2 className="text-base font-bold text-stone-900 dark:text-white text-center mb-1">
+              Delete Dues Scheme & Cycle?
+            </h2>
+            <p className="text-xs text-stone-600 dark:text-slate-300 text-center mb-5">
+              Are you sure you want to delete the entire due cycle <span className="font-mono font-bold text-stone-900 dark:text-white">{deletingCycle.period_date}</span>? This will remove all charges for all <span className="font-bold text-rose-600">{deletingCycle.count} members</span> ({deletingCycle.total_amount.toLocaleString()} RWF total).
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDeletingCycle(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center justify-center gap-1.5"
+                onClick={handleConfirmDeleteCycle}
+                id="btn-confirm-delete-cycle"
+              >
+                <Trash2 className="h-4 w-4" /> Delete All Charges
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Official Payment Receipt Modal */}
+      {viewingReceiptFee && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-[85] animate-in fade-in" id="view-receipt-modal">
+          <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative animate-in zoom-in-95">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-800 to-emerald-950 p-6 text-white text-center relative select-none">
+              <button 
+                onClick={() => setViewingReceiptFee(null)}
+                className="absolute top-4 right-4 text-emerald-200 hover:text-white transition"
+                id="btn-close-receipt-modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <div className="h-12 w-12 rounded-full bg-white/15 backdrop-blur-xs mx-auto flex items-center justify-center text-emerald-300 mb-2 border border-white/20">
+                <Receipt className="h-6 w-6" />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300">
+                {activeOrg?.name || "COOPERATIVE SOCIETY"}
+              </span>
+              <h2 className="text-xl font-black mt-0.5 tracking-tight font-display">
+                Official Payment Receipt
+              </h2>
+              <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-[9px] font-mono font-black bg-white/20 text-emerald-100 border border-white/20">
+                REC-{viewingReceiptFee.id.slice(0, 8).toUpperCase()}
+              </span>
+            </div>
+
+            {/* Receipt Body */}
+            <div className="p-6 space-y-4 text-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-dashed dark:border-slate-800">
+                <span className="text-stone-500 dark:text-slate-400 font-medium">Payment Status:</span>
+                <span className="inline-flex items-center gap-1 font-black text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/40">
+                  <CheckCircle2 className="h-3 w-3" /> SETTLED & VERIFIED
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 py-1">
+                <div>
+                  <span className="text-[10px] text-stone-400 uppercase font-bold block">Member Name</span>
+                  <span className="text-sm font-bold text-stone-900 dark:text-white mt-0.5 block">
+                    {viewingReceiptFee.member_name || "Cooperative Member"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-stone-400 uppercase font-bold block">Dues Cycle</span>
+                  <span className="text-sm font-bold font-mono text-stone-900 dark:text-white mt-0.5 block">
+                    {viewingReceiptFee.period_date}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-stone-50 dark:bg-slate-950/60 p-4 rounded-xl border border-stone-200 dark:border-slate-800 space-y-2">
+                <div className="flex justify-between items-center text-stone-600 dark:text-slate-400">
+                  <span>Cycle Frequency:</span>
+                  <span className="font-bold text-stone-800 dark:text-slate-200 uppercase">{viewingReceiptFee.payment_period}</span>
+                </div>
+                <div className="flex justify-between items-center text-stone-600 dark:text-slate-400">
+                  <span>Settlement Method:</span>
+                  <span className="font-bold text-stone-800 dark:text-slate-200">{viewingReceiptFee.paid_by_method || "Mobile Money"}</span>
+                </div>
+                {viewingReceiptFee.transaction_reference && (
+                  <div className="flex justify-between items-center text-stone-600 dark:text-slate-400">
+                    <span>Transaction Reference:</span>
+                    <span className="font-mono font-bold text-stone-900 dark:text-white">{viewingReceiptFee.transaction_reference}</span>
+                  </div>
+                )}
+                {viewingReceiptFee.paid_at && (
+                  <div className="flex justify-between items-center text-stone-600 dark:text-slate-400">
+                    <span>Payment Date:</span>
+                    <span className="font-medium text-stone-800 dark:text-slate-200">
+                      {new Date(viewingReceiptFee.paid_at).toLocaleDateString("en-RW", { year: "numeric", month: "short", day: "numeric" })}
+                    </span>
+                  </div>
+                )}
+                <div className="border-t border-dashed dark:border-slate-800 pt-2 flex justify-between items-center font-extrabold">
+                  <span className="text-stone-800 dark:text-slate-200">Amount Paid:</span>
+                  <span className="text-base text-emerald-700 dark:text-emerald-400 font-mono">
+                    {viewingReceiptFee.amount.toLocaleString()} RWF
+                  </span>
+                </div>
+              </div>
+
+              {viewingReceiptFee.admin_note && (
+                <div className="text-[11px] p-2.5 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-900/40 text-blue-900 dark:text-blue-300">
+                  <span className="font-bold block text-[10px] uppercase tracking-wider">Accountant Remarks:</span>
+                  <p className="mt-0.5">{viewingReceiptFee.admin_note}</p>
+                </div>
+              )}
+
+              <p className="text-[10px] text-center text-stone-400 dark:text-slate-500 italic">
+                This document serves as formal confirmation of dues payment issued and reconciled by the cooperative accountant office.
+              </p>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="p-4 bg-stone-50 dark:bg-slate-950/80 border-t dark:border-slate-800 flex items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => setViewingReceiptFee(null)}
+                className="px-4 py-2 font-bold"
+              >
+                Close
               </Button>
             </div>
           </div>
