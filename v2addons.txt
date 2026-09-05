@@ -81,13 +81,13 @@ IMPACTO utilizes 4 primary Supabase storage buckets:
 
 
 
-
+hello
 
 
 
 
 we must fix erro in paying circles apply popups then payment circles with packages management 
-
+ok there is issue the role of admin and accountant are getting well tjier dues but other role are not getting them on thier dashoard so look where is error
 
 
 
