@@ -1,98 +1,89 @@
--- =========================================================================
--- Impacto V2 — Database Schema Updates & RLS Policies for Supabase
--- Run this manually in your Supabase SQL Editor to support:
--- 1. Subscription, Trial, and Grace Period tracking
--- 2. pawaPay Push-to-Pay Deposits & Webhooks
--- 3. Feature Marketplace, Packages, and Custom Pricing
--- 4. Unlimited Storage & Member Cap enforcement
--- =========================================================================
+-- ==============================================================================
+-- ASSET & STOCK / INVENTORY MANAGEMENT MIGRATION
+-- Compatible with both UUID and TEXT ID schemas
+-- ==============================================================================
 
--- Organizations table subscription & limits extensions
-ALTER TABLE public.organizations
-ADD COLUMN IF NOT EXISTS subscription_plan text DEFAULT 'growth' CHECK (subscription_plan IN ('free', 'growth', 'pro', 'enterprise')),
-ADD COLUMN IF NOT EXISTS subscription_status text DEFAULT 'trial' CHECK (subscription_status IN ('trial', 'active', 'grace_period', 'expired', 'cancelled')),
-ADD COLUMN IF NOT EXISTS trial_ends_at timestamptz DEFAULT (now() + interval '30 days'),
-ADD COLUMN IF NOT EXISTS grace_period_ends_at timestamptz DEFAULT (now() + interval '33 days'),
-ADD COLUMN IF NOT EXISTS member_limit integer DEFAULT 30,
-ADD COLUMN IF NOT EXISTS storage_unlimited boolean DEFAULT false;
-
--- pawaPay Deposits Table
-CREATE TABLE IF NOT EXISTS public.pawapay_deposits (
-    deposit_id uuid PRIMARY KEY,
-    org_id text NOT NULL,
-    amount numeric NOT NULL,
-    currency text DEFAULT 'RWF',
-    phone_number text NOT NULL,
-    provider text NOT NULL,
-    status text DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'COMPLETED', 'FAILED', 'IN_RECONCILIATION')),
-    client_reference_id text,
-    provider_transaction_id text,
-    failure_code text,
-    failure_message text,
-    metadata jsonb,
-    created_at timestamptz DEFAULT now(),
-    updated_at timestamptz DEFAULT now()
+-- 1. Ensure the assets table exists with flexible types
+CREATE TABLE IF NOT EXISTS public.assets (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    org_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT DEFAULT 'General Asset',
+    quantity NUMERIC DEFAULT 1,
+    quality TEXT,
+    identifier TEXT,
+    serial_number TEXT,
+    purchase_date DATE DEFAULT CURRENT_DATE,
+    purchase_cost NUMERIC DEFAULT 0,
+    currency VARCHAR(10) DEFAULT 'RWF',
+    condition VARCHAR(50) DEFAULT 'good',
+    assigned_to_member_id TEXT,
+    assigned_to_name TEXT,
+    location TEXT,
+    status VARCHAR(50) DEFAULT 'operational',
+    notes TEXT,
+    qr_code TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Marketplace Features Table
-CREATE TABLE IF NOT EXISTS public.marketplace_features (
-    feature_id text PRIMARY KEY,
-    name text NOT NULL,
-    theme text NOT NULL CHECK (theme IN ('Finance', 'Governance', 'Operations', 'Communication')),
-    description text,
-    base_price numeric DEFAULT 0.00,
-    is_active boolean DEFAULT true,
-    created_at timestamptz DEFAULT now()
+-- 2. Add columns if table already existed under an older definition
+ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS quantity NUMERIC DEFAULT 1;
+ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS quality TEXT;
+ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS identifier TEXT;
+ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS assigned_to_member_id TEXT;
+ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS assigned_to_name TEXT;
+ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'operational';
+ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS condition VARCHAR(50) DEFAULT 'good';
+ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS location TEXT;
+
+-- 3. Indexes for fast filtering and search
+CREATE INDEX IF NOT EXISTS idx_assets_org_id ON public.assets(org_id);
+CREATE INDEX IF NOT EXISTS idx_assets_assigned_member ON public.assets(assigned_to_member_id);
+CREATE INDEX IF NOT EXISTS idx_assets_status ON public.assets(status);
+CREATE INDEX IF NOT EXISTS idx_assets_identifier ON public.assets(identifier);
+
+-- 4. Enable Row Level Security (RLS)
+ALTER TABLE public.assets ENABLE ROW LEVEL SECURITY;
+
+-- Clean existing policies if re-running
+DROP POLICY IF EXISTS "Allow members of org to view assets" ON public.assets;
+DROP POLICY IF EXISTS "Allow staff to insert and manage assets" ON public.assets;
+DROP POLICY IF EXISTS "Allow authenticated users full access to assets" ON public.assets;
+
+-- 6. Add is_volunteer flag to org_members if not present
+ALTER TABLE IF EXISTS public.org_members ADD COLUMN IF NOT EXISTS is_volunteer BOOLEAN DEFAULT false;
+
+-- ==============================================================================
+-- PLATFORM COMPLIANCE & AUDIT MIGRATION
+-- ==============================================================================
+
+-- 1. Ensure platform_staff table exists
+CREATE TABLE IF NOT EXISTS public.platform_staff (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    email TEXT NOT NULL UNIQUE,
+    username TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    role VARCHAR(50) DEFAULT 'auditor',
+    status VARCHAR(50) DEFAULT 'active',
+    last_active TIMESTAMPTZ,
+    notes TEXT,
+    permissions JSONB DEFAULT '{"can_audit_payments": true, "can_view_ledgers": true, "can_verify_members": true}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Marketplace Packages Table (2-4 features grouped together)
-CREATE TABLE IF NOT EXISTS public.marketplace_packages (
-    package_id text PRIMARY KEY,
-    name text NOT NULL,
-    description text,
-    feature_ids text[] NOT NULL,
-    package_price numeric DEFAULT 0.00,
-    created_at timestamptz DEFAULT now()
+-- 2. Ensure platform_audit_logs table exists
+CREATE TABLE IF NOT EXISTS public.platform_audit_logs (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    action TEXT NOT NULL,
+    target_type VARCHAR(50) NOT NULL,
+    target_id TEXT,
+    actor_id TEXT,
+    actor_name TEXT,
+    details JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Organization Active Features / Packages
-CREATE TABLE IF NOT EXISTS public.org_purchased_items (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id text NOT NULL,
-    item_type text NOT NULL CHECK (item_type IN ('feature', 'package')),
-    item_id text NOT NULL,
-    expires_at timestamptz, -- automatically set 30 days if Free plan
-    created_at timestamptz DEFAULT now()
-);
-
--- Grant Permissions & Enable RLS
-GRANT ALL ON TABLE public.pawapay_deposits TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.marketplace_features TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.marketplace_packages TO anon, authenticated, service_role;
-GRANT ALL ON TABLE public.org_purchased_items TO anon, authenticated, service_role;
-
--- Row Level Security Policies
-ALTER TABLE public.pawapay_deposits ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.marketplace_features ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.marketplace_packages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.org_purchased_items ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS select_pawapay_deposits ON public.pawapay_deposits;
-DROP POLICY IF EXISTS write_pawapay_deposits ON public.pawapay_deposits;
-CREATE POLICY select_pawapay_deposits ON public.pawapay_deposits FOR SELECT USING (true);
-CREATE POLICY write_pawapay_deposits ON public.pawapay_deposits FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS select_marketplace_features ON public.marketplace_features;
-DROP POLICY IF EXISTS write_marketplace_features ON public.marketplace_features;
-CREATE POLICY select_marketplace_features ON public.marketplace_features FOR SELECT USING (true);
-CREATE POLICY write_marketplace_features ON public.marketplace_features FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS select_marketplace_packages ON public.marketplace_packages;
-DROP POLICY IF EXISTS write_marketplace_packages ON public.marketplace_packages;
-CREATE POLICY select_marketplace_packages ON public.marketplace_packages FOR SELECT USING (true);
-CREATE POLICY write_marketplace_packages ON public.marketplace_packages FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS select_org_purchased_items ON public.org_purchased_items;
-DROP POLICY IF EXISTS write_org_purchased_items ON public.org_purchased_items;
-CREATE POLICY select_org_purchased_items ON public.org_purchased_items FOR SELECT USING (true);
-CREATE POLICY write_org_purchased_items ON public.org_purchased_items FOR ALL USING (true) WITH CHECK (true);
+-- 3. Add platform_role column to users
+ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS platform_role VARCHAR(50);

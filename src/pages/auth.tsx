@@ -6,7 +6,7 @@ import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
 import { LogoLoader } from "../components/LogoLoader";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
-import { useOrganizations, useMembers } from "../hooks/useImpactoData";
+import { useOrganizations, useMembers, useUserMemberships } from "../hooks/useImpactoData";
 import { Button, Input, Card, Badge, Avatar } from "../components/ui";
 import { MockDB } from "../lib/mockData";
 import { useToast } from "../components/Toast";
@@ -326,6 +326,11 @@ export const Login: React.FC = () => {
           navigate("/platform/admin");
           return;
         }
+        
+        if (dbUser.platform_role === "auditor" || dbUser.email.includes("auditor")) {
+          navigate("/auditor");
+          return;
+        }
 
         // Fetch memberships
         const { data: members, error: mError } = await supabase
@@ -380,8 +385,9 @@ export const Login: React.FC = () => {
             return;
           }
         } else if (activeMembers.length > 0) {
-          // Send user directly to their primary/registered organization dashboard
-          const primaryMember = activeMembers[0];
+          // Send user directly to their primary/first-joined organization dashboard
+          const primaryOrgId = dbUser.primary_org_id || dbUser.joined_org_ids?.[0];
+          const primaryMember = (primaryOrgId && activeMembers.find(m => m.org_id === primaryOrgId)) || activeMembers[0];
           const primaryOrg = primaryMember.organizations || orgs?.find(o => o.id === primaryMember.org_id);
           if (primaryOrg) {
             setActiveOrg(primaryOrg, primaryMember);
@@ -401,23 +407,30 @@ export const Login: React.FC = () => {
           return;
         }
 
+        const members = MockDB.getMembers().filter(m => m.user_id === (foundDemoUser ? foundDemoUser.id : ""));
+        const activeMembers = members.filter(m => m.status === "active");
+
+        const primaryOrgId = foundDemoUser?.primary_org_id || foundDemoUser?.joined_org_ids?.[0] || activeMembers[0]?.org_id;
+
         const loginUser = foundDemoUser || {
           id: `user-${Date.now()}`,
           email: cleanEmail,
           full_name: cleanEmail.split("@")[0],
           is_superadmin: cleanEmail.includes("admin"),
+          primary_org_id: primaryOrgId,
+          joined_org_ids: activeMembers.map(m => m.org_id),
           created_at: new Date().toISOString()
         };
 
         setUser(loginUser);
         setSession({ token: "demo-session" });
 
-        const members = MockDB.getMembers().filter(m => m.user_id === loginUser.id);
-        const activeMembers = members.filter(m => m.status === "active");
+        const userMembers = MockDB.getMembers().filter(m => m.user_id === loginUser.id);
+        const userActiveMembers = userMembers.filter(m => m.status === "active");
 
         if (selectedLoginOrg) {
           const targetOrg = MockDB.getOrgs().find(o => o.id === selectedLoginOrg);
-          const matchMem = activeMembers.find(m => m.org_id === selectedLoginOrg) || {
+          const matchMem = userActiveMembers.find(m => m.org_id === selectedLoginOrg) || {
             id: `mem-${Date.now()}`,
             org_id: selectedLoginOrg,
             user_id: loginUser.id,
@@ -429,8 +442,10 @@ export const Login: React.FC = () => {
             setActiveOrg(targetOrg, matchMem);
           }
           navigate("/dashboard");
-        } else if (activeMembers.length > 0) {
-          const primaryMember = activeMembers[0];
+        } else if (userActiveMembers.length > 0) {
+          // Route to the first organization joined
+          const targetPrimaryId = loginUser.primary_org_id || loginUser.joined_org_ids?.[0];
+          const primaryMember = (targetPrimaryId && userActiveMembers.find(m => m.org_id === targetPrimaryId)) || userActiveMembers[0];
           const primaryOrg = MockDB.getOrgs().find(o => o.id === primaryMember.org_id);
           if (primaryOrg) {
             setActiveOrg(primaryOrg, primaryMember);
@@ -547,7 +562,8 @@ export const Register: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const orgIdFromParam = searchParams.get("org_id");
+  const orgIdFromParam = searchParams.get("org_id") || searchParams.get("org");
+  const modeFromParam = searchParams.get("mode");
   
   const { data: orgs, isLoading: isLoadingOrgs } = useOrganizations();
   const { user, setUser, setSession, logout } = useAuthStore();
@@ -569,7 +585,10 @@ export const Register: React.FC = () => {
     if (orgIdFromParam) {
       setPartSelectedOrg(orgIdFromParam);
     }
-  }, [orgIdFromParam]);
+    if (modeFromParam === "participant" || modeFromParam === "ngo") {
+      setMode(modeFromParam);
+    }
+  }, [orgIdFromParam, modeFromParam]);
 
   // Organization Workspace Details - Step 1
   const [orgName, setOrgName] = useState("");
@@ -646,7 +665,9 @@ export const Register: React.FC = () => {
           email: partEmail,
           full_name: partName,
           is_superadmin: false,
-          auth_user_id: authUser.id
+          auth_user_id: authUser.id,
+          primary_org_id: partSelectedOrg,
+          joined_org_ids: partSelectedOrg ? [partSelectedOrg] : []
         });
         if (dbError) console.warn("[Participant Register] Users upsert notice:", dbError.message);
 
@@ -669,6 +690,8 @@ export const Register: React.FC = () => {
           email: partEmail,
           full_name: partName,
           is_superadmin: false,
+          primary_org_id: partSelectedOrg,
+          joined_org_ids: partSelectedOrg ? [partSelectedOrg] : [],
           created_at: new Date().toISOString()
         };
 
@@ -715,6 +738,8 @@ export const Register: React.FC = () => {
           email: partEmail,
           full_name: partName,
           is_superadmin: false,
+          primary_org_id: partSelectedOrg,
+          joined_org_ids: partSelectedOrg ? [partSelectedOrg] : [],
           created_at: new Date().toISOString()
         };
         users.push(newUser);
@@ -871,6 +896,12 @@ export const Register: React.FC = () => {
           };
         }
 
+        // Update user primary_org_id and joined_org_ids in Supabase
+        await supabase.from("users").update({
+          primary_org_id: finalOrg.id,
+          joined_org_ids: [finalOrg.id]
+        }).eq("id", authUser.id);
+
         // 5. Insert member into public.org_members
         const { data: createdMember, error: memInsertErr } = await supabase.from("org_members").insert({
           org_id: finalOrg.id,
@@ -896,6 +927,8 @@ export const Register: React.FC = () => {
           email: adminEmail,
           full_name: adminName,
           is_superadmin: false,
+          primary_org_id: finalOrg.id,
+          joined_org_ids: [finalOrg.id],
           created_at: new Date().toISOString()
         };
 
@@ -959,6 +992,8 @@ export const Register: React.FC = () => {
           email: adminEmail,
           full_name: adminName,
           is_superadmin: false,
+          primary_org_id: newOrg.id,
+          joined_org_ids: [newOrg.id],
           created_at: new Date().toISOString()
         };
 
@@ -1142,11 +1177,43 @@ export const Register: React.FC = () => {
                         };
                         members.push(newMemberRow);
                         MockDB.saveMembers(members);
+
+                        const updatedJoinedIds = Array.from(new Set([...(user.joined_org_ids || []), targetOrg.id]));
+                        const updatedPrimaryId = user.primary_org_id || targetOrg.id;
+                        const updatedUser = {
+                          ...user,
+                          primary_org_id: updatedPrimaryId,
+                          joined_org_ids: updatedJoinedIds
+                        };
+
+                        const users = MockDB.getUsers();
+                        const uIdx = users.findIndex(u => u.id === user.id);
+                        if (uIdx >= 0) {
+                          users[uIdx] = { ...users[uIdx], primary_org_id: updatedPrimaryId, joined_org_ids: updatedJoinedIds };
+                          MockDB.saveUsers(users);
+                        }
+
+                        if (isSupabaseConfigured) {
+                          await supabase.from("users").update({
+                            primary_org_id: updatedPrimaryId,
+                            joined_org_ids: updatedJoinedIds
+                          }).eq("id", user.id);
+
+                          await supabase.from("org_members").insert({
+                            org_id: targetOrg.id,
+                            user_id: user.id,
+                            role: "member",
+                            status: finalStatus,
+                            joined_at: new Date().toISOString()
+                          });
+                        }
+
+                        setUser(updatedUser);
                         setLoading(false);
 
                         if (isPublic) {
                           setActiveOrg(targetOrg, newMemberRow);
-                          addToast(`Successfully registered and activated in ${targetOrg.name}!`, "success");
+                          addToast(`Successfully registered and activated as a member in ${targetOrg.name}!`, "success");
                           navigate("/dashboard");
                         } else {
                           addToast(`Registration submitted! Your request to join ${targetOrg.name} is pending admin approval.`, "warning");
@@ -1461,20 +1528,55 @@ export const Register: React.FC = () => {
 export const OrgPicker: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+  const { user, logout, setUser } = useAuthStore();
   const { setActiveOrg } = useOrgStore();
   const { data: orgs, isLoading } = useOrganizations();
-  console.log("Orgs in OrgPicker:", orgs);
+  const { data: liveUserMemberships } = useUserMemberships(user?.id);
   const { addToast } = useToast();
 
   // Search input query for available Organizations
   const [searchQuery, setSearchQuery] = useState("");
+  const [localMemberships, setLocalMemberships] = useState<any[]>([]);
 
-  // All memberships state of current user to allow real-time request mutations
-  const [memberships, setMemberships] = useState<any[]>(() => {
+  // Compute memberships reactively from database / mockData
+  const memberships = React.useMemo(() => {
     if (!user) return [];
-    return MockDB.getMembers().filter((m) => m.user_id === user.id);
-  });
+    if (liveUserMemberships && liveUserMemberships.length > 0) {
+      return liveUserMemberships;
+    }
+    const allMembers = MockDB.getMembers().filter((m) => m.user_id === user.id);
+    // If user has joined_org_ids not yet in MockDB members, ensure active member row exists with preserved role
+    if (user.joined_org_ids && user.joined_org_ids.length > 0) {
+      let changed = false;
+      const allDBMembers = MockDB.getMembers();
+      user.joined_org_ids.forEach((jOrgId) => {
+        if (!allMembers.some((m) => m.org_id === jOrgId)) {
+          const newRow = {
+            id: `member-${jOrgId}-${user.id}`,
+            org_id: jOrgId,
+            user_id: user.id,
+            role: "member" as const,
+            status: "active" as const,
+            joined_at: new Date().toISOString()
+          };
+          allMembers.push(newRow);
+          allDBMembers.push(newRow);
+          changed = true;
+        }
+      });
+      if (changed) {
+        MockDB.saveMembers(allDBMembers);
+      }
+    }
+    // Merge with any instant local mutations if present
+    if (localMemberships.length > 0) {
+      const mergedMap = new Map<string, any>();
+      allMembers.forEach(m => mergedMap.set(m.id || m.org_id, m));
+      localMemberships.forEach(m => mergedMap.set(m.id || m.org_id, m));
+      return Array.from(mergedMap.values());
+    }
+    return allMembers;
+  }, [user, liveUserMemberships, localMemberships]);
 
   const handleSelect = (memberRow: any) => {
     const org = orgs?.find((o) => o.id === memberRow.org_id) || MockDB.getOrgs().find((o) => o.id === memberRow.org_id) || null;
@@ -1521,8 +1623,40 @@ export const OrgPicker: React.FC = () => {
     members.push(newMemberRow);
     MockDB.saveMembers(members);
 
-    // Update state to re-render directories instantly
-    setMemberships([...memberships, newMemberRow]);
+    // Update user's joined_org_ids and primary_org_id
+    const updatedJoinedIds = Array.from(new Set([...(user.joined_org_ids || []), orgId]));
+    const updatedPrimaryId = user.primary_org_id || orgId;
+    const updatedUser = {
+      ...user,
+      primary_org_id: updatedPrimaryId,
+      joined_org_ids: updatedJoinedIds
+    };
+
+    const users = MockDB.getUsers();
+    const uIdx = users.findIndex(u => u.id === user.id);
+    if (uIdx >= 0) {
+      users[uIdx] = { ...users[uIdx], primary_org_id: updatedPrimaryId, joined_org_ids: updatedJoinedIds };
+      MockDB.saveUsers(users);
+    }
+    setUser(updatedUser);
+
+    if (isSupabaseConfigured) {
+      supabase.from("users").update({
+        primary_org_id: updatedPrimaryId,
+        joined_org_ids: updatedJoinedIds
+      }).eq("id", user.id);
+
+      supabase.from("org_members").insert({
+        org_id: orgId,
+        user_id: user.id,
+        role: "member",
+        status: finalStatus,
+        joined_at: new Date().toISOString()
+      });
+    }
+
+    // Update local state to re-render directories instantly
+    setLocalMemberships((prev) => [...prev, newMemberRow]);
 
     if (isPublic && !wouldExceed) {
       addToast(`Successfully joined ${org?.name || "Workspace"} directly!`, "success");
@@ -1536,7 +1670,10 @@ export const OrgPicker: React.FC = () => {
   const handleLeaveOrCancel = (memberId: string) => {
     const list = MockDB.getMembers().filter(m => m.id !== memberId);
     MockDB.saveMembers(list);
-    setMemberships(list.filter(m => m.user_id === user?.id));
+    setLocalMemberships(list.filter(m => m.user_id === user?.id));
+    if (isSupabaseConfigured) {
+      supabase.from("org_members").delete().eq("id", memberId);
+    }
   };
 
   const handleLogout = () => {
@@ -1559,68 +1696,30 @@ export const OrgPicker: React.FC = () => {
   const pendingMemberships = memberships.filter((m) => m.status === "pending");
   const rejectedMemberships = memberships.filter((m) => m.status === "rejected");
 
-  // Filter orgs you haven't applied to yet and that are listed in the public directory
-  const appliedOrgIds = new Set(memberships.map(m => m.org_id));
-  const availableOrgs = orgs?.filter(org => !appliedOrgIds.has(org.id) && org.is_public_directory !== false && org.allow_public_joining !== false) || [];
+  // Filter orgs you haven't applied to yet and that are strictly public organizations
+  const appliedOrgIds = new Set(memberships.map((m) => m.org_id));
+  const availableOrgs = (orgs || MockDB.getOrgs()).filter(
+    (org) =>
+      !appliedOrgIds.has(org.id) &&
+      (org.is_public_directory ?? true) &&
+      (org.allow_public_joining ?? true)
+  );
 
-  // Filter and sort based on searchQuery to put those he seems to want above
+  // Filter and sort based on searchQuery, strictly limited to 6 public organizations
   const filteredOrgs = (() => {
-    if (!searchQuery) {
-      return [...availableOrgs].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    let list = availableOrgs;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase().trim();
+      list = availableOrgs.filter(
+        (org) =>
+          org.name?.toLowerCase().includes(q) ||
+          org.org_category?.toLowerCase().includes(q) ||
+          org.tagline?.toLowerCase().includes(q) ||
+          org.slug?.toLowerCase().includes(q)
+      );
     }
-
-    const q = searchQuery.toLowerCase().trim();
-
-    // First filter to only those that match
-    const matchedOrgs = availableOrgs.filter(org => 
-      org.name.toLowerCase().includes(q) || 
-      org.org_category.toLowerCase().includes(q) ||
-      org.tagline.toLowerCase().includes(q) ||
-      org.slug.toLowerCase().includes(q)
-    );
-
-    // Then sort by relevance
-    return matchedOrgs.sort((a, b) => {
-      const nameA = (a.name || "").toLowerCase();
-      const nameB = (b.name || "").toLowerCase();
-      const slugA = (a.slug || "").toLowerCase();
-      const slugB = (b.slug || "").toLowerCase();
-      const catA = (a.org_category || "").toLowerCase();
-      const catB = (b.org_category || "").toLowerCase();
-      const tagA = (a.tagline || "").toLowerCase();
-      const tagB = (b.tagline || "").toLowerCase();
-
-      // 1. Exact match on name
-      if (nameA === q && nameB !== q) return -1;
-      if (nameB === q && nameA !== q) return 1;
-
-      // 2. Starts with query on name
-      const startsNameA = nameA.startsWith(q);
-      const startsNameB = nameB.startsWith(q);
-      if (startsNameA && !startsNameB) return -1;
-      if (startsNameB && !startsNameA) return 1;
-
-      // 3. Substring match on name
-      const subNameA = nameA.includes(q);
-      const subNameB = nameB.includes(q);
-      if (subNameA && !subNameB) return -1;
-      if (subNameB && !subNameA) return 1;
-
-      // 4. Starts with query on slug
-      const startsSlugA = slugA.startsWith(q);
-      const startsSlugB = slugB.startsWith(q);
-      if (startsSlugA && !startsSlugB) return -1;
-      if (startsSlugB && !startsSlugA) return 1;
-
-      // 5. Substring match on tagline/category
-      const subTagA = tagA.includes(q) || catA.includes(q);
-      const subTagB = tagB.includes(q) || catB.includes(q);
-      if (subTagA && !subTagB) return -1;
-      if (subTagB && !subTagA) return 1;
-
-      // Default alphabetical
-      return nameA.localeCompare(nameB);
-    });
+    // Limit strictly to 6 public organizations
+    return list.slice(0, 6);
   })();
 
   return (
@@ -1643,14 +1742,19 @@ export const OrgPicker: React.FC = () => {
           {activeMemberships.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full select-none">
               {activeMemberships.map((row) => {
-                const org = orgs?.find((o) => o.id === row.org_id);
+                const org = orgs?.find((o) => o.id === row.org_id) || MockDB.getOrgs().find((o) => o.id === row.org_id);
                 if (!org) return null;
+                const isPrimary = user?.primary_org_id === row.org_id || (!user?.primary_org_id && activeMemberships[0]?.id === row.id);
 
                 return (
                   <div
                     key={row.id}
                     onClick={() => handleSelect(row)}
-                    className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 p-5 rounded-2xl shadow-xs hover:border-emerald-600 focus:ring-2 focus:ring-emerald-500 hover:shadow-md transition cursor-pointer flex flex-col gap-4 group justify-between"
+                    className={`p-5 rounded-2xl shadow-xs transition cursor-pointer flex flex-col gap-4 group justify-between ${
+                      isPrimary 
+                        ? "bg-emerald-50/40 dark:bg-emerald-950/20 border-2 border-emerald-600 dark:border-emerald-500 hover:shadow-md" 
+                        : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-emerald-600 hover:shadow-md"
+                    }`}
                   >
                     <div className="flex items-start gap-3">
                       <div className="h-11 w-11 rounded-lg overflow-hidden shrink-0 bg-emerald-50 border border-emerald-100 flex items-center justify-center">
@@ -1660,10 +1764,17 @@ export const OrgPicker: React.FC = () => {
                           <Building2 className="h-5 w-5 text-emerald-600" />
                         )}
                       </div>
-                      <div className="flex flex-col truncate">
-                        <span className="font-display font-bold text-sm text-gray-900 dark:text-white truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
-                          {org.name}
-                        </span>
+                      <div className="flex flex-col truncate flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-display font-bold text-sm text-gray-900 dark:text-white truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+                            {org.name}
+                          </span>
+                          {isPrimary && (
+                            <span className="text-[9px] font-mono font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-full shrink-0 flex items-center gap-0.5">
+                              ✓ Default Member
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mt-0.5">
                           {org.org_category}
                         </span>
@@ -1671,9 +1782,14 @@ export const OrgPicker: React.FC = () => {
                     </div>
 
                     <div className="flex items-center justify-between border-t border-gray-150 dark:border-slate-750 pt-3">
-                      <Badge color={row.role === "org_admin" ? "amber" : "blue"}>
-                        {row.role === "org_admin" ? "Admin" : "Member"}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge color={row.role === "org_admin" ? "amber" : "blue"}>
+                          {row.role === "org_admin" ? "Admin" : "Member"}
+                        </Badge>
+                        <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md">
+                          Joined
+                        </span>
+                      </div>
                       <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center group-hover:underline font-bold gap-0.5 transition">
                         Launch <ChevronRight className="h-4 w-4" />
                       </span>
@@ -1836,10 +1952,10 @@ export const OrgPicker: React.FC = () => {
 
                   <div className="pt-2 border-t border-gray-100 dark:border-slate-800 flex justify-end">
                     <Button
-                      onClick={() => handleApplyJoin(org.id)}
-                      className="text-[10px] py-1.5 px-3 bg-emerald-600 hover:bg-emerald-750 flex items-center gap-1 rounded-md"
+                      onClick={() => navigate(`/register?org_id=${org.id}&mode=participant`)}
+                      className="text-[10px] py-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs transition"
                     >
-                      <Sparkles className="h-3 w-3 shrink-0" /> Request Membership
+                      Request Membership
                     </Button>
                   </div>
                 </div>

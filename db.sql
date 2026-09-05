@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS public.users (
   reduced_motion BOOLEAN DEFAULT false,
   profile_visibility TEXT DEFAULT 'members_only' CHECK (profile_visibility IN ('public', 'members_only', 'private')),
   status_badge TEXT DEFAULT 'active' CHECK (status_badge IN ('active', 'remote', 'field', 'away')),
+  primary_org_id TEXT,
+  joined_org_ids TEXT[] DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -60,6 +62,8 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS reduced_motion BOOLEAN DEFAULT
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_visibility TEXT DEFAULT 'members_only';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS status_badge TEXT DEFAULT 'active';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS auth_user_id TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS primary_org_id TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS joined_org_ids TEXT[] DEFAULT '{}';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- ---------------------------------------------------------------------
@@ -987,6 +991,95 @@ CREATE TABLE IF NOT EXISTS public.org_purchased_items (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ---------------------------------------------------------------------
+-- Table 48: ASSETS (Physical Equipment, IT Hardware & Inventory Tracking)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.assets (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  org_id TEXT NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'Equipment',
+  serial_number TEXT,
+  purchase_date DATE,
+  purchase_cost NUMERIC(15,2) DEFAULT 0,
+  currency TEXT DEFAULT 'RWF',
+  condition TEXT DEFAULT 'good' CHECK (condition IN ('new', 'good', 'fair', 'needs_repair', 'damaged')),
+  assigned_to_member_id TEXT REFERENCES public.org_members(id) ON DELETE SET NULL,
+  assigned_to_name TEXT,
+  location TEXT,
+  status TEXT DEFAULT 'operational' CHECK (status IN ('operational', 'maintenance', 'in_storage', 'decommissioned', 'disposed')),
+  notes TEXT,
+  qr_code TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ---------------------------------------------------------------------
+-- Table 49: CERTIFICATES (Official Workshop & Recognition Certificates)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.certificates (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  org_id TEXT NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  recipient_member_id TEXT REFERENCES public.org_members(id) ON DELETE SET NULL,
+  recipient_name TEXT NOT NULL,
+  recipient_email TEXT,
+  title TEXT NOT NULL,
+  description TEXT,
+  issue_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  expiry_date DATE,
+  certificate_code TEXT NOT NULL UNIQUE,
+  template_theme TEXT DEFAULT 'emerald' CHECK (template_theme IN ('gold', 'emerald', 'navy', 'modern')),
+  signatory_name TEXT NOT NULL,
+  signatory_title TEXT NOT NULL,
+  signatory_signature_url TEXT,
+  qr_verification_url TEXT,
+  status TEXT DEFAULT 'issued' CHECK (status IN ('issued', 'revoked')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ---------------------------------------------------------------------
+-- Table 50: DOCUMENT_SIGNATURES (Touch/Cursor/Image Digital E-Signatures)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.document_signatures (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  document_id TEXT NOT NULL REFERENCES public.documents(id) ON DELETE CASCADE,
+  member_id TEXT NOT NULL REFERENCES public.org_members(id) ON DELETE CASCADE,
+  org_id TEXT NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  signer_name TEXT NOT NULL,
+  signer_email TEXT,
+  signer_role TEXT,
+  signature_type TEXT DEFAULT 'drawn' CHECK (signature_type IN ('drawn', 'uploaded', 'typed')),
+  signature_data_url TEXT NOT NULL,
+  document_version INT NOT NULL DEFAULT 1,
+  ip_address TEXT,
+  user_agent TEXT,
+  verification_hash TEXT,
+  signed_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(document_id, member_id, document_version)
+);
+
+ALTER TABLE public.document_acknowledgements ADD COLUMN IF NOT EXISTS signature_data_url TEXT;
+ALTER TABLE public.document_acknowledgements ADD COLUMN IF NOT EXISTS signature_type TEXT DEFAULT 'typed';
+ALTER TABLE public.document_acknowledgements ADD COLUMN IF NOT EXISTS signer_name TEXT;
+ALTER TABLE public.document_acknowledgements ADD COLUMN IF NOT EXISTS signer_role TEXT;
+ALTER TABLE public.document_acknowledgements ADD COLUMN IF NOT EXISTS verification_hash TEXT;
+
+-- ---------------------------------------------------------------------
+-- Table 51: OFFLINE_SYNC_LOGS (PWA Field Operations Sync Audit)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.offline_sync_logs (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  org_id TEXT NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  performed_by TEXT REFERENCES public.users(id) ON DELETE SET NULL,
+  operation TEXT NOT NULL,
+  entity TEXT NOT NULL,
+  payload JSONB,
+  client_timestamp TIMESTAMPTZ NOT NULL,
+  synced_at TIMESTAMPTZ DEFAULT NOW(),
+  status TEXT DEFAULT 'synced'
+);
+
+
 
 -- =====================================================================
 -- 2. PERFORMANCE & CHRONOLOGICAL QUERY INDICES
@@ -1751,3 +1844,242 @@ ON CONFLICT (id) DO NOTHING;
 -- All 47 tables, indices, relations, security policies, storage buckets,
 -- and seed accounts are now fully unified and ready for execution.
 -- =====================================================================
+-- =========================================================================
+-- Impacto V2 — Database Schema Updates & RLS Policies for Supabase
+-- Run this manually in your Supabase SQL Editor to support:
+-- 1. Subscription, Trial, and Grace Period tracking
+-- 2. pawaPay Push-to-Pay Deposits & Webhooks
+-- 3. Feature Marketplace, Packages, and Custom Pricing
+-- 4. Unlimited Storage & Member Cap enforcement
+-- =========================================================================
+
+-- Organizations table subscription & limits extensions
+ALTER TABLE public.organizations
+ADD COLUMN IF NOT EXISTS subscription_plan text DEFAULT 'growth' CHECK (subscription_plan IN ('free', 'growth', 'pro', 'enterprise')),
+ADD COLUMN IF NOT EXISTS subscription_status text DEFAULT 'trial' CHECK (subscription_status IN ('trial', 'active', 'grace_period', 'expired', 'cancelled')),
+ADD COLUMN IF NOT EXISTS trial_ends_at timestamptz DEFAULT (now() + interval '30 days'),
+ADD COLUMN IF NOT EXISTS grace_period_ends_at timestamptz DEFAULT (now() + interval '33 days'),
+ADD COLUMN IF NOT EXISTS member_limit integer DEFAULT 30,
+ADD COLUMN IF NOT EXISTS storage_unlimited boolean DEFAULT false;
+
+-- pawaPay Deposits Table
+CREATE TABLE IF NOT EXISTS public.pawapay_deposits (
+    deposit_id uuid PRIMARY KEY,
+    org_id text NOT NULL,
+    amount numeric NOT NULL,
+    currency text DEFAULT 'RWF',
+    phone_number text NOT NULL,
+    provider text NOT NULL,
+    status text DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'COMPLETED', 'FAILED', 'IN_RECONCILIATION')),
+    client_reference_id text,
+    provider_transaction_id text,
+    failure_code text,
+    failure_message text,
+    metadata jsonb,
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
+);
+
+-- Marketplace Features Table
+CREATE TABLE IF NOT EXISTS public.marketplace_features (
+    feature_id text PRIMARY KEY,
+    name text NOT NULL,
+    theme text NOT NULL CHECK (theme IN ('Finance', 'Governance', 'Operations', 'Communication')),
+    description text,
+    base_price numeric DEFAULT 0.00,
+    is_active boolean DEFAULT true,
+    created_at timestamptz DEFAULT now()
+);
+
+-- Marketplace Packages Table (2-4 features grouped together)
+CREATE TABLE IF NOT EXISTS public.marketplace_packages (
+    package_id text PRIMARY KEY,
+    name text NOT NULL,
+    description text,
+    feature_ids text[] NOT NULL,
+    package_price numeric DEFAULT 0.00,
+    created_at timestamptz DEFAULT now()
+);
+
+-- Organization Active Features / Packages
+CREATE TABLE IF NOT EXISTS public.org_purchased_items (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id text NOT NULL,
+    item_type text NOT NULL CHECK (item_type IN ('feature', 'package')),
+    item_id text NOT NULL,
+    expires_at timestamptz, -- automatically set 30 days if Free plan
+    created_at timestamptz DEFAULT now()
+);
+
+-- Grant Permissions & Enable RLS
+GRANT ALL ON TABLE public.pawapay_deposits TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.marketplace_features TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.marketplace_packages TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.org_purchased_items TO anon, authenticated, service_role;
+
+-- Row Level Security Policies
+ALTER TABLE public.pawapay_deposits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.marketplace_features ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.marketplace_packages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.org_purchased_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS select_pawapay_deposits ON public.pawapay_deposits;
+DROP POLICY IF EXISTS write_pawapay_deposits ON public.pawapay_deposits;
+CREATE POLICY select_pawapay_deposits ON public.pawapay_deposits FOR SELECT USING (true);
+CREATE POLICY write_pawapay_deposits ON public.pawapay_deposits FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS select_marketplace_features ON public.marketplace_features;
+DROP POLICY IF EXISTS write_marketplace_features ON public.marketplace_features;
+CREATE POLICY select_marketplace_features ON public.marketplace_features FOR SELECT USING (true);
+CREATE POLICY write_marketplace_features ON public.marketplace_features FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS select_marketplace_packages ON public.marketplace_packages;
+DROP POLICY IF EXISTS write_marketplace_packages ON public.marketplace_packages;
+CREATE POLICY select_marketplace_packages ON public.marketplace_packages FOR SELECT USING (true);
+CREATE POLICY write_marketplace_packages ON public.marketplace_packages FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS select_org_purchased_items ON public.org_purchased_items;
+DROP POLICY IF EXISTS write_org_purchased_items ON public.org_purchased_items;
+CREATE POLICY select_org_purchased_items ON public.org_purchased_items FOR SELECT USING (true);
+CREATE POLICY write_org_purchased_items ON public.org_purchased_items FOR ALL USING (true) WITH CHECK (true);
+-- =====================================================================
+-- IMPACTO SCHEMA UPDATE SCRIPT
+-- =====================================================================
+-- Multi-organization membership tracking & primary organization landing
+
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS primary_org_id TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS joined_org_ids TEXT[] DEFAULT '{}';
+
+-- ---------------------------------------------------------------------
+-- Table: ASSETS (Physical Equipment, IT Hardware & Inventory Tracking)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.assets (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  org_id TEXT NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'Equipment',
+  serial_number TEXT,
+  purchase_date DATE,
+  purchase_cost NUMERIC(15,2) DEFAULT 0,
+  currency TEXT DEFAULT 'RWF',
+  condition TEXT DEFAULT 'good' CHECK (condition IN ('new', 'good', 'fair', 'needs_repair', 'damaged')),
+  assigned_to_member_id TEXT REFERENCES public.org_members(id) ON DELETE SET NULL,
+  assigned_to_name TEXT,
+  location TEXT,
+  status TEXT DEFAULT 'operational' CHECK (status IN ('operational', 'maintenance', 'in_storage', 'decommissioned', 'disposed')),
+  notes TEXT,
+  qr_code TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ---------------------------------------------------------------------
+-- Table: CERTIFICATES (Official Workshop & Recognition Certificates)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.certificates (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  org_id TEXT NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  recipient_member_id TEXT REFERENCES public.org_members(id) ON DELETE SET NULL,
+  recipient_name TEXT NOT NULL,
+  recipient_email TEXT,
+  title TEXT NOT NULL,
+  description TEXT,
+  issue_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  expiry_date DATE,
+  certificate_code TEXT NOT NULL UNIQUE,
+  template_theme TEXT DEFAULT 'emerald' CHECK (template_theme IN ('gold', 'emerald', 'navy', 'modern')),
+  signatory_name TEXT NOT NULL,
+  signatory_title TEXT NOT NULL,
+  signatory_signature_url TEXT,
+  qr_verification_url TEXT,
+  status TEXT DEFAULT 'issued' CHECK (status IN ('issued', 'revoked')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ---------------------------------------------------------------------
+-- Table: DOCUMENT_SIGNATURES (Touch/Cursor/Image Digital E-Signatures)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.document_signatures (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  document_id TEXT NOT NULL REFERENCES public.documents(id) ON DELETE CASCADE,
+  member_id TEXT NOT NULL REFERENCES public.org_members(id) ON DELETE CASCADE,
+  org_id TEXT NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  signer_name TEXT NOT NULL,
+  signer_email TEXT,
+  signer_role TEXT,
+  signature_type TEXT DEFAULT 'drawn' CHECK (signature_type IN ('drawn', 'uploaded', 'typed')),
+  signature_data_url TEXT NOT NULL,
+  document_version INT NOT NULL DEFAULT 1,
+  ip_address TEXT,
+  user_agent TEXT,
+  verification_hash TEXT,
+  signed_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(document_id, member_id, document_version)
+);
+
+ALTER TABLE public.document_acknowledgements ADD COLUMN IF NOT EXISTS signature_data_url TEXT;
+ALTER TABLE public.document_acknowledgements ADD COLUMN IF NOT EXISTS signature_type TEXT DEFAULT 'typed';
+ALTER TABLE public.document_acknowledgements ADD COLUMN IF NOT EXISTS signer_name TEXT;
+ALTER TABLE public.document_acknowledgements ADD COLUMN IF NOT EXISTS signer_role TEXT;
+ALTER TABLE public.document_acknowledgements ADD COLUMN IF NOT EXISTS verification_hash TEXT;
+
+-- ---------------------------------------------------------------------
+-- Table: OFFLINE_SYNC_LOGS (PWA Field Operations Sync Audit)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.offline_sync_logs (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  org_id TEXT NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  performed_by TEXT REFERENCES public.users(id) ON DELETE SET NULL,
+  operation TEXT NOT NULL,
+  entity TEXT NOT NULL,
+  payload JSONB,
+  client_timestamp TIMESTAMPTZ NOT NULL,
+  synced_at TIMESTAMPTZ DEFAULT NOW(),
+  status TEXT DEFAULT 'synced'
+);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -21,7 +21,6 @@ import {
   Sprout,
   Building,
   Smile,
-  Sparkles,
   Search,
   Plus,
   Send,
@@ -145,6 +144,7 @@ import { MockDB } from "../lib/mockData";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useToast } from "../components/Toast";
 import { DocumentOffice } from "../components/DocumentOffice";
+import { CertificateBadgeBuilderModal } from "../components/CertificateBadgeBuilderModal";
 import { uploadFileToSupabase, resolveFileUrl } from "../lib/storageService";
 import { ResolvedImage, ResolvedAudio, ResolvedDownloadLink } from "../components/ResolvedMedia";
 
@@ -681,8 +681,8 @@ export const DashboardHome: React.FC = () => {
       {/* Dynamic Welcome Heading */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 dark:border-slate-800 pb-5">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold font-display leading-none tracking-tight text-gray-905 dark:text-white flex items-center gap-2">
-            {t("dashboard_labels.welcome_title")} {user?.full_name?.split(" ")[0] || "User"} <Sparkles className="h-5 w-5 text-amber-500" />
+          <h1 className="text-2xl md:text-3xl font-extrabold font-display leading-none tracking-tight text-gray-905 dark:text-white flex items-center">
+            {t("dashboard_labels.welcome_title")} {user?.full_name?.split(" ")[0] || "User"}!
           </h1>
           <p className="text-xs md:text-sm text-gray-500 mt-1 dark:text-slate-400 font-medium">
             {t("dashboard_labels.welcome_subtitle", { orgName: activeOrg?.name || "your" })}
@@ -821,6 +821,80 @@ export const DashboardHome: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* ========================================== */}
+      {/* 0. PRIMARY WORKSPACE METRICS ROW (IMAGE 5) */}
+      {/* ========================================== */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* Metric 1: Active Members */}
+        <div
+          onClick={() => navigate("/dashboard/members")}
+          className="card card-glow bg-white dark:bg-slate-850 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 border-t-[3px] border-t-[#156c45] shadow-3xs cursor-pointer flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4a6357] dark:text-slate-400">
+              Active Members
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Users className="h-4.5 w-4.5" />
+            </div>
+          </div>
+          <div className="mt-2">
+            <span className="text-3xl font-display font-bold text-[#111c16] dark:text-white">
+              {members?.length || 48}
+            </span>
+            <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
+              of {(activeOrg as any)?.member_limit || 100} member cap
+            </p>
+          </div>
+        </div>
+
+        {/* Metric 2: Strategic Goals */}
+        <div
+          onClick={() => navigate("/dashboard/goals")}
+          className="card card-glow bg-white dark:bg-slate-850 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 border-t-[3px] border-t-[#156c45] shadow-3xs cursor-pointer flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4a6357] dark:text-slate-400">
+              Strategic Goals
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Target className="h-4.5 w-4.5" />
+            </div>
+          </div>
+          <div className="mt-2">
+            <span className="text-3xl font-display font-bold text-[#111c16] dark:text-white">
+              {goals?.length || 3}
+            </span>
+            <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
+              {goals?.filter(g => g.status !== 'completed').length || 1} active this quarter
+            </p>
+          </div>
+        </div>
+
+        {/* Metric 3: MoMo Collected */}
+        <div
+          onClick={() => navigate("/dashboard/fees")}
+          className="card card-glow bg-white dark:bg-slate-850 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 border-t-[3px] border-t-[#156c45] shadow-3xs cursor-pointer flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4a6357] dark:text-slate-400">
+              MoMo Collected
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Coins className="h-4.5 w-4.5" />
+            </div>
+          </div>
+          <div className="mt-2">
+            <span className="text-3xl font-display font-bold text-[#111c16] dark:text-white">
+              {(financialStats.totalPaid || myFeeStats.myPaidTotal || 0).toLocaleString()}
+            </span>
+            <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
+              RWF this cycle
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* ========================================== */}
       {/* 1. FINANCIAL STANDING & DUES HEALTH (ACCOUNTANT COLLECTION METER OR MEMBER PERSONAL STANDING) */}
@@ -971,122 +1045,202 @@ export const DashboardHome: React.FC = () => {
             </div>
           )}
 
-          {/* 4. Cooperative Milestones & Goals Checklist */}
-          <Card
-            title={t("dashboard_labels.pinned_goals_title", "Organization Milestones & Targets")}
-            action={
-              <Link to="/dashboard/goals" className="text-xs text-[var(--org-primary)] font-bold hover:underline flex items-center gap-1">
-                View All <ArrowRight className="h-3 w-3" />
-              </Link>
-            }
-          >
-            {displayGoals.length > 0 ? (
-              <div className="flex flex-col gap-5">
-                {displayGoals.map((g) => {
-                  const pct = Math.min(100, Math.round((g.current_progress / (g.target || 1)) * 100));
-                  return (
-                    <div key={g.id} className="flex flex-col gap-2 p-3 bg-slate-50/70 dark:bg-slate-800/40 rounded-xl border border-gray-100 dark:border-slate-800">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-xs text-gray-900 dark:text-white flex items-center gap-1.5">
-                          <Target className="h-3.5 w-3.5 text-[var(--org-primary)]" /> {g.title}
-                        </span>
-                        <span className="text-xs font-semibold text-gray-550 font-mono">
-                          {g.current_progress.toLocaleString()} / {g.target.toLocaleString()} {g.unit || ""} ({pct}%)
-                        </span>
-                      </div>
-                      <ProgressBar value={g.current_progress} max={g.target} />
-                    </div>
-                  );
-                })}
+          {/* 4. Strategic Goals Card (Image 5) */}
+          <div className="card card-glow bg-white dark:bg-slate-850 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-3xs p-6">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-slate-800">
+              <div>
+                <h3 className="font-display font-bold text-base text-gray-900 dark:text-white">
+                  Strategic Goals
+                </h3>
+                <p className="text-xs text-[#4a6357] dark:text-slate-400 mt-0.5">
+                  Pinned integrity goals this quarter
+                </p>
               </div>
-            ) : (
-              <EmptyState title={t("dashboard_labels.no_goals_pinned")} message={t("dashboard_labels.go_to_goals_msg")} />
-            )}
-          </Card>
+              <Link to="/dashboard/goals" className="text-xs font-bold text-[#156c45] dark:text-emerald-400 hover:underline flex items-center gap-1">
+                View all →
+              </Link>
+            </div>
 
-          {/* 5. Live Announcement & Document Feed */}
-          <Card
-            title={t("dashboard_labels.recent_postings_title", "Announcements & Official Notices")}
-            action={
-              <Link to="/dashboard/news" className="text-xs text-[var(--org-primary)] font-bold hover:underline flex items-center gap-1">
-                News Feed <ArrowRight className="h-3 w-3" />
-              </Link>
-            }
-          >
-            {activeNews.length > 0 ? (
-              <div className="flex flex-col gap-3">
-                {activeNews.map((n) => (
-                  <div key={n.id} className="flex gap-4 p-3 border border-gray-100 dark:border-slate-800 rounded-xl hover:bg-slate-50/80 dark:hover:bg-slate-800/60 transition items-center">
-                    {n.cover_url && (
-                      <div className="h-12 w-12 rounded-lg overflow-hidden shrink-0 bg-slate-100">
-                        <img src={n.cover_url} alt={n.title} className="h-full w-full object-cover" />
+            <div className="pt-4">
+              {displayGoals.length > 0 ? (
+                <div className="flex flex-col gap-4">
+                  {displayGoals.map((g) => {
+                    const pct = Math.min(100, Math.round((g.current_progress / (g.target || 1)) * 100));
+                    return (
+                      <div key={g.id} className="flex flex-col gap-2 p-3.5 bg-slate-50/70 dark:bg-slate-800/40 rounded-xl border border-gray-100 dark:border-slate-800 hover:border-emerald-200 dark:hover:border-emerald-900/50 transition">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-xs text-gray-900 dark:text-white flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-[#156c45] dark:bg-emerald-400 shrink-0" />
+                            {g.title}
+                          </span>
+                          <span className="text-xs font-bold text-[#156c45] dark:text-emerald-400 font-mono">
+                            {pct}%
+                          </span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-[#156c45] dark:bg-emerald-500 transition-all duration-500"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-[#4a6357] dark:text-slate-400 font-medium">
+                          <span>{g.current_progress.toLocaleString()} / {g.target.toLocaleString()} {g.unit || "milestones"}</span>
+                          <span className="font-mono text-[10px] text-gray-400">Quarterly Target</span>
+                        </div>
                       </div>
-                    )}
-                    <div className="flex flex-col text-xs leading-normal truncate flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-bold text-xs text-gray-950 dark:text-white truncate">{n.title}</span>
-                        <span className="text-[10px] text-gray-400 font-mono shrink-0">
-                          {n.published_at ? new Date(n.published_at).toLocaleDateString() : ""}
-                        </span>
-                      </div>
-                      <span className="text-gray-450 mt-0.5 line-clamp-1 text-[11px]">{n.excerpt}</span>
-                    </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-8 px-4 flex flex-col items-center text-center">
+                  <div className="w-12 h-12 rounded-full bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center mb-2.5">
+                    <Target className="h-5 w-5" />
                   </div>
-                ))}
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-1">
+                    No strategic goals pinned
+                  </h4>
+                  <p className="text-xs text-[#4a6357] dark:text-slate-400 max-w-xs leading-relaxed mb-3">
+                    Track your cooperative milestones and mission targets here.
+                  </p>
+                  <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/goals")}>
+                    Set Goals
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 5. Organization Feed Card (Image 5) */}
+          <div className="card card-glow bg-white dark:bg-slate-850 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-3xs p-6">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-slate-800">
+              <div>
+                <h3 className="font-display font-bold text-base text-gray-900 dark:text-white">
+                  Organization Feed
+                </h3>
+                <p className="text-xs text-[#4a6357] dark:text-slate-400 mt-0.5">
+                  Recent announcements and postings
+                </p>
               </div>
-            ) : (
-              <EmptyState title={t("dashboard_labels.empty_news_title")} message={t("dashboard_labels.no_announcements_shared")} />
-            )}
-          </Card>
+              <Link to="/dashboard/news" className="text-xs font-bold text-[#156c45] dark:text-emerald-400 hover:underline flex items-center gap-1">
+                News Feed →
+              </Link>
+            </div>
+
+            <div className="pt-4">
+              {activeNews.length > 0 ? (
+                <div className="flex flex-col gap-3">
+                  {activeNews.map((n) => (
+                    <div
+                      key={n.id}
+                      onClick={() => navigate("/dashboard/news")}
+                      className="flex gap-4 p-3.5 border border-gray-100 dark:border-slate-800 rounded-xl hover:bg-[#e8f5ee]/20 dark:hover:bg-slate-800/60 hover:border-emerald-200 transition items-center cursor-pointer"
+                    >
+                      {n.cover_url && (
+                        <div className="h-12 w-12 rounded-lg overflow-hidden shrink-0 bg-slate-100">
+                          <img src={n.cover_url} alt={n.title} className="h-full w-full object-cover" />
+                        </div>
+                      )}
+                      <div className="flex flex-col text-xs leading-normal truncate flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-xs text-gray-950 dark:text-white truncate">{n.title}</span>
+                          <span className="text-[10px] text-gray-400 font-mono shrink-0">
+                            {n.published_at ? new Date(n.published_at).toLocaleDateString() : ""}
+                          </span>
+                        </div>
+                        <span className="text-gray-500 mt-0.5 line-clamp-1 text-[11px]">{n.excerpt}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-12 px-6 flex flex-col items-center text-center">
+                  <div className="w-14 h-14 rounded-full bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center mb-3 shadow-2xs">
+                    <MessageSquare className="h-6 w-6" />
+                  </div>
+                  <h4 className="text-base font-bold text-[#111c16] dark:text-white mb-1 font-display">
+                    Your workspace is quiet right now
+                  </h4>
+                  <p className="text-xs text-[#4a6357] dark:text-slate-400 max-w-sm mx-auto mb-5 leading-relaxed">
+                    No announcements have been shared yet. Post the first update to get the conversation started.
+                  </p>
+                  <button
+                    onClick={() => navigate("/dashboard/news")}
+                    className="bg-[#156c45] hover:bg-[#115436] text-white text-xs font-bold px-5 py-2.5 rounded-xl transition shadow-3xs flex items-center gap-2 cursor-pointer"
+                  >
+                    <Megaphone className="h-3.5 w-3.5" /> Post an Announcement
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Sidebar Widgets - Weekly Schedule & Attendance Radar */}
+        {/* Sidebar Widgets - Weekly Schedule & Attendance Radar (Image 5) */}
         <div className="flex flex-col gap-8">
-          <Card
-            title="Weekly Schedule & Radar"
-            action={
-              <Link to="/dashboard/events" className="text-xs text-[var(--org-primary)] font-bold hover:underline flex items-center gap-1">
-                Calendar <ArrowRight className="h-3 w-3" />
-              </Link>
-            }
-          >
-            {nextUpcomingItems.length > 0 ? (
-              <div className="flex flex-col gap-3">
-                {nextUpcomingItems.map((item) => {
-                  const eventDate = new Date(item.date_time);
-                  const isToday = new Date().toDateString() === eventDate.toDateString();
-                  return (
-                    <div
-                      key={item.id}
-                      className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-gray-100 dark:border-slate-800 flex flex-col gap-2 hover:border-gray-300 dark:hover:border-slate-700 transition"
-                    >
-                      <div className="flex justify-between items-start gap-2">
-                        <span className="font-bold text-xs text-gray-900 dark:text-white line-clamp-1">
-                          {item.title}
-                        </span>
-                        <Badge color={item.type === "meeting" ? "purple" : "blue"}>
-                          {item.type === "meeting" ? "Meeting" : "Event"}
-                        </Badge>
-                      </div>
-
-                      <div className="flex items-center justify-between text-[11px] text-gray-450 font-medium">
-                        <div className="flex items-center gap-1 font-mono">
-                          <Clock className="h-3 w-3 text-gray-400" />
-                          {isToday ? "Today at " : `${eventDate.toLocaleDateString([], { month: "short", day: "numeric" })} at `}
-                          {eventDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        </div>
-                        <span className="text-[10px] truncate max-w-[120px] text-gray-400 font-mono">
-                          {item.venue}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+          <div className="card card-glow bg-white dark:bg-slate-850 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-3xs p-5">
+            <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-slate-800">
+              <div>
+                <h3 className="font-display font-bold text-sm text-gray-900 dark:text-white">
+                  This Week
+                </h3>
+                <p className="text-[11px] text-[#4a6357] dark:text-slate-400 mt-0.5">
+                  Upcoming sessions & deadlines
+                </p>
               </div>
-            ) : (
-              <EmptyState title="No upcoming sessions" message="All upcoming events and meetings will show on your weekly schedule radar here." />
-            )}
-          </Card>
+              <Link to="/dashboard/events" className="text-xs font-bold text-[#156c45] dark:text-emerald-400 hover:underline flex items-center gap-1">
+                Calendar →
+              </Link>
+            </div>
+
+            <div className="pt-3.5">
+              {nextUpcomingItems.length > 0 ? (
+                <div className="flex flex-col gap-3">
+                  {nextUpcomingItems.map((item) => {
+                    const eventDate = new Date(item.date_time);
+                    const isToday = new Date().toDateString() === eventDate.toDateString();
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-3 bg-slate-50/70 dark:bg-slate-800/60 rounded-xl border border-gray-100 dark:border-slate-800 flex flex-col gap-1.5 hover:border-emerald-200 transition"
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <span className="font-bold text-xs text-gray-900 dark:text-white line-clamp-1">
+                            {item.title}
+                          </span>
+                          <Badge color={item.type === "meeting" ? "purple" : "blue"}>
+                            {item.type === "meeting" ? "Meeting" : "Event"}
+                          </Badge>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-gray-500 font-medium">
+                          <div className="flex items-center gap-1 font-mono">
+                            <Clock className="h-3 w-3 text-gray-400" />
+                            {isToday ? "Today at " : `${eventDate.toLocaleDateString([], { month: "short", day: "numeric" })} at `}
+                            {eventDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                          <span className="text-[10px] truncate max-w-[120px] text-gray-400 font-mono">
+                            {item.venue}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-8 px-4 flex flex-col items-center text-center">
+                  <div className="w-12 h-12 rounded-full bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center mb-2.5">
+                    <CalendarDays className="h-5 w-5" />
+                  </div>
+                  <h4 className="text-sm font-bold text-[#111c16] dark:text-white mb-1 font-display">
+                    Nothing scheduled yet
+                  </h4>
+                  <p className="text-xs text-[#4a6357] dark:text-slate-400 leading-relaxed max-w-xs">
+                    Events and meetings will appear here once added to your calendar.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Recent Cooperative Documents */}
           <Card
@@ -1367,16 +1521,24 @@ export const NewsFeed: React.FC = () => {
           <p className="text-xs text-gray-500">{t("dashboard_labels.news_feed_subtitle")}</p>
         </div>
         <div className="flex items-center gap-3 self-start md:self-auto">
-          <div className="flex items-center bg-gray-100 rounded-lg p-1 text-xs font-semibold">
+          <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-1 shadow-3xs">
             <button
               onClick={() => setActiveTab("active")}
-              className={`px-3 py-1.5 rounded-md transition ${activeTab === "active" ? "bg-white shadow text-emerald-800" : "text-gray-500 hover:text-gray-900"}`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                activeTab === "active"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+              }`}
             >
               Active
             </button>
             <button
               onClick={() => setActiveTab("history")}
-              className={`px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ${activeTab === "history" ? "bg-white shadow text-amber-800" : "text-gray-500 hover:text-gray-900"}`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                activeTab === "history"
+                  ? "bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+              }`}
               title="Database history archive"
             >
               <History className="h-3.5 w-3.5" /> History Log
@@ -1384,7 +1546,7 @@ export const NewsFeed: React.FC = () => {
           </div>
 
           {isAdmin && activeTab === "active" && (
-            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpenAddModal(true)}>
+            <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setOpenAddModal(true)}>
               {t("dashboard_labels.add_post")}
             </Button>
           )}
@@ -1840,8 +2002,8 @@ export const ChatRoom: React.FC = () => {
             type: "info"
           } as any);
 
-          // Upload to Supabase Storage via proxy API
-          const key = await uploadFileToSupabase(file, "voice-notes");
+          // Upload to Supabase Storage via chat-attachments bucket
+          const key = await uploadFileToSupabase(file, "chat-attachments", "voice-notes");
 
           // Use the ref value to avoid state closures!
           const duration = recDurationRef.current > 0 ? recDurationRef.current : 5;
@@ -2951,23 +3113,25 @@ const OldGoalsTracker: React.FC = () => {
             return (
               <div
                 key={goal.id}
-                className="bg-white dark:bg-slate-900 border border-gray-150 dark:border-slate-800 rounded-2xl p-5 shadow-xs flex flex-col justify-between transition relative hover:shadow-md hover:border-gray-350 dark:hover:border-slate-700 animate-in fade-in"
+                className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-3xs flex flex-col justify-between transition relative hover:shadow-xs hover:border-slate-300 dark:hover:border-slate-700 animate-in fade-in"
               >
                 {goal.is_pinned && (
-                  <span className="absolute -top-2.5 left-4 bg-amber-500 text-[9px] px-2.5 py-0.5 text-white font-black rounded-full font-mono uppercase tracking-wider shadow-xs">
-                    📌 {t("Pinned")}
+                  <span className="absolute -top-2.5 left-4 bg-[#156c45] dark:bg-emerald-600 text-[9px] px-2.5 py-0.5 text-white font-bold rounded-full font-mono uppercase tracking-wider shadow-3xs">
+                    {t("Pinned")}
                   </span>
                 )}
 
                 <div>
                   <div className="flex justify-between items-start mb-3 gap-4">
                     <div className="flex flex-col">
-                      <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100 font-display tracking-tight leading-tight flex items-center gap-1.5">
-                        <Target className="h-4.5 w-4.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                        {goal.title}
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white font-display tracking-tight leading-tight flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center shrink-0">
+                          <Target className="h-4 w-4" />
+                        </div>
+                        <span>{goal.title}</span>
                       </h3>
                       {goal.description && (
-                        <p className="text-xs text-stone-500 dark:text-stone-400 mt-1.5 leading-relaxed font-semibold">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
                           {goal.description}
                         </p>
                       )}
@@ -2978,7 +3142,7 @@ const OldGoalsTracker: React.FC = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-[10px] font-extrabold px-2 py-1 leading-none h-fit"
+                          className="text-[10px] font-bold px-2 py-1 leading-none h-fit"
                           onClick={() => {
                             setSelectedGoal(goal);
                             setSliderVal(goal.current_progress);
@@ -3001,7 +3165,7 @@ const OldGoalsTracker: React.FC = () => {
                             setStartProgress(goal.starting_progress || 0);
                             setOpenEditModal(true);
                           }}
-                          className="p-1 px-1.5 text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-slate-850 rounded transition shrink-0"
+                          className="p-1 px-1.5 text-slate-400 hover:text-[#156c45] hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition shrink-0"
                           title="Edit Goal details"
                         >
                           <Edit className="h-3.5 w-3.5" />
@@ -3013,7 +3177,7 @@ const OldGoalsTracker: React.FC = () => {
                               refetch();
                             }
                           }}
-                          className="p-1 px-1.5 text-gray-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-slate-850 rounded transition shrink-0"
+                          className="p-1 px-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition shrink-0"
                           title="Delete Goal"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -3022,51 +3186,51 @@ const OldGoalsTracker: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Enhanced elegant progress visualization reach bar */}
-                  <div className="mt-4.5 w-full bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-gray-100 dark:border-slate-850">
-                    <div className="flex items-center justify-between mb-2 text-[10px] font-extrabold text-stone-600 dark:text-stone-400 font-mono tracking-wider">
+                  {/* Clean progress visualization reach bar */}
+                  <div className="mt-4 w-full bg-slate-50/80 dark:bg-slate-950 p-3.5 rounded-xl border border-slate-200/60 dark:border-slate-800/60">
+                    <div className="flex items-center justify-between mb-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 font-mono tracking-wider">
                       <span>{t("STRATEGIC MILESTONE REACH")}</span>
-                      <span className="text-blue-600 dark:text-blue-400 font-black">{percentage}%</span>
+                      <span className="text-[#156c45] dark:text-emerald-400 font-bold">{percentage}%</span>
                     </div>
 
-                    <div className="w-full bg-gray-200 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden shadow-inner flex border border-transparent">
+                    <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden flex">
                       <div
-                        className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full transition-all duration-300"
+                        className="bg-[#156c45] dark:bg-emerald-500 h-full transition-all duration-500 rounded-full"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
 
-                    <div className="flex justify-between items-center text-[10px] text-stone-600 dark:text-stone-400 mt-2 font-mono">
+                    <div className="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-400 mt-2 font-mono">
                       <span>
-                        Current: <span className="font-extrabold text-stone-900 dark:text-white">{progressNum.toLocaleString()}</span>
+                        Current: <span className="font-bold text-slate-900 dark:text-white">{progressNum.toLocaleString()}</span>
                       </span>
                       <span>
-                        Target: <span className="font-extrabold text-stone-950 dark:text-slate-100">{targetNum.toLocaleString()} {goal.unit || "%"}</span>
+                        Target: <span className="font-bold text-slate-900 dark:text-slate-200">{targetNum.toLocaleString()} {goal.unit || "%"}</span>
                       </span>
                     </div>
 
                     {goal.last_note && (
-                      <div className="mt-3 pt-2.5 border-t border-dashed border-gray-200 dark:border-slate-800 text-[11.5px] text-stone-600 dark:text-stone-400 leading-normal font-sans font-medium italic flex items-start gap-1.5 animate-in fade-in duration-300">
-                        <span className="text-[11px] text-blue-550 px-1 py-0.5 bg-blue-50 dark:bg-slate-850 rounded font-style-normal shrink-0">✍️ {t("Latest Status Note")}</span>
+                      <div className="mt-2.5 pt-2 border-t border-slate-200/60 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-300 leading-normal font-sans italic flex items-start gap-1.5">
+                        <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 px-1.5 py-0.5 bg-slate-200/70 dark:bg-slate-800 rounded font-normal shrink-0">{t("Note")}</span>
                         <span className="mt-0.5">"{goal.last_note}"</span>
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center text-[10px] sm:text-xs font-semibold text-gray-500 border-t pt-3.5 mt-4 leading-none font-sans select-none shrink-0">
+                <div className="flex justify-between items-center text-[11px] font-medium text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-3 mt-4 leading-none font-sans select-none shrink-0">
                   <span className="flex items-center gap-1.5">
-                    <CalendarDays className="h-3.5 w-3.5 text-gray-400" />
-                    {t("Deadline:")} <span className="text-gray-800 dark:text-stone-300 font-medium">{new Date(goal.deadline).toLocaleDateString()}</span>
+                    <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
+                    {t("Deadline:")} <span className="text-slate-800 dark:text-slate-200 font-semibold">{new Date(goal.deadline).toLocaleDateString()}</span>
                   </span>
 
                   {isNearDeadline ? (
-                    <span className="text-rose-600 font-black animate-pulse flex items-center gap-1 bg-rose-50 px-2 py-0.5 rounded">
-                      ⚠️ {daysToDeadline} {t("days left")}
+                    <span className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1 bg-rose-50 dark:bg-rose-950/30 px-2 py-0.5 rounded">
+                      {daysToDeadline} {t("days left")}
                     </span>
                   ) : (
-                    <span className="text-emerald-700 font-black flex items-center gap-1">
-                      ✓ {daysToDeadline} {t("days left")}
+                    <span className="text-[#156c45] dark:text-emerald-400 font-bold flex items-center gap-1">
+                      {daysToDeadline} {t("days left")}
                     </span>
                   )}
                 </div>
@@ -4007,6 +4171,7 @@ export const DocumentsCenter: React.FC = () => {
 
   // Document Office States
   const [isOfficeOpen, setIsOfficeOpen] = useState(false);
+  const [isCertBadgeModalOpen, setIsCertBadgeModalOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<Document | null>(null);
   const [viewingDoc, setViewingDoc] = useState<Document | null>(null);
   const [activePreviewDoc, setActivePreviewDoc] = useState<{ url: string; name: string } | null>(null);
@@ -4266,6 +4431,14 @@ export const DocumentsCenter: React.FC = () => {
 
           {canManageDocs && (
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setIsCertBadgeModalOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer"
+                title="Design & export certificates and member badges"
+              >
+                <Award className="h-4 w-4" />
+                Certificate / Badge
+              </button>
               <button
                 onClick={() => {
                   setEditingDoc(null);
@@ -4822,6 +4995,14 @@ export const DocumentsCenter: React.FC = () => {
       </Modal>
 
       {/* COMPREHENSIVE OFFICE AND VIEWING COMPONENT */}
+      {isCertBadgeModalOpen && (
+        <CertificateBadgeBuilderModal
+          isOpen={isCertBadgeModalOpen}
+          onClose={() => setIsCertBadgeModalOpen(false)}
+          members={members}
+        />
+      )}
+
       {isOfficeOpen && (
         <DocumentOffice
           activeOrg={activeOrg}
@@ -5594,7 +5775,7 @@ export const EventsCalendar: React.FC = () => {
         <div className="flex items-center gap-2">
           {isAdmin && (
             <>
-              <Button size="sm" variant="outline" icon={<FileSpreadsheet className="h-4 w-4 text-emerald-600" />} onClick={exportAttendanceMatrixExcel}>
+              <Button size="sm" variant="outline" icon={<FileSpreadsheet className="h-4 w-4 text-[#156c45] dark:text-emerald-400" />} onClick={exportAttendanceMatrixExcel}>
                 Export Master Matrix (Excel)
               </Button>
               <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setOpenAddModal(true)}>

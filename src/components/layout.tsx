@@ -34,7 +34,10 @@ import {
   Building2,
   Check,
   Sliders,
-  Sparkles
+  Sparkles,
+  PenTool,
+  Upload,
+  PackageCheck
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
@@ -49,11 +52,13 @@ import {
   useOrganizations,
   useNotificationSends,
   useMemberFees,
-  useMembers
+  useMembers,
+  useUserMemberships
 } from "../hooks/useImpactoData";
 import { useToast } from "./Toast";
 import { MockDB } from "../lib/mockData";
 import { GuiderAssistant } from "./GuiderAssistant";
+import { resolveFileUrl } from "../lib/storageService";
 
 // ==========================================
 // 1. ORGANIZATIONAL BRANDING INJECTOR
@@ -95,11 +100,30 @@ export const OrgThemeInjector: React.FC = () => {
 // ==========================================
 export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSidebar }) => {
   const { user, logout, updateUserLanguage } = useAuthStore();
-  const { activeOrg, clearOrg, setActiveOrg } = useOrgStore();
+  const { activeOrg, activeMember, clearOrg, setActiveOrg } = useOrgStore();
   const { data: orgs } = useOrganizations();
-  const userMemberships = user ? MockDB.getMembers().filter(
-    (m) => m.user_id === user.id && m.status === "active"
-  ) : [];
+  const { data: userMembershipsData } = useUserMemberships(user?.id);
+  
+  // Combine live query memberships with local fallback ensuring active status
+  const userMemberships = React.useMemo(() => {
+    if (!user) return [];
+    if (userMembershipsData && userMembershipsData.length > 0) {
+      return userMembershipsData.filter((m) => m.status === "active");
+    }
+    return MockDB.getMembers().filter(
+      (m) => m.user_id === user.id && m.status === "active"
+    );
+  }, [user, userMembershipsData]);
+
+  // Keep activeMember synchronized with the latest role in the current active organization
+  React.useEffect(() => {
+    if (!activeOrg || !user) return;
+    const currentMem = userMemberships.find((m) => m.org_id === activeOrg.id);
+    if (currentMem && (!activeMember || activeMember.role !== currentMem.role || activeMember.org_id !== activeOrg.id)) {
+      setActiveOrg(activeOrg, currentMem);
+    }
+  }, [activeOrg, user, userMemberships, activeMember, setActiveOrg]);
+
   const { t, i18n } = useTranslation();
   const [dark, setDark] = useState(() => {
     const currentTheme = localStorage.getItem("theme") || "light";
@@ -123,6 +147,25 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
   const { data: meetings } = useMeetings(activeOrg?.id);
   const { data: notificationSends } = useNotificationSends(activeOrg?.id);
   const { data: memberFees } = useMemberFees(activeOrg?.id);
+
+  const rawLogo = activeOrg?.logo_url || (activeOrg?.dashboard_logo && !activeOrg.dashboard_logo.startsWith("icon:") ? activeOrg.dashboard_logo : "");
+  const [resolvedHeaderLogo, setResolvedHeaderLogo] = useState<string>("");
+
+  useEffect(() => {
+    if (!rawLogo || rawLogo === "/logo.png") {
+      setResolvedHeaderLogo("");
+      return;
+    }
+    if (rawLogo.startsWith("http") || rawLogo.startsWith("blob:") || rawLogo.startsWith("data:")) {
+      setResolvedHeaderLogo(rawLogo);
+      return;
+    }
+    let active = true;
+    resolveFileUrl(rawLogo, "avatars").then((url) => {
+      if (active) setResolvedHeaderLogo(url);
+    });
+    return () => { active = false; };
+  }, [rawLogo]);
 
   const announcementsList = [
     ...(news || []).map((n) => ({
@@ -203,76 +246,71 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-14 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl backdrop-saturate-150 border-b border-black/5 dark:border-white/10 flex items-center justify-between px-4 z-40 shrink-0 select-none">
+    <header className="fixed top-0 left-0 right-0 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between px-4 sm:px-6 z-40 shrink-0 select-none shadow-3xs">
       <div className="flex items-center gap-3">
         {/* Mobile menu toggle */}
         <button
           onClick={onToggleSidebar}
-          className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-500 md:hidden"
+          className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 md:hidden"
         >
           <Menu className="h-5 w-5" />
         </button>
 
         {/* Brand Logo / Icon */}
-        <Link to="/" className="flex items-center gap-2" onClick={() => clearOrg()}>
-          {activeOrg?.dashboard_logo && activeOrg.dashboard_logo.startsWith("icon:") ? (
+        <Link to="/" className="flex items-center gap-2 group" onClick={() => clearOrg()}>
+          {activeOrg?.dashboard_logo && !activeOrg.dashboard_logo.startsWith("http") && !activeOrg.dashboard_logo.startsWith("/") && activeOrg.dashboard_logo.startsWith("icon:") ? (
             (() => {
               const IconComponent = getLucideIcon(activeOrg.dashboard_logo.substring(5));
               return IconComponent ? (
-                <IconComponent className="h-7 w-7 text-[var(--org-primary)] shrink-0" />
+                <IconComponent className="h-7 w-7 text-[#156c45] dark:text-emerald-400 shrink-0" />
               ) : (
-                <svg className="h-7 w-7 text-[var(--org-primary)] shrink-0" viewBox="0 0 100 100" fill="none">
+                <svg className="h-7 w-7 text-[#156c45] dark:text-emerald-400 shrink-0" viewBox="0 0 100 100" fill="none">
                   <circle cx="50" cy="35" r="25" stroke="currentColor" strokeWidth="8" />
                   <circle cx="35" cy="65" r="25" stroke="currentColor" strokeWidth="8" />
                   <circle cx="65" cy="65" r="25" stroke="currentColor" strokeWidth="8" />
                 </svg>
               );
             })()
-          ) : activeOrg?.dashboard_logo ? (
+          ) : resolvedHeaderLogo ? (
             <img 
-              src={activeOrg.dashboard_logo} 
-              alt="Dashboard Logo" 
-              className="h-8 shrink-0 object-contain"
+              id="org-header-logo-img"
+              src={resolvedHeaderLogo} 
+              alt={activeOrg?.name || "Logo"} 
+              className="h-8 max-w-[120px] shrink-0 object-contain rounded"
               referrerPolicy="no-referrer"
               onError={(e) => {
-                (e.target as HTMLImageElement).src = "/logo.png";
+                (e.target as HTMLImageElement).style.display = "none";
               }}
             />
           ) : (
-            <svg className="h-7 w-7 text-[var(--org-primary)] shrink-0" viewBox="0 0 100 100" fill="none">
+            <svg className="h-7 w-7 text-[#156c45] dark:text-emerald-400 shrink-0" viewBox="0 0 100 100" fill="none">
               <circle cx="50" cy="35" r="25" stroke="currentColor" strokeWidth="8" />
               <circle cx="35" cy="65" r="25" stroke="currentColor" strokeWidth="8" />
               <circle cx="65" cy="65" r="25" stroke="currentColor" strokeWidth="8" />
-              <polygon points="53,48 47,48 50,42" fill="currentColor" opacity="0.8" />
+              <polygon points="53,48 47,48 50,42" fill="#F59E0B" />
             </svg>
           )}
-          <span className="font-display font-extrabold text-lg tracking-tight text-gray-900 dark:text-white hidden sm:inline">
-            {activeOrg ? activeOrg.name : <>IMPACT<span className="text-emerald-600 dark:text-emerald-500 font-black">O</span></>}
+          <span className="font-display font-extrabold text-lg tracking-tight text-slate-900 dark:text-white hidden sm:inline">
+            {activeOrg ? activeOrg.name : <>Impact<span className="text-[#156c45] dark:text-emerald-500 font-black">o</span></>}
           </span>
         </Link>
 
         {activeOrg && (
           <div className="hidden xs:flex items-center gap-2 relative">
-            <span className="text-gray-300 dark:text-slate-700 font-light font-sans">/</span>
+            <span className="text-slate-300 dark:text-slate-700 font-light font-sans">/</span>
             <button
               onClick={() => setOrgSwitcherOpen(!orgSwitcherOpen)}
-              className="text-xs font-semibold px-2.5 py-1 rounded-md bg-[var(--org-primary-l)] text-[var(--org-primary)] hover:brightness-95 transition flex items-center gap-1.5 font-sans cursor-pointer focus:outline-none"
+              className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-700/70 border border-slate-200/60 dark:border-slate-700/60 transition flex items-center gap-1.5 font-sans cursor-pointer focus:outline-none"
             >
-              <span>{activeOrg.name}</span>
+              <span className="truncate max-w-[130px]">{activeOrg.name}</span>
               {userMemberships.length > 1 && (
                 <svg className={`h-3 w-3 transition-transform ${orgSwitcherOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                 </svg>
               )}
             </button>
-            <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full select-none font-mono ${
-              activeOrg.subscription_status === "active"
-                ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                : activeOrg.subscription_status === "expired"
-                ? "bg-rose-100 text-rose-800 border border-rose-300 animate-pulse"
-                : "bg-amber-100 text-amber-850 border border-amber-300"
-            }`}>
-              {activeOrg.subscription_status === "active" ? "PREMIUM MASTER" : activeOrg.subscription_status === "expired" ? "EXPIRED LICENSE" : "TRIAL PERIOD"}
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full select-none font-mono bg-emerald-50 text-[#156c45] border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/50">
+              {activeOrg.subscription_status === "active" ? "MASTER WORKSPACE" : activeOrg.subscription_status === "expired" ? "RENEWAL DUE" : "FREE PLAN"}
             </span>
 
             {orgSwitcherOpen && userMemberships.length > 1 && (
@@ -328,7 +366,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
         )}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-2.5">
         {/* Currency Switcher */}
         <div className="relative flex items-center">
           <button
@@ -340,16 +378,16 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
               setNotificationOpen(false);
               setOrgSwitcherOpen(false);
             }}
-            className="flex items-center gap-1.5 px-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-gray-250 dark:border-slate-700 rounded-lg text-xs font-extrabold text-gray-750 dark:text-slate-200 transition h-8 cursor-pointer shadow-xs whitespace-nowrap"
+            className="flex items-center gap-1.5 px-2.5 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 transition h-8.5 cursor-pointer shadow-3xs whitespace-nowrap"
           >
-            <Coins className="h-3.5 w-3.5 text-amber-500 shrink-0 animate-spin-slow" />
+            <Coins className="h-3.5 w-3.5 text-[#156c45] dark:text-emerald-400 shrink-0" />
             <span>{activeCurrency}</span>
           </button>
           {currencyOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setCurrencyOpen(false)} />
-              <div className="absolute right-0 top-9 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl w-36 overflow-hidden shrink-0 z-50">
-                <div className="px-2.5 py-1.5 border-b text-[9px] uppercase tracking-wider font-mono text-gray-400 font-bold dark:border-slate-700">
+              <div className="absolute right-0 top-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl w-36 overflow-hidden shrink-0 z-50 py-1">
+                <div className="px-2.5 py-1.5 border-b text-[9px] uppercase tracking-wider font-mono text-slate-400 font-bold dark:border-slate-700">
                   Active Currency
                 </div>
                 {(["RWF", "USD", "EUR", "KES"] as const).map((code) => (
@@ -360,12 +398,12 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
                       setActiveCurrency(code);
                       setCurrencyOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-750 transition cursor-pointer ${
-                      activeCurrency === code ? "text-[var(--org-primary)] font-bold bg-slate-50 dark:bg-slate-750" : "text-gray-700 dark:text-slate-200"
+                    className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-750 transition cursor-pointer ${
+                      activeCurrency === code ? "text-[#156c45] dark:text-emerald-400 font-bold bg-slate-50 dark:bg-slate-750" : "text-slate-700 dark:text-slate-200"
                     }`}
                   >
                     <span>{code === "USD" ? "USD ($)" : code === "EUR" ? "EUR (€)" : code === "KES" ? "KES (KES)" : "RWF (RWF)"}</span>
-                    {activeCurrency === code && <span className="h-1.5 w-1.5 rounded-full bg-[var(--org-primary)]" />}
+                    {activeCurrency === code && <span className="h-1.5 w-1.5 rounded-full bg-[#156c45] dark:bg-emerald-400" />}
                   </button>
                 ))}
               </div>
@@ -386,20 +424,20 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
             }}
             aria-label="Personal Language and Accessibility Selector"
             title="Choose your personal language preference"
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-500 dark:text-slate-400 cursor-pointer flex items-center gap-1"
+            className="flex items-center gap-1.5 px-2.5 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 transition h-8.5 cursor-pointer shadow-3xs"
           >
-            <Globe className="h-4.5 w-4.5" />
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider hidden sm:inline">
+            <Globe className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider">
               {(i18n.language || "en").substring(0, 2)}
             </span>
           </button>
           {langMenuOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setLangMenuOpen(false)} />
-              <div className="absolute right-0 top-9 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl w-52 overflow-hidden shrink-0 z-50 py-1">
-                <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-700">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-slate-400">
-                    Personal Language (Accessibility)
+              <div className="absolute right-0 top-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl w-52 overflow-hidden shrink-0 z-50 py-1">
+                <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
+                    Personal Language
                   </span>
                 </div>
                 {[
@@ -416,20 +454,20 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
                         handleLanguageSwitch(item.code as any);
                         setLangMenuOpen(false);
                       }}
-                      className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center justify-between transition cursor-pointer ${
+                      className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-between transition cursor-pointer ${
                         isSelected
-                          ? "bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 font-bold"
-                          : "text-gray-700 dark:text-slate-200"
+                          ? "bg-emerald-50/80 dark:bg-emerald-950/30 text-[#156c45] dark:text-emerald-300 font-bold"
+                          : "text-slate-700 dark:text-slate-200"
                       }`}
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-sm">{item.flag}</span>
                         <div className="flex flex-col">
                           <span>{item.native}</span>
-                          <span className="text-[10px] text-gray-400">{item.label}</span>
+                          <span className="text-[10px] text-slate-400">{item.label}</span>
                         </div>
                       </div>
-                      {isSelected && <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />}
+                      {isSelected && <Check className="h-3.5 w-3.5 text-[#156c45] dark:text-emerald-400 shrink-0" />}
                     </button>
                   );
                 })}
@@ -441,9 +479,10 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
-          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-500 dark:text-slate-400"
+          aria-label="Toggle dark mode"
+          className="w-8.5 h-8.5 rounded-xl flex items-center justify-center bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 transition cursor-pointer shadow-3xs"
         >
-          {dark ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
+          {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
 
         {/* Notifications */}
@@ -456,11 +495,12 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
                 localStorage.setItem("last_notification_seen", now);
                 setLastNotificationTimestamp(now);
               }}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-500 dark:text-slate-400 relative focus:outline-none"
+              aria-label="Notifications"
+              className="w-8.5 h-8.5 rounded-xl flex items-center justify-center bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 transition cursor-pointer relative shadow-3xs"
             >
-              <Bell className="h-4.5 w-4.5" />
+              <Bell className="h-4 w-4" />
               {hasNewNotification && (
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
               )}
             </button>
 
@@ -640,24 +680,28 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
   const isAccountant = (activeMember?.role as string) === "accountant" || !!user?.is_superadmin;
   const isStaff = (activeMember?.role as string) === "org_admin" || (activeMember?.role as string) === "manager" || (activeMember?.role as string) === "accountant" || !!user?.is_superadmin;
 
-  const navigation = [
+  const workspaceNav = [
     { name: t("nav.dashboard"), path: "/dashboard", icon: LayoutDashboard },
     { name: t("nav.news"), path: "/dashboard/news", icon: Megaphone },
     { name: t("nav.chat"), path: "/dashboard/chat", icon: MessageSquare },
     { name: t("nav.events"), path: "/dashboard/events", icon: Calendar },
     { name: t("nav.goals"), path: "/dashboard/goals", icon: Target },
     { name: t("nav.documents"), path: "/dashboard/documents", icon: FolderOpen },
-    { name: "Marketplace", path: "/dashboard/marketplace", icon: ShoppingBag },
     { name: "Member Fees", path: "/dashboard/fees", icon: Coins },
-    { name: "V2 Add-ons & AI", path: "/dashboard/v2-addons", icon: Sparkles },
-    // Admin & Management links:
-    { name: "Organization Profile", path: "/dashboard/org-profile", icon: Building2 },
-    { name: t("nav.members"), path: "/dashboard/members", icon: Users, admin: true },
-    { name: t("nav.ledger"), path: "/dashboard/ledger", icon: Coins, accountantOnly: true },
-    { name: t("nav.grants"), path: "/dashboard/grants", icon: Award, accountantOnly: true },
-    { name: t("nav.reports"), path: "/dashboard/reports", icon: FileBarChart, admin: true },
-    { name: t("nav.settings"), path: "/dashboard/settings", icon: Settings, admin: true }
+    ...(activeOrg?.marketplace_enabled !== false
+      ? [{ name: "Marketplace", path: "/dashboard/marketplace", icon: ShoppingBag }]
+      : [])
   ];
+
+  const managementNav = [
+    { name: "Organization Profile", path: "/dashboard/org-profile", icon: Building2, allowed: true },
+    { name: t("nav.members"), path: "/dashboard/members", icon: Users, allowed: isStaff },
+    { name: "Asset & Stock Management", path: "/dashboard/assets", icon: PackageCheck, allowed: isStaff },
+    { name: t("nav.ledger"), path: "/dashboard/ledger", icon: Coins, allowed: isAccountant },
+    { name: t("nav.grants"), path: "/dashboard/grants", icon: Award, allowed: isAccountant },
+    { name: t("nav.reports"), path: "/dashboard/reports", icon: FileBarChart, allowed: isAdmin },
+    { name: t("nav.settings"), path: "/dashboard/settings", icon: Settings, allowed: isAdmin }
+  ].filter(item => item.allowed);
 
   return (
     <>
@@ -670,49 +714,92 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
       )}
 
       <aside
-        className={`fixed top-14 left-0 bottom-0 w-52 bg-gray-50 dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 z-50 transition-transform duration-200 shrink-0 md:translate-x-0 ${
+        className={`fixed top-14 left-0 bottom-0 w-56 bg-white dark:bg-slate-900 border-r border-gray-200/80 dark:border-slate-800 z-50 transition-transform duration-200 shrink-0 md:translate-x-0 flex flex-col justify-between ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="h-full flex flex-col justify-between p-3 select-none overflow-y-auto">
-          <nav className="flex flex-col gap-1 w-full">
-            {navigation.map((item) => {
-              // Hide marketplace if disabled by admin
-              if (item.name === "Marketplace" && activeOrg && activeOrg.marketplace_enabled === false) {
-                return null;
-              }
-              // Hide Ledger from non-accountants
-              if (item.accountantOnly && !isAccountant) {
-                return null;
-              }
-              // Hide admin links from standard members
-              if (item.admin && !isStaff) return null;
+          <div className="flex flex-col gap-5 w-full">
+            {/* Workspace section */}
+            <div>
+              <div className="px-3 pb-1 text-[10px] font-mono uppercase font-bold tracking-wider text-gray-400 dark:text-slate-500">
+                Workspace
+              </div>
+              <nav className="flex flex-col gap-0.5 mt-1">
+                {workspaceNav.map((item) => {
+                  const isActive = location.pathname === item.path;
+                  const Icon = item.icon;
 
-              const isActive = location.pathname === item.path;
-              const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={onClose}
+                      className={`flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-150 ${
+                        isActive
+                          ? "bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 font-bold shadow-2xs"
+                          : "text-gray-600 hover:text-[#156c45] hover:bg-[#e8f5ee]/40 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-emerald-400"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 truncate">
+                        <Icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? "text-[#156c45] dark:text-emerald-400" : "text-gray-400 dark:text-slate-500"}`} />
+                        <span className="truncate">{item.name}</span>
+                      </div>
+                      {isActive && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#156c45] dark:bg-emerald-400 shrink-0" />
+                      )}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
 
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={onClose}
-                  className={`flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
-                    isActive
-                      ? "bg-[var(--org-primary-l)] text-[var(--org-primary)] shadow-xs"
-                      : "text-gray-500 hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                  }`}
-                >
-                  <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-[var(--org-primary)]" : "text-gray-400"}`} />
-                  <span className="truncate">{item.name}</span>
-                </Link>
-              );
-            })}
-          </nav>
+            {/* Management section */}
+            {managementNav.length > 0 && (
+              <div>
+                <div className="px-3 pb-1 text-[10px] font-mono uppercase font-bold tracking-wider text-gray-400 dark:text-slate-500">
+                  Management
+                </div>
+                <nav className="flex flex-col gap-0.5 mt-1">
+                  {managementNav.map((item) => {
+                    const isActive = location.pathname === item.path;
+                    const Icon = item.icon;
 
-          <div className="mt-8 pt-4 border-t border-gray-200 dark:border-slate-800 shrink-0">
-            <div className="px-3">
-              <span className="text-[10px] font-mono tracking-wider uppercase text-gray-500 block">Organization Suite</span>
-              <span className="text-[9px] text-gray-400 block mt-0.5">ImpactO v1.0.1 • © 2026</span>
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        onClick={onClose}
+                        className={`flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-150 ${
+                          isActive
+                            ? "bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 font-bold shadow-2xs"
+                            : "text-gray-600 hover:text-[#156c45] hover:bg-[#e8f5ee]/40 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-emerald-400"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 truncate">
+                          <Icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? "text-[#156c45] dark:text-emerald-400" : "text-gray-400 dark:text-slate-500"}`} />
+                          <span className="truncate">{item.name}</span>
+                        </div>
+                        {isActive && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-[#156c45] dark:bg-emerald-400 shrink-0" />
+                        )}
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 pt-3 border-t border-gray-100 dark:border-slate-800 shrink-0">
+            <div className="px-2 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold tracking-tight text-gray-900 dark:text-white block font-display">
+                  Impact<span className="text-[#156c45] dark:text-[#22c06b] font-black">o</span> Suite
+                </span>
+                <span className="text-[9px] text-gray-400 font-mono block">v1.0.1 • 2026</span>
+              </div>
+              <span className="h-2 w-2 rounded-full bg-[#22c06b] ring-4 ring-[#22c06b]/20 shrink-0" title="Connected" />
             </div>
           </div>
         </div>
@@ -820,7 +907,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
       const rate = platformSettings.usd_to_rwf_rate || 1350;
       let costUsd = 25;
       if (selectedTier.includes("Starter")) costUsd = 10;
-      if (selectedTier.includes("Pro VIP") || selectedTier.includes("Enterprise")) costUsd = 40;
+      if (selectedTier.includes("Pro VIP") || selectedTier.includes("Pro Plan") || selectedTier.includes("Enterprise")) costUsd = 40;
 
       const randomRef = "TXN" + Math.floor(100000000 + Math.random() * 900000000);
       const isMtn = momoPhone ? (momoPhone.startsWith("078") || momoPhone.startsWith("079")) : true;
@@ -861,7 +948,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
       const rate = platformSettings.usd_to_rwf_rate || 1350;
       let costUsd = 25;
       if (selectedTier.includes("Starter")) costUsd = 10;
-      if (selectedTier.includes("Pro VIP") || selectedTier.includes("Enterprise")) costUsd = 40;
+      if (selectedTier.includes("Pro VIP") || selectedTier.includes("Pro Plan") || selectedTier.includes("Enterprise")) costUsd = 40;
 
       const randomRef = "TXN" + Math.floor(100000000 + Math.random() * 900000000);
       const isMtn = momoPhone ? (momoPhone.startsWith("078") || momoPhone.startsWith("079")) : true;
@@ -972,7 +1059,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       >
                         <option value="Starter Plan - $10/month">Starter Tier — $10 ({(10 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(10, 'USD'))})</option>
                         <option value="Growth Plan - $25/month">Growth Tier — $25 ({(25 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(25, 'USD'))})</option>
-                        <option value="Pro VIP Plan - $40/month">Pro VIP Room — $40 ({(40 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(40, 'USD'))})</option>
+                        <option value="Pro Plan - $40/month">Pro Plan — $40 ({(40 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(40, 'USD'))})</option>
                       </select>
                     </div>
 
@@ -1056,7 +1143,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       >
                         <option value="Starter Plan - $10/month">Starter Tier — $10 ({(10 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(10, 'USD'))})</option>
                         <option value="Growth Plan - $25/month">Growth Tier — $25 ({(25 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(25, 'USD'))})</option>
-                        <option value="Pro VIP Plan - $40/month">Pro VIP Room — $40 ({(40 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(40, 'USD'))})</option>
+                        <option value="Pro Plan - $40/month">Pro Plan — $40 ({(40 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(40, 'USD'))})</option>
                       </select>
                     </div>
 

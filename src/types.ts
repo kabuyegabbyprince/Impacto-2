@@ -4,6 +4,7 @@ export interface User {
   full_name: string;
   avatar_url?: string;
   is_superadmin: boolean;
+  platform_role?: "superadmin" | "auditor" | "support" | "user";
   created_at: string;
   preferred_language?: "en" | "fr" | "rw";
   accessibility_font_size?: "normal" | "large" | "x-large";
@@ -17,6 +18,8 @@ export interface User {
   reduced_motion?: boolean;
   profile_visibility?: "public" | "members_only" | "private";
   status_badge?: "active" | "remote" | "field" | "away";
+  primary_org_id?: string;
+  joined_org_ids?: string[];
 }
 
 export interface Organization {
@@ -346,6 +349,45 @@ export interface SubscriptionPayment {
   status: "awaiting_approval" | "approved" | "rejected";
   submitted_at: string;
   validated_at?: string;
+  audited_by?: string;
+  audited_by_name?: string;
+  audit_notes?: string;
+  audited_at?: string;
+}
+
+export interface PlatformStaff {
+  id: string;
+  user_id?: string;
+  email: string;
+  username: string;
+  full_name: string;
+  role: "auditor" | "superadmin" | "support";
+  status: "active" | "suspended";
+  password_plain?: string; // stored for demo/mock credential access
+  created_at: string;
+  created_by?: string;
+  last_active?: string;
+  notes?: string;
+  permissions?: {
+    can_audit_payments: boolean;
+    can_view_ledgers: boolean;
+    can_verify_members: boolean;
+  };
+}
+
+export interface PlatformAuditLog {
+  id: string;
+  staff_id: string;
+  staff_name: string;
+  staff_role: string;
+  action_type: "approve_subscription" | "reject_subscription" | "audit_dues_payment" | "verify_member_txn" | "export_audit_report";
+  target_id: string;
+  target_org_id?: string;
+  target_org_name?: string;
+  amount?: number;
+  reference?: string;
+  notes?: string;
+  created_at: string;
 }
 
 // ==========================================
@@ -599,6 +641,78 @@ export interface ShareTransaction {
   transaction_date: string;
   recorded_by: string;
 }
+
+export interface Asset {
+  id: string;
+  org_id: string;
+  name: string;
+  category: string;
+  quantity?: number;
+  quality?: string;
+  identifier?: string; // flexible tag / SKU / serial (not required)
+  serial_number?: string;
+  purchase_date?: string;
+  purchase_cost?: number;
+  currency?: string;
+  condition: "new" | "good" | "fair" | "needs_repair" | "damaged";
+  assigned_to_member_id?: string;
+  assigned_to_name?: string;
+  location?: string;
+  status: "operational" | "maintenance" | "in_storage" | "decommissioned" | "disposed";
+  notes?: string;
+  qr_code?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Certificate {
+  id: string;
+  org_id: string;
+  recipient_member_id?: string;
+  recipient_name: string;
+  recipient_email?: string;
+  title: string;
+  description: string;
+  issue_date: string;
+  expiry_date?: string;
+  certificate_code: string;
+  template_theme: "gold" | "emerald" | "navy" | "modern";
+  signatory_name: string;
+  signatory_title: string;
+  signatory_signature_url?: string;
+  qr_verification_url?: string;
+  status: "issued" | "revoked";
+  created_at: string;
+}
+
+export interface DocumentSignature {
+  id: string;
+  document_id: string;
+  member_id: string;
+  org_id: string;
+  signer_name: string;
+  signer_email?: string;
+  signer_role?: string;
+  signature_type: "drawn" | "uploaded" | "typed";
+  signature_data_url: string;
+  document_version: number;
+  ip_address?: string;
+  user_agent?: string;
+  verification_hash?: string;
+  signed_at: string;
+}
+
+export interface OfflineSyncQueueItem {
+  id: string;
+  timestamp: string;
+  operation: "CREATE" | "UPDATE" | "DELETE";
+  entity: "event_attendance" | "assets" | "ledger_entries" | "documents" | "signatures" | "member_fees" | "audit_logs";
+  payload: any;
+  status: "pending" | "syncing" | "synced" | "failed";
+  retry_count: number;
+  error_message?: string;
+}
+
 
 
 

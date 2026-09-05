@@ -28,8 +28,9 @@ import {
   DonatePage,
   EventCheckinPage
 } from "./pages/public";
+import { CertificateVerifyPage } from "./pages/CertificateVerifyPage";
 
-// Active Dashboard Pages
+// Active Dashboard & Governance Modules (from src/dash)
 import {
   DashboardHome,
   NewsFeed,
@@ -37,33 +38,27 @@ import {
   GoalsTracker,
   MeetingsMinutes,
   DocumentsCenter,
-  EventsCalendar
-} from "./pages/dashboard";
-
-import { OrganizationMarketplace } from "./pages/marketplace";
-import { OrganizationMemberFees } from "./pages/fees";
-import { V2AdvancedFeatures } from "./components/V2AdvancedFeatures";
-
-// Administrative Modules
-import {
+  EventsCalendar,
+  OrganizationMarketplace,
+  OrganizationMemberFees,
+  GoalsPage,
+  OrganizationSettingsPage,
+  OrganizationProfilePage,
+  SuperadminDashboard,
   MembersManagement,
   LedgerBookkeeping,
   DonorsPortal,
   GrantsTracker,
-  AnnualReports
-} from "./pages/admin-modules";
+  AnnualReports,
+  AssetManagementPage
+} from "./dash";
 
-// Organization Brand Settings
-import { OrganizationSettingsPage } from "./pages/settings";
-import { OrganizationProfilePage } from "./pages/org-profile";
-import { GoalsPage } from "./pages/goals";
-
-// Platform Operators Control
-import { SuperadminDashboard } from "./pages/superadmin";
+import { V2AdvancedFeatures } from "./components/V2AdvancedFeatures";
 
 // Guard Gatewards & Layouts
-import { PrivateRoute, OrgRoute, AdminRoute, AccountantRoute, PlatformRoute } from "./components/guards";
+import { PrivateRoute, OrgRoute, AdminRoute, AccountantRoute, PlatformRoute, AuditorRoute } from "./components/guards";
 import { DashboardLayout } from "./components/layout";
+import { AuditorDashboard } from "./pages/auditorDashboard";
 
 import { ToastProvider } from "./components/Toast";
 import { initCrossTabSync } from "./lib/crossTabSync";
@@ -96,6 +91,8 @@ export default function App() {
                 1. PUBLIC DISCOVERY & WHITE-LABELED PORTALS
                 ========================================== */}
             <Route path="/" element={<Landing />} />
+            <Route path="/verify" element={<CertificateVerifyPage />} />
+            <Route path="/verify/:code" element={<CertificateVerifyPage />} />
             <Route path="/@:slug" element={<OrgPublicPage />} />
             <Route path="/@:slug/donate" element={<DonatePage />} />
             <Route path="/@:slug/checkin" element={<EventCheckinPage />} />
@@ -108,6 +105,7 @@ export default function App() {
                 ========================================== */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/signup" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             
@@ -121,7 +119,7 @@ export default function App() {
             />
 
             {/* ==========================================
-                3. SUPERADMIN CONTROL PANELS
+                3. SUPERADMIN & AUDITOR CONTROL PANELS
                 ========================================== */}
             <Route
               path="/platform/admin"
@@ -130,6 +128,18 @@ export default function App() {
                   <SuperadminDashboard />
                 </PlatformRoute>
               }
+            />
+            <Route
+              path="/auditor"
+              element={
+                <AuditorRoute>
+                  <AuditorDashboard />
+                </AuditorRoute>
+              }
+            />
+            <Route
+              path="/platform/auditor"
+              element={<Navigate to="/auditor" replace />}
             />
 
             {/* ==========================================
@@ -236,13 +246,7 @@ export default function App() {
 
             <Route
               path="/dashboard/v2-addons"
-              element={
-                <OrgRoute>
-                  <DashboardLayout>
-                    <V2AdvancedFeatures />
-                  </DashboardLayout>
-                </OrgRoute>
-              }
+              element={<Navigate to="/dashboard/settings?tab=subscription" replace />}
             />
 
             {/* ==========================================
@@ -259,6 +263,18 @@ export default function App() {
               }
             />
             <Route path="/admin/members" element={<Navigate to="/dashboard/members" replace />} />
+
+            <Route
+              path="/dashboard/assets"
+              element={
+                <AdminRoute>
+                  <DashboardLayout>
+                    <AssetManagementPage />
+                  </DashboardLayout>
+                </AdminRoute>
+              }
+            />
+            <Route path="/dashboard/inventory" element={<Navigate to="/dashboard/assets" replace />} />
 
             <Route
               path="/dashboard/ledger"

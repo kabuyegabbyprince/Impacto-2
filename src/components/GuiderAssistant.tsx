@@ -125,7 +125,7 @@ export const GuiderAssistant: React.FC<GuiderAssistantProps> = ({ defaultOpen = 
     trial: { en: "Free Trial", rw: "Icyiciro cy'Igerageza", fr: "Essai Gratuit" },
     starter: { en: "Starter Tier ($10)", rw: "Ifatabuguzi rya Starter ($10)", fr: "Forfait Starter (10 $)" },
     growth: { en: "Growth Tier ($25)", rw: "Ifatabuguzi rya Growth ($25)", fr: "Forfait Growth (25 $)" },
-    enterprise: { en: "Pro VIP Room ($40)", rw: "Ifatabuguzi rya Pro VIP ($40)", fr: "Forfait Pro VIP (40 $)" }
+    enterprise: { en: "Pro Plan ($40)", rw: "Ifatabuguzi rya Pro ($40)", fr: "Forfait Pro (40 $)" }
   };
 
   const displayRoleName = roleLabels[userRole]?.[currentLang] || roleLabels.member[currentLang];
@@ -552,11 +552,11 @@ export const GuiderAssistant: React.FC<GuiderAssistantProps> = ({ defaultOpen = 
           <button
             id="guider-floating-trigger-btn"
             onClick={() => setIsOpen(true)}
-            className="group relative flex items-center gap-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-4 py-3 rounded-full shadow-2xl transition-all duration-300 border-2 border-emerald-400/30 hover:shadow-emerald-900/30"
+            className="group relative flex items-center gap-3 bg-[#156c45] hover:bg-[#105536] active:scale-[0.98] text-white px-4 py-2.5 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 border border-emerald-400/20 cursor-pointer"
             title={labels.title}
           >
             {/* Impacto Brand Icon Logo */}
-            <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shadow-inner overflow-hidden flex-shrink-0">
+            <div className="w-7 h-7 rounded-xl bg-white flex items-center justify-center shadow-xs overflow-hidden shrink-0">
               <img
                 src="/impacto-logo.png"
                 alt="Impacto Logo"
@@ -564,17 +564,17 @@ export const GuiderAssistant: React.FC<GuiderAssistantProps> = ({ defaultOpen = 
                 onError={(e) => {
                   (e.currentTarget as HTMLElement).style.display = "none";
                   (e.currentTarget.parentElement as HTMLElement).innerHTML =
-                    '<span class="text-emerald-700 font-black text-xs">IM</span>';
+                    '<span class="text-[#156c45] font-black text-xs">IM</span>';
                 }}
               />
             </div>
 
             <div className="flex flex-col items-start pr-1">
-              <div className="flex items-center gap-1.5 font-bold text-sm leading-tight tracking-wide">
+              <div className="flex items-center gap-1.5 font-bold text-xs leading-tight tracking-wide">
                 <span>{labels.floatingBtn}</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
+                <span className="w-2 h-2 rounded-full bg-emerald-300" />
               </div>
-              <span className="text-[10px] text-emerald-100 font-medium leading-none opacity-90">
+              <span className="text-[10px] text-emerald-100 font-medium leading-none opacity-90 mt-0.5">
                 {labels.floatingSubtitle}
               </span>
             </div>
@@ -588,33 +588,33 @@ export const GuiderAssistant: React.FC<GuiderAssistantProps> = ({ defaultOpen = 
           id="guider-interactive-drawer"
           className={`fixed bottom-0 right-0 z-50 flex flex-col bg-white dark:bg-slate-900 shadow-2xl border-l border-t border-slate-200 dark:border-slate-800 transition-all duration-300 ${
             expandedView
-              ? "w-full md:w-[680px] h-[92vh] max-h-[900px] rounded-tl-2xl"
-              : "w-full sm:w-[460px] h-[82vh] max-h-[760px] rounded-tl-2xl"
+              ? "w-full md:w-[680px] h-[92vh] max-h-[900px] rounded-t-2xl md:rounded-tl-2xl md:rounded-tr-none"
+              : "w-full sm:w-[460px] h-[82vh] max-h-[760px] rounded-t-2xl sm:rounded-tl-2xl sm:rounded-tr-none"
           }`}
         >
           {/* HEADER */}
-          <div className="flex items-center justify-between px-5 py-3.5 bg-gradient-to-r from-emerald-700 via-emerald-800 to-teal-900 text-white rounded-tl-2xl select-none">
+          <div className="flex items-center justify-between px-5 py-3.5 bg-[#156c45] text-white rounded-t-2xl sm:rounded-tl-2xl sm:rounded-tr-none select-none border-b border-emerald-800/40">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-white p-1 flex items-center justify-center shadow-md flex-shrink-0">
+              <div className="w-8 h-8 rounded-xl bg-white p-1 flex items-center justify-center shadow-xs shrink-0">
                 <img
                   src="/impacto-logo.png"
                   alt="Impacto Logo"
-                  className="w-6 h-6 object-contain"
+                  className="w-5.5 h-5.5 object-contain"
                   onError={(e) => {
                     (e.currentTarget as HTMLElement).style.display = "none";
                     (e.currentTarget.parentElement as HTMLElement).innerHTML =
-                      '<span class="text-emerald-800 font-black text-xs">IM</span>';
+                      '<span class="text-[#156c45] font-black text-xs">IM</span>';
                   }}
                 />
               </div>
               <div>
-                <h3 className="font-bold text-sm tracking-wide flex items-center gap-2">
+                <h3 className="font-bold text-sm tracking-tight flex items-center gap-2">
                   <span>{labels.floatingBtn}</span>
                   <span className="text-xs font-normal text-emerald-200">
                     ({currentLang === "rw" ? "Baza" : "Guider"})
                   </span>
                 </h3>
-                <p className="text-[11px] text-emerald-100/80">
+                <p className="text-[11px] text-emerald-100/90 font-medium">
                   {labels.subtitle}
                 </p>
               </div>
@@ -625,7 +625,7 @@ export const GuiderAssistant: React.FC<GuiderAssistantProps> = ({ defaultOpen = 
               {/* Expand Toggle */}
               <button
                 onClick={() => setExpandedView(!expandedView)}
-                className="p-1.5 text-emerald-200 hover:text-white hover:bg-emerald-600/50 rounded-lg transition-colors cursor-pointer"
+                className="p-1.5 text-emerald-100 hover:text-white hover:bg-emerald-700/60 rounded-xl transition-colors cursor-pointer"
                 title={expandedView ? "Minimize" : "Expand"}
               >
                 {expandedView ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -634,7 +634,7 @@ export const GuiderAssistant: React.FC<GuiderAssistantProps> = ({ defaultOpen = 
               {/* Close Button */}
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1.5 text-emerald-200 hover:text-white hover:bg-emerald-600/50 rounded-lg transition-colors cursor-pointer"
+                className="p-1.5 text-emerald-100 hover:text-white hover:bg-emerald-700/60 rounded-xl transition-colors cursor-pointer"
                 title={labels.close}
               >
                 <X className="w-4 h-4" />

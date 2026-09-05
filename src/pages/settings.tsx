@@ -38,12 +38,14 @@ import {
   useSubmitSubscriptionPayment,
   useErrorReports,
   useDeleteOrganization,
-  useUpdateUserProfile
+  useUpdateUserProfile,
+  useMembers
 } from "../hooks/useImpactoData";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { useToast } from "../components/Toast";
 import { Button, Input, Card, Badge, Modal, Avatar, ImageUploadInput, getLucideIcon } from "../components/ui";
 import { ResolvedImage } from "../components/ResolvedMedia";
+import { V2AdvancedFeatures } from "../components/V2AdvancedFeatures";
 
 export const OrganizationSettingsPage: React.FC = () => {
   const { t } = useLocalTranslation();
@@ -59,12 +61,20 @@ export const OrganizationSettingsPage: React.FC = () => {
   const updateProfileMutation = useUpdateUserProfile();
   const { data: platformData } = usePlatformAdminData();
   const { data: supportChats, refetch: refetchSupport } = useErrorReports(activeOrg?.id);
+  const { data: members } = useMembers(activeOrg?.id);
+
+  const canAccessMomo = activeMember?.role === "org_admin" || activeMember?.role === "accountant";
+  const canAccessSupport = activeMember?.role === "org_admin";
+  const canAccessSubscription = activeMember?.role === "org_admin" || activeMember?.role === "accountant" || !!user?.is_superadmin;
+  const hasProPlan = activeOrg?.subscription_tier === "enterprise" || (activeOrg as any)?.subscription_tier === "pro";
 
   const [activeTab, setActiveTab] = useState<"general" | "public_portal" | "members_dashboard" | "momo" | "subscription" | "support" | "profile">(() => {
     const tabParam = searchParams.get("tab");
     if (tabParam === "profile" || tabParam === "accessibility") return "profile";
     if (tabParam === "momo") return "momo";
-    if (tabParam === "subscription") return "subscription";
+    if (tabParam === "subscription" || tabParam === "billing") {
+      return (activeMember?.role === "org_admin" || activeMember?.role === "accountant" || !!user?.is_superadmin) ? "subscription" : "general";
+    }
     if (tabParam === "support") return "support";
     return "general";
   });
@@ -73,14 +83,17 @@ export const OrganizationSettingsPage: React.FC = () => {
     const tabParam = searchParams.get("tab");
     if (tabParam === "profile" || tabParam === "accessibility") {
       setActiveTab("profile");
+    } else if ((tabParam === "subscription" || tabParam === "billing") && canAccessSubscription) {
+      setActiveTab("subscription");
+    } else if (tabParam === "momo" && canAccessMomo) {
+      setActiveTab("momo");
+    } else if (tabParam === "support" && canAccessSupport) {
+      setActiveTab("support");
     }
-  }, [searchParams]);
+  }, [searchParams, canAccessSubscription, canAccessMomo, canAccessSupport]);
 
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-
-  const canAccessMomo = activeMember?.role === "org_admin" || activeMember?.role === "accountant";
-  const canAccessSupport = activeMember?.role === "org_admin";
 
   const platformSettings = platformData?.settings || {
     usd_to_rwf_rate: 1300,
@@ -353,7 +366,9 @@ export const OrganizationSettingsPage: React.FC = () => {
         mission,
         vision,
         primary_color: pColor,
-        dashboard_logo: dashboardLogo,
+        logo_url: logoUrl,
+        cover_url: coverUrl,
+        dashboard_logo: dashboardLogo || logoUrl,
         marketplace_enabled: marketplaceEnabled,
         donations_enabled: enableDonations,
         donation_account_name: mName,
@@ -361,7 +376,7 @@ export const OrganizationSettingsPage: React.FC = () => {
         donation_airtel_number: airtelNum
       });
       setActiveOrg(updated, useOrgStore.getState().activeMember);
-      addToast("Organization Workspace generic branding variables saved successfully!", "success");
+      addToast("Organization workspace branding, logo, and theme saved successfully!", "success");
     } catch (err: any) {
       console.error(err);
       addToast(err?.message || "Failed to save general workspace variables.", "error");
@@ -454,7 +469,7 @@ export const OrganizationSettingsPage: React.FC = () => {
       const rate = platformSettings.usd_to_rwf_rate || 1350;
       let costUsd = 25;
       if (subPlan.includes("Starter")) costUsd = 10;
-      if (subPlan.includes("Pro VIP") || subPlan.includes("Enterprise")) costUsd = 40;
+      if (subPlan.includes("Pro VIP") || subPlan.includes("Pro Plan") || subPlan.includes("Enterprise")) costUsd = 40;
 
       await submitPaymentMutation.mutateAsync({
         org_id: activeOrg?.id || "",
@@ -535,95 +550,97 @@ export const OrganizationSettingsPage: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-6 select-none font-sans w-full animate-in">
-      <div className="border-b pb-4 shrink-0">
-        <h2 className="text-xl md:text-2xl font-bold font-display text-gray-901">{t("settings_title", "Organization Settings Management")}</h2>
-        <p className="text-xs text-gray-500 font-medium">{t("settings_subtitle", "Coordinate custom primary color palettes, public profile pages, members' layouts, and manual subscription billing gateways.")}</p>
+      <div className="border-b border-gray-200 dark:border-slate-800 pb-5 shrink-0">
+        <h2 className="text-xl md:text-2xl font-bold font-display text-gray-900 dark:text-white leading-none">{t("settings_title", "Organization Settings Management")}</h2>
+        <p className="text-xs md:text-sm text-gray-500 dark:text-slate-400 font-medium mt-1">{t("settings_subtitle", "Coordinate custom primary color palettes, public profile pages, members' layouts, and manual subscription billing gateways.")}</p>
       </div>
 
       {successMsg && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-150 text-xs text-emerald-800 font-semibold rounded-lg flex items-center gap-2 animate-bounce">
+        <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 font-semibold rounded-xl flex items-center gap-2 shadow-3xs">
           <Check className="h-4.5 w-4.5" />
           {successMsg}
         </div>
       )}
 
       {errorMsg && (
-        <div className="p-3.5 bg-rose-50 border border-rose-150 text-xs text-rose-800 font-semibold rounded-lg flex items-center gap-2">
+        <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-800 dark:text-rose-300 font-semibold rounded-xl flex items-center gap-2 shadow-3xs">
           <AlertTriangle className="h-4.5 w-4.5 text-rose-600" />
           {errorMsg}
         </div>
       )}
 
-      {/* Settings Tab Headers */}
-      <div className="flex gap-4 border-b pb-1 overflow-x-auto scrollbar-none font-display mb-2 select-none shrink-0">
+      {/* Settings Tab Headers - Modern Segmented Control */}
+      <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 inline-flex items-center gap-1 shadow-3xs overflow-x-auto scrollbar-none select-none shrink-0">
         <button
           onClick={() => setActiveTab("general")}
-          className={`pb-3 text-xs md:text-sm font-bold border-b-2 transition shrink-0 cursor-pointer flex items-center gap-1.5 ${
+          className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "general"
-              ? "border-[var(--org-primary)] text-[var(--org-primary)]"
-              : "border-transparent text-gray-500 hover:text-gray-900"
+              ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
           }`}
         >
-          <Sliders className="h-4 w-4" /> {t("set_tab_general")}
+          <Sliders className="h-3.5 w-3.5" /> {t("set_tab_general")}
         </button>
 
         <button
           onClick={() => setActiveTab("public_portal")}
-          className={`pb-3 text-xs md:text-sm font-bold border-b-2 transition shrink-0 cursor-pointer flex items-center gap-1.5 ${
+          className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "public_portal"
-              ? "border-[var(--org-primary)] text-[var(--org-primary)]"
-              : "border-transparent text-gray-500 hover:text-gray-900"
+              ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
           }`}
         >
-          <Globe className="h-4 w-4" /> {t("set_tab_public")}
+          <Globe className="h-3.5 w-3.5" /> {t("set_tab_public")}
         </button>
 
         {canAccessMomo && (
           <button
             onClick={() => setActiveTab("momo")}
-            className={`pb-3 text-xs md:text-sm font-bold border-b-2 transition shrink-0 cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
               activeTab === "momo"
-                ? "border-[var(--org-primary)] text-[var(--org-primary)]"
-                : "border-transparent text-gray-500 hover:text-gray-900"
+                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
             }`}
           >
-            <CreditCard className="h-4 w-4" /> {t("set_tab_momo")}
+            <CreditCard className="h-3.5 w-3.5" /> {t("set_tab_momo")}
           </button>
         )}
 
-        <button
-          onClick={() => setActiveTab("subscription")}
-          className={`pb-3 text-xs md:text-sm font-bold border-b-2 transition shrink-0 cursor-pointer flex items-center gap-1.5 ${
-            activeTab === "subscription"
-              ? "border-[var(--org-primary)] text-[var(--org-primary)]"
-              : "border-transparent text-gray-500 hover:text-gray-900"
-          }`}
-        >
-          <Crown className="h-4 w-4" /> {t("set_tab_subscription")}
-        </button>
+        {canAccessSubscription && (
+          <button
+            onClick={() => setActiveTab("subscription")}
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
+              activeTab === "subscription"
+                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+            }`}
+          >
+            <Crown className="h-3.5 w-3.5" /> {t("set_tab_subscription")}
+          </button>
+        )}
 
         {canAccessSupport && (
           <button
             onClick={() => setActiveTab("support")}
-            className={`pb-3 text-xs md:text-sm font-bold border-b-2 transition shrink-0 cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
               activeTab === "support"
-                ? "border-[var(--org-primary)] text-[var(--org-primary)]"
-                : "border-transparent text-gray-500 hover:text-gray-900"
+                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
             }`}
           >
-            <Ambulance className="h-4 w-4" /> {t("set_tab_support")}
+            <Ambulance className="h-3.5 w-3.5" /> {t("set_tab_support")}
           </button>
         )}
 
         <button
           onClick={() => setActiveTab("profile")}
-          className={`pb-3 text-xs md:text-sm font-bold border-b-2 transition shrink-0 cursor-pointer flex items-center gap-1.5 ${
+          className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "profile"
-              ? "border-[var(--org-primary)] text-[var(--org-primary)]"
-              : "border-transparent text-gray-500 hover:text-gray-900"
+              ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
           }`}
         >
-          <User className="h-4 w-4" /> {t("My Profile")}
+          <User className="h-3.5 w-3.5" /> {t("My Profile")}
         </button>
       </div>
 
@@ -657,15 +674,28 @@ export const OrganizationSettingsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Logo and Marketplace Configuration */}
-              <div className="border-t pt-5 flex flex-col gap-5">
-                <ImageUploadInput 
-                  label="Cooperative Dashboard Logo" 
-                  value={dashboardLogo} 
-                  onChange={setDashboardLogo} 
-                />
+              {/* Logo and Theme Configuration */}
+              <div className="border-t border-slate-200/80 dark:border-slate-800 pt-5 flex flex-col gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <ImageUploadInput 
+                    label="Official Organization Brand Logo (Replaces default letter badge)" 
+                    value={logoUrl} 
+                    onChange={(val) => {
+                      setLogoUrl(val);
+                      if (!dashboardLogo) setDashboardLogo(val);
+                    }} 
+                    bucketName="avatars"
+                  />
+
+                  <ImageUploadInput 
+                    label="Organization Profile Banner / Cover Image" 
+                    value={coverUrl} 
+                    onChange={setCoverUrl} 
+                    bucketName="avatars"
+                  />
+                </div>
                 
-                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800/40 border dark:border-slate-800 rounded-xl">
+                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 rounded-xl">
                   <div className="flex flex-col gap-1 text-left">
                     <span className="text-xs font-bold text-gray-800 dark:text-gray-100">Cooperative Marketplace Integration</span>
                     <span className="text-[11px] text-gray-400">Allow members to buy/sell assets and commodities via the internal cooperative directory. Disable this to hide the Marketplace option from the navigation menu.</span>
@@ -960,7 +990,7 @@ export const OrganizationSettingsPage: React.FC = () => {
         )}
 
         {/* Subscription pricing structures */}
-        {activeTab === "subscription" && (
+        {activeTab === "subscription" && canAccessSubscription && (
           <div className="flex flex-col gap-6 w-full animate-in fade-in">
             {activeOrg?.subscription_status === "trial" && (
               <div className="bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 p-4.5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 font-sans select-none animate-in duration-300">
@@ -1128,23 +1158,23 @@ export const OrganizationSettingsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Pro VIP Monolith */}
+              {/* Pro Plan Monolith */}
               <div className={`border rounded-2xl p-5 shadow-xs flex flex-col justify-between text-white transition ${
-                activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "enterprise"
+                activeOrg?.subscription_status === "active" && (activeOrg?.subscription_tier === "enterprise" || (activeOrg as any)?.subscription_tier === "pro")
                   ? "border-amber-500 bg-slate-900 shadow-md transform scale-102 ring-2 ring-amber-500 ring-offset-2 ring-offset-slate-950"
                   : "bg-slate-900 border-amber-500/60"
               }`}>
                 <div>
                   <div className="flex justify-between items-center mb-4 leading-none select-none">
-                    <span className="text-[10px] uppercase tracking-widest text-amber-400 font-mono font-bold">VIP ROOM TIER</span>
-                    {activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "enterprise" ? (
+                    <span className="text-[10px] uppercase tracking-widest text-amber-400 font-mono font-bold">PRO PLAN TIER</span>
+                    {activeOrg?.subscription_status === "active" && (activeOrg?.subscription_tier === "enterprise" || (activeOrg as any)?.subscription_tier === "pro") ? (
                       <Badge color="green">{t("ACTIVE NOW")}</Badge>
                     ) : (
                       <Crown className="h-4.5 w-4.5 text-amber-400" />
                     )}
                   </div>
                   <h3 className="text-2xl font-extrabold font-display leading-none text-white">$40 <span className="text-xs font-normal text-slate-400">/ {t("month")} ({formatAmount(convertToRWF(40, "USD"))})</span></h3>
-                  <p className="text-[11px] text-amber-400 font-bold mt-2 font-mono">Pro VIP Exclusive Experience:</p>
+                  <p className="text-[11px] text-amber-400 font-bold mt-2 font-mono">Pro Plan Exclusive Experience:</p>
                   <ul className="text-xs font-semibold text-slate-200 space-y-2 mt-3 leading-relaxed">
                     <li className="flex items-start gap-1">
                       <span className="text-amber-400 font-bold">✓</span>
@@ -1156,7 +1186,7 @@ export const OrganizationSettingsPage: React.FC = () => {
                     </li>
                     <li className="flex items-start gap-1">
                       <span className="text-amber-400 font-bold">✓</span>
-                      <span><strong>{t("Treated as VIP group tier")}</strong></span>
+                      <span><strong>{t("Treated as Pro tier organization")}</strong></span>
                     </li>
                     <li className="flex items-start gap-1">
                       <span className="text-amber-400 font-bold">✓</span>
@@ -1164,27 +1194,27 @@ export const OrganizationSettingsPage: React.FC = () => {
                     </li>
                     <li className="flex items-start gap-1">
                       <span className="text-amber-400 font-bold">✓</span>
-                      <span><strong>{t("Admin direct contact (VIP room)")}</strong></span>
+                      <span><strong>{t("Admin direct contact (Pro Plan)")}</strong></span>
                     </li>
                   </ul>
                 </div>
                 <div>
-                  {activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "enterprise" ? (
+                  {activeOrg?.subscription_status === "active" && (activeOrg?.subscription_tier === "enterprise" || (activeOrg as any)?.subscription_tier === "pro") ? (
                     <Button className="w-full mt-6 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold cursor-default pointer-events-none">
                       ✓ {t("Your Active Plan")}
                     </Button>
                   ) : (
-                    <Button className="w-full mt-6 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold" onClick={() => { setSubPlan("Pro VIP Plan - $40/month"); setOpenSubModal(true); }}>
-                      {t("Join VIP Room")}
+                    <Button className="w-full mt-6 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold" onClick={() => { setSubPlan("Pro Plan - $40/month"); setOpenSubModal(true); }}>
+                      {t("Upgrade to Pro Plan")}
                     </Button>
                   )}
                   {/* Switch Link Option */}
                   <div className="text-center mt-3 select-none">
                     <span 
-                      onClick={() => { setSubPlan("Pro VIP Plan - $40/month"); setOpenSubModal(true); }}
+                      onClick={() => { setSubPlan("Pro Plan - $40/month"); setOpenSubModal(true); }}
                       className="text-amber-400 hover:text-amber-300 text-[11px] font-bold underline cursor-pointer transition"
                     >
-                      {t("Change Subscription to Pro VIP")}
+                      {t("Change Subscription to Pro Plan")}
                     </span>
                   </div>
                 </div>
@@ -1232,6 +1262,13 @@ export const OrganizationSettingsPage: React.FC = () => {
                 </Button>
               </div>
             </Card>
+
+            {/* V2 Add-ons & AI Feature suite: Only visible to Admin and Accountant on Workplace Tier Billing, and NEVER displayed when organization is on Pro Plan */}
+            {!hasProPlan && (
+              <div className="mt-4 border-t border-gray-200 dark:border-gray-800 pt-6">
+                <V2AdvancedFeatures orgId={activeOrg?.id} currentPlan={activeOrg?.subscription_tier} memberCount={members?.length || 1} />
+              </div>
+            )}
           </div>
         )}
 

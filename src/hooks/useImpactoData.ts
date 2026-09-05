@@ -40,6 +40,7 @@ import {
   MemberFee,
   MarketplaceProduct,
   MarketplaceLead,
+  Asset,
 } from "../types";
 
 // Helper for fake latency/promises
@@ -435,6 +436,60 @@ export function useApprovedMembers(orgId: string | undefined) {
   };
 }
 
+export function useUserMemberships(userId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!userId || !isSupabaseConfigured) return;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      const channelName = `user_mems_rt_${userId}_${Math.random().toString(36).substring(2, 9)}`;
+      channel = supabase
+        .channel(channelName)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "org_members", filter: `user_id=eq.${userId}` },
+          () => queryClient.invalidateQueries({ queryKey: ["user_memberships", userId] })
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn("[Realtime] User memberships channel notice:", err);
+    }
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [userId, queryClient]);
+
+  return useQuery({
+    queryKey: ["user_memberships", userId],
+    queryFn: async () => {
+      if (!userId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("org_members")
+          .select("*, organizations(*)")
+          .eq("user_id", userId);
+        if (error) {
+          console.warn("[useUserMemberships] Supabase fetch error, fallback to mock:", error.message);
+        } else if (data && data.length > 0) {
+          return data as (OrgMember & { organizations?: Organization })[];
+        }
+      }
+      await delay();
+      const orgs = MockDB.getOrgs();
+      const allMock = MockDB.getMembers().filter((m) => m.user_id === userId);
+      return allMock.map((m) => ({
+        ...m,
+        organizations: orgs.find((o) => o.id === m.org_id) as any,
+      })) as (OrgMember & { organizations?: Organization })[];
+    },
+    enabled: !!userId,
+  });
+}
+
+
 export function useMemberTiers(orgId: string | undefined) {
   return useQuery({
     queryKey: ["tiers", orgId],
@@ -560,11 +615,25 @@ export function useUpdateMemberStatus() {
         if (status) updates.status = status;
         if (role) updates.role = role;
         if (is_volunteer !== undefined) updates.is_volunteer = is_volunteer;
-        const { data, error } = await supabase
+        
+        let { data, error } = await supabase
           .from("org_members")
           .update(updates)
           .eq("id", id)
           .select();
+          
+        // If the Supabase table does not have optional columns like is_volunteer, retry without it
+        if (error && error.code === "PGRST204" && updates.is_volunteer !== undefined) {
+          delete updates.is_volunteer;
+          const retryRes = await supabase
+            .from("org_members")
+            .update(updates)
+            .eq("id", id)
+            .select();
+          data = retryRes.data;
+          error = retryRes.error;
+        }
+        
         if (error) throw error;
         if (!data || data.length === 0) {
           updatedRecord = { id, ...updates };
@@ -2432,8 +2501,234 @@ export function useUpdateErrorReportAdminNotes() {
 }
 
 // ==========================================
-// 12. SUPERADMIN PORTAL DATA HOOK
+// 12. SUPERADMIN PORTAL DATA & AUDITOR HOOKS
 // ==========================================
+export function usePlatformStaff() {
+  return useQuery({
+    queryKey: ["platform_staff"],
+    queryFn: async () => {
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("platform_staff")
+            .select("*")
+            .order("created_at", { ascending: false });
+          if (!error && data && data.length > 0) return data;
+        } catch (err) {
+          console.warn("Supabase platform_staff select fallback:", err);
+        }
+      }
+      await delay();
+      return MockDB.getPlatformStaff();
+    }
+  });
+}
+
+export function usePlatformAuditLogs() {
+  return useQuery({
+    queryKey: ["platform_audit_logs"],
+    queryFn: async () => {
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("platform_audit_logs")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(200);
+          if (!error && data && data.length > 0) return data;
+        } catch (err) {
+          console.warn("Supabase platform_audit_logs select fallback:", err);
+        }
+      }
+      await delay();
+      return MockDB.getPlatformAuditLogs();
+    }
+  });
+}
+
+export function useCreatePlatformStaff() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      email: string;
+      username: string;
+      full_name: string;
+      role: "auditor" | "superadmin" | "support";
+      password_plain?: string;
+      notes?: string;
+      permissions?: {
+        can_audit_payments: boolean;
+        can_view_ledgers: boolean;
+        can_verify_members: boolean;
+      };
+    }) => {
+      const newStaffId = `staff-${Date.now()}`;
+      const newStaff = {
+        id: newStaffId,
+        ...payload,
+        status: "active" as const,
+        created_at: new Date().toISOString(),
+        last_active: new Date().toISOString(),
+        permissions: payload.permissions || {
+          can_audit_payments: true,
+          can_view_ledgers: true,
+          can_verify_members: true
+        }
+      };
+
+      if (payload.password_plain) {
+        try {
+          const raw = localStorage.getItem("impacto_user_passwords");
+          const stored = raw ? JSON.parse(raw) : {};
+          stored[payload.email.toLowerCase()] = payload.password_plain;
+          localStorage.setItem("impacto_user_passwords", JSON.stringify(stored));
+        } catch (e) {
+          console.warn("Failed to save staff password locally", e);
+        }
+      }
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("platform_staff").insert({
+            id: newStaff.id,
+            email: newStaff.email,
+            username: newStaff.username,
+            full_name: newStaff.full_name,
+            role: newStaff.role,
+            status: newStaff.status,
+            notes: newStaff.notes,
+            permissions: newStaff.permissions,
+            created_at: newStaff.created_at
+          });
+          
+          // Ensure they are also in the users table so they can login and have platform_role set
+          const { data: existingUser } = await supabase.from("users").select("id").eq("email", payload.email).maybeSingle();
+          if (!existingUser) {
+            await supabase.from("users").insert({
+              id: `u-${newStaffId}`,
+              email: payload.email,
+              full_name: payload.full_name,
+              is_superadmin: payload.role === "superadmin",
+              platform_role: payload.role,
+              created_at: new Date().toISOString()
+            });
+          } else {
+             await supabase.from("users").update({
+               platform_role: payload.role,
+               is_superadmin: payload.role === "superadmin"
+             }).eq("email", payload.email);
+          }
+        } catch (err) {
+          console.warn("Supabase platform_staff insert fallback:", err);
+        }
+      }
+
+      // Also ensure mock user list has this user
+      const users = MockDB.getUsers();
+      if (!users.some(u => u.email.toLowerCase() === payload.email.toLowerCase())) {
+        users.push({
+          id: `u-${newStaffId}`,
+          email: payload.email,
+          full_name: payload.full_name,
+          is_superadmin: payload.role === "superadmin",
+          platform_role: payload.role,
+          created_at: new Date().toISOString()
+        });
+        MockDB.saveUsers(users);
+      }
+
+      const allStaff = MockDB.getPlatformStaff();
+      allStaff.unshift(newStaff);
+      MockDB.savePlatformStaff(allStaff);
+
+      return newStaff;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platform_staff"] });
+      queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+    }
+  });
+}
+
+export function useUpdatePlatformStaffStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status, password_plain }: { id: string; status?: "active" | "suspended"; password_plain?: string }) => {
+      if (isSupabaseConfigured) {
+        try {
+          const updatePayload: any = {};
+          if (status) updatePayload.status = status;
+          if (password_plain) updatePayload.password_plain = password_plain;
+          await supabase.from("platform_staff").update(updatePayload).eq("id", id);
+        } catch (err) {
+          console.warn("Supabase platform_staff update fallback:", err);
+        }
+      }
+      await delay();
+      const allStaff = MockDB.getPlatformStaff();
+      const idx = allStaff.findIndex(s => s.id === id);
+      if (idx !== -1) {
+        if (status) allStaff[idx].status = status;
+        if (password_plain) allStaff[idx].password_plain = password_plain;
+        MockDB.savePlatformStaff(allStaff);
+        return allStaff[idx];
+      }
+      throw new Error("Staff member not found");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platform_staff"] });
+      queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+    }
+  });
+}
+
+export function useDeletePlatformStaff() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (isSupabaseConfigured) {
+        try {
+          // Fetch the staff member first to get their email
+          const { data: staffData } = await supabase.from("platform_staff").select("email").eq("id", id).maybeSingle();
+          
+          await supabase.from("platform_staff").delete().eq("id", id);
+          
+          // If we found the email, remove their platform privileges from users table
+          if (staffData?.email) {
+            await supabase.from("users").update({
+              platform_role: null,
+              is_superadmin: false
+            }).eq("email", staffData.email);
+          }
+        } catch (err) {
+          console.warn("Supabase platform_staff delete fallback:", err);
+        }
+      }
+      await delay();
+      const allStaff = MockDB.getPlatformStaff();
+      const staffToRemove = allStaff.find(s => s.id === id);
+      const filtered = allStaff.filter(s => s.id !== id);
+      MockDB.savePlatformStaff(filtered);
+      
+      if (staffToRemove) {
+        const allUsers = MockDB.getUsers();
+        const updatedUsers = allUsers.map(u => {
+          if (u.email.toLowerCase() === staffToRemove.email.toLowerCase()) {
+            return { ...u, platform_role: undefined, is_superadmin: false };
+          }
+          return u;
+        });
+        MockDB.saveUsers(updatedUsers);
+      }
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["platform_staff"] });
+      queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+    }
+  });
+}
+
 export function usePlatformAdminData() {
   return useQuery({
     queryKey: ["platform_admin_data"],
@@ -2455,6 +2750,8 @@ export function usePlatformAdminData() {
           .select("*")
           .eq("id", "global")
           .maybeSingle();
+        const { data: staffData } = await supabase.from("platform_staff").select("*");
+        const { data: auditLogsData } = await supabase.from("platform_audit_logs").select("*").order("created_at", { ascending: false }).limit(200);
         const { count: usersCount } = await supabase.from("users").select("*", { count: "exact", head: true });
         const { count: membersCount } = await supabase.from("org_members").select("*", { count: "exact", head: true });
 
@@ -2471,11 +2768,19 @@ export function usePlatformAdminData() {
             validated_at: p.validated_at || null,
           };
         });
+        let finalStaff = staffData || MockDB.getPlatformStaff();
+        if (Array.isArray(finalStaff) && !finalStaff.some(s => s.role === "superadmin")) {
+           const superAdmins = MockDB.getPlatformStaff().filter(s => s.role === "superadmin");
+           finalStaff = [...superAdmins, ...finalStaff];
+        }
+
         return {
           orgs: enrichedOrgs as Organization[],
           payments: enrichedPayments as SubscriptionPayment[],
           errors: (errors || []) as ErrorReport[],
           settings: settingsData || defaultSettings,
+          staff: finalStaff,
+          auditLogs: auditLogsData || MockDB.getPlatformAuditLogs(),
           totalUsers: usersCount || MockDB.getUsers().length,
           totalMembers: membersCount || MockDB.getMembers().length,
         };
@@ -2486,6 +2791,8 @@ export function usePlatformAdminData() {
         payments: MockDB.getSubPayments(),
         errors: MockDB.getErrors(),
         settings: MockDB.getPlatformSettings(),
+        staff: MockDB.getPlatformStaff(),
+        auditLogs: MockDB.getPlatformAuditLogs(),
         totalUsers: MockDB.getUsers().length,
         totalMembers: MockDB.getMembers().length,
       };
@@ -2501,26 +2808,42 @@ export function useApproveSubscription() {
       orgId,
       status,
       tier = "growth",
+      auditedBy,
+      auditedByName,
+      auditNotes,
     }: {
       paymentId: string;
       orgId: string;
       status: "approved" | "rejected";
       tier?: "starter" | "growth" | "enterprise";
+      auditedBy?: string;
+      auditedByName?: string;
+      auditNotes?: string;
     }) => {
+      const validatedAt = new Date().toISOString();
+      const auditorName = auditedByName || "Platform Administrator";
+      const auditorId = auditedBy || "admin-lead";
+
       if (isSupabaseConfigured) {
-        const validatedAt = new Date().toISOString();
         let resData: any;
         try {
           const { data, error } = await supabase
             .from("subscription_payments")
-            .update({ status, validated_at: validatedAt } as any)
+            .update({
+              status,
+              validated_at: validatedAt,
+              audited_by: auditorId,
+              audited_by_name: auditorName,
+              audit_notes: auditNotes || null,
+              audited_at: validatedAt
+            } as any)
             .eq("id", paymentId)
             .select()
             .single();
           if (error) throw error;
           resData = data;
         } catch (dbErr: any) {
-          console.warn("Supabase sub payment validated_at failed. Fallback without validated_at.", dbErr);
+          console.warn("Supabase sub payment update fallback:", dbErr);
           const { data, error } = await supabase
             .from("subscription_payments")
             .update({ status })
@@ -2529,11 +2852,9 @@ export function useApproveSubscription() {
             .single();
           if (error) throw error;
           resData = data;
-          localStorage.setItem(`impacto_sub_payment_validated_at_${paymentId}`, validatedAt);
         }
 
         if (status === "approved") {
-          // extend subscription ends at
           const nextExpiry = new Date();
           nextExpiry.setDate(nextExpiry.getDate() + 30);
           try {
@@ -2557,15 +2878,23 @@ export function useApproveSubscription() {
               .eq("id", orgId);
           }
         }
-        return { data: resData, orgId, tier };
       }
+
       await delay();
       const pays = MockDB.getSubPayments();
       const idx = pays.findIndex((p) => p.id === paymentId);
+      let targetPaymentAmount = 33750;
+      let targetPaymentRef = "TXN-REF";
+
       if (idx !== -1) {
-        const validatedAt = new Date().toISOString();
         pays[idx].status = status;
         pays[idx].validated_at = validatedAt;
+        pays[idx].audited_by = auditorId;
+        pays[idx].audited_by_name = auditorName;
+        pays[idx].audit_notes = auditNotes || (status === "approved" ? "Verified mobile money transaction proof" : "Payment proof rejected during audit");
+        pays[idx].audited_at = validatedAt;
+        targetPaymentAmount = pays[idx].amount_local || 33750;
+        targetPaymentRef = pays[idx].reference || "TXN-REF";
         MockDB.saveSubPayments(pays);
 
         if (status === "approved") {
@@ -2581,10 +2910,31 @@ export function useApproveSubscription() {
           }
         }
       }
+
+      // Record in Platform Audit Logs
+      const auditLogs = MockDB.getPlatformAuditLogs();
+      const matchedOrg = MockDB.getOrgs().find(o => o.id === orgId);
+      auditLogs.unshift({
+        id: `audit-${Date.now()}`,
+        staff_id: auditorId,
+        staff_name: auditorName,
+        staff_role: "auditor",
+        action_type: status === "approved" ? "approve_subscription" : "reject_subscription",
+        target_id: paymentId,
+        target_org_id: orgId,
+        target_org_name: matchedOrg?.name || "Workspace",
+        amount: targetPaymentAmount,
+        reference: targetPaymentRef,
+        notes: auditNotes || (status === "approved" ? "Transaction verified and 30-day billing period extended." : "Proof rejected during reconciliation."),
+        created_at: validatedAt
+      });
+      MockDB.savePlatformAuditLogs(auditLogs);
+
       return { paymentId, orgId, tier };
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+      queryClient.invalidateQueries({ queryKey: ["platform_audit_logs"] });
       queryClient.invalidateQueries({ queryKey: ["organizations"] });
 
       const store = useOrgStore.getState();
@@ -5313,5 +5663,169 @@ export function useUpdateUserProfile() {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["org_members"] });
     }
+  });
+}
+
+// ==========================================
+// 41. ASSET & INVENTORY HOOKS
+// ==========================================
+export function useAssets(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["assets", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("assets")
+          .select("*")
+          .eq("org_id", orgId)
+          .order("created_at", { ascending: false });
+        if (error) {
+          console.warn("Supabase assets fetch warning, falling back to local storage:", error.message);
+          const allAssets = MockDB.getAssets();
+          return allAssets.filter((a: any) => a.org_id === orgId);
+        }
+        return (data as Asset[]) || [];
+      } else {
+        await delay(150);
+        const allAssets = MockDB.getAssets();
+        return allAssets.filter((a: any) => a.org_id === orgId);
+      }
+    },
+    enabled: !!orgId,
+  });
+}
+
+export function useCreateAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (newAsset: Partial<Asset> & { org_id: string; name: string }) => {
+      const now = new Date().toISOString();
+      const payload: Asset = {
+        id: "asset-" + Math.random().toString(36).substring(2, 9),
+        org_id: newAsset.org_id,
+        name: newAsset.name,
+        category: newAsset.category || "General Asset",
+        quantity: typeof newAsset.quantity === "number" ? newAsset.quantity : 1,
+        quality: newAsset.quality || "Standard",
+        identifier: newAsset.identifier || "",
+        serial_number: newAsset.serial_number || newAsset.identifier || "",
+        purchase_date: newAsset.purchase_date || now.split("T")[0],
+        purchase_cost: typeof newAsset.purchase_cost === "number" ? newAsset.purchase_cost : 0,
+        currency: newAsset.currency || "RWF",
+        condition: newAsset.condition || "good",
+        assigned_to_member_id: newAsset.assigned_to_member_id || undefined,
+        assigned_to_name: newAsset.assigned_to_name || undefined,
+        location: newAsset.location || "Main Storage",
+        status: newAsset.status || "operational",
+        notes: newAsset.notes || "",
+        qr_code: newAsset.identifier ? `ASSET-${newAsset.identifier}` : `ASSET-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+        created_at: now,
+        updated_at: now,
+      };
+
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase.from("assets").insert(payload).select().single();
+        if (error) {
+          console.warn("Supabase insert asset warning, saving locally:", error.message);
+          const list = MockDB.getAssets();
+          list.unshift(payload);
+          MockDB.saveAssets(list);
+          notifyCrossTabChange("assets");
+          return payload;
+        }
+        notifyCrossTabChange("assets");
+        return data as Asset;
+      } else {
+        await delay(200);
+        const list = MockDB.getAssets();
+        list.unshift(payload);
+        MockDB.saveAssets(list);
+        notifyCrossTabChange("assets");
+        return payload;
+      }
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["assets", data.org_id] });
+    },
+  });
+}
+
+export function useUpdateAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Asset> }) => {
+      const now = new Date().toISOString();
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("assets")
+          .update({ ...updates, updated_at: now })
+          .eq("id", id)
+          .select()
+          .single();
+        if (error) {
+          console.warn("Supabase update asset warning, updating locally:", error.message);
+          const list = MockDB.getAssets();
+          const idx = list.findIndex((a: any) => a.id === id);
+          if (idx !== -1) {
+            list[idx] = { ...list[idx], ...updates, updated_at: now };
+            MockDB.saveAssets(list);
+            notifyCrossTabChange("assets");
+            return list[idx];
+          }
+        }
+        notifyCrossTabChange("assets");
+        return data as Asset;
+      } else {
+        await delay(200);
+        const list = MockDB.getAssets();
+        const idx = list.findIndex((a: any) => a.id === id);
+        if (idx !== -1) {
+          list[idx] = { ...list[idx], ...updates, updated_at: now };
+          MockDB.saveAssets(list);
+          notifyCrossTabChange("assets");
+          return list[idx];
+        }
+        throw new Error("Asset not found");
+      }
+    },
+    onSuccess: (data) => {
+      if (data?.org_id) {
+        queryClient.invalidateQueries({ queryKey: ["assets", data.org_id] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["assets"] });
+      }
+    },
+  });
+}
+
+export function useDeleteAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, orgId }: { id: string; orgId: string }) => {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from("assets").delete().eq("id", id);
+        if (error) {
+          console.warn("Supabase delete asset warning, deleting locally:", error.message);
+          const list = MockDB.getAssets();
+          const filtered = list.filter((a: any) => a.id !== id);
+          MockDB.saveAssets(filtered);
+          notifyCrossTabChange("assets");
+          return { id, orgId };
+        }
+        notifyCrossTabChange("assets");
+        return { id, orgId };
+      } else {
+        await delay(200);
+        const list = MockDB.getAssets();
+        const filtered = list.filter((a: any) => a.id !== id);
+        MockDB.saveAssets(filtered);
+        notifyCrossTabChange("assets");
+        return { id, orgId };
+      }
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["assets", data.orgId] });
+    },
   });
 }

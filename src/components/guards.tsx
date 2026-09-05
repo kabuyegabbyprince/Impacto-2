@@ -64,3 +64,26 @@ export const PlatformRoute: React.FC<{ children: React.ReactNode }> = ({ childre
   }
   return <>{children}</>;
 };
+
+export const AuditorRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuthStore();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // Superadmin or user with platform_role auditor or staff with auditor privileges
+  const hasAuditorAccess =
+    user.is_superadmin ||
+    user.platform_role === "auditor" ||
+    user.platform_role === "superadmin" ||
+    user.email?.includes("auditor") ||
+    user.email === "superadmin@impact-o.app";
+
+  if (!hasAuditorAccess) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+};
+

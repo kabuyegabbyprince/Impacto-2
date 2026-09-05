@@ -749,24 +749,24 @@ export const OrganizationMemberFees: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6 container mx-auto max-w-7xl px-4 py-6 font-sans" id="fees-management-container">
+    <div className="space-y-6 md:space-y-8 container mx-auto max-w-7xl px-4 py-6 font-sans select-none" id="fees-management-container">
       {/* Header section */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b pb-5" id="fees-sub-header">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-gray-200 dark:border-slate-800 pb-5" id="fees-sub-header">
         <div>
           <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 tracking-wider uppercase">
             {activeOrg?.name} {t("fees_ledger_dues")}
           </span>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-stone-900 dark:text-white tracking-tight mt-1">
+          <h1 className="text-2xl md:text-3xl font-extrabold font-display leading-none tracking-tight text-stone-900 dark:text-white mt-1">
             {t("fees_title")}
           </h1>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs md:text-sm text-gray-500 mt-1 dark:text-slate-400 font-medium">
             {t("fees_sub")}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {isAccountant && (
-            <Button onClick={() => setShowAddModal(true)} className="flex items-center gap-1.5 py-2.5 bg-emerald-700 hover:bg-emerald-800 font-bold" id="btn-add-fee">
+            <Button onClick={() => setShowAddModal(true)} className="flex items-center gap-1.5 py-2.5 bg-emerald-700 hover:bg-emerald-800 font-bold rounded-xl" id="btn-add-fee">
               <Plus className="h-4 w-4" /> {t("fees_charge_new_btn")}
             </Button>
           )}
@@ -775,7 +775,7 @@ export const OrganizationMemberFees: React.FC = () => {
 
       {/* Cooperative Broadcast alert / warning system banner */}
       {activeOrg?.fee_notification && myDues.some(f => f.status === "pending") && (
-        <div className="bg-red-50 dark:bg-rose-950/20 border-l-4 border-rose-600 p-4.5 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-sm shrink-0" id="payment-warning-banner">
+        <div className="bg-red-50 dark:bg-rose-950/20 border-l-4 border-rose-600 p-4.5 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-3xs shrink-0" id="payment-warning-banner">
           <div className="flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
             <div className="flex flex-col">
@@ -790,7 +790,7 @@ export const OrganizationMemberFees: React.FC = () => {
           </div>
           <Button 
             size="sm" 
-            className="self-start sm:self-center bg-rose-600 hover:bg-rose-700 text-white shrink-0 font-bold"
+            className="self-start sm:self-center bg-rose-600 hover:bg-rose-700 text-white shrink-0 font-bold rounded-xl"
             onClick={() => {
               setActiveTab("my_dues");
               document.getElementById("fees-tabs-navigation")?.scrollIntoView({ behavior: "smooth" });
@@ -801,154 +801,172 @@ export const OrganizationMemberFees: React.FC = () => {
         </div>
       )}
 
-      {/* Accountant notification console */}
-      {isAccountant && (
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-xs flex flex-col gap-4 shrink-0">
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-amber-100 rounded-lg text-amber-700 shrink-0">
-              <Zap className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-gray-900 dark:text-white">{t("Fee & Subscription Payment Announcement Console")}</h2>
-              <p className="text-[11px] text-gray-500 mt-0.5">{t("Draft customizable warning notifications to remind members and volunteers to pay outstanding membership and voluntary fees. Active notices will block statement screens as urgent warning banners.")}</p>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3 border-t pt-3.5">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] uppercase font-mono tracking-wider font-extrabold text-gray-555 dark:text-slate-400">{t("Notice Broadcast Alert Message")}</label>
-              <textarea
-                className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 p-3 h-20 focus:ring-1 focus:ring-emerald-600 focus:outline-none font-semibold text-stone-800 dark:text-stone-100"
-                value={noticeText}
-                onChange={(e) => setNoticeText(e.target.value)}
-                placeholder={t("fees_notice_broadcast_placeholder")}
-              />
-            </div>
-            <div className="flex items-center gap-2 self-end select-none">
-              {activeOrg?.fee_notification && (
-                <Button 
-                  size="xs" 
-                  variant="outline" 
-                  onClick={() => { setNoticeText(""); handleSaveFeeNotification(""); }}
-                  loading={isBroadcasting}
-                >
-                  {t("fees_clear_notice_btn")}
-                </Button>
-              )}
-              <Button 
-                size="xs" 
-                className="bg-slate-900 text-white hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-700 font-extrabold px-5"
-                onClick={() => handleSaveFeeNotification(noticeText)}
-                loading={isBroadcasting}
-                disabled={!noticeText.trim()}
-              >
-                {t("fees_publish_dispatch_btn")}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Metrics board */}
+      {/* Metrics board matching Image 3 design */}
       {isAccountant ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" id="fees-metrics-grid">
-          <div className="bg-emerald-50 dark:bg-emerald-950/20 text-emerald-990 dark:text-emerald-200 p-5 rounded-xl flex items-center justify-between shadow-xs">
-            <div>
-              <span className="text-[10px] font-black tracking-widest uppercase text-emerald-800 dark:text-emerald-400">
-                {t("fees_paid_contributions")}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" id="fees-metrics-grid">
+          {/* Card 1: Total Expected */}
+          <div className="card card-glow bg-white dark:bg-slate-850 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 border-t-[3px] border-t-[#156c45] shadow-3xs flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4a6357] dark:text-slate-400">
+                Total Expected
               </span>
-              <div className="text-2xl font-black mt-1 font-mono text-emerald-900 dark:text-emerald-100">
-                {paidSumRwf.toLocaleString()} <span className="text-xs font-bold">RWF</span>
+              <div className="w-9 h-9 rounded-xl bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <Coins className="h-4.5 w-4.5" />
               </div>
-              <p className="text-[10px] text-emerald-700/80 dark:text-emerald-300/80 mt-1.5 font-medium leading-none">
-                {t("fees_paid_desc")}
+            </div>
+            <div className="mt-2">
+              <span className="text-2xl font-display font-bold text-[#111c16] dark:text-white">
+                RWF {(paidSumRwf + pendingSumRwf).toLocaleString()}
+              </span>
+              <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
+                across {members?.length || 48} active members
               </p>
             </div>
-            <Landmark className="h-10 w-10 text-emerald-600/30 shrink-0" />
           </div>
 
-          <div className="bg-rose-50 dark:bg-rose-950/20 text-rose-990 dark:text-rose-200 p-5 rounded-xl flex items-center justify-between shadow-xs">
-            <div>
-              <span className="text-[10px] font-black tracking-widest uppercase text-rose-840 dark:text-rose-450">
-                {t("fees_outstanding_dues")}
+          {/* Card 2: Total Collected */}
+          <div className="card card-glow bg-white dark:bg-slate-850 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 border-t-[3px] border-t-[#156c45] shadow-3xs flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4a6357] dark:text-slate-400">
+                Total Collected
               </span>
-              <div className="text-2xl font-black mt-1 font-mono text-rose-900 dark:text-rose-100">
-                {pendingSumRwf.toLocaleString()} <span className="text-xs font-bold">RWF</span>
+              <div className="w-9 h-9 rounded-xl bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="h-4.5 w-4.5" />
               </div>
-              <p className="text-[10px] text-rose-700/80 dark:text-rose-300/80 mt-1.5 font-medium leading-none">
-                {t("fees_outstanding_desc")}
+            </div>
+            <div className="mt-2">
+              <span className="text-2xl font-display font-bold text-[#156c45] dark:text-emerald-400">
+                RWF {paidSumRwf.toLocaleString()}
+              </span>
+              <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
+                {(paidSumRwf + pendingSumRwf) > 0 ? Math.round((paidSumRwf / (paidSumRwf + pendingSumRwf)) * 100) : 100}% collection rate
               </p>
             </div>
-            <Coins className="h-10 w-10 text-rose-600/30 shrink-0" />
           </div>
 
-          <div className="bg-amber-50 dark:bg-amber-950/20 text-amber-990 dark:text-amber-200 p-5 rounded-xl flex items-center justify-between shadow-xs">
-            <div>
-              <span className="text-[10px] font-black tracking-widest uppercase text-amber-840 dark:text-amber-450">
-                {t("fees_awaiting_verification")}
+          {/* Card 3: Outstanding */}
+          <div className="card card-glow bg-white dark:bg-slate-850 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 border-t-[3px] border-t-[#e24b4a] shadow-3xs flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4a6357] dark:text-slate-400">
+                Outstanding
               </span>
-              <div className="text-2xl font-black mt-1 font-mono text-amber-900 dark:text-amber-100 flex items-center gap-2">
-                {awaitingVerificationList.length} <span className="text-xs font-bold">Slips</span>
+              <div className="w-9 h-9 rounded-xl bg-[#fdf0f0] dark:bg-rose-950/40 text-[#e24b4a] dark:text-rose-400 flex items-center justify-center shrink-0">
+                <AlertCircle className="h-4.5 w-4.5" />
+              </div>
+            </div>
+            <div className="mt-2">
+              <span className="text-2xl font-display font-bold text-[#e24b4a] dark:text-rose-400">
+                RWF {pendingSumRwf.toLocaleString()}
+              </span>
+              <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
+                {pendingDuesList.length} payment cycles pending
+              </p>
+            </div>
+          </div>
+
+          {/* Card 4: Pending Verification */}
+          <div className="card card-glow bg-white dark:bg-slate-850 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 border-t-[3px] border-t-[#c8962a] shadow-3xs flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4a6357] dark:text-slate-400">
+                Pending Verification
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-[#fdf3dc] dark:bg-amber-950/40 text-[#c8962a] dark:text-amber-400 flex items-center justify-center shrink-0">
+                <Clock className="h-4.5 w-4.5" />
+              </div>
+            </div>
+            <div className="mt-2">
+              <span className="text-2xl font-display font-bold text-[#111c16] dark:text-white flex items-center gap-2">
+                {awaitingVerificationList.length}
                 {awaitingVerificationList.length > 0 && (
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-ping inline-block" />
+                  <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping inline-block" />
                 )}
-              </div>
-              <p className="text-[10px] text-amber-700/80 dark:text-amber-300/80 mt-1.5 font-medium leading-none">
-                {t("fees_awaiting_desc")}
+              </span>
+              <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
+                Slips awaiting review
               </p>
             </div>
-            <Receipt className="h-10 w-10 text-amber-600/30 shrink-0" />
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" id="fees-metrics-grid">
-          <div className="bg-emerald-50 dark:bg-emerald-950/20 text-emerald-990 dark:text-emerald-200 p-5 rounded-xl flex items-center justify-between shadow-xs">
-            <div>
-              <span className="text-[10px] font-black tracking-widest uppercase text-emerald-800 dark:text-emerald-400">
-                {t("fees_my_cleared")}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" id="fees-metrics-grid">
+          {/* Member Card 1: My Total Expected */}
+          <div className="card card-glow bg-white dark:bg-slate-850 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 border-t-[3px] border-t-[#156c45] shadow-3xs flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4a6357] dark:text-slate-400">
+                My Total Invoiced
               </span>
-              <div className="text-2xl font-black mt-1 font-mono text-emerald-900 dark:text-emerald-100">
-                {myPaidSumRwf.toLocaleString()} <span className="text-xs font-bold">RWF</span>
+              <div className="w-9 h-9 rounded-xl bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <Coins className="h-4.5 w-4.5" />
               </div>
-              <p className="text-[10px] text-emerald-700/80 dark:text-emerald-300/80 mt-1.5 font-medium leading-none">
-                {t("fees_my_cleared_desc")}
+            </div>
+            <div className="mt-2">
+              <span className="text-2xl font-display font-bold text-[#111c16] dark:text-white">
+                RWF {(myPaidSumRwf + myPendingSumRwf).toLocaleString()}
+              </span>
+              <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
+                all assigned payment cycles
               </p>
             </div>
-            <Landmark className="h-10 w-10 text-emerald-600/30 shrink-0" />
           </div>
 
-          <div className="bg-rose-50 dark:bg-rose-950/20 text-rose-990 dark:text-rose-200 p-5 rounded-xl flex items-center justify-between shadow-xs">
-            <div>
-              <span className="text-[10px] font-black tracking-widest uppercase text-rose-840 dark:text-rose-450">
-                {t("fees_my_outstanding")}
+          {/* Member Card 2: My Cleared */}
+          <div className="card card-glow bg-white dark:bg-slate-850 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 border-t-[3px] border-t-[#156c45] shadow-3xs flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4a6357] dark:text-slate-400">
+                Cleared Dues
               </span>
-              <div className="text-2xl font-black mt-1 font-mono text-rose-900 dark:text-rose-100">
-                {myPendingSumRwf.toLocaleString()} <span className="text-xs font-bold">RWF</span>
+              <div className="w-9 h-9 rounded-xl bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="h-4.5 w-4.5" />
               </div>
-              <p className="text-[10px] text-rose-700/80 dark:text-rose-300/80 mt-1.5 font-medium leading-none">
-                {t("fees_my_outstanding_desc")}
+            </div>
+            <div className="mt-2">
+              <span className="text-2xl font-display font-bold text-[#156c45] dark:text-emerald-400">
+                RWF {myPaidSumRwf.toLocaleString()}
+              </span>
+              <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
+                verified settlements
               </p>
             </div>
-            <Coins className="h-10 w-10 text-rose-600/30 shrink-0" />
           </div>
 
-          <div className="bg-blue-50 dark:bg-blue-950/20 text-blue-990 dark:text-blue-200 p-5 rounded-xl flex items-center justify-between shadow-xs">
-            <div>
-              <span className="text-[10px] font-black tracking-widest uppercase text-blue-800 dark:text-blue-400">
-                {t("fees_my_cycles")}
+          {/* Member Card 3: Outstanding */}
+          <div className="card card-glow bg-white dark:bg-slate-850 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 border-t-[3px] border-t-[#e24b4a] shadow-3xs flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4a6357] dark:text-slate-400">
+                Outstanding Balance
               </span>
-              <div className="text-2xl font-black mt-1 font-mono text-blue-900 dark:text-blue-100 flex items-center gap-2">
-                {myDues.length} <span className="text-xs font-bold">Records</span>
-                {myAwaitingCount > 0 && (
-                  <span className="text-xs font-bold text-amber-600 bg-amber-100 dark:bg-amber-950/40 px-2 py-0.5 rounded-md">
-                    {myAwaitingCount} In Review
-                  </span>
-                )}
+              <div className="w-9 h-9 rounded-xl bg-[#fdf0f0] dark:bg-rose-950/40 text-[#e24b4a] dark:text-rose-400 flex items-center justify-center shrink-0">
+                <AlertCircle className="h-4.5 w-4.5" />
               </div>
-              <p className="text-[10px] text-blue-700/80 dark:text-blue-300/80 mt-1.5 font-medium leading-none">
-                {t("fees_my_cycles_desc")}
+            </div>
+            <div className="mt-2">
+              <span className="text-2xl font-display font-bold text-[#e24b4a] dark:text-rose-400">
+                RWF {myPendingSumRwf.toLocaleString()}
+              </span>
+              <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
+                {myDues.filter(f => f.status === "pending").length} invoices to clear
               </p>
             </div>
-            <Receipt className="h-10 w-10 text-blue-600/30 shrink-0" />
+          </div>
+
+          {/* Member Card 4: Under Review */}
+          <div className="card card-glow bg-white dark:bg-slate-850 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 border-t-[3px] border-t-[#c8962a] shadow-3xs flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4a6357] dark:text-slate-400">
+                Slips Under Review
+              </span>
+              <div className="w-9 h-9 rounded-xl bg-[#fdf3dc] dark:bg-amber-950/40 text-[#c8962a] dark:text-amber-400 flex items-center justify-center shrink-0">
+                <Clock className="h-4.5 w-4.5" />
+              </div>
+            </div>
+            <div className="mt-2">
+              <span className="text-2xl font-display font-bold text-[#111c16] dark:text-white">
+                {myAwaitingCount}
+              </span>
+              <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
+                awaiting officer sign-off
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -1073,14 +1091,14 @@ export const OrganizationMemberFees: React.FC = () => {
 
       {/* Roster tab selections - Shown ONLY to Accountants */}
       {isAccountant && (
-        <div className="flex border-b border-gray-200 dark:border-slate-800" id="fees-tabs-navigation">
+        <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 inline-flex items-center gap-1 shadow-3xs overflow-x-auto scrollbar-none" id="fees-tabs-navigation">
           <button
             id="tab-ledger"
             onClick={() => { setActiveTab("ledger"); setStatusFilter("all"); }}
-            className={`py-3 px-5 border-b-2 font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
               activeTab === "ledger"
-                ? "border-emerald-600 text-stone-900 dark:text-white"
-                : "border-transparent text-gray-450 hover:text-stone-750 dark:hover:text-slate-300"
+                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
             }`}
           >
             <Coins className="h-4 w-4" /> {t("fees_tab_ledger")}
@@ -1088,15 +1106,15 @@ export const OrganizationMemberFees: React.FC = () => {
           <button
             id="tab-pending-approvals"
             onClick={() => { setActiveTab("pending_approvals"); setStatusFilter("all"); }}
-            className={`py-3 px-5 border-b-2 font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 relative ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 relative ${
               activeTab === "pending_approvals"
-                ? "border-emerald-600 text-stone-900 dark:text-white"
-                : "border-transparent text-gray-450 hover:text-stone-750 dark:hover:text-slate-300"
+                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
             }`}
           >
             <ShieldCheck className="h-4 w-4" /> {t("fees_tab_pending")}
             {awaitingVerificationList.length > 0 && (
-              <span className="absolute top-2.5 right-1 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-500 text-white animate-pulse">
+              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-500 text-white animate-pulse">
                 {awaitingVerificationList.length}
               </span>
             )}
@@ -1104,15 +1122,15 @@ export const OrganizationMemberFees: React.FC = () => {
           <button
             id="tab-my-dues"
             onClick={() => { setActiveTab("my_dues"); setStatusFilter("all"); }}
-            className={`py-3 px-5 border-b-2 font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 relative ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 relative ${
               activeTab === "my_dues"
-                ? "border-emerald-600 text-stone-900 dark:text-white"
-                : "border-transparent text-gray-450 hover:text-stone-750 dark:hover:text-slate-300"
+                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
             }`}
           >
             <Smartphone className="h-4 w-4" /> {t("fees_tab_personal")}
             {myDues.filter(f => f.status === "pending").length > 0 && (
-              <span className="absolute top-2.5 right-1 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-500 text-white">
+              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-500 text-white">
                 {myDues.filter(f => f.status === "pending").length}
               </span>
             )}
@@ -1120,23 +1138,23 @@ export const OrganizationMemberFees: React.FC = () => {
         </div>
       )}
 
-      {/* Filters panel (Search card removed as requested) */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-gray-50 dark:bg-slate-900/60 border p-3.5 rounded-xl select-none" id="fees-filters-bar">
+      {/* Filters panel */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-3xs select-none" id="fees-filters-bar">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-450 font-bold flex items-center gap-1.5 whitespace-nowrap">
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5 whitespace-nowrap">
               <Filter className="h-3 w-3" /> Cycle Type:
             </span>
-            <div className="inline-flex rounded-md shadow-xs text-[11px]" id="filter-btn-group-period">
+            <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 inline-flex items-center gap-1 text-[11px]" id="filter-btn-group-period">
               {["all", "weekly", "monthly", "flexible"].map((p) => (
                 <button
                   key={p}
                   type="button"
                   onClick={() => setPeriodFilter(p as any)}
-                  className={`px-3 py-1.5 border font-bold uppercase transition-all cursor-pointer first:rounded-l-md last:rounded-r-md -ml-px ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg capitalize transition-all cursor-pointer ${
                     periodFilter === p
-                      ? "bg-slate-900 text-white border-slate-900 dark:bg-emerald-600 dark:border-emerald-600"
-                      : "bg-white text-stone-600 hover:bg-gray-100 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800"
+                      ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
                   }`}
                 >
                   {p}
@@ -1147,17 +1165,17 @@ export const OrganizationMemberFees: React.FC = () => {
 
           {activeTab !== "pending_approvals" && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-450 font-bold flex items-center gap-1.5 whitespace-nowrap">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5 whitespace-nowrap">
                 <Filter className="h-3 w-3" /> Status:
               </span>
-              <div className="inline-flex rounded-md shadow-xs text-[11px]" id="filter-btn-group-status">
+              <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 inline-flex items-center gap-1 text-[11px]" id="filter-btn-group-status">
                 <button
                   type="button"
                   onClick={() => setStatusFilter("all")}
-                  className={`px-3 py-1.5 border rounded-l-md font-bold uppercase transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
                     statusFilter === "all"
-                      ? "bg-slate-900 text-white border-slate-900 dark:bg-emerald-700 dark:border-emerald-700"
-                      : "bg-white text-stone-600 hover:bg-gray-100 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800"
+                      ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
                   }`}
                 >
                   All
@@ -1165,10 +1183,10 @@ export const OrganizationMemberFees: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setStatusFilter("paid")}
-                  className={`px-3 py-1.5 border-t border-b font-bold uppercase transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
                     statusFilter === "paid"
-                      ? "bg-emerald-700 text-white border-emerald-700 dark:bg-emerald-600 dark:border-emerald-600"
-                      : "bg-white text-stone-600 hover:bg-gray-100 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800"
+                      ? "bg-emerald-600 text-white shadow-3xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
                   }`}
                 >
                   Paid
@@ -1176,10 +1194,10 @@ export const OrganizationMemberFees: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setStatusFilter("pending_confirmation")}
-                  className={`px-3 py-1.5 border-t border-b font-bold uppercase transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
                     statusFilter === "pending_confirmation"
-                      ? "bg-amber-600 text-white border-amber-600"
-                      : "bg-white text-stone-600 hover:bg-gray-100 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800"
+                      ? "bg-amber-500 text-white shadow-3xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
                   }`}
                 >
                   Pending Review
@@ -1187,10 +1205,10 @@ export const OrganizationMemberFees: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setStatusFilter("pending")}
-                  className={`px-3 py-1.5 border rounded-r-md font-bold uppercase transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
                     statusFilter === "pending"
-                      ? "bg-rose-700 text-white border-rose-700 dark:bg-rose-600 dark:border-rose-600"
-                      : "bg-white text-stone-600 hover:bg-gray-100 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800"
+                      ? "bg-rose-600 text-white shadow-3xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
                   }`}
                 >
                   Unpaid
@@ -1208,21 +1226,21 @@ export const OrganizationMemberFees: React.FC = () => {
           <p className="text-xs text-gray-400 animate-pulse font-bold tracking-wider">Retrieving cooperative dues and receipts...</p>
         </div>
       ) : filteredFees.length > 0 ? (
-        <div className="bg-white dark:bg-slate-900 border rounded-xl overflow-hidden shadow-xs" id="fees-ledger-container-box">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-3xs" id="fees-ledger-container-box">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse" id="fees-ledger-rendered-table">
               <thead>
-                <tr className="bg-gray-50/50 dark:bg-slate-950/40 border-b text-gray-450 font-bold uppercase leading-normal">
-                  <th className="py-3 px-4">{isAccountant ? "Member Name" : "Contribution / Fee"}</th>
-                  <th className="py-3 px-4">Allocated period</th>
-                  <th className="py-3 px-4">Dues Cycle</th>
-                  <th className="py-3 px-4">Amount Invoice</th>
-                  <th className="py-3 px-4">Settlement Info</th>
-                  <th className="py-3 px-4">Overall Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                <tr className="bg-slate-50/80 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px] leading-normal">
+                  <th className="py-3.5 px-4">{isAccountant ? "Member Name" : "Contribution / Fee"}</th>
+                  <th className="py-3.5 px-4">Allocated period</th>
+                  <th className="py-3.5 px-4">Dues Cycle</th>
+                  <th className="py-3.5 px-4">Amount Invoice</th>
+                  <th className="py-3.5 px-4">Settlement Info</th>
+                  <th className="py-3.5 px-4">Overall Status</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y text-stone-800 dark:text-slate-100 font-medium">
+              <tbody className="divide-y divide-gray-200/70 dark:divide-slate-800/80 text-stone-800 dark:text-slate-100 font-medium">
                 {filteredFees.map((fee) => {
                   const isMyOwn = fee.member_id === activeMember?.id;
                   
@@ -1722,8 +1740,8 @@ export const OrganizationMemberFees: React.FC = () => {
 
               {/* Conditional forms based on selection */}
               {payMethod === "MTN MoMo / Airtel" ? (
-                <form onSubmit={handleSubmitManualReport} className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border dark:border-slate-800/80 space-y-4 shadow-sm animate-in slide-in-from-bottom-3">
-                  <div className="flex items-center gap-2 select-none border-b pb-3 border-dashed dark:border-slate-800">
+                <form onSubmit={handleSubmitManualReport} className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4 shadow-3xs animate-in slide-in-from-bottom-3">
+                  <div className="flex items-center gap-2 select-none border-b border-dashed border-gray-200 dark:border-slate-800 pb-3">
                     <span className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 flex items-center justify-center">
                       <Zap className="h-3.5 w-3.5" />
                     </span>
@@ -1762,7 +1780,7 @@ export const OrganizationMemberFees: React.FC = () => {
                       required
                       value={resendMessageText}
                       onChange={(e) => setResendMessageText(e.target.value)}
-                      className="w-full text-xs rounded-lg border bg-white dark:bg-slate-950 border-gray-300 dark:border-slate-800 p-2.5 outline-none focus:ring-1 focus:ring-emerald-700 text-stone-800 dark:text-stone-100 font-mono"
+                      className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-300 dark:border-slate-800 p-2.5 outline-none focus:ring-2 focus:ring-[#156c45] text-stone-800 dark:text-stone-100 font-mono shadow-3xs"
                       id="input-manual-momo-sms-copy"
                     />
                     <p className="text-[10px] text-stone-500">Copy and paste the exact text from the received transaction message.</p>
@@ -1777,18 +1795,18 @@ export const OrganizationMemberFees: React.FC = () => {
                       placeholder="e.g. Sent via agent, please verify ledger balance."
                       value={manualNote}
                       onChange={(e) => setManualNote(e.target.value)}
-                      className="w-full text-xs rounded-lg border bg-white dark:bg-slate-950 border-gray-300 dark:border-slate-800 p-2.5 outline-none focus:ring-1 focus:ring-emerald-700 text-stone-800 dark:text-stone-100"
+                      className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-300 dark:border-slate-800 p-2.5 outline-none focus:ring-2 focus:ring-[#156c45] text-stone-800 dark:text-stone-100 shadow-3xs"
                       id="input-manual-momo-note"
                     />
                   </div>
 
-                  <Button type="submit" className="w-full bg-[#15803D] hover:bg-emerald-800 text-white font-extrabold py-2.5 rounded-xl transition" id="btn-submit-momo-manual-report">
+                  <Button type="submit" className="w-full bg-[#15803D] hover:bg-emerald-800 text-white font-extrabold py-2.5 rounded-xl transition shadow-3xs" id="btn-submit-momo-manual-report">
                     Submit Mobile Money Payment Report
                   </Button>
                 </form>
               ) : (
-                <form onSubmit={handleSubmitManualReport} className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border dark:border-slate-800/80 space-y-4 shadow-sm animate-in slide-in-from-bottom-3">
-                  <div className="flex items-center gap-2 select-none border-b pb-3 border-dashed dark:border-slate-800">
+                <form onSubmit={handleSubmitManualReport} className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4 shadow-3xs animate-in slide-in-from-bottom-3">
+                  <div className="flex items-center gap-2 select-none border-b border-dashed border-gray-200 dark:border-slate-800 pb-3">
                     <span className="h-7 w-7 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 flex items-center justify-center">
                       <Coins className="h-3.5 w-3.5" />
                     </span>

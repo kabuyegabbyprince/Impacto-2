@@ -1,132 +1,103 @@
-# IMPACTO V2 — Future Roadmap, Subscription & AI Specifications
-
-## 🤖 1. AI Feature Integration: "Impacto AI Assistant"
-- **Purpose**: A lightweight, practical AI companion embedded directly into the platform workflow.
-- **Key Capabilities**:
-  - **Smart Meeting Summaries**: Automatically parses meeting notes and attendance to generate concise executive decisions and action items.
-  - **Ledger & Expense Insights**: Detects anomalous transaction spikes or flags missing receipt references in financial books.
-  - **Communication Drafter**: Instantly generates professional announcements, member thank-yous, and dues reminder messages using variable templates.
+# IMPACTO V2 — System Architecture, Subscriptions & Roadmap Specifications
 
 ---
 
-## ⏳ 2. Subscription Lifecycle & Trial Mechanics
-- **Default Trial**: New organizations start automatically on the **Growth Plan** for a 30-day free trial.
-- **Grace Period**: Upon trial expiration, organizations receive a strict **3-day Grace Period** to select a paid subscription or transition to the Free Forever plan.
-- **Free Forever Plan Limitations**:
-  - **Member Cap**: Strictly limited to a maximum of **30 active members**.
-  - **Data Lockdown**: Excess member records, advanced ledger reports, and secure document vaults beyond Free limits become locked (read-only / inaccessible).
-  - **Resumption**: When the organization upgrades to a paid plan, all locked data and features instantly resume full functionality without data loss.
+## 1. Subscription Tiers & Trial Lifecycle Matrix
 
----
-
-## 📋 3. Plan Classification & Feature Mapping
-- **Free Plan**:
-  - Max 30 members
-  - Basic Member Directory & Roles
-  - Basic Announcements & Simple Chat
-  - Standard Local Storage Limits (100MB)
+### Tier Specifications
+- **Free Forever Plan**:
+  - Member Limit: Up to 30 active members
+  - Core Features: Member Directory, Roles, Basic Announcements, Standard Chat
+  - Storage Limit: 100 MB local media storage
+  - Lockdown Rules: If member count or storage exceeds limits, excess records enter read-only mode safely without data deletion.
 - **Growth Plan (Default Trial)**:
-  - Up to 250 members
-  - Events & QR Attendance
-  - Member Dues & Specific Charges
-  - Basic Financial Ledger & Excel Attendance Export
-  - Standard Document Office Templates
+  - Member Limit: Up to 250 members
+  - Features: QR Code Event Attendance, Member Dues & Custom Charges, Basic Financial Ledger, Excel Attendance Export, DocumentOffice Suite
+  - Storage Limit: 5 GB cloud storage
 - **Pro Plan**:
-  - Unlimited Members
-  - **Unlimited Storage**: Zero storage restrictions for documents, receipts, media, and attachments.
-  - Advanced Financial Management & MTN/Airtel Live Payment APIs
-  - Automated Certificate Generation & Asset/Inventory Tracker
-  - Public Crowdfunding Pages & Advanced Reports
+  - Member Limit: Unlimited members
+  - Features: Automated Certificate Generation, Asset & Inventory Tracker, Mobile Money Live Gateway, Public Marketplace, Advanced Ledger Reports
+  - Storage: Unlimited cloud storage for all files, media, receipts, and attachments
 - **Enterprise Plan**:
-  - Multi-Branch & Granular RBAC Permissions
-  - Identity Document Verification Hub
-  - Governance Quorum Validation & Full Audit Trail
-  - Priority Support & Dedicated Account Manager
+  - Member Limit: Unlimited members across multiple branches
+  - Features: Multi-Branch Federation, Granular RBAC Permissions, Identity Document Verification Hub, Governance Quorum Validation, Full Historical Audit Trail, Dedicated Account Manager
+
+### Trial & Grace Period Mechanics
+- **30-Day Growth Trial**: Every newly registered organization automatically receives a 30-day trial on the Growth Plan.
+- **3-Day Grace Period**: When the 30-day trial concludes, a 3-day grace period is granted before plan enforcement takes effect.
+- **Data Preservation & Resumption**: Transitioning to Free preserves all records safely. Upgrading unlocks all features and historical data immediately.
 
 ---
 
-## 📦 4. Feature Packages & À La Carte Marketplace
-- **Feature Grouping (Packages)**: 
-  - Features can be grouped into curated packages (2 to 4 complementary features per package) drawn from higher-tier plans.
-  - *Example Packages*:
-    - **Governance Pack** (Quorum Validation + Document E-Signatures + Audit Trail)
-    - **Field Ops Pack** (QR Attendance + Asset Tracker + Offline Sync Queue)
-    - **Fintech Pack** (MTN/Airtel Live APIs + Automated Dues + Excel Export)
-- **Package Usage Rules**:
-  - Organizations on lower plans can purchase or claim individual packages to use them in their current plan until the package expires.
-  - If a package is claimed or assigned on the Free Plan, it **expires automatically after 30 days**.
-- **Marketplace & Admin Pricing**:
-  - **Admin Pricing Control**: Platform and organization administrators can set custom pricing for individual features in the system marketplace.
-  - **Feature Themes (Default)**: Features are categorized by themes (Finance, Governance, Operations, Communication).
-  - **Package Valuation**: Package pricing and value are dynamically calculated based on the combined value of the individual features included within them.
+## 2. Feature Packages & À La Carte Marketplace
+
+### Curated Feature Packages
+- **Governance Pack**: Quorum Validation + Document E-Signatures + Version Acknowledgement + Audit Trail
+- **Field Operations Pack**: QR Code Attendance + Asset Tracker + Offline PWA Sync Queue
+- **Fintech & Payments Pack**: Mobile Money Push-to-Pay API + Automated Dues Schedules + Excel Financial Export
+
+### Marketplace Rules
+- **Package Duration**: A-la-carte packages purchased or claimed on the Free Plan remain active for 30 days.
+- **Dynamic Pricing**: Package valuations are dynamically computed from composite feature prices set by system administrators.
+- **Thematic Categorization**: Features are categorized under Finance, Governance, Operations, and Communications.
 
 ---
 
-## 🚧 5. Unimplemented & Scheduled Features
-- PWA Offline Mode & Sync Queue (for field work in low connectivity)
-- Granular Roles & Manager Rights Checkbox
-- Governance Quorum Meetings Validation
-- Dynamic Variable Message Templates Creator
-- Secure Document Signing & Version Acknowledgement
-- Full Audit Trail Historical Logs Tracker
-- SMS Fallback Notifications
+## 3. Storage & Storage Buckets (Supabase Storage)
 
-## ⚖️ 6. Unstable / Under Calibration Modules
-- Identity Document Verification Hub
-- 3-Step Resignations Survey & Offboarding Analytics
-- Real-Time Chat Polls (cross-user percentage synchronization)
-- Document Privacy (strict private vs. public scoping on file uploads)
-
-## 🌟 7. Strategic Additions & Roadmap
-- **Live Payment APIs**: Integration with real MTN Mobile Money and Airtel Money APIs.
-- **QR Code Attendance**: Cryptographic QR code check-ins for events.
-- **Excel Attendance Export**: Multi-column spreadsheet export for attendance history.
-- **Member Dues & Specific Charges**: Weekly/monthly fee schedules with targeted assignments and proof-of-payment uploads.
-- **Automated Certificate Generation**: Richly styled PDF certificates for workshop/volunteer hours.
-- **Asset & Inventory Tracker**: Physical goods tracking for organization equipment.
-- **Public Crowdfunding Pages**: External fundraising campaign pages with financial progress bars.
+IMPACTO utilizes 4 primary Supabase storage buckets:
+- **`avatars`** (Public): User profile images, organization brand logos, cover banners, and marketplace item imagery.
+- **`documents`** (Public): Identity verification documents, official meeting minutes, certificates, and compliance policies.
+- **`chat-attachments`** (Public): Live chat images, outreach media, and recorded voice notes.
+- **`impacto-files`** (Public): System asset fallbacks and financial receipts.
 
 ---
 
-## 💳 8. pawaPay.io Push-to-Pay Integration Plan
-- **Overview**: Standardised API integration for MTN MoMo and Airtel Money across Sub-Saharan Africa (`https://api.sandbox.pawapay.io` vs `https://api.pawapay.io`).
-- **Core Deposit Workflow**:
-  1. Backend generates a `depositId` (UUIDv4) and stores it locally as `PENDING` before calling pawaPay.
-  2. Call `POST /v2/deposits` with amount, currency, payer phone number, and provider (`MTN_MOMO_RWA`, etc.).
-  3. Receive synchronous `ACCEPTED` status; customer receives PIN prompt on their mobile device.
-  4. Receive final webhook callback (`COMPLETED` or `FAILED`).
-- **Three-Layer Reliability Approach**:
-  - **Layer 1 (Webhooks)**: Secure endpoint (`POST /webhooks/pawapay/deposit`) with signature verification and idempotent status updates.
-  - **Layer 2 (Status Polling / Reconciliation)**: Scheduled job checking transactions pending > 15 minutes via `GET /v2/deposits/{depositId}`.
-  - **Layer 3 (pawaPay Internal Reconciliation)**: Automatic resolution for `IN_RECONCILIATION` states.
-- **Dynamic UX & Validation**:
-  - Dynamic provider picker via `GET /v2/active-conf`.
-  - Phone number sanitisation and network auto-detection via `POST /v2/predict-provider`.
-  - Decimal and min/max amount validation per provider limits before submission.
-  - Defensive status handling (`NEEDS_ATTENTION` escalation path).
+## 4. Mobile Money Gateway & Payment Webhooks
+
+### Deposit & Verification Workflow
+1. **Initiation**: User or member submits a contribution with amount, currency (`RWF`), and payer mobile number (MTN / Airtel).
+2. **Review & Audit Queue**: Transactions appear in the cooperative accounting queue with uploaded receipt/SMS reference codes.
+3. **Webhook Callback Receiver**: The backend endpoint `/api/payments/webhook` and `/api/payments/momo/callback` processes inbound push notifications and status updates.
 
 ---
 
-## ✅ 9. Master Implementation Checklist
-- 🟢 ✅ **Subscription & Trial Enforcement**:
-  - 🟢 ✅ Default new organizations to 30-day Growth Plan trial.
-  - 🟢 ✅ Implement 3-day grace period upon trial expiry.
-  - 🟢 ✅ Enforce Free Forever plan member cap (30 members) and data lockdown for excess records.
-  - 🟢 ✅ Enable instant feature/data resumption upon upgrading to paid tiers.
-- 🟢 ✅ **Plan & Feature Marketplace**:
-  - 🟢 ✅ Implement plan classification matrix (Free, Growth, Pro with unlimited storage, Enterprise).
-  - 🟢 ✅ Implement feature packaging (2-4 features per package, 30-day expiry on Free plan).
-  - 🟢 ✅ Build Admin marketplace pricing control and feature theme categorization (Finance, Governance, Operations, Communication).
-- 🟢 ✅ **pawaPay.io Payment Integration**:
-  - 🟢 ✅ Sandbox testing with MTN MoMo and Airtel Money.
-  - 🟢 ✅ Backend deposit initiation (`POST /v2/deposits`) with UUIDv4 `depositId` and PENDED state persistence.
-  - 🟢 ✅ Secure webhook receiver (`POST /webhooks/pawapay/deposit`) with signature validation and idempotency.
-  - 🟢 ✅ Automated reconciliation polling job for pending transactions.
-  - 🟢 ✅ Dynamic provider configuration (`GET /v2/active-conf`) and phone number prediction (`POST /v2/predict-provider`).
-  - 🟢 ✅ Amount decimal and min/max bounds validation per provider.
-  - 🟢 ✅ Defensive status handling (`COMPLETED`, `FAILED`, `NEEDS_ATTENTION`).
-- 🟢 ✅ **AI Assistant & Roadmap Features**:
-  - 🟢 ✅ AI meeting summaries, ledger insights, and communication drafter.
-  - 🟢 ✅ QR code attendance and Excel export.
-  - 🟢 ✅ Certificate generation and asset tracking.
+## 5. Engineering Status & Feature Checklist
+
+### ✅ Completed & Active Modules
+- 🟢 **Multi-Organization Switching**: Users can join and switch between multiple organizations while maintaining primary workspace defaults.
+- 🟢 **DocumentOffice Suite**: Wide-canvas Word letterhead editor, digital signature blocks, and spreadsheet builder with formulas, CSV import, and data visualization.
+- 🟢 **Subscription & Trial Engine**: 30-day Growth trial default, 3-day grace period, 30-member Free plan cap, and data resumption.
+- 🟢 **QR Code Attendance & Excel Export**: Event registration check-ins via QR code and tabular data export.
+- 🟢 **Certificate Generation & Asset Tracking**: Automated member certificates and equipment inventory records.
+- 🟢 **Mobile Money Payment Gateway**: Webhook receiver and payment audit queue.
+- 🟢 **Identity Document Verification Hub**: National ID / passport verification workflow with status badges.
+- 🟢 **Resignation & Offboarding Survey**: Structured member exit requests, survey insights, and admin responses.
+- 🟢 **Public Organization Showcase & Marketplace**: Dynamic branding, gallery bento grid, contact info, and public commodity catalog.
+
+### 🚧 Future Enhancements
+- 🟡 **PWA Offline Mode & Background Sync Queue**: Extended background sync queue for low-connectivity rural field deployments.
+- 🟡 **Smart AI Meeting Insights**: Automatic meeting minutes summarization using Gemini models.
+
+
+
+
+
+
+
+
+we must fix erro in paying circles apply popups then payment circles with packages management 
+
+
+
+
+
+
+
+
+
+
+
+
+
 

@@ -1,6 +1,6 @@
 {
   "name": "Impacto",
-  "description": "A multi-tenant SaaS Organization Management Platform for organizing, engaging, and tracking impact.",
+  "description": "A complete organization management system with a free forever plan for cooperatives, NGOs, and community associations to coordinate members, audit Mobile Money dues, and publish official documents.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

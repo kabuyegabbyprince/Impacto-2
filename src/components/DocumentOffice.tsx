@@ -37,11 +37,17 @@ import {
   Sigma,
   Palette,
   Menu,
-  Settings2
+  Settings2,
+  Maximize2,
+  Minimize2,
+  PenTool,
+  Upload
 } from "lucide-react";
 import { Document, OrgMember } from "../types";
 import { useCreateMember } from "../hooks/useImpactoData";
 import { useToast } from "../components/Toast";
+import { DigitalSignaturePad } from "./DigitalSignaturePad";
+import { MockDB } from "../lib/mockData";
 
 interface DocumentOfficeProps {
   activeOrg: any;
@@ -93,10 +99,16 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
   const createMemberMutation = useCreateMember();
 
   // Mode: "word" or "excel"
-  const [fileType, setFileType] = useState<"word" | "excel">("word");
+  const [fileType, setFileType] = useState<"word" | "excel">("excel");
   const [docName, setDocName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isPrivateDoc, setIsPrivateDoc] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFluidWidth, setIsFluidWidth] = useState(true);
+
+  // --- Signature States ---
+  const [signatureMenuOpen, setSignatureMenuOpen] = useState(false);
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
 
   const isProPlan = activeOrg?.subscription_status === "trial" || activeOrg?.subscription_tier === "growth" || activeOrg?.subscription_tier === "enterprise";
 
@@ -183,7 +195,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
       }
     } else {
       setDocName("");
-      setFileType("word");
+      setFileType("excel");
       setIsPrivateDoc(false);
       setSelectedRecipients([]);
       setIsLetter(false);
@@ -700,76 +712,271 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-0 md:p-4">
-      <div className="w-full h-full md:h-[90vh] md:max-w-6xl bg-white dark:bg-slate-900 md:rounded-2xl shadow-2xl border dark:border-slate-800 flex flex-col overflow-hidden relative animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-0 md:p-1">
+      <div className={`w-full h-full ${isFullscreen ? 'md:h-full md:max-w-none md:rounded-none' : 'md:h-[99vh] md:max-w-[99vw] md:rounded-xl'} bg-white dark:bg-slate-900 shadow-2xl border dark:border-slate-800 flex flex-col overflow-hidden relative animate-in fade-in zoom-in duration-200 transition-all`}>
         
         {/* OFFICE HEADER */}
-        <div className="px-4 py-3 md:px-6 md:py-4 border-b border-gray-150 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-gray-50 dark:bg-slate-950/40 shrink-0">
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className={`p-2 rounded-xl text-white shrink-0 ${fileType === "excel" ? "bg-emerald-600" : "bg-indigo-600"}`}>
+        <div className="px-4 py-3 md:px-6 md:py-3.5 border-b border-gray-150 dark:border-slate-800 flex items-center justify-between gap-3 bg-white dark:bg-slate-900 shrink-0">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/60 flex items-center justify-center text-[#156c45] dark:text-emerald-400 shrink-0 shadow-3xs">
               {fileType === "excel" ? <FileSpreadsheet className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 w-full">
-                <input 
-                  type="text" 
-                  value={docName}
-                  onChange={(e) => setDocName(e.target.value)}
-                  placeholder={fileType === "excel" ? "Spreadsheet filename..." : "Document filename..."}
-                  disabled={readOnly}
-                  className="bg-transparent font-bold text-sm md:text-base text-gray-901 dark:text-white border-b border-dashed border-gray-300 dark:border-slate-700 outline-none focus:border-indigo-500 w-full min-w-0 py-0.5 truncate"
-                />
-              </div>
-              <p className="text-[10px] md:text-[11px] text-gray-500 mt-0.5 truncate">
-                {editingDoc ? "Modifying existing document in" : viewingDoc ? "Viewing" : "Drafting in"} Branded Office Studio
-              </p>
+            <div className="flex-1 min-w-0 max-w-md">
+              <input 
+                type="text" 
+                value={docName}
+                onChange={(e) => setDocName(e.target.value)}
+                placeholder={fileType === "excel" ? "Spreadsheet filename..." : "Document filename..."}
+                disabled={readOnly}
+                className="bg-transparent font-display font-semibold text-base md:text-lg text-gray-800 dark:text-white outline-none w-full py-0.5 truncate placeholder:text-gray-400 focus:placeholder:text-gray-300 transition"
+              />
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 w-full justify-between sm:justify-end sm:w-auto mt-2 sm:mt-0">
-            <div className="flex items-center gap-3">
-              {!readOnly && (
-                <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-bold text-gray-700 dark:text-gray-300">
-                  <input 
-                    type="checkbox"
-                    checked={isPrivateDoc}
-                    onChange={(e) => setIsPrivateDoc(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                  />
-                  <span className="flex items-center gap-1">
-                    <Lock className="h-3 w-3 text-rose-500 hidden sm:block" />
-                    Private <span className="hidden sm:inline">File</span>
-                  </span>
-                </label>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5">
-              {!readOnly && (
-                <button 
-                  onClick={handleSaveOfficeDocument}
-                  disabled={isSaving}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] md:text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 rounded-lg transition"
-                >
-                  <Save className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{isSaving ? "Saving..." : "Save to Cloud"}</span>
-                  <span className="sm:hidden">{isSaving ? "Saving..." : "Save"}</span>
-                </button>
-              )}
-              {!readOnly && (
-                <button 
-                  onClick={() => setShowMobileSettings(!showMobileSettings)}
-                  className="lg:hidden p-1.5 bg-gray-200 dark:bg-slate-800 rounded-lg text-gray-600 dark:text-gray-300 transition"
-                >
-                  <Settings2 className="h-4.5 w-4.5" />
-                </button>
-              )}
+          <div className="flex items-center gap-3 shrink-0">
+            {!readOnly && (
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-gray-700 dark:text-gray-300 hover:text-gray-900 transition">
+                <input 
+                  type="checkbox" 
+                  checked={isPrivateDoc}
+                  onChange={(e) => setIsPrivateDoc(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-[#156c45] focus:ring-[#156c45] cursor-pointer"
+                />
+                <span>Private</span>
+              </label>
+            )}
+
+            {!readOnly && (
               <button 
-                onClick={onClose}
-                className="p-1.5 hover:bg-gray-200 dark:hover:bg-slate-800 rounded-lg text-gray-500 hover:text-gray-800 transition bg-gray-100 dark:bg-slate-900"
+                onClick={handleSaveOfficeDocument}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-[#156c45] hover:bg-[#115436] disabled:bg-[#156c45]/60 rounded-xl transition shadow-sm cursor-pointer"
               >
-                <X className="h-4.5 w-4.5" />
+                <Save className="h-3.5 w-3.5" />
+                <span>{isSaving ? "Saving..." : "Save to Cloud"}</span>
               </button>
-            </div>
+            )}
+
+            <button 
+              onClick={() => setShowMobileSettings(!showMobileSettings)}
+              className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl text-gray-600 dark:text-gray-300 transition"
+            >
+              <Settings2 className="h-4.5 w-4.5" />
+            </button>
+
+            <button 
+              type="button"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              title={isFullscreen ? "Exit Fullscreen" : "Fullscreen Interface"}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl text-gray-400 hover:text-gray-700 dark:hover:text-white transition hidden sm:flex items-center justify-center cursor-pointer"
+            >
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
+
+            <button 
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl text-gray-400 hover:text-gray-700 dark:hover:text-white transition cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* SECONDARY TOOLBAR & TABS BAR */}
+        <div className="px-4 py-2.5 sm:px-6 border-b border-gray-150 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 shrink-0">
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setFileType("word")}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                fileType === "word" 
+                  ? "bg-[#156c45] text-white shadow-3xs" 
+                  : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300 hover:border-[#156c45] hover:text-[#156c45] dark:hover:border-emerald-500 dark:hover:text-emerald-400"
+              }`}
+            >
+              Word / Letter
+            </button>
+            <button 
+              onClick={() => setFileType("excel")}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                fileType === "excel" 
+                  ? "bg-[#156c45] text-white shadow-3xs" 
+                  : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300 hover:border-[#156c45] hover:text-[#156c45] dark:hover:border-emerald-500 dark:hover:text-emerald-400"
+              }`}
+            >
+              Excel Spreadsheet
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 justify-end flex-1">
+            {/* Word Toolbar */}
+            {fileType === "word" && !readOnly && (
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <button onClick={() => execCmd("bold")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs font-bold text-gray-700 dark:text-slate-300 transition" title="Bold">
+                    B
+                  </button>
+                  <button onClick={() => execCmd("italic")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs italic text-gray-700 dark:text-slate-300 transition" title="Italic">
+                    I
+                  </button>
+                  <button onClick={() => execCmd("underline")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs underline text-gray-700 dark:text-slate-300 transition" title="Underline">
+                    U
+                  </button>
+                </div>
+
+                <div className="h-4 w-px bg-gray-200 dark:bg-slate-800 mx-0.5" />
+
+                <div className="flex items-center gap-1">
+                  <button onClick={() => execCmd("formatBlock", "H1")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs font-bold text-gray-700 dark:text-slate-300 transition" title="Heading 1">
+                    H1
+                  </button>
+                  <button onClick={() => execCmd("formatBlock", "H2")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs font-bold text-gray-700 dark:text-slate-300 transition" title="Heading 2">
+                    H2
+                  </button>
+                </div>
+
+                <div className="h-4 w-px bg-gray-200 dark:bg-slate-800 mx-0.5" />
+
+                <div className="flex items-center gap-1">
+                  <button onClick={() => execCmd("justifyLeft")} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-700 dark:text-slate-300 transition" title="Align Left">
+                    <AlignLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => execCmd("justifyCenter")} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-700 dark:text-slate-300 transition" title="Align Center">
+                    <AlignCenter className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => execCmd("justifyRight")} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-700 dark:text-slate-300 transition" title="Align Right">
+                    <AlignRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="h-4 w-px bg-gray-200 dark:bg-slate-800 mx-0.5" />
+
+                {/* Size select */}
+                <select 
+                  onChange={(e) => execCmd("fontSize", e.target.value)} 
+                  className="px-2 py-1 text-xs font-semibold bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-700 dark:text-slate-300 outline-none cursor-pointer"
+                  defaultValue="3"
+                  title="Font Size"
+                >
+                  <option value="1">XS</option>
+                  <option value="2">SM</option>
+                  <option value="3">MD</option>
+                  <option value="4">LG</option>
+                  <option value="5">XL</option>
+                  <option value="6">2XL</option>
+                </select>
+
+                {/* Color select */}
+                <select 
+                  onChange={(e) => execCmd("foreColor", e.target.value)} 
+                  className="px-2 py-1 text-xs font-semibold bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-700 dark:text-slate-300 outline-none cursor-pointer"
+                  defaultValue="#1E293B"
+                  title="Text Color"
+                >
+                  <option value="#1E293B">Slate</option>
+                  <option value="#156c45">Forest</option>
+                  <option value="#EF4444">Red</option>
+                  <option value="#3B82F6">Blue</option>
+                  <option value="#F59E0B">Amber</option>
+                  <option value="#8B5CF6">Purple</option>
+                </select>
+
+                <div className="h-4 w-px bg-gray-200 dark:bg-slate-800 mx-0.5" />
+
+                {/* Import File Button */}
+                <label className="flex items-center gap-1.5 px-3 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer text-xs font-bold text-gray-700 dark:text-slate-300 transition select-none">
+                  <span>Import File</span>
+                  <input 
+                    type="file" 
+                    accept=".txt,.md,.html,.docx" 
+                    onChange={handleWordImport}
+                    className="hidden" 
+                  />
+                </label>
+              </div>
+            )}
+
+            {/* Excel Toolbar */}
+            {fileType === "excel" && !readOnly && (
+              <div className="flex flex-wrap items-center gap-2">
+                <button 
+                  onClick={addRow} 
+                  className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#156c45] rounded-lg text-xs font-bold transition"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Row
+                </button>
+                <button 
+                  onClick={addColumn} 
+                  className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#156c45] rounded-lg text-xs font-bold transition"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Column
+                </button>
+                <button 
+                  onClick={deleteColumn} 
+                  className="flex items-center gap-1 px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold transition"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Remove Col
+                </button>
+                <button 
+                  onClick={() => injectFormulaRow(4, "SUM")}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#156c45] rounded-lg text-xs font-bold transition"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Auto-Sum
+                </button>
+
+                <label className="flex items-center gap-1.5 px-3 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg cursor-pointer text-xs font-bold text-gray-700 dark:text-slate-300 transition select-none">
+                  <FileUp className="h-3.5 w-3.5 text-emerald-600" />
+                  Import CSV
+                  <input 
+                    type="file" 
+                    accept=".csv" 
+                    onChange={handleCSVImport}
+                    className="hidden" 
+                  />
+                </label>
+              </div>
+            )}
+
+            {!readOnly && (
+              <>
+                <div className="h-4 w-px bg-gray-200 dark:bg-slate-800 mx-1 hidden sm:block" />
+                <div className="relative flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => setSignatureMenuOpen(!signatureMenuOpen)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-xs font-bold text-gray-700 dark:text-slate-200 transition cursor-pointer"
+                  >
+                    <PenTool className="h-3.5 w-3.5 text-[#156c45]" />
+                    <span className="hidden sm:inline">Signature</span>
+                  </button>
+                  
+                  {signatureMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setSignatureMenuOpen(false)} />
+                      <div className="absolute right-0 top-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl w-48 overflow-hidden shrink-0 z-50 py-1">
+                        <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-700 font-mono text-[9px] uppercase tracking-wider text-slate-400 font-bold">
+                          Digital Signatures
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSignatureMenuOpen(false);
+                            setShowSignaturePad(true);
+                          }}
+                          className="w-full text-left px-3.5 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition cursor-pointer font-semibold"
+                        >
+                          <Upload className="h-3.5 w-3.5 text-[#156c45]" />
+                          <span>Import / Create Signature</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -777,147 +984,26 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
           
           {/* MAIN CANVAS */}
-          <div className="flex-1 p-6 overflow-y-auto bg-gray-100/40 dark:bg-slate-950/25 flex flex-col items-center gap-4">
+          <div className="flex-1 p-3 sm:p-5 md:p-6 overflow-y-auto bg-stone-100/60 dark:bg-slate-950/40 flex flex-col items-center">
             
-            {/* FILE TYPE PICKER FOR NEW DRAFTS */}
-            {!editingDoc && !viewingDoc && !readOnly && (
-              <div className="flex p-1 bg-gray-200 dark:bg-slate-800 rounded-lg text-xs font-bold shrink-0 mb-2">
-                <button 
-                  onClick={() => setFileType("word")}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md transition ${fileType === "word" ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-xs" : "text-gray-500"}`}
-                >
-                  <FileText className="h-3.5 w-3.5" />
-                  Word/Letter Document
-                </button>
-                <button 
-                  onClick={() => setFileType("excel")}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md transition ${fileType === "excel" ? "bg-white dark:bg-slate-700 text-emerald-600 dark:text-white shadow-xs" : "text-gray-500"}`}
-                >
-                  <FileSpreadsheet className="h-3.5 w-3.5" />
-                  Excel Spreadsheet
-                </button>
-              </div>
-            )}
-
             {/* A: WORD / LETTER DRAFTING INTERFACE */}
             {fileType === "word" && (
-              <div className="w-full max-w-3xl flex flex-col gap-3 flex-1 min-h-[300px]">
+              <div className="w-full max-w-5xl flex flex-col gap-4 flex-1 transition-all duration-200">
                 
-                {/* TOOLBAR */}
-                {!readOnly && (
-                  <div className="p-2 bg-white dark:bg-slate-900 border rounded-xl flex flex-wrap items-center justify-between gap-2 shadow-xs shrink-0">
-                    <div className="flex flex-wrap items-center gap-1">
-                      <button onClick={() => execCmd("bold")} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-600 dark:text-slate-300" title="Bold">
-                        <Bold className="h-3.5 w-3.5 font-bold" />
-                      </button>
-                      <button onClick={() => execCmd("italic")} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-600 dark:text-slate-300" title="Italic">
-                        <Italic className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => execCmd("underline")} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-600 dark:text-slate-300" title="Underline">
-                        <Underline className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => execCmd("formatBlock", "H1")} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-600 dark:text-slate-300" title="Heading 1">
-                        <Heading1 className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => execCmd("formatBlock", "H2")} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-600 dark:text-slate-300" title="Heading 2">
-                        <Heading2 className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => execCmd("insertUnorderedList")} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-600 dark:text-slate-300" title="Bullet List">
-                        <List className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => execCmd("insertOrderedList")} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-600 dark:text-slate-300" title="Numbered List">
-                        <ListOrdered className="h-3.5 w-3.5" />
-                      </button>
-                      
-                      <div className="h-4 w-px bg-gray-200 dark:bg-slate-800 mx-1" />
-                      
-                      <button onClick={() => execCmd("justifyLeft")} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-600 dark:text-slate-300" title="Align Left">
-                        <AlignLeft className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => execCmd("justifyCenter")} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-600 dark:text-slate-300" title="Align Center">
-                        <AlignCenter className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => execCmd("justifyRight")} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-600 dark:text-slate-300" title="Align Right">
-                        <AlignRight className="h-3.5 w-3.5" />
-                      </button>
-
-                      <div className="h-4 w-px bg-gray-200 dark:bg-slate-800 mx-1" />
-
-                      {/* Font Size select */}
-                      <select 
-                        onChange={(e) => execCmd("fontSize", e.target.value)} 
-                        className="p-1 text-[11px] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded text-gray-600 dark:text-slate-300 outline-none cursor-pointer"
-                        defaultValue="3"
-                        title="Font Size"
-                      >
-                        <option value="1">XS</option>
-                        <option value="2">SM</option>
-                        <option value="3">MD</option>
-                        <option value="4">LG</option>
-                        <option value="5">XL</option>
-                        <option value="6">2XL</option>
-                        <option value="7">3XL</option>
-                      </select>
-
-                      {/* Font Color select */}
-                      <select 
-                        onChange={(e) => execCmd("foreColor", e.target.value)} 
-                        className="p-1 text-[11px] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded text-gray-600 dark:text-slate-300 outline-none cursor-pointer font-medium"
-                        defaultValue="#1E293B"
-                        title="Text Color"
-                      >
-                        <option value="#1E293B">slate</option>
-                        <option value="#EF4444">red</option>
-                        <option value="#10B981">green</option>
-                        <option value="#3B82F6">blue</option>
-                        <option value="#F59E0B">amber</option>
-                        <option value="#8B5CF6">purple</option>
-                      </select>
-
-                      {/* Highlight select */}
-                      <select 
-                        onChange={(e) => execCmd("hiliteColor", e.target.value)} 
-                        className="p-1 text-[11px] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded text-gray-600 dark:text-slate-300 outline-none cursor-pointer"
-                        defaultValue="transparent"
-                        title="Highlight Color"
-                      >
-                        <option value="transparent">no highlight</option>
-                        <option value="#FEF08A">yellow highlight</option>
-                        <option value="#BBF7D0">green highlight</option>
-                        <option value="#BFDBFE">blue highlight</option>
-                        <option value="#FCA5A5">red highlight</option>
-                      </select>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <label className="flex items-center gap-1 px-2.5 py-1 bg-stone-50 hover:bg-stone-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-stone-250 dark:border-slate-700 rounded-lg cursor-pointer text-[11px] font-bold text-stone-600 dark:text-slate-300 transition select-none">
-                        <FileUp className="h-3 w-3" />
-                        Import Text/Doc File
-                        <input 
-                          type="file" 
-                          accept=".txt,.md,.html,.docx" 
-                          onChange={handleWordImport}
-                          className="hidden" 
-                        />
-                      </label>
-                    </div>
-                  </div>
-                )}
-
                 {/* PAPER CANVAS */}
-                <div className="flex-1 w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-md p-8 md:p-12 overflow-y-auto flex flex-col min-h-[400px]">
+                <div className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 sm:p-10 md:p-12 flex flex-col min-h-[580px] flex-1">
                   {/* Cooperative Branded Header */}
                   {showBrandedHeader && (
-                    <div className="border-b-2 border-double border-indigo-600 dark:border-indigo-400 pb-4 mb-6 text-center select-none shrink-0">
-                      <h1 className="text-xl md:text-2xl font-black font-display tracking-wide text-indigo-900 dark:text-indigo-400 uppercase">
-                        {activeOrg?.name || "COOPERATIVE WORKSPACE"}
+                    <div className="border-b-2 border-[#156c45] pb-4 mb-6 text-center select-none shrink-0">
+                      <h1 className="text-2xl md:text-3xl font-bold font-serif tracking-wider text-gray-900 dark:text-white uppercase">
+                        {activeOrg?.name ? activeOrg.name : "WALKER"}
                       </h1>
-                      <p className="text-[10px] font-mono tracking-widest text-gray-500 uppercase mt-1">
+                      <p className="text-[11px] font-mono tracking-widest text-[#4a6357] dark:text-emerald-400 font-semibold uppercase mt-1">
                         Branded Cooperative Official Communication Desk
                       </p>
                       {isLetter && (
-                        <div className="mt-3 flex items-center justify-center gap-1.5">
-                          <span className="px-2.5 py-0.5 bg-amber-500 text-[9px] font-bold text-slate-950 rounded-full tracking-wider uppercase select-none">
+                        <div className="mt-2.5 flex items-center justify-center gap-1.5">
+                          <span className="px-3 py-0.5 bg-[#e8f5ee] dark:bg-emerald-950/40 text-[9px] font-bold text-[#156c45] dark:text-emerald-400 rounded-full tracking-wider uppercase select-none border border-emerald-200 dark:border-emerald-900/50">
                             OFFICIAL CO-OP LETTER
                           </span>
                         </div>
@@ -926,14 +1012,14 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   )}
 
                   {/* Date & Reference Area */}
-                  <div className="flex justify-between text-xs font-mono text-gray-500 mb-6 shrink-0 select-none">
+                  <div className="flex justify-between text-xs font-mono text-[#4a6357] dark:text-slate-400 mb-6 shrink-0 select-none">
                     <span>Ref: COOP/DOC-{Math.floor(1000 + Math.random() * 9000)}</span>
-                    <span>Date: {new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                    <span>Date: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
                   </div>
 
                   {/* Dynamic letter info panel in view mode */}
                   {viewingDoc?.is_letter && (
-                    <div className="mb-6 p-4 bg-indigo-50 dark:bg-slate-800/40 border border-indigo-200 dark:border-indigo-900/40 rounded-xl leading-relaxed text-indigo-800 dark:text-indigo-300">
+                    <div className="mb-6 p-4 bg-[#e8f5ee]/40 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 rounded-xl leading-relaxed text-[#156c45] dark:text-emerald-300">
                       <h4 className="font-bold text-xs select-none">Received Communication Docket</h4>
                       <p className="text-[11px] font-medium mt-1">
                         This document has been shared with you by the cooperative administrative desk. You have access to review and respond inside the portal.
@@ -946,10 +1032,42 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                     ref={editorRef}
                     contentEditable={!readOnly}
                     onInput={handleEditorInput}
-                    className="flex-1 outline-none text-sm font-serif leading-relaxed text-gray-800 dark:text-slate-100 min-h-[250px] overflow-visible select-text prose dark:prose-invert max-w-none"
-                    style={{ minHeight: "250px" }}
-                    placeholder="Begin typing your letter or official cooperative guidelines here..."
+                    className="flex-1 outline-none text-base font-sans leading-relaxed text-gray-800 dark:text-slate-100 min-h-[300px] overflow-visible select-text prose dark:prose-invert max-w-none focus:outline-none"
+                    style={{ minHeight: "300px" }}
+                    placeholder="Begin typing your official cooperative letter, resolution, or guidelines here..."
                   />
+
+                  {/* DIGITAL SIGNATURE & VERIFICATION SECTION */}
+                  <div className="mt-8 pt-6 border-t border-gray-200 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 select-none">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-slate-300">
+                        <CheckCircle className="h-4 w-4 text-[#156c45]" />
+                        <span>Verified Digital Author:</span>
+                      </div>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {activeMember?.user?.full_name || "Official Signatory"}
+                      </p>
+                      <p className="text-xs text-gray-400 capitalize">
+                        {activeMember?.role ? activeMember.role.replace("_", " ") : "Authorized Representative"} • {activeOrg?.name || "Impacto"}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1.5">
+                      <div className="h-16 w-44 border-b-2 border-gray-400 dark:border-slate-600 flex items-center justify-center bg-gray-50/50 dark:bg-slate-800/30 rounded-t-lg relative group">
+                        <span className="font-serif italic text-lg text-gray-800 dark:text-slate-200 select-none">
+                          {activeMember?.user?.full_name || "Signatory"}
+                        </span>
+                        <div className="absolute right-1 top-1">
+                          <span className="text-[8px] bg-emerald-100 dark:bg-emerald-950 text-[#156c45] font-bold px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                            E-SIGNED
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-gray-400 font-mono">
+                        Document Version Secured & Timestamped
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1253,18 +1371,18 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
               </div>
 
               {/* PRIVACY & ACCESS CONTROL */}
-              <div className="flex flex-col gap-3 p-3.5 bg-white dark:bg-slate-900 border rounded-xl">
+              <div className={`flex flex-col gap-3 p-3.5 bg-white dark:bg-slate-900 border rounded-xl transition ${isPrivateDoc ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
                 <label className="flex items-start gap-2.5 cursor-pointer select-none">
                   <input 
                     type="checkbox" 
                     checked={isPrivateDoc}
                     onChange={(e) => setIsPrivateDoc(e.target.checked)}
-                    className="mt-1 rounded border-gray-350 text-indigo-600 focus:ring-indigo-500 h-4 w-4 shrink-0"
+                    className="mt-1 rounded border-gray-350 text-[#156c45] focus:ring-[#156c45] h-4 w-4 shrink-0 accent-[#156c45]"
                   />
                   <div>
                     <div className="flex items-center gap-1.5">
-                      <Lock className="h-3.5 w-3.5 text-rose-500" />
-                      <span className="text-xs font-black text-gray-700 dark:text-slate-200 block">Private Document</span>
+                      <Lock className="h-3.5 w-3.5 text-[#156c45]" />
+                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block">Private Document</span>
                     </div>
                     <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight">
                       When enabled, only you and explicitly chosen cooperative members can access this file.
@@ -1311,7 +1429,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                               className="flex items-center justify-between p-1.5 hover:bg-white dark:hover:bg-slate-800 rounded-md cursor-pointer transition select-none"
                             >
                               <div className="flex items-center gap-2 min-w-0">
-                                <div className="h-5 w-5 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-[9px] font-black shrink-0">
+                                <div className="h-5 w-5 bg-[#e8f5ee] text-[#156c45] rounded-full flex items-center justify-center text-[9px] font-black shrink-0">
                                   {member.user?.full_name?.substring(0, 2) || "CO"}
                                 </div>
                                 <div className="min-w-0">
@@ -1323,7 +1441,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                                   </span>
                                 </div>
                               </div>
-                              <div className={`h-3.5 w-3.5 rounded border flex items-center justify-center shrink-0 ${isChecked ? "bg-indigo-600 border-indigo-600 text-white" : "border-gray-300 dark:border-slate-700"}`}>
+                              <div className={`h-3.5 w-3.5 rounded border flex items-center justify-center shrink-0 ${isChecked ? "bg-[#156c45] border-[#156c45] text-white" : "border-gray-300 dark:border-slate-700"}`}>
                                 {isChecked && <Check className="h-2.5 w-2.5 font-bold" />}
                               </div>
                             </div>
@@ -1339,7 +1457,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                 <div className="flex flex-col gap-4">
                   
                   {/* Letter toggle */}
-                  <label className="flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-xs">
+                  <label className={`flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs ${isLetter ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
                     <input 
                       type="checkbox" 
                       checked={isLetter}
@@ -1349,10 +1467,10 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                           setIsCustomizedDissemination(false);
                         }
                       }}
-                      className="mt-1 rounded border-gray-350 text-indigo-600 focus:ring-indigo-500 h-4 w-4 shrink-0"
+                      className="mt-1 rounded border-gray-350 text-[#156c45] focus:ring-[#156c45] h-4 w-4 shrink-0 accent-[#156c45]"
                     />
                     <div>
-                      <span className="text-xs font-black text-gray-700 dark:text-slate-200 block">Treat as Official Letter</span>
+                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block">Treat as Official Letter</span>
                       <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight">
                         Convert this page into a letter and target specific cooperative members in their received box.
                       </span>
@@ -1360,15 +1478,15 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   </label>
 
                   {/* Letterhead Toggle */}
-                  <label className="flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-xs">
+                  <label className={`flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs ${showBrandedHeader ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
                     <input 
                       type="checkbox" 
                       checked={showBrandedHeader}
                       onChange={(e) => setShowBrandedHeader(e.target.checked)}
-                      className="mt-1 rounded border-gray-350 text-indigo-600 focus:ring-indigo-500 h-4 w-4 shrink-0"
+                      className="mt-1 rounded border-gray-350 text-[#156c45] focus:ring-[#156c45] h-4 w-4 shrink-0 accent-[#156c45]"
                     />
                     <div>
-                      <span className="text-xs font-black text-gray-700 dark:text-slate-200 block">Include Branded Header</span>
+                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block">Include Branded Header</span>
                       <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight">
                         Display the official cooperative letterhead banner and reference metadata at the top of the canvas.
                       </span>
@@ -1378,7 +1496,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   {/* Customized Dissemination Toggle */}
                   {isLetter && !editingDoc && (
                     <div className="relative">
-                      <label className="flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-xs">
+                      <label className="flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs">
                         <input 
                           type="checkbox" 
                           checked={isCustomizedDissemination}
@@ -1389,8 +1507,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                         />
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-black text-gray-700 dark:text-slate-200 block">Individualized Dissemination</span>
-                            <span className="px-1.5 py-0.2 bg-amber-500 text-white font-black text-[8px] uppercase tracking-wide rounded">PRO</span>
+                            <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block">Individualized Dissemination</span>
+                            <span className="px-1.5 py-0.2 bg-amber-500 text-white font-bold text-[8px] uppercase tracking-wide rounded">PRO</span>
                           </div>
                           <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight">
                             Generate and deliver customized individual copies mapped dynamically to organization members in the database.
@@ -1402,7 +1520,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                             </span>
                             <div className="flex flex-col gap-1.5">
                               <div className="flex items-center justify-between">
-                                <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded text-[8px]">
+                                <span className="font-mono text-[#156c45] dark:text-emerald-400 font-bold bg-[#e8f5ee] dark:bg-emerald-950/40 px-1.5 py-0.5 rounded text-[8px]">
                                   full name
                                 </span>
                                 <span className="text-gray-550 dark:text-slate-400 max-w-[130px] truncate font-medium">
@@ -1410,7 +1528,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
-                                <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded text-[8px]">
+                                <span className="font-mono text-[#156c45] dark:text-emerald-400 font-bold bg-[#e8f5ee] dark:bg-emerald-950/40 px-1.5 py-0.5 rounded text-[8px]">
                                   email
                                 </span>
                                 <span className="text-gray-550 dark:text-slate-400 max-w-[130px] truncate font-medium">
@@ -1418,7 +1536,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
-                                <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded text-[8px]">
+                                <span className="font-mono text-[#156c45] dark:text-emerald-400 font-bold bg-[#e8f5ee] dark:bg-emerald-950/40 px-1.5 py-0.5 rounded text-[8px]">
                                   role
                                 </span>
                                 <span className="text-gray-550 dark:text-slate-400 capitalize font-medium">
@@ -1843,6 +1961,34 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
           </div>
         </div>
       )}
+
+      {/* Signature Pad */}
+      <DigitalSignaturePad
+        isOpen={showSignaturePad}
+        onClose={() => setShowSignaturePad(false)}
+        documentTitle={docName || "Official Workspace Document"}
+        documentVersion={1}
+        signerName={activeMember?.user?.full_name || "Authorized Member"}
+        signerRole="Executive Official"
+        onSignComplete={(data) => {
+          const sigs = MockDB.getDocumentSignatures();
+          const newSig = {
+            id: "sig-" + Date.now(),
+            document_id: editingDoc?.id || "doc-draft",
+            member_id: activeMember?.id || "mem-1",
+            org_id: activeOrg?.id || "default-org",
+            signer_name: data.signerName,
+            signer_role: data.signerRole,
+            signature_type: data.signatureType,
+            signature_data_url: data.signatureDataUrl,
+            document_version: data.documentVersion,
+            verification_hash: data.verificationHash,
+            signed_at: data.signedAt
+          };
+          MockDB.saveDocumentSignatures([newSig, ...sigs]);
+          addToast(`Signature successfully registered with verification hash ${data.verificationHash}!`, "success");
+        }}
+      />
     </div>
   );
 };

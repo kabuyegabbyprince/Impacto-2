@@ -49,14 +49,14 @@ export const PlanGatedView: React.FC<PlanGatedViewProps> = ({
       textColor: "text-emerald-800"
     },
     enterprise: {
-      name: "Pro VIP Room",
+      name: "Pro Plan",
       price: "$40 / month",
       benefits: [
         "Highly secure end-to-end encryption",
         "Auto-personalized data management",
-        "Treated as VIP group tier",
+        "Treated as Pro tier organization",
         "Unlimited on all features & storage",
-        "Admin direct contact (VIP room)"
+        "Admin direct contact (Pro Plan)"
       ],
       color: "from-amber-600 to-amber-800",
       textColor: "text-amber-800"

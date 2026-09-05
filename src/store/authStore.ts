@@ -1,26 +1,8 @@
 import { create } from "zustand";
 import i18n from "../lib/i18n";
+import { User } from "../types";
 
-export interface User {
-  id: string;
-  full_name: string;
-  email: string;
-  avatar_url?: string;
-  is_superadmin: boolean;
-  created_at: string;
-  preferred_language?: "en" | "fr" | "rw";
-  accessibility_font_size?: "normal" | "large" | "x-large";
-  accessibility_high_contrast?: boolean;
-  bio?: string;
-  phone_number?: string;
-  job_title?: string;
-  notification_email?: boolean;
-  notification_sms?: boolean;
-  ui_density?: "normal" | "compact" | "spacious";
-  reduced_motion?: boolean;
-  profile_visibility?: "public" | "members_only" | "private";
-  status_badge?: "active" | "remote" | "field" | "away";
-}
+export type { User };
 
 export interface AuthState {
   user: User | null;

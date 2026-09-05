@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Plus Jakarta Sans", sans-serif;
+  --font-sans: "DM Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans", "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
   --color-brand-primary: var(--brand-primary);
@@ -160,3 +160,46 @@ html[data-a11y-contrast="high"] textarea {
 .animate-ios-spin {
   animation: ios-spin 1.2s linear infinite;
 }
+
+/* ========================================================
+   VIRELLIX & IMPACTO DESIGN SYSTEM: GREEN CARD HOVER GLOW
+   "when mouse is over the card glow green"
+   ======================================================== */
+.card-glow,
+.card,
+[data-card="true"],
+.interactive-card {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.card-glow:hover,
+.card:hover,
+[data-card="true"]:hover,
+.interactive-card:hover {
+  box-shadow: 0 12px 28px -6px rgba(21, 108, 69, 0.16), 0 6px 12px -4px rgba(21, 108, 69, 0.08) !important;
+  border-color: rgba(21, 108, 69, 0.4) !important;
+  transform: translateY(-2px);
+}
+
+[data-theme="dark"] .card-glow:hover,
+[data-theme="dark"] .card:hover,
+[data-theme="dark"] [data-card="true"]:hover,
+[data-theme="dark"] .interactive-card:hover {
+  box-shadow: 0 12px 28px -6px rgba(34, 192, 107, 0.2), 0 6px 12px -4px rgba(34, 192, 107, 0.1) !important;
+  border-color: rgba(34, 192, 107, 0.45) !important;
+}
+
+/* Subtle pulse for active badges */
+@keyframes green-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(34, 192, 107, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(34, 192, 107, 0);
+  }
+}
+
+.green-pulse {
+  animation: green-glow-pulse 2s infinite ease-in-out;
+}
+

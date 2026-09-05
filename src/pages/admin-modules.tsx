@@ -68,6 +68,7 @@ import {
   useIdentityVerifications,
   useReviewIdentityVerification,
   useResignations,
+  useFinalizeResignation,
   useGoals
 } from "../hooks/useImpactoData";
 import { Button, Input, Card, Badge, Avatar, Table, Modal, EmptyState } from "../components/ui";
@@ -108,6 +109,7 @@ export const MembersManagement: React.FC = () => {
   const { data: verifications, refetch: refetchVerifs } = useIdentityVerifications(activeOrg?.id);
   const reviewVerifMutation = useReviewIdentityVerification();
   const { data: resignations, refetch: refetchResigns } = useResignations(activeOrg?.id);
+  const finalizeResignMutation = useFinalizeResignation();
 
   // Password reset request states
   const [pwResetRequests, setPwResetRequests] = useState<any[]>([]);
@@ -410,6 +412,26 @@ export const MembersManagement: React.FC = () => {
     }
   };
 
+  const handleProcessResignation = async (resignationId: string, memberId: string, action: "active" | "suspended") => {
+    try {
+      // Step 1: Update member status
+      await handleStatusChange(memberId, action);
+      
+      // Step 2: Mark resignation as finalized
+      await finalizeResignMutation.mutateAsync({
+        id: resignationId,
+        org_id: activeOrg?.id || "",
+        member_id: memberId,
+        admin_response: action === "active" ? "Member chose to stay after discussion." : "Resignation accepted and offboarding checklist completed.",
+        admin_responded_by: activeMember?.user_id || "",
+      });
+      refetchResigns();
+    } catch (err) {
+      console.error(err);
+      addToast("Failed to process resignation fully", "error");
+    }
+  };
+
   const filteredMembers = members?.filter((m) => {
     if (m.status === "pending") return false;
     const term = search.toLowerCase();
@@ -460,7 +482,7 @@ export const MembersManagement: React.FC = () => {
                   addToast("Failed to update role", "error");
                 }
               }}
-              className="bg-stone-50 dark:bg-slate-950 text-xs font-bold border border-gray-200 dark:border-slate-800 rounded-lg px-2 py-1 text-stone-800 dark:text-slate-100 outline-none focus:ring-1 focus:ring-emerald-500"
+              className="bg-slate-50 dark:bg-slate-900 text-xs font-bold border border-slate-200/90 dark:border-slate-700/80 rounded-xl px-2.5 py-1.5 text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-[#156c45] shadow-3xs cursor-pointer"
             >
               <option value="member">Member</option>
               <option value="manager">Manager</option>
@@ -470,7 +492,7 @@ export const MembersManagement: React.FC = () => {
           );
         }
         return (
-          <Badge color={row.role === "org_admin" ? "amber" : row.role === "manager" ? "purple" : row.role === "accountant" ? "emerald" : "blue"}>
+          <Badge color={row.role === "org_admin" ? "amber" : row.role === "manager" ? "purple" : row.role === "accountant" ? "green" : "blue"}>
             {row.role === "org_admin" ? t("lbl_role_admin") : row.role === "manager" ? "Manager" : row.role === "accountant" ? "Accountant" : t("lbl_role_participant")}
           </Badge>
         );
@@ -497,8 +519,8 @@ export const MembersManagement: React.FC = () => {
           <div className="flex gap-2">
             <Button
               size="sm"
-              variant={row.is_volunteer ? "solid" : "outline"}
-              className={!row.is_volunteer ? "text-amber-600 border-amber-600" : ""}
+              variant={row.is_volunteer ? "primary" : "outline"}
+              className={!row.is_volunteer ? "text-amber-600 border-amber-500/80 hover:bg-amber-50 dark:hover:bg-amber-950/20" : ""}
               onClick={() => handleToggleVolunteer(row.id, row.is_volunteer)}
               icon={<Heart className="h-3.5 w-3.5" />}
             >
@@ -539,12 +561,12 @@ export const MembersManagement: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-6 select-none font-sans w-full animate-in fade-in duration-250">
-      <div className="flex items-center justify-between border-b pb-4 shrink-0">
+      <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-800 pb-5 shrink-0">
         <div>
-          <h2 className="text-xl md:text-2xl font-bold font-display text-gray-901">{t("members_dir_title")}</h2>
-          <p className="text-xs text-gray-400">{t("members_dir_subtitle")}</p>
+          <h2 className="text-xl md:text-2xl font-bold font-display text-slate-900 dark:text-white leading-none">{t("members_dir_title")}</h2>
+          <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">{t("members_dir_subtitle")}</p>
         </div>
-        <Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpenInviteModal(true)}>
+        <Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpenInviteModal(true)} className="rounded-xl bg-emerald-700 hover:bg-emerald-800">
           {t("btn_invite_member")}
         </Button>
       </div>
@@ -571,78 +593,78 @@ export const MembersManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Modern navigation subtabs */}
-      <div className="flex border-b border-gray-200 dark:border-slate-800 gap-6 select-none font-sans leading-none pb-0.5 overflow-x-auto whitespace-nowrap">
+      {/* Modern navigation subtabs - Clean Segmented Bar */}
+      <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-1 select-none overflow-x-auto whitespace-nowrap shadow-3xs">
         <button
           onClick={() => handleTabChange("directory")}
-          className={`pb-3 text-xs font-bold transition-all border-b-2 hover:text-stone-900 leading-none shrink-0 ${
+          className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "directory"
-              ? "border-[var(--org-primary)] text-stone-900 font-extrabold"
-              : "border-transparent text-gray-450"
+              ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
           }`}
         >
           {t("tab_directory")}
         </button>
         <button
           onClick={() => handleTabChange("volunteers")}
-          className={`pb-3 text-xs font-bold transition-all border-b-2 hover:text-stone-900 leading-none shrink-0 ${
+          className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "volunteers"
-              ? "border-[var(--org-primary)] text-stone-900 font-extrabold"
-              : "border-transparent text-gray-450"
+              ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
           }`}
         >
           {t("tab_volunteers")}
         </button>
         <button
           onClick={() => handleTabChange("verifications")}
-          className={`pb-3 text-xs font-bold transition-all border-b-2 hover:text-stone-900 leading-none flex items-center gap-1.5 shrink-0 ${
+          className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "verifications"
-              ? "border-[var(--org-primary)] text-stone-900 font-extrabold"
-              : "border-transparent text-gray-450"
+              ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
           }`}
         >
           {t("tab_verifications")}
           {verifications && verifications.filter(v => v.status === "pending").length > 0 && (
-            <Badge color="amber" className="text-[9px] px-1 py-0">{verifications.filter(v => v.status === "pending").length}</Badge>
+            <Badge color="amber" className="text-[10px] px-1.5 py-0">{verifications.filter(v => v.status === "pending").length}</Badge>
           )}
         </button>
         <button
           onClick={() => handleTabChange("resignations")}
-          className={`pb-3 text-xs font-bold transition-all border-b-2 hover:text-stone-900 leading-none flex items-center gap-1.5 shrink-0 ${
+          className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "resignations"
-              ? "border-[var(--org-primary)] text-stone-900 font-extrabold"
-              : "border-transparent text-gray-450"
+              ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
           }`}
         >
           {t("tab_resignations")}
           {resignations && resignations.filter(r => r.status === "pending").length > 0 && (
-            <Badge color="red" className="text-[9px] px-1 py-0">{resignations.filter(r => r.status === "pending").length}</Badge>
+            <Badge color="red" className="text-[10px] px-1.5 py-0">{resignations.filter(r => r.status === "pending").length}</Badge>
           )}
         </button>
         <button
           onClick={() => handleTabChange("requests")}
-          className={`pb-3 text-xs font-bold transition-all border-b-2 hover:text-stone-900 leading-none flex items-center gap-1.5 shrink-0 ${
+          className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "requests"
-              ? "border-[var(--org-primary)] text-stone-900 font-extrabold"
-              : "border-transparent text-gray-450"
+              ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
           }`}
         >
           Membership Requests
           {pendingRequestsCount > 0 && (
-            <Badge color="amber" className="text-[9px] px-1 py-0">{pendingRequestsCount}</Badge>
+            <Badge color="amber" className="text-[10px] px-1.5 py-0">{pendingRequestsCount}</Badge>
           )}
         </button>
         <button
           onClick={() => handleTabChange("pw_resets")}
-          className={`pb-3 text-xs font-bold transition-all border-b-2 hover:text-stone-900 leading-none flex items-center gap-1.5 shrink-0 ${
+          className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "pw_resets"
-              ? "border-[var(--org-primary)] text-stone-900 font-extrabold"
-              : "border-transparent text-gray-450"
+              ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
           }`}
         >
           Password Reset Requests
           {pendingPwResetCount > 0 && (
-            <Badge color="amber" className="text-[9px] px-1 py-0">{pendingPwResetCount}</Badge>
+            <Badge color="amber" className="text-[10px] px-1.5 py-0">{pendingPwResetCount}</Badge>
           )}
         </button>
       </div>
@@ -717,7 +739,6 @@ export const MembersManagement: React.FC = () => {
 
       {activeTab === "verifications" && (
         <PlanGatedView requiredTier="enterprise" featureName="Identity Document Verification Hub">
-          <div className="text-emerald-600 font-bold mb-4 uppercase text-xs tracking-wider">Under Calibration</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card title={t("verif_pending_title")}>
               <div className="flex flex-col gap-4">
@@ -804,7 +825,6 @@ export const MembersManagement: React.FC = () => {
 
       {activeTab === "resignations" && (
         <PlanGatedView requiredTier="enterprise" featureName="3-Step Resignations Survey & Offboarding Analytics">
-          <div className="text-emerald-600 font-bold mb-4 uppercase text-xs tracking-wider">Under Calibration</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card title={t("resign_pending_title")}>
               <div className="flex flex-col gap-4">
@@ -838,10 +858,10 @@ export const MembersManagement: React.FC = () => {
                           )}
 
                           <div className="flex justify-end gap-2 text-xs font-semibold">
-                            <Button size="sm" color="amber" variant="outline" onClick={() => handleStatusChange(r.member_id, "active")}>
+                            <Button size="sm" color="amber" variant="outline" onClick={() => handleProcessResignation(r.id, r.member_id, "active")}>
                               {t("btn_retain_member")}
                             </Button>
-                            <Button size="sm" onClick={() => handleStatusChange(r.member_id, "suspended")}>
+                            <Button size="sm" onClick={() => handleProcessResignation(r.id, r.member_id, "suspended")}>
                               {t("btn_process_checklist")}
                             </Button>
                           </div>
@@ -1650,19 +1670,19 @@ export const LedgerBookkeeping: React.FC = () => {
       <div className="flex flex-col gap-6 select-none font-sans w-full animate-in">
         
         {/* Header Block */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between border-b pb-4 gap-4 shrink-0">
+        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-200 dark:border-slate-800 pb-5 gap-4 shrink-0">
           <div>
-            <h2 className="text-xl md:text-2xl font-bold font-display text-gray-901 dark:text-white">{t("ledger_title")}</h2>
-            <p className="text-xs text-gray-500 dark:text-slate-400">Audited organizational bookkeeping with real-time Balance Sheet separation for Assets, Liabilities, and Shareholder Equity.</p>
+            <h2 className="text-xl md:text-2xl font-bold font-display text-gray-900 dark:text-white leading-none">{t("ledger_title")}</h2>
+            <p className="text-xs md:text-sm text-gray-500 dark:text-slate-400 mt-1 font-medium">Audited organizational bookkeeping with real-time Balance Sheet separation for Assets, Liabilities, and Shareholder Equity.</p>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 inline-flex items-center gap-1 shadow-3xs overflow-x-auto scrollbar-none shrink-0">
             <button
               onClick={() => setActiveSubTab("ledger_book")}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
                 activeSubTab === "ledger_book"
-                  ? "bg-[var(--org-primary)] text-white shadow-sm"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-350"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
               }`}
             >
               <FileText className="h-3.5 w-3.5" />
@@ -1670,10 +1690,10 @@ export const LedgerBookkeeping: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveSubTab("balance_sheet")}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
                 activeSubTab === "balance_sheet"
-                  ? "bg-[var(--org-primary)] text-white shadow-sm"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-350"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
               }`}
             >
               <Scale className="h-3.5 w-3.5" />
@@ -2551,25 +2571,25 @@ export const GrantsTracker: React.FC<GrantsTrackerProps> = ({ defaultTab = "gran
   return (
     <div className="flex flex-col gap-6 select-none font-sans w-full animate-in">
       {/* Header Block */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b pb-4 gap-4 shrink-0">
+      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-200 dark:border-slate-800 pb-5 gap-4 shrink-0">
         <div>
-          <h2 className="text-xl md:text-2xl font-bold font-display text-gray-900 dark:text-white">
+          <h2 className="text-xl md:text-2xl font-bold font-display text-gray-900 dark:text-white leading-none">
             {t("grants_dir_title", "Grants & Sourced Funds Directory")}
           </h2>
-          <p className="text-xs text-gray-500 dark:text-slate-400">
+          <p className="text-xs md:text-sm text-gray-500 dark:text-slate-400 mt-1 font-medium">
             {t("grants_dir_sub", "Manage strategic grant proposals, MoMo donations auditing, and total sourced capital.")}
           </p>
         </div>
 
         {/* Tab Controls & Primary Action Button */}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-slate-800 p-1 rounded-xl">
+          <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 inline-flex items-center gap-1 shadow-3xs overflow-x-auto scrollbar-none shrink-0">
             <button
               onClick={() => setActiveTab("grants")}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
                 activeTab === "grants"
-                  ? "bg-[var(--org-primary)] text-white shadow-xs"
-                  : "text-gray-600 hover:text-gray-900 dark:text-slate-300 dark:hover:text-white"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
               }`}
             >
               <Award className="h-3.5 w-3.5" />
@@ -2577,10 +2597,10 @@ export const GrantsTracker: React.FC<GrantsTrackerProps> = ({ defaultTab = "gran
             </button>
             <button
               onClick={() => setActiveTab("donations")}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
                 activeTab === "donations"
-                  ? "bg-[var(--org-primary)] text-white shadow-xs"
-                  : "text-gray-600 hover:text-gray-900 dark:text-slate-300 dark:hover:text-white"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
               }`}
             >
               <Heart className="h-3.5 w-3.5" />
@@ -2588,10 +2608,10 @@ export const GrantsTracker: React.FC<GrantsTrackerProps> = ({ defaultTab = "gran
             </button>
             <button
               onClick={() => setActiveTab("overview")}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
                 activeTab === "overview"
-                  ? "bg-[var(--org-primary)] text-white shadow-xs"
-                  : "text-gray-600 hover:text-gray-900 dark:text-slate-300 dark:hover:text-white"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
               }`}
             >
               <TrendingUp className="h-3.5 w-3.5" />
@@ -2600,7 +2620,7 @@ export const GrantsTracker: React.FC<GrantsTrackerProps> = ({ defaultTab = "gran
           </div>
 
           {activeTab === "grants" && (
-            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpenAddGrantModal(true)}>
+            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpenAddGrantModal(true)} className="rounded-xl bg-emerald-700 hover:bg-emerald-800">
               {t("btn_track_grant")}
             </Button>
           )}
@@ -3070,19 +3090,19 @@ export const AnnualReports: React.FC = () => {
       <div className="flex flex-col gap-6 select-none font-sans w-full animate-in">
       
       {/* Header Block with Sub-tabs */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b pb-4 gap-4 shrink-0">
+      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-200 dark:border-slate-800 pb-5 gap-4 shrink-0">
         <div>
-          <h2 className="text-xl md:text-2xl font-bold font-display text-gray-910 dark:text-white">{t("reports_title")}</h2>
-          <p className="text-xs text-gray-500 dark:text-slate-400">Generate, analyze, and export legal compliance reports and audit tools.</p>
+          <h2 className="text-xl md:text-2xl font-bold font-display text-slate-900 dark:text-white leading-none">{t("reports_title")}</h2>
+          <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">Generate, analyze, and export legal compliance reports and audit tools.</p>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 inline-flex items-center gap-1 shadow-3xs overflow-x-auto scrollbar-none">
           <button
             onClick={() => setActiveReportSubTab("real_time")}
-            className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
               activeReportSubTab === "real_time"
-                ? "bg-[var(--org-primary)] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-350"
+                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
             }`}
           >
             <TrendingUp className="h-3.5 w-3.5" />
@@ -3090,20 +3110,20 @@ export const AnnualReports: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveReportSubTab("annual_audit")}
-            className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all shrink-0 ${
               activeReportSubTab === "annual_audit"
-                ? "bg-[var(--org-primary)] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-350"
+                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
             }`}
           >
             Printable Annual Audit (A4)
           </button>
           <button
             onClick={() => setActiveReportSubTab("rca_compliance")}
-            className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
               activeReportSubTab === "rca_compliance"
-                ? "bg-[var(--org-primary)] text-white shadow-sm"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-350"
+                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
             }`}
           >
             <FileCheck2 className="h-3.5 w-3.5" />

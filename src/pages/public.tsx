@@ -32,7 +32,11 @@ import {
   QrCode,
   CheckCircle2,
   ShieldAlert,
-  Users
+  Users,
+  FileSpreadsheet,
+  Vote,
+  ShieldCheck,
+  Sparkles
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
@@ -56,6 +60,7 @@ import {
 } from "../hooks/useImpactoData";
 import { Button, Input, Card, Badge, Avatar, ProgressBar, EmptyState, Modal, getLucideIcon, Tabs } from "../components/ui";
 import { ResolvedImage } from "../components/ResolvedMedia";
+import { resolveFileUrl } from "../lib/storageService";
 import { Organization } from "../types";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { MockDB } from "../lib/mockData";
@@ -166,8 +171,8 @@ export const Landing: React.FC = () => {
   const rwFaqs = [
     {
       id: 1,
-      question: "Impacto ni iki kandi igenewe bande?",
-      answer: "Impacto ni ihuriro ry'imikorere n'ibaruranyandiko ry'imiryango n'amakoperative, n'amashyirahamwe y'abaturage mu Rwanda. Itanga uburyo bwiza bwo gushyira amakuru mu buryo bw'ikoranabuhanga n'ubugenzuzi bwa Mobile Money."
+      question: "Impacto ni iki kandi ese ni uburyo bwo gucunga imiryango ku buntu?",
+      answer: "Yego! Impacto ni uburyo bwuzuye bwo gucunga amakoperative n'imiryango ku buntu 100%. Butanga ibikoresho byose by'ingenzi — urutonde rw'abanyamuryango, ibitabo by'imari bya Mobile Money, ibiro by'amabaruwa afite ikirango, kwandika abitabiriye na QR Code, n'amatora mu mucyo ku buntu."
     },
     {
       id: 2,
@@ -204,8 +209,8 @@ export const Landing: React.FC = () => {
   const frFaqs = [
     {
       id: 1,
-      question: "Qu'est-ce qu'Impacto et à qui s'adresse-t-il ?",
-      answer: "Impacto est un espace de travail SaaS multi-tenant conçu spécifiquement pour les organisations non gouvernementales (ONG) rwandaises, les coopératives sociales, les initiatives forestières et les associations communautaires."
+      question: "Qu'est-ce qu'Impacto et est-ce un système de gestion d'organisation gratuit ?",
+      answer: "Impacto est un système complet et 100% gratuit de gestion d'organisation conçu pour les coopératives, les ONG et les associations communautaires. Tous les modules essentiels — répertoires des membres, registres Mobile Money, studio de lettres à en-tête, pointage QR et vote numérique — sont inclus gratuitement."
     },
     {
       id: 2,
@@ -242,8 +247,8 @@ export const Landing: React.FC = () => {
   const enFaqs = [
     {
       id: 1,
-      question: "What is Impacto and who is it designed for?",
-      answer: "Impacto is a local multi-tenant workspace platform designed specifically for Rwandan social cooperatives, forestry initiatives, and community associations. It provides secure modules to digitize and audit operations, from grassroots member directories to Mobile Money databases."
+      question: "What is Impacto and is it really a free organization management system?",
+      answer: "Yes! Impacto is a complete, 100% free organization management system designed specifically for cooperatives, NGOs, and community associations. It provides all core modules — from member directories and Mobile Money dues to official letterhead document studios, dynamic QR attendance, and democratic voting — completely free forever."
     },
     {
       id: 2,
@@ -301,7 +306,7 @@ export const Landing: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 text-slate-800 text-sm font-sans flex flex-col justify-between">
       {/* Dynamic Header */}
-      <nav className="fixed top-0 left-0 right-0 h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-6 md:px-12 z-50 select-none shrink-0 transition-all duration-150">
+      <nav className="fixed top-0 left-0 right-0 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between px-6 md:px-12 z-50 select-none shrink-0 transition-all duration-200 shadow-3xs">
         <Link to="/" className="flex items-center gap-2.5 group">
           {!logoError ? (
             <img 
@@ -312,37 +317,38 @@ export const Landing: React.FC = () => {
             />
           ) : (
             <div className="flex items-center gap-2">
-              <svg className="h-8 w-8 text-emerald-600 dark:text-emerald-500 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 100 100" fill="none">
+              <svg className="h-8 w-8 text-[#156c45] dark:text-emerald-500 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 100 100" fill="none">
                 <circle cx="50" cy="35" r="25" stroke="currentColor" strokeWidth="8" />
                 <circle cx="35" cy="65" r="25" stroke="currentColor" strokeWidth="8" />
                 <circle cx="65" cy="65" r="25" stroke="currentColor" strokeWidth="8" />
                 <polygon points="53,48 47,48 50,42" fill="#F59E0B" />
               </svg>
               <span className="font-display font-extrabold text-2xl tracking-tight text-gray-900 dark:text-white">
-                IMPACT<span className="text-emerald-600 dark:text-emerald-500 font-black">O</span>
+                IMPACT<span className="text-[#156c45] dark:text-emerald-500 font-black">O</span>
               </span>
             </div>
           )}
         </Link>
         
         {/* Navigation Content Links */}
-        <div className="hidden md:flex items-center gap-6 text-xs font-bold text-gray-505 dark:text-slate-300">
-          <a href="#capabilities" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition duration-150 relative py-1 after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-emerald-600 hover:after:w-full after:transition-all">{t("landing.nav_capabilities")}</a>
-          <a href="#discovery" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition duration-150 relative py-1 after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-emerald-600 hover:after:w-full after:transition-all">{t("landing.nav_discover")}</a>
-          <a href="#pricing" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition duration-150 relative py-1 after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-emerald-600 hover:after:w-full after:transition-all">{t("landing.nav_pricing")}</a>
-          <a href="#faqs" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition duration-150 relative py-1 after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-emerald-600 hover:after:w-full after:transition-all">{t("landing.nav_faqs")}</a>
+        <div className="hidden md:flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
+          <a href="#capabilities" className="px-3 py-1.5 rounded-lg hover:text-[#156c45] dark:hover:text-emerald-400 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors duration-150">{t("landing.nav_capabilities")}</a>
+          <a href="#discovery" className="px-3 py-1.5 rounded-lg hover:text-[#156c45] dark:hover:text-emerald-400 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors duration-150">{t("landing.nav_discover")}</a>
+          <a href="#pricing" className="px-3 py-1.5 rounded-lg hover:text-[#156c45] dark:hover:text-emerald-400 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors duration-150">{t("landing.nav_pricing")}</a>
+          <a href="#faqs" className="px-3 py-1.5 rounded-lg hover:text-[#156c45] dark:hover:text-emerald-400 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors duration-150">{t("landing.nav_faqs")}</a>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Language Switcher */}
-          <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-xl border border-gray-200/50 dark:border-slate-700/50 mr-1 select-none">
+        {/* Action Button Header */}
+        <div className="flex items-center gap-2.5">
+          {/* Language Switcher Segmented Control */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl border border-slate-200/80 dark:border-slate-700/70 select-none">
             <button
               onClick={() => handleLanguageSwitch("en")}
               title="English"
-              className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all duration-150 cursor-pointer ${
+              className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all duration-150 cursor-pointer ${
                 i18n.language === "en"
-                  ? "bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-xs"
-                  : "text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-200"
+                  ? "bg-white dark:bg-slate-700 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
               }`}
             >
               EN
@@ -350,10 +356,10 @@ export const Landing: React.FC = () => {
             <button
               onClick={() => handleLanguageSwitch("fr")}
               title="Français"
-              className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all duration-150 cursor-pointer ${
+              className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all duration-150 cursor-pointer ${
                 i18n.language?.startsWith("fr")
-                  ? "bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-xs"
-                  : "text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-200"
+                  ? "bg-white dark:bg-slate-700 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
               }`}
             >
               FR
@@ -361,10 +367,10 @@ export const Landing: React.FC = () => {
             <button
               onClick={() => handleLanguageSwitch("rw")}
               title="Kinyarwanda"
-              className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all duration-150 cursor-pointer ${
+              className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all duration-150 cursor-pointer ${
                 i18n.language?.startsWith("rw")
-                  ? "bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-xs"
-                  : "text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-200"
+                  ? "bg-white dark:bg-slate-700 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
               }`}
             >
               RW
@@ -372,12 +378,15 @@ export const Landing: React.FC = () => {
           </div>
 
           <Link to="/login">
-            <Button variant="ghost" className="font-semibold text-gray-600 dark:text-slate-300">{t("auth.login")}</Button>
+            <button className="px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-[#156c45] dark:hover:text-emerald-400 hover:bg-slate-100/80 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer">
+              {t("auth.login")}
+            </button>
           </Link>
           <Link to="/register">
-            <Button className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-4 py-2 rounded-xl transition duration-150 transform hover:scale-[1.02]">
-              {t("landing.nav_get_started")}
-            </Button>
+            <button className="flex items-center gap-1.5 bg-[#156c45] hover:bg-[#115636] active:scale-[0.98] text-white font-bold text-xs px-4 py-2 rounded-xl shadow-3xs hover:shadow-xs transition-all cursor-pointer">
+              <span>{t("landing.nav_get_started")}</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
           </Link>
         </div>
       </nav>
@@ -432,61 +441,175 @@ export const Landing: React.FC = () => {
       </section>
 
       {/* Feature Bento Grid Section */}
-      <section id="capabilities" className="py-16 bg-slate-50/50 dark:bg-slate-900 border-t border-b border-gray-200/60 dark:border-slate-800/60 px-6">
+      <section id="capabilities" className="py-20 bg-slate-50/60 dark:bg-slate-900/90 border-t border-b border-gray-200/60 dark:border-slate-800/60 px-6">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <span className="text-xs font-bold tracking-widest text-emerald-700 dark:text-emerald-400 uppercase font-mono">{t("landing.capabilities_badge")}</span>
-            <h2 className="text-2xl md:text-3xl font-extrabold font-display text-gray-900 dark:text-white mt-1">
+          <div className="text-center max-w-3xl mx-auto mb-14">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 text-[11px] font-bold tracking-widest text-[#156c45] dark:text-emerald-400 uppercase font-mono shadow-3xs">
+              <Sparkles className="h-3 w-3" />
+              {t("landing.capabilities_badge")}
+            </span>
+            <h2 className="text-3xl md:text-4xl font-extrabold font-display text-gray-900 dark:text-white mt-3 tracking-tight">
               {t("landing.capabilities_title")}
             </h2>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-sm md:text-base text-gray-500 dark:text-slate-400 mt-2.5 leading-relaxed">
               {t("landing.capabilities_desc")}
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Feature 1 */}
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 rounded-2xl flex flex-col gap-4 shadow-sm hover:shadow-md transition duration-200">
-              <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/15 rounded-xl text-emerald-700 dark:text-emerald-400 h-10 w-10 flex items-center justify-center shrink-0">
-                <Globe className="h-5 w-5" />
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Feature 1: Branded Public Portals */}
+            <div id="capability-card-portals" className="card-glow bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 p-6 rounded-2xl flex flex-col justify-between gap-5 shadow-xs hover:shadow-md transition duration-200 relative overflow-hidden group">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-500 opacity-80" />
               <div>
-                <h3 className="font-bold text-gray-900 dark:text-white text-sm font-display">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl text-[#156c45] dark:text-emerald-400 h-10 w-10 flex items-center justify-center shrink-0">
+                    <Globe className="h-5 w-5" />
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-700/50">
+                    <Check className="h-3 w-3" /> Free Forever Plan
+                  </span>
+                </div>
+                <h3 className="font-bold text-gray-900 dark:text-white text-base font-display">
                   {t("landing.card1_title")}
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-slate-300 leading-relaxed mt-1.5">
+                <p className="text-xs text-gray-600 dark:text-slate-300 leading-relaxed mt-2">
                   {t("landing.card1_desc")}
                 </p>
               </div>
+              <div className="flex flex-wrap gap-1.5 pt-3 border-t border-slate-100 dark:border-slate-700/50">
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">/@slug Web Domain</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Donor Wall</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Public News</span>
+              </div>
             </div>
 
-            {/* Feature 2 */}
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 rounded-2xl flex flex-col gap-4 shadow-sm hover:shadow-md transition duration-200">
-              <div className="p-2.5 bg-amber-50 rounded-xl text-amber-600 dark:text-amber-400 h-10 w-10 flex items-center justify-center shrink-0">
-                <Heart className="h-5 w-5" />
-              </div>
+            {/* Feature 2: Auditable Mobile Money Gates */}
+            <div id="capability-card-momo" className="card-glow bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 p-6 rounded-2xl flex flex-col justify-between gap-5 shadow-xs hover:shadow-md transition duration-200 relative overflow-hidden group">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-600 opacity-80" />
               <div>
-                <h3 className="font-bold text-gray-900 dark:text-white text-sm font-display">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl text-emerald-700 dark:text-emerald-400 h-10 w-10 flex items-center justify-center shrink-0">
+                    <Heart className="h-5 w-5" />
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-700/50">
+                    <Check className="h-3 w-3" /> Free Forever Plan
+                  </span>
+                </div>
+                <h3 className="font-bold text-gray-900 dark:text-white text-base font-display">
                   {t("landing.card2_title")}
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-slate-300 leading-relaxed mt-1.5">
+                <p className="text-xs text-gray-600 dark:text-slate-300 leading-relaxed mt-2">
                   {t("landing.card2_desc")}
                 </p>
               </div>
+              <div className="flex flex-wrap gap-1.5 pt-3 border-t border-slate-100 dark:border-slate-700/50">
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">MTN MoMo & Airtel</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Ref Code Matching</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Audited Slips</span>
+              </div>
             </div>
 
-            {/* Feature 3 */}
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 rounded-2xl flex flex-col gap-4 shadow-sm hover:shadow-md transition duration-200">
-              <div className="p-2.5 bg-blue-50 dark:bg-blue-900/15 rounded-xl text-blue-700 dark:text-blue-400 h-10 w-10 flex items-center justify-center shrink-0">
-                <FileCheck className="h-5 w-5" />
-              </div>
+            {/* Feature 3: Interactive Member Rosters */}
+            <div id="capability-card-roster" className="card-glow bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 p-6 rounded-2xl flex flex-col justify-between gap-5 shadow-xs hover:shadow-md transition duration-200 relative overflow-hidden group">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-500 opacity-80" />
               <div>
-                <h3 className="font-bold text-gray-900 dark:text-white text-sm font-display">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl text-emerald-700 dark:text-emerald-400 h-10 w-10 flex items-center justify-center shrink-0">
+                    <Users className="h-5 w-5" />
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-700/50">
+                    <Check className="h-3 w-3" /> Free Forever Plan
+                  </span>
+                </div>
+                <h3 className="font-bold text-gray-900 dark:text-white text-base font-display">
                   {t("landing.card3_title")}
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-slate-300 leading-relaxed mt-1.5">
+                <p className="text-xs text-gray-600 dark:text-slate-300 leading-relaxed mt-2">
                   {t("landing.card3_desc")}
                 </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-3 border-t border-slate-100 dark:border-slate-700/50">
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Unlimited Directory</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Roles & Badges</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Offboarding Logs</span>
+              </div>
+            </div>
+
+            {/* Feature 4: Branded Office & Letterhead Studio */}
+            <div id="capability-card-office" className="card-glow bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 p-6 rounded-2xl flex flex-col justify-between gap-5 shadow-xs hover:shadow-md transition duration-200 relative overflow-hidden group">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-600 opacity-80" />
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl text-emerald-700 dark:text-emerald-400 h-10 w-10 flex items-center justify-center shrink-0">
+                    <FileSpreadsheet className="h-5 w-5" />
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-700/50">
+                    <Check className="h-3 w-3" /> Free Forever Plan
+                  </span>
+                </div>
+                <h3 className="font-bold text-gray-900 dark:text-white text-base font-display">
+                  {t("landing.card4_title")}
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-slate-300 leading-relaxed mt-2">
+                  {t("landing.card4_desc")}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-3 border-t border-slate-100 dark:border-slate-700/50">
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Official Letterhead</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Member Mailings</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Excel & PDF Export</span>
+              </div>
+            </div>
+
+            {/* Feature 5: Democratic Digital Voting & Quorum */}
+            <div id="capability-card-voting" className="card-glow bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 p-6 rounded-2xl flex flex-col justify-between gap-5 shadow-xs hover:shadow-md transition duration-200 relative overflow-hidden group">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-500 opacity-80" />
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl text-emerald-700 dark:text-emerald-400 h-10 w-10 flex items-center justify-center shrink-0">
+                    <Vote className="h-5 w-5" />
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-700/50">
+                    <Check className="h-3 w-3" /> Free Forever Plan
+                  </span>
+                </div>
+                <h3 className="font-bold text-gray-900 dark:text-white text-base font-display">
+                  {t("landing.card5_title")}
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-slate-300 leading-relaxed mt-2">
+                  {t("landing.card5_desc")}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-3 border-t border-slate-100 dark:border-slate-700/50">
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Secret Ballots</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Quorum Verifier</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Audited Tallies</span>
+              </div>
+            </div>
+
+            {/* Feature 6: Dynamic QR Attendance & Event Radar */}
+            <div id="capability-card-attendance" className="card-glow bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 p-6 rounded-2xl flex flex-col justify-between gap-5 shadow-xs hover:shadow-md transition duration-200 relative overflow-hidden group">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-600 opacity-80" />
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl text-[#156c45] dark:text-emerald-400 h-10 w-10 flex items-center justify-center shrink-0">
+                    <QrCode className="h-5 w-5" />
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-700/50">
+                    <Check className="h-3 w-3" /> Free Forever Plan
+                  </span>
+                </div>
+                <h3 className="font-bold text-gray-900 dark:text-white text-base font-display">
+                  {t("landing.card6_title")}
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-slate-300 leading-relaxed mt-2">
+                  {t("landing.card6_desc")}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-3 border-t border-slate-100 dark:border-slate-700/50">
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Dynamic QR Gates</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Mobile Check-In</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300">Real-Time Ledger</span>
               </div>
             </div>
           </div>
@@ -707,12 +830,12 @@ export const Landing: React.FC = () => {
               </Link>
             </div>
 
-            {/* 4. Pro VIP */}
+            {/* 4. Pro Plan */}
             <div className="bg-[#0F172A] border-2 border-amber-500/80 p-6 rounded-2xl flex flex-col justify-between text-white hover:border-amber-400 transition shadow-lg relative">
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 px-3 py-0.5 text-[8px] uppercase font-black tracking-widest rounded-full">VIP ROOM</span>
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 px-3 py-0.5 text-[8px] uppercase font-black tracking-widest rounded-full">PRO PLAN</span>
               <div>
-                <span className="text-[9px] font-bold text-amber-400 uppercase tracking-widest block font-bold">{isRw ? "Icyerekezo Cyihariye" : isFr ? "VIP & Sécurité Maximale" : "VIP & Ultimate Security"}</span>
-                <h3 className="text-base font-extrabold text-slate-50 mt-1">{isRw ? "Ifatabuguzi rya Pro VIP" : isFr ? "Licence Pro VIP" : "Pro VIP License"}</h3>
+                <span className="text-[9px] font-bold text-amber-400 uppercase tracking-widest block font-bold">{isRw ? "Icyerekezo Cyihariye" : isFr ? "Sécurité Maximale & Pro" : "Pro Plan & Ultimate Security"}</span>
+                <h3 className="text-base font-extrabold text-slate-50 mt-1">{isRw ? "Ifatabuguzi rya Pro" : isFr ? "Licence Pro" : "Pro Plan License"}</h3>
                 <p className="text-2xl font-black text-white mt-3">
                   {formatAmount(convertToRWF(40, "USD"), "USD")}
                   <span className="text-xs font-semibold text-slate-400">{isRw ? " / ukwezi" : isFr ? " / mois" : " / mo"}</span>
@@ -721,19 +844,19 @@ export const Landing: React.FC = () => {
                   {formatAmount(convertToRWF(40, "USD"), activeCurrency)}
                 </p>
                 <div className="mt-5 pt-4 border-t border-slate-800">
-                  <p className="text-xs font-bold text-slate-200">{isRw ? "Ibikubiyemo byose bya VIP:" : isFr ? "Avantages VIP :" : "VIP Features & Perks:"}</p>
+                  <p className="text-xs font-bold text-slate-200">{isRw ? "Ibikubiyemo byose bya Pro:" : isFr ? "Avantages Pro :" : "Pro Plan Features & Perks:"}</p>
                   <ul className="text-[11px] text-slate-300 flex flex-col gap-2 mt-2 font-medium">
                     <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> <strong>{isRw ? "Ubufasha bwihariye bw'end-to-end encryption" : "Highly secure end-to-end encryption"}</strong></li>
                     <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> <strong>{isRw ? "Gucunga amakuru yihariye (Auto-personalized data management)" : "Auto-personalized data management"}</strong></li>
-                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> <strong>{isRw ? "Itsinda ry'icyubahiro (VIP Group Access)" : "Treated as VIP group tier"}</strong></li>
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> <strong>{isRw ? "Itsinda ry'icyiciro cya Pro" : "Treated as Pro group tier"}</strong></li>
                     <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> <strong>{isRw ? "Uburenganzira bwuzuye kuri buri kintu cyose (Unlimited all features)" : "Unlimited on all features & storage"}</strong></li>
-                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> <strong>{isRw ? "Umuhuza w'umuyobozi bwite (Admin direct contact VIP room)" : "Admin direct contact (VIP room)"}</strong></li>
+                    <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> <strong>{isRw ? "Umuhuza w'umuyobozi bwite (Admin direct contact)" : "Admin direct contact (Pro Plan)"}</strong></li>
                   </ul>
                 </div>
               </div>
               <Link to="/register" className="mt-8">
                 <Button className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black py-2.5 shadow-md">
-                  {isRw ? "Injira mu Cyumba cya VIP" : isFr ? "Rejoindre la Salle VIP" : "Join VIP Room"}
+                  {isRw ? "Tangiza Pro Plan" : isFr ? "Choisir le Plan Pro" : "Get Pro Plan"}
                 </Button>
               </Link>
             </div>
@@ -970,6 +1093,12 @@ export const Landing: React.FC = () => {
               <li><span className="hover:text-white transition cursor-pointer">QR Attendance Registers</span></li>
               <li><span className="hover:text-white transition cursor-pointer">Annual Report Compiler</span></li>
               <li><span className="hover:text-white transition cursor-pointer">Interactive Goals Tracker</span></li>
+              <li>
+                <a href="/verify" className="text-emerald-400 hover:text-emerald-300 transition flex items-center gap-1.5 font-semibold">
+                  <span>Verify Credential / Badge</span>
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1 rounded uppercase font-mono">Public</span>
+                </a>
+              </li>
             </ul>
           </div>
 
@@ -1012,7 +1141,7 @@ export const Landing: React.FC = () => {
         {/* Lower copyright row */}
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-semibold text-slate-500">
           <p>© 2026 Virellix Inc. All rights reserved. Registered trademark under Rwanda RDB.</p>
-          <div className="flex gap-4 font-mono text-[10px] uppercase tracking-wider">
+          <div className="flex flex-wrap items-center gap-4 font-mono text-[10px] uppercase tracking-wider">
             <button
               onClick={() => setTermsModalOpen(true)}
               className="hover:text-emerald-400 underline transition cursor-pointer"
@@ -1407,83 +1536,98 @@ export const OrgPublicPage: React.FC = () => {
 
         {/* Tab content renders */}
         {activeTab === "marketplace" && org.marketplace_enabled && (
-          <OrganizationMarketplace />
+          <OrganizationMarketplace orgId={org.id} org={org} isPublic={true} />
         )}
         {activeTab === "about" && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 flex flex-col gap-6">
-              <Card title="Our Mission">
-                <p className="text-sm text-gray-700 dark:text-slate-250 leading-relaxed font-medium">
-                  {description}
-                </p>
-                {org.mission && (
-                  <div className="mt-5 p-4 bg-[var(--org-primary-l)] rounded-xl border border-[var(--org-primary-l)]">
-                    <span className="text-[10px] font-bold text-[var(--org-primary)] uppercase tracking-wider block font-display">Mission Statement</span>
-                    <p className="text-sm font-semibold text-gray-800 dark:text-slate-100 mt-1 leading-snug">{org.mission}</p>
-                  </div>
-                )}
-                {org.vision && (
-                  <div className="mt-4 p-4 bg-amber-50/50 rounded-xl border border-amber-100">
-                    <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block font-display">Vision Statement</span>
-                    <p className="text-sm font-semibold text-gray-800 dark:text-slate-100 mt-1 leading-snug">{org.vision}</p>
-                  </div>
-                )}
-              </Card>
-            </div>
-
-            {/* Sidebar Contact Info */}
-            <div className="flex flex-col gap-6">
-              <Card title="Quick Info">
-                <div className="flex flex-col gap-3 text-xs md:text-sm font-medium">
-                  <div className="flex items-center gap-2 text-gray-505">
-                    <Building2 className="h-4.5 w-4.5 text-[var(--org-primary)]" />
-                    <span className="text-gray-750 font-semibold">{org.org_category}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-505">
-                    <MapPin className="h-4.5 w-4.5 text-[var(--org-primary)]" />
-                    <span className="text-gray-750">{org.location_name || "Kigali, Rwanda"}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-505">
-                    <Globe className="h-4.5 w-4.5 text-[var(--org-primary)]" />
-                    <span className="text-gray-750 truncate font-semibold">impact-o.app/@{org.slug}</span>
-                  </div>
-
-                  {org.contact_us && (
-                    <div className="mt-2 pt-2 border-t border-gray-100 flex flex-col gap-1 text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">
-                      <span className="font-bold text-gray-800">Contact Us:</span>
-                      {org.contact_us}
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+              {/* Main Column */}
+              <div className="md:col-span-2 flex flex-col gap-6">
+                <Card title="About Our Organization">
+                  <p className="text-sm text-gray-700 dark:text-slate-200 leading-relaxed font-medium">
+                    {description}
+                  </p>
+                  {org.mission && (
+                    <div className="mt-4 p-4 bg-emerald-50/70 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/60 dark:border-emerald-900/40">
+                      <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider block font-display">Mission Statement</span>
+                      <p className="text-sm font-semibold text-gray-800 dark:text-slate-100 mt-1 leading-snug">{org.mission}</p>
                     </div>
                   )}
-                </div>
-              </Card>
+                  {org.vision && (
+                    <div className="mt-3.5 p-4 bg-amber-50/70 dark:bg-amber-950/20 rounded-xl border border-amber-200/60 dark:border-amber-900/40">
+                      <span className="text-[10px] font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider block font-display">Vision Statement</span>
+                      <p className="text-sm font-semibold text-gray-800 dark:text-slate-100 mt-1 leading-snug">{org.vision}</p>
+                    </div>
+                  )}
+                </Card>
 
-              {org.donations_enabled && (
-                <Card title="Fuel the Workspace" className="text-center bg-gradient-to-tr from-[var(--org-primary)] to-[var(--org-secondary)] text-white">
-                  <div className="flex flex-col items-center gap-3">
-                    <Heart className="h-9 w-9 text-amber-400 fill-amber-400" />
-                    <p className="text-xs text-white/90">MoMo Donations are active for this Organization workspace.</p>
-                    <Link to={`/@${org.slug}/donate`} className="w-full mt-3">
-                      <Button variant="secondary" className="w-full">
+                {/* Integrated Organizational Gallery */}
+                {org.gallery_urls && org.gallery_urls.length > 0 && (
+                  <Card 
+                    title={
+                      <div className="flex items-center justify-between w-full">
+                        <span className="text-sm font-bold font-display text-gray-900 dark:text-white">Organizational Gallery</span>
+                        <Badge color="blue">{org.gallery_urls.length} {org.gallery_urls.length === 1 ? "Photo" : "Photos"}</Badge>
+                      </div>
+                    }
+                  >
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 pt-1">
+                      {org.gallery_urls.map((url, idx) => (
+                        <div key={idx} className="group aspect-square rounded-xl overflow-hidden border border-slate-200/80 dark:border-slate-800 bg-gray-100 dark:bg-slate-800 shadow-2xs relative">
+                          <ResolvedImage 
+                            src={url} 
+                            alt={`Gallery photo ${idx + 1}`} 
+                            className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                            bucketName="avatars" 
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+              </div>
+
+              {/* Sidebar Contact & Support */}
+              <div className="flex flex-col gap-6">
+                <Card title="Quick Info">
+                  <div className="flex flex-col gap-3.5 text-xs md:text-sm font-medium">
+                    <div className="flex items-center gap-2.5 text-gray-500 dark:text-slate-400">
+                      <Building2 className="h-4.5 w-4.5 text-[var(--org-primary,#10b981)] shrink-0" />
+                      <span className="text-gray-800 dark:text-slate-200 font-semibold">{org.org_category}</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-gray-500 dark:text-slate-400">
+                      <MapPin className="h-4.5 w-4.5 text-[var(--org-primary,#10b981)] shrink-0" />
+                      <span className="text-gray-800 dark:text-slate-200">{org.location_name || "Kigali, Rwanda"}</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-gray-500 dark:text-slate-400">
+                      <Globe className="h-4.5 w-4.5 text-[var(--org-primary,#10b981)] shrink-0" />
+                      <span className="text-gray-800 dark:text-slate-200 truncate font-semibold">impact-o.app/@{org.slug}</span>
+                    </div>
+
+                    {org.contact_us && (
+                      <div className="mt-2 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-1 text-xs text-gray-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                        <span className="font-bold text-gray-900 dark:text-white">Contact Us:</span>
+                        {org.contact_us}
+                      </div>
+                    )}
+                  </div>
+                </Card>
+
+                {org.donations_enabled && (
+                  <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-sm border border-amber-400/30 text-center flex flex-col items-center gap-3">
+                    <Heart className="h-8 w-8 text-amber-100 fill-amber-200" />
+                    <div>
+                      <h4 className="font-bold text-sm text-white">Fuel the Workspace</h4>
+                      <p className="text-xs text-amber-50/90 mt-1">MoMo Donations are active for this organization.</p>
+                    </div>
+                    <Link to={`/@${org.slug}/donate`} className="w-full mt-1">
+                      <Button variant="secondary" className="w-full font-bold bg-white text-amber-900 hover:bg-amber-50 border-none">
                         Donate Now
                       </Button>
                     </Link>
                   </div>
-                </Card>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Dynamic Gallery if exists */}
-        {activeTab === "about" && org.gallery_urls && org.gallery_urls.length > 0 && (
-          <div className="mt-6 flex flex-col gap-4">
-            <h3 className="text-sm font-bold font-display text-gray-900 border-b pb-2">Organizational Gallery</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {org.gallery_urls.map((url, idx) => (
-                <div key={idx} className="aspect-square rounded-xl overflow-hidden border bg-gray-100 dark:bg-slate-800 shadow-xs">
-                  <ResolvedImage src={url} alt={`Gallery image ${idx + 1}`} className="h-full w-full object-cover hover:scale-105 transition duration-300" bucketName="avatars" />
-                </div>
-              ))}
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -1617,8 +1761,24 @@ export const OrgPublicPage: React.FC = () => {
 
 // Subcomponent: Org header
 const OrgBrandingHeader: React.FC<{ org: Organization; onShare: () => void; onJoin: () => void }> = ({ org, onShare, onJoin }) => {
+  const [resolvedLogo, setResolvedLogo] = React.useState<string>("");
   const [logoErr, setLogoErr] = React.useState(false);
   const [coverErr, setCoverErr] = React.useState(false);
+
+  const rawLogo = org.logo_url || org.dashboard_logo;
+
+  React.useEffect(() => {
+    setLogoErr(false);
+    if (!rawLogo || rawLogo.startsWith("icon:") || rawLogo === "/logo.png") {
+      setResolvedLogo("");
+      return;
+    }
+    let active = true;
+    resolveFileUrl(rawLogo, "avatars").then((url) => {
+      if (active) setResolvedLogo(url);
+    });
+    return () => { active = false; };
+  }, [rawLogo]);
 
   const getInitials = (name: string) => {
     return name ? name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase() : "ORG";
@@ -1627,9 +1787,9 @@ const OrgBrandingHeader: React.FC<{ org: Organization; onShare: () => void; onJo
   const isGradientCover = org.cover_url && (org.cover_url.startsWith("from-") || !org.cover_url.includes("/"));
 
   return (
-    <div className="bg-white dark:bg-slate-900 border-b">
-      {/* Cover picture - more polished */}
-      <div className="h-56 md:h-72 w-full bg-slate-100 relative overflow-hidden">
+    <div className="bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800">
+      {/* Cover picture - responsive and high contrast */}
+      <div className="h-56 md:h-72 w-full bg-slate-900 relative overflow-hidden">
         {org.cover_url && !coverErr ? (
           isGradientCover ? (
             <div className={`h-full w-full bg-gradient-to-r ${org.cover_url}`} />
@@ -1642,12 +1802,17 @@ const OrgBrandingHeader: React.FC<{ org: Organization; onShare: () => void; onJo
             />
           )
         ) : (
-          <div className={`h-full w-full bg-gradient-to-r from-emerald-600 to-teal-700`} />
+          <div 
+            className="h-full w-full"
+            style={{
+              background: `linear-gradient(135deg, var(--org-primary, #10b981) 0%, #064e3b 100%)`
+            }}
+          />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
         <Link 
           to="/" 
-          className="absolute top-4 left-4 inline-flex items-center gap-2 bg-white/10 backdrop-blur-md hover:bg-white/20 text-white text-xs font-bold px-4 py-2 rounded-full z-30 transition"
+          className="absolute top-4 left-4 inline-flex items-center gap-2 bg-white/20 backdrop-blur-md hover:bg-white/30 text-white text-xs font-bold px-4 py-2 rounded-full z-30 transition border border-white/20 shadow-xs"
         >
           <ArrowLeft className="h-4 w-4" /> Home
         </Link>
@@ -1656,12 +1821,12 @@ const OrgBrandingHeader: React.FC<{ org: Organization; onShare: () => void; onJo
       {/* Profile area - enhanced */}
       <div className="max-w-4xl mx-auto px-4 pb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 -mt-20 md:-mt-24 relative z-10">
         <div className="flex flex-col md:flex-row items-start md:items-end gap-5">
-          <div className="h-20 w-20 md:h-28 md:w-28 rounded-2xl bg-white p-1 shadow-xl">
-            {org.logo_url && !logoErr ? (
+          <div className="h-20 w-20 md:h-28 md:w-28 rounded-2xl bg-white dark:bg-slate-800 p-1.5 shadow-xl shrink-0 overflow-hidden flex items-center justify-center border border-slate-200/80 dark:border-slate-700">
+            {resolvedLogo && !logoErr ? (
               <img 
-                src={org.logo_url} 
+                src={resolvedLogo} 
                 alt={org.name} 
-                className="h-full w-full object-cover rounded-xl" 
+                className="h-full w-full object-contain rounded-xl" 
                 onError={() => setLogoErr(true)}
               />
             ) : (
@@ -1675,17 +1840,17 @@ const OrgBrandingHeader: React.FC<{ org: Organization; onShare: () => void; onJo
               </div>
             )}
           </div>
-          <div className="flex flex-col gap-1 pb-1 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm p-3 rounded-xl">
-            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">
+          <div className="flex flex-col gap-1 pb-1 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white leading-tight">
               {org.name}
             </h1>
-            <p className="text-sm text-gray-700 dark:text-slate-300 font-medium">
+            <p className="text-xs md:text-sm text-gray-700 dark:text-slate-300 font-medium">
               {org.tagline}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm p-3 rounded-xl">
+        <div className="flex items-center gap-3 shrink-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
           <Button variant="outline" size="sm" icon={<Share2 className="h-4 w-4" />} onClick={onShare}>
             Share
           </Button>
