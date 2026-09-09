@@ -1,4 +1,5 @@
 import { GoalsPage } from "./goals";
+import { WaitRoomView } from "../components/WaitRoomView";
 
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -54,6 +55,7 @@ import {
   ExternalLink,
   AlertTriangle,
   AlertCircle,
+  Sparkles,
   Info,
   PlusCircle,
   Image,
@@ -70,7 +72,8 @@ import {
   Activity,
   Share2,
   UserPlus,
-  ArrowLeft
+  ArrowLeft,
+  Eye
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
@@ -293,6 +296,18 @@ export const DashboardHome: React.FC = () => {
   const { t } = useLocalTranslation();
   const { user } = useAuthStore();
   const { activeOrg, activeMember } = useOrgStore();
+
+  // If non-admin user is in pending or rejected status, display the Wait Room
+  if (!user?.is_superadmin && (activeMember?.role as string) !== "org_admin") {
+    if (
+      activeMember?.status === "pending" ||
+      (activeMember?.status as string) === "awaiting_approval" ||
+      activeMember?.status === "rejected"
+    ) {
+      return <WaitRoomView />;
+    }
+  }
+
   const typedMember = activeMember as any;
   const isAdmin = activeMember?.role === "org_admin" || activeMember?.role === "manager" || activeMember?.role === "accountant";
   const isAccountant = activeMember?.role === "accountant";
@@ -715,6 +730,25 @@ export const DashboardHome: React.FC = () => {
         )}
       </div>
 
+      {/* Free Mode Dashboard Banner - shown only on free mode, reminding dashboard of all roles */}
+      {(!activeOrg?.subscription_tier || activeOrg?.subscription_tier === 'free') && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-300 font-semibold shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <Sparkles className="h-4.5 w-4.5 text-amber-600 shrink-0" />
+            <span>
+              <strong>Free Mode Notice:</strong> You are currently on the Free Forever tier, viewing the dashboard across all roles. Upgrade to a paid plan to unlock expanded capacity and remove this notice.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/dashboard/settings")}
+            className="self-start md:self-center px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition shrink-0"
+          >
+            Upgrade Plan →
+          </button>
+        </div>
+      )}
+
       {/* High priority fee warning barrier */}
       {myPendingDues.length > 0 && (
         <div className="bg-red-50 dark:bg-rose-950/20 border-l-4 border-rose-600 p-4.5 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-4 shadow-sm shrink-0" id="dashboard-due-fees-reminder">
@@ -860,7 +894,7 @@ export const DashboardHome: React.FC = () => {
           </div>
           <div className="mt-2">
             <span className="text-3xl font-display font-bold text-[#111c16] dark:text-white">
-              {members?.length || 48}
+              {members?.length || 0}
             </span>
             <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
               of {(activeOrg as any)?.member_limit || 100} member cap
@@ -883,10 +917,10 @@ export const DashboardHome: React.FC = () => {
           </div>
           <div className="mt-2">
             <span className="text-3xl font-display font-bold text-[#111c16] dark:text-white">
-              {goals?.length || 3}
+              {goals?.length || 0}
             </span>
             <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
-              {goals?.filter(g => g.status !== 'completed').length || 1} active this quarter
+              {goals?.filter(g => g.status !== 'completed').length || 0} active this quarter
             </p>
           </div>
         </div>
@@ -2990,11 +3024,7 @@ export const ChatRoom: React.FC = () => {
 // 4. GOALS METRIC SLIDERS
 // ==========================================
 export const GoalsTracker: React.FC = () => {
-  return (
-    <PlanGatedView requiredTier="growth" featureName="Bento Goals & Strategic Analytics">
-      <GoalsPage />
-    </PlanGatedView>
-  );
+  return <GoalsPage />;
 };
 
 const OldGoalsTracker: React.FC = () => {
@@ -3026,7 +3056,8 @@ const OldGoalsTracker: React.FC = () => {
   const [progressNote, setProgressNote] = useState("");
   const [showAdvancedOpts, setShowAdvancedOpts] = useState(true);
 
-  const isAdmin = activeMember?.role === "org_admin";
+  // Only roles different from "member" are allowed to set and manage goals; members have read-only access
+  const canSetGoals = !!activeMember && activeMember.role !== "member";
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3121,10 +3152,14 @@ const OldGoalsTracker: React.FC = () => {
             <h2 className="text-xl md:text-2xl font-bold font-display text-gray-901">{t("goals_tab_title", "Strategic Goals Tracker")}</h2>
           <p className="text-xs text-gray-500 font-medium">{t("goals_tab_sub", "Verify team metrics, deadlines, and agricultural achievements.")}</p>
         </div>
-        {isAdmin && (
+        {canSetGoals ? (
           <Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpenAddModal(true)}>
             {t("btn_add_goal", "Add Goal")}
           </Button>
+        ) : (
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 flex items-center gap-1.5">
+            <Eye className="h-3.5 w-3.5 text-emerald-600" /> Member Read-Only
+          </span>
         )}
       </div>
 
@@ -3175,7 +3210,7 @@ const OldGoalsTracker: React.FC = () => {
                       )}
                     </div>
 
-                    {isAdmin && (
+                    {canSetGoals && (
                       <div className="flex items-center gap-1 shrink-0 select-none">
                         <Button
                           size="sm"
@@ -4459,7 +4494,7 @@ export const DocumentsCenter: React.FC = () => {
   };
 
   return (
-    <PlanGatedView requiredTier="growth" featureName="Secure Document Signing & Document Library">
+    <PlanGatedView requiredTier="growth" featureKey="document_office" featureName="DocumentOffice Suite & Resource Center">
       <div className="flex flex-col gap-6 select-none font-sans w-full">
         <div className="border-b pb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>

@@ -1,37 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
+import { APP_CONFIG } from "../config";
 
-const getEnv = (key: string) => {
-  if (typeof process !== "undefined" && process.env && process.env[key]) {
-    return process.env[key];
-  }
-  // Vite replaces import.meta.env at build time for the client
-  try {
-    if (typeof import.meta !== "undefined" && (import.meta as any).env && (import.meta as any).env[key]) {
-      return (import.meta as any).env[key];
-    }
-  } catch (e) {
-    // ignore
-  }
-  return undefined;
-};
+const supabaseUrl = APP_CONFIG.supabase.url;
+const supabaseAnonKey = APP_CONFIG.supabase.anonKey;
 
-const getRuntimeEnv = () => {
-  const win = typeof window !== "undefined" ? (window as any) : {};
-  return win.__RUNTIME_ENV__ || {};
-};
-
-const runtimeEnv = getRuntimeEnv();
-
-const supabaseUrl =
-  runtimeEnv.VITE_SUPABASE_URL ||
-  getEnv("VITE_SUPABASE_URL") ||
-  "";
-const supabaseAnonKey =
-  runtimeEnv.VITE_SUPABASE_ANON_KEY ||
-  getEnv("VITE_SUPABASE_ANON_KEY") ||
-  "";
-
-export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
+export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey && !supabaseUrl.includes("placeholder"));
 
 if (!isSupabaseConfigured) {
   console.warn(
@@ -44,3 +17,4 @@ export const supabase = createClient(
   supabaseUrl || "https://placeholder-project-id.supabase.co",
   supabaseAnonKey || "placeholder-anon-key-placeholder-anon-key-placeholder-anon-key"
 );
+

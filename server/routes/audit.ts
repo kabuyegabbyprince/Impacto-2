@@ -152,4 +152,100 @@ router.post("/create", async (req, res) => {
   }
 });
 
+// Centralized Platform Audit Logs API for payment approvals, rejections, and financial compliance
+// POST /api/audit-logs/platform/create
+router.post("/platform/create", async (req, res) => {
+  try {
+    const {
+      id,
+      action,
+      target_type = "payment_slip",
+      target_id,
+      actor_id,
+      actor_name,
+      org_id,
+      details = {},
+      created_at
+    } = req.body;
+
+    if (!action) {
+      return res.status(400).json({ error: "Missing required parameter: action" });
+    }
+
+    const logId = id || `plat-audit-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const timestamp = created_at || new Date().toISOString();
+
+    const mergedDetails = {
+      ...details,
+      org_id: org_id || details.org_id || null,
+      timestamp,
+    };
+
+    const platformLogPayload = {
+      id: logId,
+      action,
+      target_type,
+      target_id: target_id || details.fee_id || null,
+      actor_id: actor_id || null,
+      actor_name: actor_name || "Accountant",
+      details: mergedDetails,
+      created_at: timestamp
+    };
+
+    if (hasSupabaseCredentials()) {
+      const supabaseService = getSupabaseAdminClient();
+      if (supabaseService) {
+        const { data, error } = await supabaseService
+          .from("platform_audit_logs")
+          .upsert(platformLogPayload)
+          .select();
+
+        if (error) {
+          console.warn("[Platform Audit API] Supabase write warning:", error.message);
+        } else {
+          return res.json({ success: true, log: data?.[0] || platformLogPayload });
+        }
+      }
+    }
+
+    res.json({ success: true, log: platformLogPayload, bypassed: true });
+  } catch (error: any) {
+    console.error("[Platform Audit API] Create failed:", error);
+    res.status(500).json({ error: "Failed to create platform audit log.", details: error.message });
+  }
+});
+
+// GET /api/audit-logs/platform/list
+router.get("/platform/list", async (req, res) => {
+  try {
+    const orgId = req.query.org_id as string;
+    const limit = parseInt((req.query.limit as string) || "100", 10);
+
+    if (hasSupabaseCredentials()) {
+      const supabaseService = getSupabaseAdminClient();
+      if (supabaseService) {
+        let query = supabaseService
+          .from("platform_audit_logs")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(limit);
+
+        const { data, error } = await query;
+        if (!error && data) {
+          // If filtered by orgId, match on details->>'org_id' or target_id
+          const filtered = orgId
+            ? data.filter((item: any) => item.details?.org_id === orgId || item.target_id === orgId)
+            : data;
+          return res.json({ success: true, logs: filtered });
+        }
+      }
+    }
+
+    res.json({ success: true, logs: [], bypassed: true });
+  } catch (error: any) {
+    console.error("[Platform Audit API] List failed:", error);
+    res.status(500).json({ error: "Failed to list platform audit logs.", details: error.message });
+  }
+});
+
 export default router;

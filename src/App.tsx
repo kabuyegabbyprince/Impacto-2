@@ -62,6 +62,24 @@ import { AuditorDashboard } from "./pages/auditorDashboard";
 
 import { ToastProvider } from "./components/Toast";
 import { initCrossTabSync } from "./lib/crossTabSync";
+import { useAuthStore } from "./store/authStore";
+import { useOrgStore } from "./store/orgStore";
+
+// Portal entrance: Direct unauthenticated users straight to Login form
+const RootPortalEntrance: React.FC = () => {
+  const { user } = useAuthStore();
+  const { activeOrg } = useOrgStore();
+
+  if (!user) {
+    return <Login />;
+  }
+
+  if (activeOrg) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Navigate to="/org-picker" replace />;
+};
 
 // Prepare Query cache client with aggressive caching to minimize Supabase query frequency and egress
 const queryClient = new QueryClient({
@@ -88,9 +106,10 @@ export default function App() {
         <Router>
           <Routes>
             {/* ==========================================
-                1. PUBLIC DISCOVERY & WHITE-LABELED PORTALS
+                1. PORTAL ENTRANCE & PUBLIC DIRECTORY
                 ========================================== */}
-            <Route path="/" element={<Landing />} />
+            <Route path="/" element={<RootPortalEntrance />} />
+            <Route path="/landing" element={<Landing />} />
             <Route path="/verify" element={<CertificateVerifyPage />} />
             <Route path="/verify/:code" element={<CertificateVerifyPage />} />
             <Route path="/@:slug" element={<OrgPublicPage />} />
@@ -338,13 +357,24 @@ export default function App() {
             />
 
             <Route
-              path="/dashboard/settings"
+              path="/dashboard/profile"
               element={
-                <AdminRoute>
+                <OrgRoute>
                   <DashboardLayout>
                     <OrganizationSettingsPage />
                   </DashboardLayout>
-                </AdminRoute>
+                </OrgRoute>
+              }
+            />
+
+            <Route
+              path="/dashboard/settings"
+              element={
+                <OrgRoute>
+                  <DashboardLayout>
+                    <OrganizationSettingsPage />
+                  </DashboardLayout>
+                </OrgRoute>
               }
             />
 

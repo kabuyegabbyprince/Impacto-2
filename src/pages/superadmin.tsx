@@ -41,8 +41,16 @@ import {
   Check,
   X,
   History,
-  Database
+  Database,
+  Package
 } from "lucide-react";
+import {
+  SUBSCRIPTION_TIERS,
+  SubscriptionTier,
+  ADDON_PACKAGES,
+  AddOnPackageId,
+  getOrgSubscriptionLifecycle
+} from "../lib/subscriptionMatrix";
 import {
   usePlatformAdminData,
   useUpdateOrganization,
@@ -56,6 +64,7 @@ import {
   useDeletePlatformStaff,
   usePlatformAuditLogs
 } from "../hooks/useImpactoData";
+import { useAuthStore } from "../store/authStore";
 import { Button, Input, Card, Badge, Table, Modal, EmptyState, Avatar, getLucideIcon } from "../components/ui";
 import { useToast } from "../components/Toast";
 
@@ -75,40 +84,90 @@ const formatDuration = (startStr: string, endStr?: string) => {
 
 const SubscriptionTierCell: React.FC<{
   row: any;
-  onUpdate: (id: string, tier: string) => Promise<void>;
-}> = ({ row, onUpdate }) => {
-  const currentTier = row.subscription_status === "trial" ? "trial" : (row.subscription_tier || "growth");
-  const [selectedTier, setSelectedTier] = useState(currentTier);
+  onUpdate: (id: string, actionOrTier: string) => Promise<void>;
+  onTogglePackage?: (id: string, pkgId: AddOnPackageId) => Promise<void>;
+}> = ({ row, onUpdate, onTogglePackage }) => {
+  const lifecycle = getOrgSubscriptionLifecycle(row);
+  const [selectedTier, setSelectedTier] = useState<string>(lifecycle.tier);
 
   useEffect(() => {
-    setSelectedTier(currentTier);
-  }, [currentTier]);
+    setSelectedTier(lifecycle.tier);
+  }, [lifecycle.tier]);
 
   return (
-    <div className="flex flex-col gap-2 min-w-[170px]">
-      <select
-        value={selectedTier}
-        onChange={(e) => setSelectedTier(e.target.value)}
-        className="text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 font-bold text-slate-900 dark:text-slate-100 outline-none cursor-pointer shadow-xs"
-      >
-        <option value="trial">Trial Plan (Free)</option>
-        <option value="starter">Starter Plan ($10)</option>
-        <option value="growth">Growth Plan ($25)</option>
-        <option value="enterprise">Pro VIP Room ($40)</option>
-      </select>
-      <Button
-        size="sm"
-        className="bg-emerald-600 hover:bg-emerald-700 text-[11px] font-bold py-1.5 px-3 h-8 rounded-xl transition flex items-center gap-1.5 justify-center whitespace-nowrap text-white shadow-xs"
-        onClick={() => onUpdate(row.id, selectedTier)}
-      >
-        <RefreshCw className="h-3.5 w-3.5" />
-        Apply & Restart 30d
-      </Button>
+    <div className="flex flex-col gap-1.5 min-w-[210px]">
+      <div className="flex items-center gap-1.5">
+        <select
+          value={selectedTier}
+          onChange={(e) => setSelectedTier(e.target.value)}
+          className="text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-emerald-500 font-bold text-slate-900 dark:text-slate-100 outline-none cursor-pointer shadow-xs flex-1"
+        >
+          <option value="growth">Growth Plan ($25 / Default Trial)</option>
+          <option value="pro">Pro Plan ($40 / Unlimited)</option>
+          <option value="starter">Starter Plan ($10 / 100 Members)</option>
+          <option value="free">Free Forever Plan ($0 / 30 Members)</option>
+        </select>
+        <button
+          title="Apply Tier & Restart 30d"
+          onClick={() => onUpdate(row.id, selectedTier)}
+          className="h-8 w-8 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-xs transition"
+        >
+          <Check className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div className="flex items-center gap-1 flex-wrap">
+        <button
+          onClick={() => onUpdate(row.id, "extend_30")}
+          className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/50"
+          title="Add +30 days to current license"
+        >
+          +30d Extend
+        </button>
+        <button
+          onClick={() => onUpdate(row.id, "grant_grace_3")}
+          className="text-[10px] font-bold text-amber-700 dark:text-amber-400 hover:underline px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 border border-amber-200/50"
+          title="Grant 3-day grace period"
+        >
+          +3d Grace
+        </button>
+        <button
+          onClick={() => onUpdate(row.id, "reset_growth_trial")}
+          className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 hover:underline px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/50"
+          title="Reset to 30-Day Growth Plan Trial"
+        >
+          Reset Trial
+        </button>
+      </div>
+
+      {/* Quick $4 Package Audit / Grant Toggles */}
+      <div className="mt-1 pt-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1 flex-wrap">
+        <span className="text-[9.5px] font-bold text-slate-400 font-mono">Grant Pkg:</span>
+        {(Object.keys(ADDON_PACKAGES) as AddOnPackageId[]).map((pkgKey) => {
+          const isActive = lifecycle.activePackages.includes(pkgKey);
+          return (
+            <button
+              key={pkgKey}
+              type="button"
+              onClick={() => onTogglePackage?.(row.id, pkgKey)}
+              className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded transition ${
+                isActive
+                  ? "bg-emerald-600 text-white"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200"
+              }`}
+              title={`Toggle ${ADDON_PACKAGES[pkgKey].name} (+20 members)`}
+            >
+              {pkgKey === "event_pack" ? "Event" : pkgKey === "finance_pack" ? "Finance" : pkgKey === "document_pack" ? "Doc" : "Pro"}{isActive ? " ✓" : ""}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 };
 
 export const SuperadminDashboard: React.FC = () => {
+  const { user } = useAuthStore();
   const { data: platformData, refetch } = usePlatformAdminData();
   const { addToast } = useToast();
 
@@ -122,26 +181,55 @@ export const SuperadminDashboard: React.FC = () => {
   const updateSettingsMutation = useUpdatePlatformSettings();
   const replyNotesMutation = useUpdateErrorReportAdminNotes();
 
-  const handleUpdateSubscriptionTier = async (orgId: string, newTier: string) => {
+  const handleUpdateSubscriptionTier = async (orgId: string, actionOrTier: string) => {
     try {
       const matchedOrg = orgs.find((o: any) => o.id === orgId);
       const name = matchedOrg?.name || "Workspace";
-      if (newTier === "trial") {
+
+      if (actionOrTier === "extend_30") {
+        const currentEnds = matchedOrg?.subscription_ends_at ? new Date(matchedOrg.subscription_ends_at).getTime() : Date.now();
+        const base = Math.max(Date.now(), currentEnds);
+        const newEnds = new Date(base + 30 * 24 * 3600 * 1000).toISOString();
         await updateOrgMutation.mutateAsync({
           id: orgId,
-          subscription_tier: "trial",
-          subscription_status: "trial",
-          subscription_ends_at: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString()
+          subscription_status: "active",
+          subscription_ends_at: newEnds
         });
-        setSuccessMsg(`Successfully reset ${name} to 30-day TRIAL`);
+        setSuccessMsg(`Extended ${name} license by +30 days (Valid until ${new Date(newEnds).toLocaleDateString()})`);
+      } else if (actionOrTier === "grant_grace_3") {
+        const graceEnds = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString();
+        await updateOrgMutation.mutateAsync({
+          id: orgId,
+          subscription_status: "trial",
+          subscription_tier: "growth",
+          subscription_ends_at: graceEnds
+        });
+        setSuccessMsg(`Granted 3-day grace period to ${name}`);
+      } else if (actionOrTier === "reset_growth_trial") {
+        await updateOrgMutation.mutateAsync({
+          id: orgId,
+          subscription_tier: "growth",
+          subscription_status: "trial",
+          subscription_ends_at: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
+          created_at: new Date().toISOString()
+        });
+        setSuccessMsg(`Reset ${name} to 30-Day Growth Plan Trial`);
+      } else if (actionOrTier === "free") {
+        await updateOrgMutation.mutateAsync({
+          id: orgId,
+          subscription_tier: "free",
+          subscription_status: "active",
+          subscription_ends_at: null
+        });
+        setSuccessMsg(`Assigned Free Forever Plan to ${name} (Max 30 members, 100 MB, safe read-only lockdown on limit)`);
       } else {
         await updateOrgMutation.mutateAsync({
           id: orgId,
-          subscription_tier: newTier as any,
+          subscription_tier: actionOrTier as any,
           subscription_status: "active",
           subscription_ends_at: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString()
         });
-        setSuccessMsg(`Successfully upgraded ${name} plan tier to ${newTier.toUpperCase()} & restarted 30-day count`);
+        setSuccessMsg(`Upgraded ${name} to ${actionOrTier.toUpperCase()} Plan (+30 days active)`);
       }
       refetch();
       setTimeout(() => setSuccessMsg(""), 3500);
@@ -151,11 +239,43 @@ export const SuperadminDashboard: React.FC = () => {
     }
   };
 
+  const handleTogglePackage = async (orgId: string, pkgId: AddOnPackageId) => {
+    try {
+      const raw = localStorage.getItem(`impacto_org_packages_${orgId}`) || "[]";
+      let pkgs: AddOnPackageId[] = [];
+      try {
+        pkgs = JSON.parse(raw);
+      } catch (e) {
+        pkgs = [];
+      }
+
+      if (pkgs.includes(pkgId)) {
+        pkgs = pkgs.filter((p) => p !== pkgId);
+        addToast(`Revoked ${ADDON_PACKAGES[pkgId].name} for workspace`, "info");
+      } else {
+        pkgs.push(pkgId);
+        addToast(`Granted ${ADDON_PACKAGES[pkgId].name} (+20 members) to workspace!`, "success");
+      }
+
+      localStorage.setItem(`impacto_org_packages_${orgId}`, JSON.stringify(pkgs));
+      refetch();
+    } catch (err) {
+      console.error(err);
+      addToast("Failed to toggle add-on package", "error");
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<"stats" | "orgs" | "payments" | "errors" | "staff" | "billing_setup">("stats");
   const [search, setSearch] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<any>(null);
+  const [rejectModalItem, setRejectModalItem] = useState<any>(null);
+  const [rejectReasonPreset, setRejectReasonPreset] = useState("Reference code not found on MoMo merchant collection statement");
+  const [customRejectReason, setCustomRejectReason] = useState("");
+  const [momoViewTab, setMomoViewTab] = useState<"pending" | "archive">("pending");
+  const [archiveSearch, setArchiveSearch] = useState("");
+  const [archiveStatusFilter, setArchiveStatusFilter] = useState<"all" | "approved" | "rejected">("all");
 
   // Platform Staff & Auditor State
   const { data: staffList = [] } = usePlatformStaff();
@@ -252,21 +372,32 @@ export const SuperadminDashboard: React.FC = () => {
     }
   };
 
-  const handleApproveSub = async (payId: string, companyId: string, planText?: string) => {
+  const handleApproveSub = async (payId: string, companyId: string, planText?: string, pkgId?: string) => {
     try {
-      let deducedTier: "starter" | "growth" | "enterprise" = "growth";
-      if (planText) {
-        const lower = planText.toLowerCase();
-        if (lower.includes("enterprise") || lower.includes("pro") || lower.includes("vip")) deducedTier = "enterprise";
-        else if (lower.includes("starter")) deducedTier = "starter";
-      }
+      const lower = (planText || "").toLowerCase();
+      const isPackage = !!pkgId || lower.includes("package") || lower.includes("pack");
+      let deducedTier: "free" | "growth" | "pro" | "enterprise" = "growth";
+      if (lower.includes("enterprise")) deducedTier = "enterprise";
+      else if (lower.includes("pro") || lower.includes("vip")) deducedTier = "pro";
+      else if (lower.includes("starter")) deducedTier = "growth";
+      else if (lower.includes("free")) deducedTier = "free";
+
       await approveSubMutation.mutateAsync({
         paymentId: payId,
         orgId: companyId,
         status: "approved",
         tier: deducedTier,
+        plan: planText,
+        packageId: pkgId,
+        auditedBy: user?.id || "superadmin-root",
+        auditedByName: user?.full_name || user?.email || "Platform Superadmin",
+        auditNotes: isPackage ? "Add-on package verified against telecom merchant logs." : "SaaS subscription manual transfer verified against telecom collection records."
       });
-      setSuccessMsg("SaaS manual transaction successfully approved! Organization license extended by +30 days.");
+      if (isPackage) {
+        setSuccessMsg("Add-on feature package payment successfully verified and archived! Payer notified.");
+      } else {
+        setSuccessMsg("SaaS manual transaction successfully approved and archived! Organization license extended by +30 days and payer notified.");
+      }
       refetch();
       setTimeout(() => setSuccessMsg(""), 3500);
     } catch (err) {
@@ -274,14 +405,19 @@ export const SuperadminDashboard: React.FC = () => {
     }
   };
 
-  const handleRejectSub = async (payId: string, companyId: string) => {
+  const handleConfirmRejectSub = async (payId: string, companyId: string, reasonText: string) => {
     try {
       await approveSubMutation.mutateAsync({
         paymentId: payId,
         orgId: companyId,
-        status: "rejected"
+        status: "rejected",
+        auditedBy: user?.id || "superadmin-root",
+        auditedByName: user?.full_name || user?.email || "Platform Superadmin",
+        auditNotes: reasonText || "Payment verification rejected due to unverified statement."
       });
-      setSuccessMsg("Manual subscription payment marked as Rejected.");
+      setSuccessMsg("Manual payment proof marked as Rejected, archived in history, and payer notified.");
+      setRejectModalItem(null);
+      setCustomRejectReason("");
       refetch();
       setTimeout(() => setSuccessMsg(""), 3500);
     } catch (err) {
@@ -448,18 +584,55 @@ export const SuperadminDashboard: React.FC = () => {
       cell: (row: any) => <span className="text-xs text-slate-600 dark:text-slate-300 font-bold bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">{row.org_category || "General"}</span>
     },
     {
-      header: "License Status",
+      header: "Lifecycle & Quotas",
       accessor: "subscription_status",
       cell: (row: any) => {
-        const isExpired = row.subscription_status === "expired" || (row.subscription_ends_at && new Date(row.subscription_ends_at) < new Date());
+        const lifecycle = getOrgSubscriptionLifecycle(row);
         return (
           <div className="flex flex-col gap-1">
-            <Badge color={isExpired ? "red" : row.subscription_status === "active" ? "green" : "amber"}>
-              {isExpired ? "EXPIRED LICENSE" : row.subscription_status?.toUpperCase() || "TRIAL"}
-            </Badge>
-            {row.subscription_ends_at && (
-              <span className="text-[10px] text-slate-400 font-mono">
-                Ends: {new Date(row.subscription_ends_at).toLocaleDateString()}
+            {/* Mention purchased packages right ABOVE or adjacent to current plan badge - WITHOUT adding extra rows! */}
+            {lifecycle.activePackages.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap mb-0.5">
+                {lifecycle.activePackages.map((pkgId) => {
+                  const pkgDef = ADDON_PACKAGES[pkgId];
+                  return (
+                    <span
+                      key={pkgId}
+                      className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center gap-1"
+                    >
+                      <Zap className="h-2.5 w-2.5 text-amber-500" />
+                      {pkgDef?.name || pkgId} (+20)
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Badge
+                color={
+                  lifecycle.isLocked
+                    ? "red"
+                    : lifecycle.isGracePeriod
+                    ? "amber"
+                    : lifecycle.isTrial
+                    ? "blue"
+                    : "green"
+                }
+              >
+                {lifecycle.statusLabel.toUpperCase()}
+              </Badge>
+              {lifecycle.isReadOnlySafeMode && (
+                <Badge color="red">SAFE READ-ONLY</Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+              <span>Limit: {lifecycle.memberLimit === Infinity ? "Unlimited" : `${lifecycle.memberLimit} Members`}</span>
+              <span>•</span>
+              <span>Storage: {lifecycle.storageLimit}</span>
+            </div>
+            {lifecycle.subscriptionEndsAt && (
+              <span className="text-[9.5px] text-slate-400 font-mono">
+                Ends: {new Date(lifecycle.subscriptionEndsAt).toLocaleDateString()}
               </span>
             )}
           </div>
@@ -467,33 +640,34 @@ export const SuperadminDashboard: React.FC = () => {
       }
     },
     {
-      header: "Active Days Left",
+      header: "Days Remaining",
       accessor: "subscription_ends_at",
       cell: (row: any) => {
-        const isExpired = row.subscription_status === "expired";
-        const now = Date.now();
-        const createdTime = row.created_at ? new Date(row.created_at).getTime() : now;
-        
-        let daysLeft = 0;
-        if (isExpired) {
-          daysLeft = 0;
-        } else if (row.subscription_status === "trial" || !row.subscription_status) {
-          const trialLimit = 30 * 24 * 3600 * 1000;
-          daysLeft = Math.max(0, Math.ceil(((createdTime + trialLimit) - now) / (1000 * 3600 * 24)));
-        } else if (row.subscription_ends_at) {
-          daysLeft = Math.max(0, Math.ceil((new Date(row.subscription_ends_at).getTime() - now) / (1000 * 3600 * 24)));
-        } else {
-          daysLeft = 30;
-        }
-        
+        const lifecycle = getOrgSubscriptionLifecycle(row);
+        const days = lifecycle.daysRemaining;
+
         return (
           <div className="flex items-center gap-2 font-sans font-extrabold text-xs">
-            <span className={`h-2.5 w-2.5 rounded-full ${isExpired || daysLeft === 0 ? "bg-rose-500" : daysLeft <= 5 ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`} />
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                lifecycle.isLocked
+                  ? "bg-rose-500"
+                  : lifecycle.isGracePeriod
+                  ? "bg-amber-500 animate-pulse"
+                  : days <= 5
+                  ? "bg-amber-500"
+                  : "bg-emerald-500"
+              }`}
+            />
             <span>
-              {isExpired || daysLeft === 0 ? (
-                <span className="text-rose-600 font-black">0 Days (Locked)</span>
+              {lifecycle.isLocked ? (
+                <span className="text-rose-600 font-black">Locked (Expired)</span>
+              ) : lifecycle.isGracePeriod ? (
+                <span className="text-amber-600 font-black">{days}d Grace</span>
+              ) : lifecycle.tier === "free" ? (
+                <span className="text-slate-700 dark:text-slate-300 font-bold">Free Forever</span>
               ) : (
-                <span className="text-slate-900 dark:text-slate-100 font-bold">{daysLeft} Days</span>
+                <span className="text-slate-900 dark:text-slate-100 font-bold">{days} Days</span>
               )}
             </span>
           </div>
@@ -504,7 +678,11 @@ export const SuperadminDashboard: React.FC = () => {
       header: "Subscription Tier",
       accessor: "subscription_tier",
       cell: (row: any) => (
-        <SubscriptionTierCell row={row} onUpdate={handleUpdateSubscriptionTier} />
+        <SubscriptionTierCell 
+          row={row} 
+          onUpdate={handleUpdateSubscriptionTier} 
+          onTogglePackage={handleTogglePackage}
+        />
       )
     },
     {
@@ -861,150 +1039,289 @@ export const SuperadminDashboard: React.FC = () => {
         )}
 
         {/* 2. TENANTS TAB */}
-        {activeTab === "orgs" && (
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col gap-6 w-full">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-              <div>
-                <h3 className="text-base font-black font-display text-slate-900 dark:text-white">Tenant Workspaces & Licenses</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Manage subscription plans, extend 30-day billing periods, or enforce lockouts.</p>
+        {activeTab === "orgs" && (() => {
+          const tierCounts = {
+            free: 0,
+            starter: 0,
+            growth: 0,
+            pro: 0,
+            grace: 0,
+            safeMode: 0,
+            locked: 0,
+          };
+
+          orgs.forEach((o: any) => {
+            const lc = getOrgSubscriptionLifecycle(o);
+            if (lc.tier === "free") tierCounts.free++;
+            else if (lc.tier === "starter") tierCounts.starter++;
+            else if (lc.tier === "growth") tierCounts.growth++;
+            else if (lc.tier === "pro") tierCounts.pro++;
+
+            if (lc.isGracePeriod) tierCounts.grace++;
+            if (lc.isReadOnlySafeMode) tierCounts.safeMode++;
+            if (lc.isLocked) tierCounts.locked++;
+          });
+
+          return (
+            <div className="flex flex-col gap-6 w-full">
+              {/* Matrix Tier & Lifecycle Stat Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3.5 flex flex-col">
+                  <span className="text-[10px] uppercase font-mono font-bold text-slate-500">Free Forever</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-black text-slate-900 dark:text-white font-display">{tierCounts.free}</span>
+                    <span className="text-[10px] text-slate-400">Max 30 m.</span>
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 border border-blue-200/60 dark:border-blue-900/40 rounded-2xl p-3.5 flex flex-col">
+                  <span className="text-[10px] uppercase font-mono font-bold text-blue-600">Starter Plan</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-black text-blue-600 font-display">{tierCounts.starter}</span>
+                    <span className="text-[10px] text-blue-700/60">Max 100 m.</span>
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 border border-emerald-200/60 dark:border-emerald-900/40 rounded-2xl p-3.5 flex flex-col">
+                  <span className="text-[10px] uppercase font-mono font-bold text-emerald-600">Growth Plan</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-black text-emerald-600 font-display">{tierCounts.growth}</span>
+                    <span className="text-[10px] text-emerald-700/60">Max 500 m.</span>
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 border border-indigo-200/60 dark:border-indigo-900/40 rounded-2xl p-3.5 flex flex-col">
+                  <span className="text-[10px] uppercase font-mono font-bold text-indigo-600">Pro Plan</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-black text-indigo-600 font-display">{tierCounts.pro}</span>
+                    <span className="text-[10px] text-indigo-700/60">$40 / Unltd</span>
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 border border-amber-300/80 dark:border-amber-700 rounded-2xl p-3.5 flex flex-col">
+                  <span className="text-[10px] uppercase font-mono font-bold text-amber-700 dark:text-amber-400">3-Day Grace</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-black text-amber-700 dark:text-amber-400 font-display">{tierCounts.grace}</span>
+                    <span className="text-[10px] text-amber-600 animate-pulse">Active</span>
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 border border-rose-200/80 dark:border-rose-900/40 rounded-2xl p-3.5 flex flex-col">
+                  <span className="text-[10px] uppercase font-mono font-bold text-rose-600">Safe Read-Only</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-black text-rose-600 font-display">{tierCounts.safeMode}</span>
+                    <span className="text-[10px] text-rose-500">Over Quota</span>
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3.5 flex flex-col">
+                  <span className="text-[10px] uppercase font-mono font-bold text-slate-500">Locked Out</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-black text-slate-700 dark:text-slate-300 font-display">{tierCounts.locked}</span>
+                    <span className="text-[10px] text-slate-400">Expired</span>
+                  </div>
+                </div>
               </div>
-              <div className="w-full md:w-80">
-                <Input
-                  type="text"
-                  placeholder="Filter workspaces by name, slug..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  prefixIcon={<Search className="h-4 w-4 text-slate-400" />}
-                />
+
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col gap-6 w-full">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-black font-display text-slate-900 dark:text-white">Tenant Workspaces & Subscription Matrix</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Manage Free (30 m.), Starter (100 m.), Growth (500 m.), and Pro ($40 / Unlimited) tiers, grant 3-day grace periods, or extend 30-day licenses.</p>
+                  </div>
+                  <div className="w-full md:w-80">
+                    <Input
+                      type="text"
+                      placeholder="Filter workspaces by name, slug..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      prefixIcon={<Search className="h-4 w-4 text-slate-400" />}
+                    />
+                  </div>
+                </div>
+                <Table columns={orgColumns} data={filteredOrgs} emptyMessage="No multi-tenant workspaces match queried criteria." />
               </div>
             </div>
-            <Table columns={orgColumns} data={filteredOrgs} emptyMessage="No multi-tenant workspaces match queried criteria." />
-          </div>
-        )}
+          );
+        })()}
 
         {/* 3. PAYMENTS APPROVAL QUEUE TAB */}
         {activeTab === "payments" && (() => {
           const pendingPayments = (payments || []).filter((p) => p.status === "awaiting_approval");
           const reviewedPayments = (payments || []).filter((p) => p.status === "approved" || p.status === "rejected");
+          
+          const filteredArchive = reviewedPayments.filter((p) => {
+            const matchedOrg = orgs.find((o) => o.id === p.org_id);
+            const orgName = (matchedOrg?.name || "").toLowerCase();
+            const planStr = (p.plan || p.plan_details || "").toLowerCase();
+            const phoneStr = (p.phone || p.phone_number || "").toLowerCase();
+            const refStr = (p.reference || p.transaction_reference || "").toLowerCase();
+            const auditorStr = (p.audited_by_name || "").toLowerCase();
+            const q = archiveSearch.toLowerCase();
+
+            const matchesQuery = !q || orgName.includes(q) || planStr.includes(q) || phoneStr.includes(q) || refStr.includes(q) || auditorStr.includes(q);
+            const matchesStatus = archiveStatusFilter === "all" || p.status === archiveStatusFilter;
+            return matchesQuery && matchesStatus;
+          });
+
+          const approvedCount = reviewedPayments.filter((p) => p.status === "approved").length;
+          const rejectedCount = reviewedPayments.filter((p) => p.status === "rejected").length;
 
           return (
             <div className="flex flex-col gap-6 w-full">
+              {/* Header & Sub-Navigation */}
               <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                   <h3 className="text-base font-black font-display text-slate-900 dark:text-white">MoMo Transaction Records Approval Board</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Audit transaction proofs against your MTN / Airtel merchant collection statements.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Audit real mobile money proofs for subscription tiers and add-on packages against telecom statements.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Button
-                    onClick={() => setHistoryOpen(!historyOpen)}
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center gap-2 font-bold text-xs h-10 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-xl"
+                
+                {/* View Switcher Pills */}
+                <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setMomoViewTab("pending")}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                      momoViewTab === "pending"
+                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
                   >
-                    <Clock className="h-4 w-4 text-emerald-600" />
-                    {historyOpen ? "Hide History Sidebar" : `Show History Archive (${reviewedPayments.length})`}
-                  </Button>
+                    <Smartphone className="h-3.5 w-3.5 text-amber-500" />
+                    Pending Approvals
+                    {pendingPayments.length > 0 && (
+                      <span className="ml-1 bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.2 rounded-full">
+                        {pendingPayments.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMomoViewTab("archive")}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                      momoViewTab === "archive"
+                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <History className="h-3.5 w-3.5 text-emerald-500" />
+                    Validation Archive
+                    <span className="ml-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[10px] px-1.5 py-0.2 rounded-full">
+                      {reviewedPayments.length}
+                    </span>
+                  </button>
                 </div>
               </div>
 
-              <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
-                {historyOpen && (
-                  <div className="w-full lg:w-96 shrink-0 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 flex flex-col gap-3 shadow-xs">
-                    <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800">
-                      <span className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 font-display flex items-center gap-1.5">
-                        <CheckCircle className="h-4 w-4 text-emerald-500" /> Validation Archive
-                      </span>
-                      <Badge color="blue" className="text-[10px] font-mono font-bold">
-                        {reviewedPayments.length} Reviewed
-                      </Badge>
-                    </div>
-
-                    <div className="max-h-[65vh] overflow-y-auto pr-1 flex flex-col gap-2.5">
-                      {reviewedPayments.length > 0 ? (
-                        reviewedPayments.map((p) => {
-                          const matchedOrg = orgs.find((o) => o.id === p.org_id);
-                          const validatedAt = p.validated_at;
-                          const latencyText = validatedAt ? formatDuration(p.submitted_at, validatedAt) : "N/A";
-
-                          return (
-                            <div
-                              key={p.id}
-                              onClick={() => setSelectedHistoryItem(p)}
-                              className="text-left p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 hover:border-emerald-500 dark:hover:border-emerald-500 transition-all cursor-pointer flex flex-col gap-2 shadow-xs"
-                            >
-                              <div className="flex justify-between items-start gap-2">
-                                <span className="font-extrabold text-slate-900 dark:text-gray-100 text-xs truncate max-w-[150px]">
-                                  {matchedOrg?.name || "Virellix Partner"}
-                                </span>
-                                <Badge color={p.status === "approved" ? "green" : "red"} className="text-[9px] px-1.5 py-0.5">
-                                  {p.status?.toUpperCase()}
-                                </Badge>
-                              </div>
-
-                              <div className="flex justify-between text-[11px] font-mono leading-none border-b border-slate-200/60 dark:border-slate-800 pb-2">
-                                <span className="text-slate-400">Total:</span>
-                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">
-                                  {(p.amount_local || p.amount_usd * 1350).toLocaleString()} RWF
-                                </span>
-                              </div>
-
-                              <div className="flex justify-between text-[10px] font-semibold text-slate-500">
-                                <span>Turnaround:</span>
-                                <span className="font-bold text-indigo-600 dark:text-indigo-400">{latencyText}</span>
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div className="text-center py-10">
-                          <p className="text-xs text-slate-400 font-medium">No archived transactions found.</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex-1 w-full flex flex-col gap-4">
+              {/* TAB 1: PENDING APPROVALS QUEUE */}
+              {momoViewTab === "pending" && (
+                <div className="flex flex-col gap-4 w-full">
                   {pendingPayments.length > 0 ? (
                     pendingPayments.map((p: any) => {
                       const matchedOrg = orgs.find((o: any) => o.id === p.org_id);
+                      const planStr = (p.plan || p.plan_details || "").toLowerCase();
+                      const isPackage = !!p.package_id || p.item_type === "package" || planStr.includes("package") || planStr.includes("pack");
+                      const senderPhone = p.phone || p.phone_number || "N/A";
+                      const txnRef = p.reference || p.transaction_reference || "N/A";
+                      const itemTitle = p.plan || p.plan_details || (isPackage ? "Add-On Feature Package" : "Growth Plan - $25/mo");
+                      const isMtn = p.method === "mtn" || senderPhone.startsWith("078") || senderPhone.startsWith("079");
+
                       return (
-                        <div key={p.id} className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                          <div className="flex items-start gap-4">
-                            <div className="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-slate-800 border border-emerald-200/50 dark:border-slate-700 flex items-center justify-center text-emerald-600 font-bold shrink-0">
-                              <Smartphone className="h-6 w-6" />
+                        <div key={p.id} className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 transition hover:border-emerald-300 dark:hover:border-slate-700">
+                          <div className="flex items-start gap-4 w-full">
+                            <div className={`h-12 w-12 rounded-2xl border flex items-center justify-center font-bold shrink-0 ${
+                              isPackage 
+                                ? "bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800 text-purple-600" 
+                                : "bg-emerald-50 dark:bg-slate-800 border-emerald-200/50 dark:border-slate-700 text-emerald-600"
+                            }`}>
+                              {isPackage ? <Package className="h-6 w-6" /> : <Smartphone className="h-6 w-6" />}
                             </div>
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-black text-slate-900 dark:text-white">{matchedOrg?.name || "Cooperative Workspace"}</span>
-                                <span className="text-[10px] font-mono bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded-md font-bold">AWAITING APPROVAL</span>
+                            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-black text-slate-900 dark:text-white truncate">
+                                  {matchedOrg?.name || "Cooperative Workspace"}
+                                </span>
+                                <span className="text-[10px] font-mono bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded-md font-bold">
+                                  AWAITING APPROVAL
+                                </span>
+                                {isPackage ? (
+                                  <span className="text-[10px] font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                    <Package className="h-3 w-3" /> ADD-ON PACKAGE
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                    <CheckCircle className="h-3 w-3" /> TENANT SUBSCRIPTION
+                                  </span>
+                                )}
+                                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md ${
+                                  isMtn 
+                                    ? "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300" 
+                                    : "bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300"
+                                }`}>
+                                  {isMtn ? "MTN MoMo" : "Airtel Money"}
+                                </span>
                               </div>
-                              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                                {(p.amount_local || (p.amount_usd * 1350)).toLocaleString()} RWF ({p.amount_usd ? `$${p.amount_usd}` : "$25"})
-                              </span>
-                              <div className="flex items-center gap-4 text-xs text-slate-500 mt-1 font-medium">
-                                <span>Sender MoMo: <strong className="text-slate-800 dark:text-slate-200">{p.phone_number || "0780000000"}</strong></span>
-                                <span>TXN Ref: <strong className="font-mono text-slate-800 dark:text-slate-200">{p.transaction_reference || "TXN998811"}</strong></span>
+
+                              <div className="flex flex-wrap items-center gap-3">
+                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                                  {itemTitle}
+                                </span>
+                                <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
+                                  {(p.amount_local || (p.amount_usd ? p.amount_usd * 1350 : 33750)).toLocaleString()} RWF {p.amount_usd ? `($${p.amount_usd})` : ""}
+                                </span>
                               </div>
+
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-0.5 font-medium">
+                                <span>Sender MoMo: <strong className="text-slate-800 dark:text-slate-200 font-mono">{senderPhone}</strong></span>
+                                <span>TXN Ref: <strong className="font-mono text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{txnRef}</strong></span>
+                                {p.submitted_at && (
+                                  <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                                    <Clock className="h-3 w-3" /> {new Date(p.submitted_at).toLocaleString()}
+                                  </span>
+                                )}
+                              </div>
+
+                              {p.proof_url && (
+                                <div className="mt-2 p-2.5 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-200/70 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-300">
+                                  <span className="font-bold text-slate-400 block mb-0.5">Verification Proof / MoMo SMS Log:</span>
+                                  <p className="font-mono break-all line-clamp-3">{p.proof_url}</p>
+                                </div>
+                              )}
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-3 shrink-0 w-full md:w-auto justify-end">
+                          <div className="flex items-center gap-2.5 shrink-0 w-full lg:w-auto justify-end pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100 dark:border-slate-800">
                             <Button
                               size="sm"
                               variant="outline"
                               className="text-rose-600 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-bold h-10 px-4 rounded-xl"
-                              onClick={() => handleRejectSub(p.id, p.org_id)}
+                              onClick={() => {
+                                setRejectModalItem(p);
+                                setRejectReasonPreset("Reference code not found on MoMo merchant collection statement");
+                                setCustomRejectReason("");
+                              }}
                             >
                               Reject Proof
                             </Button>
-                            <Button
-                              size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-10 px-5 rounded-xl shadow-xs"
-                              onClick={() => handleApproveSub(p.id, p.org_id, p.plan_details)}
-                            >
-                              Approve & Extend 30d
-                            </Button>
+                            {isPackage ? (
+                              <Button
+                                size="sm"
+                                className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold h-10 px-5 rounded-xl shadow-xs flex items-center gap-1.5"
+                                onClick={() => handleApproveSub(p.id, p.org_id, p.plan || p.plan_details, p.package_id)}
+                              >
+                                <Package className="h-4 w-4" />
+                                Approve & Activate Package
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-10 px-5 rounded-xl shadow-xs flex items-center gap-1.5"
+                                onClick={() => handleApproveSub(p.id, p.org_id, p.plan || p.plan_details)}
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                                Approve & Extend 30d
+                              </Button>
+                            )}
                           </div>
                         </div>
                       );
@@ -1015,36 +1332,349 @@ export const SuperadminDashboard: React.FC = () => {
                         <CheckCircle className="h-7 w-7" />
                       </div>
                       <h4 className="text-base font-black font-display text-slate-900 dark:text-white">All Clear in Approval Queue</h4>
-                      <p className="text-xs text-slate-500 max-w-sm">No pending mobile money subscription proof submissions require verification right now.</p>
+                      <p className="text-xs text-slate-500 max-w-sm">No pending mobile money subscription or package proof submissions require verification right now.</p>
+                      {reviewedPayments.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setMomoViewTab("archive")}
+                          className="mt-2 text-xs font-bold"
+                        >
+                          View Validation Archive ({reviewedPayments.length})
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
-              </div>
+              )}
 
+              {/* TAB 2: VALIDATION ARCHIVE & HISTORICAL AUDIT */}
+              {momoViewTab === "archive" && (
+                <div className="flex flex-col gap-5 w-full">
+                  {/* Filter & Search Bar */}
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4.5 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="w-full md:w-80">
+                      <Input
+                        type="text"
+                        placeholder="Search archive by org, phone, reference, auditor..."
+                        value={archiveSearch}
+                        onChange={(e) => setArchiveSearch(e.target.value)}
+                        prefixIcon={<Search className="h-4 w-4 text-slate-400" />}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap w-full md:w-auto justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setArchiveStatusFilter("all")}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                          archiveStatusFilter === "all"
+                            ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200"
+                        }`}
+                      >
+                        All ({reviewedPayments.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setArchiveStatusFilter("approved")}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                          archiveStatusFilter === "approved"
+                            ? "bg-emerald-600 text-white"
+                            : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100"
+                        }`}
+                      >
+                        ✓ Approved ({approvedCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setArchiveStatusFilter("rejected")}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                          archiveStatusFilter === "rejected"
+                            ? "bg-rose-600 text-white"
+                            : "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 hover:bg-rose-100"
+                        }`}
+                      >
+                        ✕ Rejected ({rejectedCount})
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Archive Records Table */}
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+                    {filteredArchive.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-mono text-[10px] uppercase border-b border-slate-200/80 dark:border-slate-800">
+                            <tr>
+                              <th className="px-5 py-3.5">Organization / Workspace</th>
+                              <th className="px-4 py-3.5">Category / Plan</th>
+                              <th className="px-4 py-3.5">Sender MoMo & Ref</th>
+                              <th className="px-4 py-3.5">Amount</th>
+                              <th className="px-4 py-3.5">Status</th>
+                              <th className="px-4 py-3.5">Turnaround Latency</th>
+                              <th className="px-4 py-3.5">Audited By</th>
+                              <th className="px-5 py-3.5 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {filteredArchive.map((p) => {
+                              const matchedOrg = orgs.find((o) => o.id === p.org_id);
+                              const planStr = (p.plan || p.plan_details || "").toLowerCase();
+                              const isPkg = p.package_id || p.item_type === "package" || planStr.includes("package");
+                              const latency = p.validated_at ? formatDuration(p.submitted_at, p.validated_at) : "Instant";
+                              const senderPhone = p.phone || p.phone_number || "N/A";
+                              const txnRef = p.reference || p.transaction_reference || "N/A";
+                              const amountLocal = p.amount_local || (p.amount_usd ? p.amount_usd * 1350 : 33750);
+
+                              return (
+                                <tr key={p.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                                  <td className="px-5 py-3.5 font-bold text-slate-900 dark:text-white">
+                                    <div className="flex items-center gap-2">
+                                      <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
+                                      <span className="truncate max-w-[160px]">{matchedOrg?.name || "Workspace"}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3.5">
+                                    <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                                      {isPkg ? (
+                                        <Package className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                                      ) : (
+                                        <CheckCircle className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                      )}
+                                      <span className="truncate max-w-[150px]">{p.plan || p.plan_details || "Subscription"}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3.5 font-mono text-slate-600 dark:text-slate-400">
+                                    <div>{senderPhone}</div>
+                                    <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1 rounded font-bold text-slate-700 dark:text-slate-300">
+                                      {txnRef}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3.5 font-mono font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                                    {amountLocal.toLocaleString()} RWF
+                                  </td>
+                                  <td className="px-4 py-3.5 whitespace-nowrap">
+                                    {p.status === "approved" ? (
+                                      <Badge color="green" className="text-[10px] px-2 py-0.5">APPROVED</Badge>
+                                    ) : (
+                                      <Badge color="red" className="text-[10px] px-2 py-0.5">REJECTED</Badge>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3.5 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                                    <span className="text-indigo-600 dark:text-indigo-400 font-bold">{latency}</span>
+                                  </td>
+                                  <td className="px-4 py-3.5 text-slate-600 dark:text-slate-300 font-medium">
+                                    {p.audited_by_name || "Platform Auditor"}
+                                  </td>
+                                  <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => setSelectedHistoryItem(p)}
+                                      className="h-7 text-[11px] px-2.5 rounded-lg border-slate-200 dark:border-slate-700"
+                                    >
+                                      View Audit Log
+                                    </Button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="p-12 text-center flex flex-col items-center justify-center gap-2">
+                        <History className="h-8 w-8 text-slate-400" />
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">No archived records found</span>
+                        <p className="text-xs text-slate-500 max-w-sm">
+                          {archiveSearch || archiveStatusFilter !== "all"
+                            ? "Try adjusting your search query or status filter."
+                            : "Approved and rejected transaction proofs will automatically be cataloged here."}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* REJECTION MODAL */}
+              {rejectModalItem && (
+                <Modal
+                  title="Reject Mobile Money Payment Evidence"
+                  isOpen={!!rejectModalItem}
+                  onClose={() => setRejectModalItem(null)}
+                >
+                  <div className="flex flex-col gap-4 text-xs">
+                    <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-xl text-rose-800 dark:text-rose-300 flex flex-col gap-1">
+                      <span className="font-black text-xs flex items-center gap-1.5">
+                        <ShieldAlert className="h-4 w-4" /> Reject Payment Proof
+                      </span>
+                      <p className="text-[11px]">
+                        The transaction proof will be marked as Rejected, archived in the audit history, and the organization administrator will receive an immediate notification explaining the reason.
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col gap-1.5">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Workspace:</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">
+                          {orgs.find((o) => o.id === rejectModalItem.org_id)?.name || "Workspace"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Item / Plan:</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">
+                          {rejectModalItem.plan || rejectModalItem.plan_details || "Subscription"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Payer Phone & Reference:</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                          {rejectModalItem.phone || "N/A"} • Ref: {rejectModalItem.reference || "N/A"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Amount:</span>
+                        <span className="font-bold text-emerald-600">
+                          {(rejectModalItem.amount_local || 33750).toLocaleString()} RWF
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Pre-set Reasons */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="font-bold text-slate-700 dark:text-slate-300">
+                        Select Reason for Rejection:
+                      </label>
+                      <select
+                        value={rejectReasonPreset}
+                        onChange={(e) => setRejectReasonPreset(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                      >
+                        <option value="Reference code not found on MoMo merchant collection statement">
+                          Reference code not found on MoMo merchant collection statement
+                        </option>
+                        <option value="Transaction amount is less than required plan or package price">
+                          Transaction amount is less than required plan or package price
+                        </option>
+                        <option value="Duplicate submission: This transaction reference was already approved">
+                          Duplicate submission: This transaction reference was already approved
+                        </option>
+                        <option value="Invalid or unreadable mobile money SMS confirmation format">
+                          Invalid or unreadable mobile money SMS confirmation format
+                        </option>
+                        <option value="Custom">Other (Specify custom note below)</option>
+                      </select>
+                    </div>
+
+                    {/* Custom Note */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="font-bold text-slate-700 dark:text-slate-300">
+                        Additional Auditor Guidance to Payer (Optional):
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={customRejectReason}
+                        onChange={(e) => setCustomRejectReason(e.target.value)}
+                        placeholder="e.g. Please verify that transfer was sent to 0788100100 and resubmit with full MTN confirmation SMS..."
+                        className="w-full p-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setRejectModalItem(null)}
+                        className="text-xs h-9 px-4 rounded-xl"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs h-9 px-5 rounded-xl shadow-xs"
+                        onClick={() => {
+                          const fullReason = rejectReasonPreset === "Custom"
+                            ? (customRejectReason || "Payment verification rejected by auditor.")
+                            : (customRejectReason ? `${rejectReasonPreset}. Note: ${customRejectReason}` : rejectReasonPreset);
+                          handleConfirmRejectSub(rejectModalItem.id, rejectModalItem.org_id, fullReason);
+                        }}
+                      >
+                        Confirm Rejection & Notify Payer
+                      </Button>
+                    </div>
+                  </div>
+                </Modal>
+              )}
+
+              {/* ARCHIVE AUDIT DETAIL MODAL */}
               {selectedHistoryItem && (
                 <Modal title="Transaction Validation Audit Detail" isOpen={!!selectedHistoryItem} onClose={() => setSelectedHistoryItem(null)}>
                   <div className="flex flex-col gap-4 text-xs">
-                    <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col gap-2 font-medium">
+                    <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col gap-2.5 font-medium">
                       <div className="flex justify-between">
                         <span className="text-slate-400">Transaction ID:</span>
                         <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{selectedHistoryItem.id}</span>
                       </div>
                       <div className="flex justify-between">
+                        <span className="text-slate-400">Item / Category:</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">
+                          {selectedHistoryItem.plan || selectedHistoryItem.plan_details || "Subscription"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
                         <span className="text-slate-400">Reference:</span>
-                        <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{selectedHistoryItem.transaction_reference}</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                          {selectedHistoryItem.reference || selectedHistoryItem.transaction_reference || "N/A"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Sender Phone:</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                          {selectedHistoryItem.phone || selectedHistoryItem.phone_number || "N/A"}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-400">Amount:</span>
-                        <span className="font-bold text-emerald-600">{(selectedHistoryItem.amount_local || selectedHistoryItem.amount_usd * 1350).toLocaleString()} RWF</span>
+                        <span className="font-bold text-emerald-600">
+                          {(selectedHistoryItem.amount_local || (selectedHistoryItem.amount_usd ? selectedHistoryItem.amount_usd * 1350 : 33750)).toLocaleString()} RWF {selectedHistoryItem.amount_usd ? `($${selectedHistoryItem.amount_usd})` : ""}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Payment Gateway:</span>
+                        <span className="font-bold uppercase text-slate-700 dark:text-slate-300 font-mono">
+                          {selectedHistoryItem.method || "MTN MOMO"}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-400">Status:</span>
                         <Badge color={selectedHistoryItem.status === "approved" ? "green" : "red"}>{selectedHistoryItem.status?.toUpperCase()}</Badge>
                       </div>
-                      <div className="flex justify-between">
+                      {selectedHistoryItem.audited_by_name && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Audited By:</span>
+                          <span className="font-bold text-slate-700 dark:text-slate-300">{selectedHistoryItem.audited_by_name}</span>
+                        </div>
+                      )}
+                      {selectedHistoryItem.audit_notes && (
+                        <div className="flex flex-col gap-1 border-t border-slate-200 dark:border-slate-700 pt-2">
+                          <span className="text-slate-400">Audit Notes:</span>
+                          <span className="text-slate-700 dark:text-slate-300 italic">{selectedHistoryItem.audit_notes}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between border-t border-slate-200 dark:border-slate-700 pt-2">
                         <span className="text-slate-400">Turnaround Latency:</span>
-                        <span className="font-bold text-indigo-600">{formatDuration(selectedHistoryItem.submitted_at, selectedHistoryItem.validated_at)}</span>
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400">{formatDuration(selectedHistoryItem.submitted_at, selectedHistoryItem.validated_at)}</span>
                       </div>
+                      {selectedHistoryItem.proof_url && (
+                        <div className="flex flex-col gap-1 border-t border-slate-200 dark:border-slate-700 pt-2">
+                          <span className="text-slate-400">Submitted Proof / SMS Receipt:</span>
+                          <p className="font-mono text-[11px] bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 break-all">
+                            {selectedHistoryItem.proof_url}
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <Button className="w-full bg-slate-900 dark:bg-emerald-600 text-white font-bold h-10 rounded-xl" onClick={() => setSelectedHistoryItem(null)}>
                       Close Details

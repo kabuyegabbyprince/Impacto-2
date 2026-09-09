@@ -22,19 +22,28 @@ apiRouter.use("/api/member-fees", feesRouter);
 apiRouter.use("/api/audit-logs", auditRouter);
 apiRouter.use("/api/storage", storageRouter);
 
-// pawaPay Webhook endpoint (root-level webhook route)
-apiRouter.post("/webhooks/pawapay/deposit", (req: Request, res: Response) => {
+// pawaPay Webhook endpoints (handles Checkouts, Deposits, Payouts, Refunds)
+const handlePawaPayCallback = (req: Request, res: Response) => {
   try {
-    const webhookData = req.body;
-    console.log("[pawaPay Webhook Received]:", webhookData);
-    const depositId = webhookData.depositId;
-    const status = webhookData.status;
-    res.json({ received: true, depositId, status });
+    const webhookData = req.body || {};
+    console.log("[pawaPay Webhook/Callback Received]:", req.path, webhookData);
+    const depositId = webhookData.depositId || webhookData.payoutId || webhookData.refundId || webhookData.id;
+    const status = webhookData.status || "COMPLETED";
+    // Always return HTTP 200 to acknowledge PawaPay notification
+    res.status(200).json({ status: "ACCEPTED", received: true, depositId, callbackStatus: status });
   } catch (err: any) {
     console.error("[pawaPay Webhook Error]:", err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(200).json({ status: "ACCEPTED", received: false, error: err.message });
   }
-});
+};
+
+apiRouter.all("/webhooks/pawapay/deposit", handlePawaPayCallback);
+apiRouter.all("/webhooks/pawapay/checkout", handlePawaPayCallback);
+apiRouter.all("/webhooks/pawapay/payout", handlePawaPayCallback);
+apiRouter.all("/webhooks/pawapay/refund", handlePawaPayCallback);
+apiRouter.all("/webhooks/pawapay", handlePawaPayCallback);
+apiRouter.all("/api/payments/pawapay/callback", handlePawaPayCallback);
+apiRouter.all("/api/payments/pawapay/webhook", handlePawaPayCallback);
 
 // Dynamic environment variables endpoint for client-side consumption
 apiRouter.get("/env.js", (req: Request, res: Response) => {

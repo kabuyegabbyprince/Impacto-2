@@ -611,6 +611,12 @@ CREATE TABLE IF NOT EXISTS public.subscription_payments (
 );
 
 ALTER TABLE public.subscription_payments ADD COLUMN IF NOT EXISTS validated_at TIMESTAMPTZ;
+ALTER TABLE public.subscription_payments ADD COLUMN IF NOT EXISTS package_id TEXT;
+ALTER TABLE public.subscription_payments ADD COLUMN IF NOT EXISTS item_type TEXT DEFAULT 'plan';
+ALTER TABLE public.subscription_payments ADD COLUMN IF NOT EXISTS audited_by TEXT;
+ALTER TABLE public.subscription_payments ADD COLUMN IF NOT EXISTS audited_by_name TEXT;
+ALTER TABLE public.subscription_payments ADD COLUMN IF NOT EXISTS audit_notes TEXT;
+ALTER TABLE public.subscription_payments ADD COLUMN IF NOT EXISTS audited_at TIMESTAMPTZ;
 
 -- ---------------------------------------------------------------------
 -- Table 26: PLATFORM_SETTINGS (Global Billing, Rates & Gateway Info)

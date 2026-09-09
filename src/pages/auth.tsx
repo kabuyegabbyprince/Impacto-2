@@ -10,6 +10,7 @@ import { useOrganizations, useMembers, useUserMemberships } from "../hooks/useIm
 import { Button, Input, Card, Badge, Avatar, Modal } from "../components/ui";
 import { MockDB } from "../lib/mockData";
 import { useToast } from "../components/Toast";
+import { APP_CONFIG } from "../config";
 
 // ==========================================
 // ORG SELECT FIELD COMPONENT WITH RELEVANCE SORTING
@@ -480,9 +481,9 @@ export const Login: React.FC = () => {
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md flex flex-col gap-8">
         <div className="text-center flex flex-col items-center select-none">
-          <Link to="/" className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-emerald-600 font-semibold mb-6 select-none bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 px-3.5 py-1.5 rounded-full shadow-xs duration-150 transition">
+          <a href={APP_CONFIG.landingUrl} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-emerald-600 font-semibold mb-6 select-none bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 px-3.5 py-1.5 rounded-full shadow-xs duration-150 transition">
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Home Page
-          </Link>
+          </a>
           {/* Logo Knot */}
           <svg className="h-14 w-14 text-emerald-600 mb-4" viewBox="0 0 100 100" fill="none">
             <circle cx="50" cy="35" r="25" stroke="currentColor" strokeWidth="8" />
@@ -594,6 +595,7 @@ export const Register: React.FC = () => {
   const [orgName, setOrgName] = useState("");
   const [orgCategory, setOrgCategory] = useState("Environment");
   const [orgTagline, setOrgTagline] = useState("");
+  const [isPrivateOrg, setIsPrivateOrg] = useState(false);
   const [autoConfirmMembers, setAutoConfirmMembers] = useState(true);
 
   // Organization Workspace Admin Credentials - Step 2
@@ -673,16 +675,34 @@ export const Register: React.FC = () => {
 
         // 4. Insert into public.org_members
         let memberRecord: any = null;
+        let orgRecord: any = null;
         if (partSelectedOrg) {
+          const { data: fetchedOrg } = await supabase.from("organizations").select("*").eq("id", partSelectedOrg).maybeSingle();
+          orgRecord = fetchedOrg || orgs?.find(o => o.id === partSelectedOrg) || null;
+          
+          const isTargetOrgPrivate = orgRecord ? (
+            orgRecord.is_public_directory === false ||
+            orgRecord.allow_public_joining === false ||
+            orgRecord.auto_confirm_members === false
+          ) : false;
+          const initialMemberStatus: "pending" | "active" = isTargetOrgPrivate ? "pending" : "active";
+
           const { data: createdMem, error: memberErr } = await supabase.from("org_members").insert({
             org_id: partSelectedOrg,
             user_id: authUser.id,
             role: "member",
-            status: "active",
+            status: initialMemberStatus,
             joined_at: new Date().toISOString()
           }).select().maybeSingle();
           if (memberErr) console.warn("[Participant Register] Member insert notice:", memberErr.message);
-          memberRecord = createdMem;
+          memberRecord = createdMem || {
+            id: `mem-${Date.now()}`,
+            org_id: partSelectedOrg,
+            user_id: authUser.id,
+            role: "member" as const,
+            status: initialMemberStatus,
+            joined_at: new Date().toISOString()
+          };
         }
 
         const dbUser = {
@@ -704,22 +724,8 @@ export const Register: React.FC = () => {
 
         setUser(dbUser);
 
-        if (partSelectedOrg) {
-          let { data: orgRecord } = await supabase.from("organizations").select("*").eq("id", partSelectedOrg).maybeSingle();
-          if (!orgRecord && orgs && orgs.length > 0) {
-            orgRecord = orgs.find(o => o.id === partSelectedOrg) || null;
-          }
-          if (orgRecord) {
-            const finalMember = memberRecord || {
-              id: `mem-${Date.now()}`,
-              org_id: partSelectedOrg,
-              user_id: authUser.id,
-              role: "member" as const,
-              status: "active" as const,
-              joined_at: new Date().toISOString()
-            };
-            setActiveOrg(orgRecord, finalMember);
-          }
+        if (partSelectedOrg && orgRecord && memberRecord) {
+          setActiveOrg(orgRecord, memberRecord);
         }
         navigate("/dashboard");
       } else {
@@ -746,14 +752,23 @@ export const Register: React.FC = () => {
         MockDB.saveUsers(users);
 
         let createdMember: any = null;
+        let targetOrg: any = null;
         if (partSelectedOrg) {
+          targetOrg = MockDB.getOrgs().find((o) => o.id === partSelectedOrg) || orgs?.find((o) => o.id === partSelectedOrg);
+          const isTargetOrgPrivate = targetOrg ? (
+            targetOrg.is_public_directory === false ||
+            targetOrg.allow_public_joining === false ||
+            targetOrg.auto_confirm_members === false
+          ) : false;
+          const initialMemberStatus: "pending" | "active" = isTargetOrgPrivate ? "pending" : "active";
+
           const members = MockDB.getMembers();
           createdMember = {
             id: "member-" + Math.random().toString(36).substr(2, 9),
             org_id: partSelectedOrg,
             user_id: newUser.id,
             role: "member" as const,
-            status: "active" as const,
+            status: initialMemberStatus,
             joined_at: new Date().toISOString()
           };
           members.push(createdMember);
@@ -771,11 +786,8 @@ export const Register: React.FC = () => {
         setUser(newUser);
         setSession({ token: "demo" });
 
-        if (partSelectedOrg && createdMember) {
-          const targetOrg = MockDB.getOrgs().find((o) => o.id === partSelectedOrg) || orgs?.find((o) => o.id === partSelectedOrg);
-          if (targetOrg) {
-            setActiveOrg(targetOrg, createdMember);
-          }
+        if (partSelectedOrg && createdMember && targetOrg) {
+          setActiveOrg(targetOrg, createdMember);
         }
         navigate("/dashboard");
       }
@@ -870,7 +882,10 @@ export const Register: React.FC = () => {
           subscription_tier: "trial",
           subscription_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
           donations_enabled: true,
-          auto_confirm_members: autoConfirmMembers ?? true
+          auto_confirm_members: !isPrivateOrg && autoConfirmMembers,
+          is_public_directory: !isPrivateOrg,
+          allow_public_joining: !isPrivateOrg && autoConfirmMembers,
+          public_page_enabled: !isPrivateOrg
         }).select().maybeSingle();
 
         if (orgInsertErr) console.warn("[Register NGO] Org insert notice:", orgInsertErr.message);
@@ -891,7 +906,10 @@ export const Register: React.FC = () => {
             subscription_tier: "trial",
             subscription_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             donations_enabled: true,
-            auto_confirm_members: autoConfirmMembers ?? true,
+            auto_confirm_members: !isPrivateOrg && autoConfirmMembers,
+            is_public_directory: !isPrivateOrg,
+            allow_public_joining: !isPrivateOrg && autoConfirmMembers,
+            public_page_enabled: !isPrivateOrg,
             created_at: new Date().toISOString()
           };
         }
@@ -974,7 +992,10 @@ export const Register: React.FC = () => {
           primary_color: "#16a34a",
           secondary_color: "#ca8a04",
           language: "en" as const,
-          auto_confirm_members: autoConfirmMembers,
+          auto_confirm_members: !isPrivateOrg && autoConfirmMembers,
+          is_public_directory: !isPrivateOrg,
+          allow_public_joining: !isPrivateOrg && autoConfirmMembers,
+          public_page_enabled: !isPrivateOrg,
           donations_enabled: true,
           donation_mtn_number: "0788100120",
           donation_airtel_number: "0733100120",
@@ -1060,9 +1081,9 @@ export const Register: React.FC = () => {
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-lg flex flex-col gap-6">
         <div className="text-center flex flex-col items-center select-none">
-          <Link to="/" className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-emerald-600 font-semibold mb-6 select-none bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 px-3.5 py-1.5 rounded-full shadow-xs duration-150 transition">
+          <a href={APP_CONFIG.landingUrl} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-emerald-600 font-semibold mb-6 select-none bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 px-3.5 py-1.5 rounded-full shadow-xs duration-150 transition">
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Home Page
-          </Link>
+          </a>
           <svg className="h-10 w-10 text-emerald-600 mb-2" viewBox="0 0 100 100" fill="none">
             <circle cx="50" cy="35" r="25" stroke="currentColor" strokeWidth="8" />
             <circle cx="35" cy="65" r="25" stroke="currentColor" strokeWidth="8" />
@@ -1140,7 +1161,7 @@ export const Register: React.FC = () => {
                   );
                 }
 
-                const isPublic = targetOrg.allow_public_joining ?? true;
+                const isPublic = (targetOrg.allow_public_joining !== false) && (targetOrg.auto_confirm_members !== false);
 
                 return (
                   <div className="flex flex-col gap-3">
@@ -1394,18 +1415,44 @@ export const Register: React.FC = () => {
                         required
                       />
 
-                      <div className="flex items-center gap-2 mt-2">
+                      {/* Organization Privacy Checkbox */}
+                      <div className="p-3.5 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-xl flex items-start gap-3 mt-2">
                         <input
                           type="checkbox"
-                          id="autoConfirm"
-                          checked={autoConfirmMembers}
-                          onChange={(e) => setAutoConfirmMembers(e.target.checked)}
-                          className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          id="isPrivateOrg"
+                          checked={isPrivateOrg}
+                          onChange={(e) => {
+                            setIsPrivateOrg(e.target.checked);
+                            if (e.target.checked) {
+                              setAutoConfirmMembers(false);
+                            }
+                          }}
+                          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                         />
-                        <label htmlFor="autoConfirm" className="text-sm text-gray-700 dark:text-slate-300">
-                          Automatically confirm new member join requests
+                        <label htmlFor="isPrivateOrg" className="text-xs text-gray-700 dark:text-slate-300 cursor-pointer select-none">
+                          <span className="font-bold text-gray-900 dark:text-white block">
+                            Make this organization private
+                          </span>
+                          <span className="text-gray-500 dark:text-slate-400 block mt-0.5 leading-relaxed">
+                            Does not appear on public dashboard directory until allowed in settings. New users go to the <strong>Wait Room</strong> until an administrator confirms them to access the dashboard.
+                          </span>
                         </label>
                       </div>
+
+                      {!isPrivateOrg && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <input
+                            type="checkbox"
+                            id="autoConfirm"
+                            checked={autoConfirmMembers}
+                            onChange={(e) => setAutoConfirmMembers(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <label htmlFor="autoConfirm" className="text-xs text-gray-700 dark:text-slate-300">
+                            Automatically confirm new member join requests
+                          </label>
+                        </div>
+                      )}
 
                       {/* Public Page Slug Preview Box */}
                       <div className="p-3 bg-slate-50 dark:bg-slate-900 border rounded-xl flex flex-col gap-2">
@@ -1784,13 +1831,13 @@ export const OrgPicker: React.FC = () => {
     // Plan limit checking to prevent self-block out
     const activeOrgMembers = members.filter(m => m.org_id === orgId && m.status === "active").length;
     const isTrial = org ? (org.subscription_status === "trial" || !org.subscription_status) : true;
-    const orgTier = org ? (org.subscription_tier || "trial") : "trial";
+    const orgTier = org ? (org.subscription_tier || "growth") : "growth";
     const currentLimit = isTrial 
-      ? 50 
-      : orgTier === "starter" 
-        ? 100 
+      ? 250 
+      : (orgTier === "free" || orgTier === "starter") 
+        ? 30 
         : orgTier === "growth" 
-          ? 500 
+          ? 250 
           : Infinity;
 
     const wouldExceed = activeOrgMembers >= currentLimit;
@@ -3043,9 +3090,9 @@ export const ResetPassword: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm flex flex-col items-center gap-4">
-        <Link to="/" className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-emerald-600 font-semibold select-none bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 px-3.5 py-1.5 rounded-full shadow-xs duration-150 transition mb-2 self-start">
+        <a href={APP_CONFIG.landingUrl} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-emerald-600 font-semibold select-none bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 px-3.5 py-1.5 rounded-full shadow-xs duration-150 transition mb-2 self-start">
           <ArrowLeft className="h-3.5 w-3.5" /> Back to Home Page
-        </Link>
+        </a>
         <Card title="New Credentials" className="w-full">
         {success ? (
           <div className="text-center flex flex-col items-center gap-3">

@@ -21,7 +21,9 @@ export interface Organization {
   donation_description?: string;
   subscription_status: "trial" | "active" | "expired";
   subscription_ends_at?: string;
-  subscription_tier?: "trial" | "starter" | "growth" | "enterprise";
+  subscription_tier?: "free" | "starter" | "growth" | "pro" | "enterprise" | "trial";
+  active_packages?: string[];
+  packages_data?: Record<string, { expires_at: string; purchased_at: string }>;
   org_category: string;
   created_at: string;
   // Custom public portal settings
@@ -161,6 +163,9 @@ export const useOrgStore = create<OrgState>((set) => ({
       } catch {}
     }
     set({ activeOrg: org, activeMember: member });
+    try {
+      window.dispatchEvent(new CustomEvent("impacto_org_updated", { detail: { org, member } }));
+    } catch {}
   },
   clearOrg: () => {
     try {
@@ -170,3 +175,40 @@ export const useOrgStore = create<OrgState>((set) => ({
     set({ activeOrg: null, activeMember: null });
   },
 }));
+
+// Real-time synchronization: automatically update active organization & packages without page reload
+if (typeof window !== "undefined") {
+  window.addEventListener("impacto_org_updated", (event: any) => {
+    try {
+      const detail = event?.detail;
+      if (!detail) return;
+      const state = useOrgStore.getState();
+      const currentOrg = state.activeOrg;
+      const currentMember = state.activeMember;
+
+      const targetOrgId = detail.orgId || detail.org?.id;
+      if (currentOrg && targetOrgId && currentOrg.id === targetOrgId) {
+        let updatedOrg = detail.org ? { ...currentOrg, ...detail.org } : { ...currentOrg };
+        
+        // Sync active packages from local storage if fresh
+        try {
+          const pkgStorage = localStorage.getItem(`impacto_org_packages_${currentOrg.id}`);
+          if (pkgStorage) {
+            updatedOrg.active_packages = JSON.parse(pkgStorage);
+          }
+        } catch (e) {}
+
+        let updatedMember = currentMember;
+        if (detail.member && (!currentMember || currentMember.id === detail.member.id)) {
+          updatedMember = { ...currentMember, ...detail.member };
+        } else if (detail.memberId && currentMember && currentMember.id === detail.memberId && detail.status) {
+          updatedMember = { ...currentMember, status: detail.status };
+        }
+
+        state.setActiveOrg(updatedOrg, updatedMember);
+      }
+    } catch (err) {
+      console.warn("Failed to process live organization sync event:", err);
+    }
+  });
+}

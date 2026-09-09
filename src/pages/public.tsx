@@ -43,6 +43,7 @@ import { useOrgStore } from "../store/orgStore";
 import { useCurrencyStore } from "../store/currencyStore";
 import { LogoLoader } from "../components/LogoLoader";
 import { PartnersSection } from "../components/PartnersSection";
+import { APP_CONFIG } from "../config";
 import {
   useOrganizations,
   useOrganization,
@@ -79,7 +80,6 @@ export const Landing: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [logoError, setLogoError] = useState(false);
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
-  const [showComparison, setShowComparison] = useState(false);
 
   // Contact modal states
   const [contactModalOpen, setContactModalOpen] = useState(false);
@@ -99,6 +99,12 @@ export const Landing: React.FC = () => {
     e.preventDefault();
     if (!contactName || !contactEmail || !contactMessage) return;
     setContactLoading(true);
+    const submissionData = {
+      name: contactName,
+      email: contactEmail,
+      subject: contactSubject || "Landing Inquiry",
+      message: contactMessage,
+    };
     try {
       await submitErrorReport.mutateAsync({
         org_id: "system",
@@ -107,7 +113,7 @@ export const Landing: React.FC = () => {
         priority: "high",
       });
       try {
-        handleFormspreeSubmit(e);
+        await handleFormspreeSubmit(submissionData as any);
       } catch (fErr) {
         console.warn("Formspree fallback notice:", fErr);
       }
@@ -861,128 +867,6 @@ export const Landing: React.FC = () => {
               </Link>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Deep Feature Comparison Matrix Section */}
-      <section id="comparison-matrix" className={`bg-slate-50 dark:bg-slate-950 border-t border-gray-150 dark:border-slate-800 px-6 transition-all duration-300 ${showComparison ? "py-20" : "py-12"}`}>
-        <div className="max-w-4xl mx-auto animate-in fade-in duration-300">
-          <div className="text-center max-w-2xl mx-auto mb-6 select-none">
-            <span className="text-[10px] font-mono tracking-widest text-emerald-600 dark:text-emerald-400 block uppercase font-bold">
-              {isRw ? "Igereranya ry'Ibikoresho" : isFr ? "Comparaison des fonctionnalités" : "Feature Capabilities"}
-            </span>
-            <h2 className="text-2xl md:text-3xl font-bold font-display mt-1 text-gray-950 dark:text-white uppercase leading-tight">
-              {isRw ? "Imbonerahamwe y'Igereranya ry'Ibikoresho" : isFr ? "Matrice de comparaison détaillée des fonctionnalités" : "Deep Feature Comparison Matrix"}
-            </h2>
-            <p className="text-xs text-gray-500 mt-2 max-w-md mx-auto leading-relaxed">
-              {isRw ? "Genzura neza ibikoresho byemewe ku rwego rw'ifatabuguzi ryawe." : isFr ? "Analysez exactement quels modules techniques sont autorisés sur votre abonnement." : "Analyze exactly which technical modules are allowed on your plan tier."}
-            </p>
-          </div>
-
-          <div className="flex justify-center mb-6">
-            <Button
-              onClick={() => setShowComparison(!showComparison)}
-              variant="outline"
-              className="flex items-center gap-2 text-xs font-semibold py-2 px-5 rounded-full border-gray-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition duration-150 shadow-xs"
-            >
-              <span>
-                {showComparison 
-                  ? (isRw ? "Hisha Igereranya ry'Ibikoresho" : isFr ? "Masquer la matrice détaillée" : "Hide Detailed Feature Comparison")
-                  : (isRw ? "Tunga Igereranya ry'Ibikoresho" : isFr ? "Afficher la matrice détaillée" : "Show Detailed Feature Comparison")
-                }
-              </span>
-              {showComparison ? <ChevronUp className="h-4 w-4 text-gray-500" /> : <ChevronDown className="h-4 w-4 text-gray-500" />}
-            </Button>
-          </div>
-
-          {showComparison && (
-            <div className="border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-xs animate-in fade-in slide-in-from-top-4 duration-300">
-              <div className="p-5 bg-slate-50/50 dark:bg-slate-900/60 border-b border-gray-200 dark:border-slate-800">
-                <h4 className="font-semibold text-gray-900 dark:text-white text-xs">
-                  {isRw ? "Imbonerahamwe y'Igereranya ry'Ibikoresho" : isFr ? "Matrice de comparaison détaillée des fonctionnalités" : "Detailed Feature Plan Comparison"}
-                </h4>
-                <p className="text-[10px] text-gray-400 dark:text-slate-400 mt-0.5">
-                  {isRw ? "Genzura neza ibikoresho byemewe ku rwego rw'ifatabuguzi ryawe." : isFr ? "Analysez exactement quels modules techniques sont autorisés sur votre abonnement." : "Analyze exactly which technical modules are allowed on your plan tier."}
-                </p>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-gray-200 dark:border-slate-800 bg-slate-100/30 dark:bg-slate-900 font-semibold text-gray-800 dark:text-white font-mono">
-                      <th className="p-3 w-1/3">
-                        {isRw ? "Ibiranga Ubushobozi" : isFr ? "Fonctionnalités de la plateforme" : "Feature Capabilities"}
-                      </th>
-                      <th className="p-3 text-center text-[10px]">{isRw ? "Ikigereranyo" : "Trial"}</th>
-                      <th className="p-3 text-center text-[10px]">{isRw ? "Igihe cyo Gutangira" : "Starter"}</th>
-                      <th className="p-3 text-center text-[10px]">{isRw ? "Ukwiyongera" : "Growth"}</th>
-                      <th className="p-3 text-center text-[10px]">Pro</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-slate-800 font-medium">
-                    <tr className="hover:bg-gray-50/50 dark:hover:bg-slate-800/30 transition text-[11px]">
-                      <td className="p-3 font-semibold text-gray-900 dark:text-slate-200">
-                        {isRw ? "Membres (kugeza)" : isFr ? "Membres (jusqu'à)" : "Members (up to)"}
-                      </td>
-                      <td className="p-3 text-center text-gray-700 dark:text-slate-300">50</td>
-                      <td className="p-3 text-center text-gray-700 dark:text-slate-300">100</td>
-                      <td className="p-3 text-center text-gray-700 dark:text-slate-300">500</td>
-                      <td className="p-3 text-center font-semibold text-gray-950 dark:text-white">∞</td>
-                    </tr>
-                    
-                    {[
-                      { name: isRw ? "Ubufasha bwa Guider (Baza Assistant)" : isFr ? "Assistant Guider (Baza interactif)" : "Guider (Baza Interactive Assistant)", trial: true, starter: false, growth: true, pro: true },
-                      { name: isRw ? "Ipima ry'Imisanzu ry'Umucungamari" : isFr ? "Compteur de recouvrement des cotisations" : "Accountant Dues Health & Collection Meter", trial: true, starter: false, growth: true, pro: true },
-                      { name: isRw ? "Gucunga Abanyamuryango" : isFr ? "Gestion des membres" : "Member Management", trial: true, starter: true, growth: true, pro: true },
-                      { name: isRw ? "Ibikorwa + Kwandika hakoreshejwe QR" : isFr ? "Événements + Présence QR" : "Events + QR Attendance", trial: true, starter: true, growth: true, pro: true },
-                      { name: isRw ? "Amakuru & Amatangazo" : isFr ? "Actualités & Annonces" : "News & Announcements", trial: true, starter: true, growth: true, pro: true },
-                      { name: isRw ? "Intego Nyamukuru (kurikirana & gutangaza)" : isFr ? "Objectifs (suivre & publier)" : "Goals (track & publish)", trial: true, starter: true, growth: true, pro: true },
-                      { name: isRw ? "Inyandiko n'Impapuro" : isFr ? "Documents" : "Documents", trial: true, starter: true, growth: true, pro: true },
-                      { name: isRw ? "Urubuga rusange rw'umuryango (@slug)" : isFr ? "Page publique de l'Organisation (@slug)" : "Public Organization Page (@slug)", trial: true, starter: true, growth: true, pro: true },
-                      { name: isRw ? "Igitabo cy'Imari bafata n'intoki" : isFr ? "Grand ledger manuel" : "Manual Ledger", trial: true, starter: true, growth: true, pro: true },
-                      { name: isRw ? "Ibiganiro bitsinda n'umuntu ku giti cye" : isFr ? "Chat (groupe & direct)" : "Chat (group & direct)", trial: true, starter: true, growth: true, pro: true },
-                      { name: isRw ? "Amatora n'Imyanzuro" : isFr ? "Votes & Décisions" : "Votes & Decisions", trial: true, starter: false, growth: true, pro: true },
-                      { name: isRw ? "Porogaramu n'Ibyagezweho" : isFr ? "Programmes & Jalons" : "Programs & Milestones", trial: true, starter: false, growth: true, pro: true },
-                      { name: isRw ? "Inama n'Ibyemezo byazo" : isFr ? "Réunions + Comptes-rendus" : "Meetings + Minutes", trial: true, starter: false, growth: true, pro: true },
-                      { name: isRw ? "Ibipimo by'Umusaruro" : isFr ? "Indicateurs d'Impact" : "Impact Metrics", trial: true, starter: false, growth: true, pro: true },
-                      { name: isRw ? "Gukurikirana Ibihe by'Inkunga" : isFr ? "Suivi des échéances d'aide" : "Grant Deadline Tracker", trial: true, starter: false, growth: true, pro: true },
-                      { name: isRw ? "Ihuriro n'ibikorwa by'abaterankunga" : isFr ? "Portail des donateurs & campagnes" : "Donor Portal & campaigns", trial: true, starter: true, growth: true, pro: true },
-                      { name: isRw ? "Raporo z'Umusaruro mu buryo bwa PDF" : isFr ? "Générateur PDF de rapports annuels" : "Annual Report PDF Gen", trial: true, starter: false, growth: false, pro: true },
-                      { name: isRw ? "Indimi nyinshi (FR/RW/EN)" : isFr ? "Multi-langues (FR/RW)" : "Multi-language (FR/RW)", trial: true, starter: true, growth: true, pro: true },
-                      { name: isRw ? "Kugaragara ku Rutonde rw'Imiryango" : isFr ? "Inscription au registre des organisations" : "Organization Discovery Listing", trial: true, starter: true, growth: true, pro: true },
-                      { name: isRw ? "Ubufasha bw'isumbuye" : isFr ? "Support Prioritaire" : "Priority Support", trial: false, starter: false, growth: false, pro: true },
-                    ].map((row, index) => (
-                      <tr key={index} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/30 transition text-[11px]">
-                        <td className="p-2.5 text-gray-600 dark:text-slate-300">{row.name}</td>
-                        <td className="p-2.5 text-center">
-                          {row.trial ? <Check className="h-3.5 w-3.5 text-emerald-600 mx-auto" /> : <span className="text-red-500 font-bold">✗</span>}
-                        </td>
-                        <td className="p-2.5 text-center">
-                          {row.starter ? <Check className="h-3.5 w-3.5 text-emerald-600 mx-auto" /> : <span className="text-red-500 font-bold">✗</span>}
-                        </td>
-                        <td className="p-2.5 text-center">
-                          {row.growth ? <Check className="h-3.5 w-3.5 text-emerald-600 mx-auto" /> : <span className="text-red-500 font-bold">✗</span>}
-                        </td>
-                        <td className="p-2.5 text-center">
-                          {row.pro ? <Check className="h-3.5 w-3.5 text-emerald-600 mx-auto" /> : <span className="text-red-500 font-bold">✗</span>}
-                        </td>
-                      </tr>
-                    ))}
-
-                    <tr className="hover:bg-gray-50/50 dark:hover:bg-slate-800/30 transition text-[11px]">
-                      <td className="p-3 font-semibold text-gray-800 dark:text-slate-200">
-                        {isRw ? "Kubika (Space Limit)" : isFr ? "Limite de stockage" : "Storage Limit"}
-                      </td>
-                      <td className="p-3 text-center font-mono text-[10px] text-gray-500">500MB</td>
-                      <td className="p-3 text-center font-mono text-[10px] text-gray-500">1GB</td>
-                      <td className="p-3 text-center font-mono text-[10px] text-gray-500">5GB</td>
-                      <td className="p-3 text-center font-mono text-[10px] font-bold text-emerald-600 dark:text-emerald-400">20GB</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
         </div>
       </section>
 
@@ -1810,12 +1694,12 @@ const OrgBrandingHeader: React.FC<{ org: Organization; onShare: () => void; onJo
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
-        <Link 
-          to="/" 
+        <a 
+          href={APP_CONFIG.landingUrl} 
           className="absolute top-4 left-4 inline-flex items-center gap-2 bg-white/20 backdrop-blur-md hover:bg-white/30 text-white text-xs font-bold px-4 py-2 rounded-full z-30 transition border border-white/20 shadow-xs"
         >
           <ArrowLeft className="h-4 w-4" /> Home
-        </Link>
+        </a>
       </div>
 
       {/* Profile area - enhanced */}

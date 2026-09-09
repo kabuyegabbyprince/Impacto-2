@@ -23,13 +23,27 @@ import {
   RefreshCw,
   ExternalLink,
   Lock,
-  Download
+  Download,
+  Layers,
+  Crown,
+  Zap,
+  Sparkles
 } from "lucide-react";
 import {
   usePlatformAdminData,
   useApproveSubscription,
-  usePlatformAuditLogs
+  usePlatformAuditLogs,
+  useUpdateOrganization
 } from "../hooks/useImpactoData";
+import {
+  SUBSCRIPTION_TIERS,
+  SubscriptionTier,
+  ADDON_PACKAGES,
+  AddOnPackageId,
+  getOrgSubscriptionLifecycle
+} from "../lib/subscriptionMatrix";
+import { MockDB } from "../lib/mockData";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
 import { Button, Input, Card, Badge, Modal } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -43,16 +57,25 @@ export const AuditorDashboard: React.FC = () => {
   const { data: platformData, refetch, isLoading } = usePlatformAdminData();
   const { data: auditLogs = [] } = usePlatformAuditLogs();
   const approveSubMutation = useApproveSubscription();
+  const updateOrgMutation = useUpdateOrganization();
 
   const orgs = platformData?.orgs || [];
   const payments = platformData?.payments || [];
 
-  const [activeTab, setActiveTab] = useState<"pending" | "search" | "history">("pending");
+  const [activeTab, setActiveTab] = useState<"pending" | "search" | "history" | "tiers">("pending");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPayment, setSelectedPayment] = useState<any>(null);
   const [auditModalAction, setAuditModalAction] = useState<"approve" | "reject" | null>(null);
   const [auditNotes, setAuditNotes] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Subscription Matrix Audit state
+  const [selectedOrgForAudit, setSelectedOrgForAudit] = useState<any>(null);
+  const [tierAuditModalOpen, setTierAuditModalOpen] = useState(false);
+  const [newTargetTier, setNewTargetTier] = useState<SubscriptionTier>("growth");
+  const [tierAuditReason, setTierAuditReason] = useState("");
+  const [tierActionType, setTierActionType] = useState<"set_tier" | "grant_grace" | "extend_30">("set_tier");
+  const [tierFilter, setTierFilter] = useState<string>("all");
 
   // Filters
   const pendingPayments = payments.filter((p: any) => p.status === "awaiting_approval");
@@ -85,12 +108,31 @@ export const AuditorDashboard: React.FC = () => {
     if (!selectedPayment || !auditModalAction) return;
     setIsProcessing(true);
     try {
-      let deducedTier: "starter" | "growth" | "enterprise" = "growth";
+      let deducedTier: SubscriptionTier = "growth";
       const planText = selectedPayment.plan || selectedPayment.plan_details;
       if (planText) {
         const lower = planText.toLowerCase();
-        if (lower.includes("enterprise") || lower.includes("pro") || lower.includes("vip")) deducedTier = "enterprise";
+        if (lower.includes("pro") || lower.includes("vip") || lower.includes("enterprise")) deducedTier = "pro";
         else if (lower.includes("starter")) deducedTier = "starter";
+        else if (lower.includes("free")) deducedTier = "free";
+
+        // Auto-activate package if payment relates to a $4 Add-On package
+        let pkgToAdd: string | null = null;
+        if (lower.includes("event")) pkgToAdd = "event_pack";
+        else if (lower.includes("finance")) pkgToAdd = "finance_pack";
+        else if (lower.includes("document") || lower.includes("office")) pkgToAdd = "document_pack";
+        else if (lower.includes("pro feature") || lower.includes("pro pack")) pkgToAdd = "pro_pack";
+
+        if (pkgToAdd && auditModalAction === "approve") {
+          try {
+            const raw = localStorage.getItem(`impacto_org_packages_${selectedPayment.org_id}`) || "[]";
+            const pkgs = JSON.parse(raw);
+            if (!pkgs.includes(pkgToAdd)) {
+              pkgs.push(pkgToAdd);
+              localStorage.setItem(`impacto_org_packages_${selectedPayment.org_id}`, JSON.stringify(pkgs));
+            }
+          } catch (e) {}
+        }
       }
 
       await approveSubMutation.mutateAsync({
@@ -145,6 +187,132 @@ export const AuditorDashboard: React.FC = () => {
     link.click();
     document.body.removeChild(link);
     addToast("Audit report CSV exported successfully", "success");
+  };
+
+  const exportTierMatrixSummary = () => {
+    const csvContent = [
+      ["Workspace Name", "Slug", "Category", "Tier", "Member Limit", "Storage Limit", "Lifecycle Status", "Days Remaining", "In Grace Period", "Safe Read-Only Mode", "Created Date", "Expiration Date"].join(","),
+      ...orgs.map((o: any) => {
+        const lc = getOrgSubscriptionLifecycle(o);
+        return [
+          `"${o.name || "Workspace"}"`,
+          `"${o.slug || ""}"`,
+          `"${o.org_category || "General"}"`,
+          `"${lc.tier.toUpperCase()}"`,
+          `"${lc.memberLimit === Infinity ? "Unlimited" : lc.memberLimit}"`,
+          `"${lc.storageLimit}"`,
+          `"${lc.statusLabel}"`,
+          `"${lc.daysRemaining}"`,
+          `"${lc.isGracePeriod ? "YES" : "NO"}"`,
+          `"${lc.isReadOnlySafeMode ? "YES" : "NO"}"`,
+          `"${o.created_at ? new Date(o.created_at).toLocaleDateString() : "N/A"}"`,
+          `"${lc.subscriptionEndsAt ? new Date(lc.subscriptionEndsAt).toLocaleDateString() : "Perpetual"}"`
+        ].join(",");
+      })
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `impacto_tier_compliance_audit_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addToast("Subscription & Tier compliance CSV exported successfully", "success");
+  };
+
+  const handleOpenTierAuditModal = (org: any, actionType: "set_tier" | "grant_grace" | "extend_30") => {
+    const lc = getOrgSubscriptionLifecycle(org);
+    setSelectedOrgForAudit(org);
+    setTierActionType(actionType);
+    setNewTargetTier(lc.tier);
+    setTierAuditReason(
+      actionType === "grant_grace"
+        ? `Auditor verified grace period extension request: granting 3 calendar days grace period to ${org.name} for fund mobilization.`
+        : actionType === "extend_30"
+        ? `Auditor manual license extension: verified offline bank deposit / billing agreement. Extended +30 days.`
+        : `Auditor tier reconciliation: audited cooperative size and features for ${org.name}.`
+    );
+    setTierAuditModalOpen(true);
+  };
+
+  const handleExecuteTierAudit = async () => {
+    if (!selectedOrgForAudit || !tierAuditReason.trim()) return;
+    setIsProcessing(true);
+    try {
+      const orgId = selectedOrgForAudit.id;
+      const orgName = selectedOrgForAudit.name || "Workspace";
+      let actionLabel = "";
+
+      if (tierActionType === "set_tier") {
+        const isFree = newTargetTier === "free";
+        await updateOrgMutation.mutateAsync({
+          id: orgId,
+          subscription_tier: newTargetTier,
+          subscription_status: "active",
+          subscription_ends_at: isFree ? null : new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString()
+        });
+        actionLabel = `Auditor reconciled ${orgName} subscription plan to ${newTargetTier.toUpperCase()}`;
+      } else if (tierActionType === "grant_grace") {
+        const graceEnds = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString();
+        await updateOrgMutation.mutateAsync({
+          id: orgId,
+          subscription_status: "trial",
+          subscription_tier: "growth",
+          subscription_ends_at: graceEnds
+        });
+        actionLabel = `Auditor granted 3-day grace period to ${orgName}`;
+      } else if (tierActionType === "extend_30") {
+        const currentEnds = selectedOrgForAudit.subscription_ends_at ? new Date(selectedOrgForAudit.subscription_ends_at).getTime() : Date.now();
+        const base = Math.max(Date.now(), currentEnds);
+        const newEnds = new Date(base + 30 * 24 * 3600 * 1000).toISOString();
+        await updateOrgMutation.mutateAsync({
+          id: orgId,
+          subscription_status: "active",
+          subscription_ends_at: newEnds
+        });
+        actionLabel = `Auditor extended ${orgName} active license by +30 days`;
+      }
+
+      // Record platform audit trail entry
+      const newAuditLog = {
+        id: "audit-tier-" + Math.random().toString(36).substring(2, 9),
+        staff_id: user?.id || "auditor-current",
+        staff_name: user?.full_name || "Platform Auditor",
+        staff_role: "auditor",
+        action_type: tierActionType === "grant_grace" ? "grant_grace_period" : tierActionType === "extend_30" ? "extend_subscription" : "reconcile_tier",
+        target_org_id: orgId,
+        target_org_name: orgName,
+        amount: 0,
+        reference: "AUDIT-" + Date.now().toString().slice(-6),
+        notes: `[TIER AUDIT] ${actionLabel}. Reason: ${tierAuditReason.trim()}`,
+        created_at: new Date().toISOString()
+      };
+
+      const localLogs = MockDB.getPlatformAuditLogs();
+      localLogs.unshift(newAuditLog);
+      MockDB.savePlatformAuditLogs(localLogs);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("platform_audit_logs").insert([newAuditLog]);
+        } catch (e) {
+          console.warn("[Auditor] Supabase audit log insert fallback:", e);
+        }
+      }
+
+      addToast(`${actionLabel} successfully and logged to platform audit trail.`, "success");
+      setTierAuditModalOpen(false);
+      setSelectedOrgForAudit(null);
+      setTierAuditReason("");
+      refetch();
+    } catch (err) {
+      console.error(err);
+      addToast("Failed to execute tier audit operation", "error");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -274,6 +442,16 @@ export const AuditorDashboard: React.FC = () => {
               <Clock className="h-3.5 w-3.5" /> Pending Approvals ({pendingPayments.length})
             </button>
             <button
+              onClick={() => setActiveTab("tiers")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === "tiers"
+                  ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+              }`}
+            >
+              <Layers className="h-3.5 w-3.5" /> Subscription Matrix & Tiers ({orgs.length})
+            </button>
+            <button
               onClick={() => setActiveTab("search")}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === "search"
@@ -296,14 +474,25 @@ export const AuditorDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2.5">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={exportAuditSummary}
-              className="text-xs font-bold h-9 px-3 rounded-xl border-slate-300 dark:border-slate-700 flex items-center gap-1.5"
-            >
-              <Download className="h-3.5 w-3.5" /> Export Audit Log (.CSV)
-            </Button>
+            {activeTab === "tiers" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={exportTierMatrixSummary}
+                className="text-xs font-bold h-9 px-3 rounded-xl border-slate-300 dark:border-slate-700 flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400"
+              >
+                <Download className="h-3.5 w-3.5" /> Export Matrix Audit (.CSV)
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={exportAuditSummary}
+                className="text-xs font-bold h-9 px-3 rounded-xl border-slate-300 dark:border-slate-700 flex items-center gap-1.5"
+              >
+                <Download className="h-3.5 w-3.5" /> Export Audit Log (.CSV)
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -561,7 +750,517 @@ export const AuditorDashboard: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* 4. SUBSCRIPTION MATRIX & TIERS TAB */}
+        {activeTab === "tiers" && (() => {
+          const tierCounts = {
+            free: 0,
+            starter: 0,
+            growth: 0,
+            pro: 0,
+            grace: 0,
+            safeMode: 0,
+            locked: 0,
+          };
+
+          orgs.forEach((o: any) => {
+            const lc = getOrgSubscriptionLifecycle(o);
+            if (lc.tier === "free") tierCounts.free++;
+            else if (lc.tier === "starter") tierCounts.starter++;
+            else if (lc.tier === "growth") tierCounts.growth++;
+            else if (lc.tier === "pro") tierCounts.pro++;
+
+            if (lc.isGracePeriod) tierCounts.grace++;
+            if (lc.isReadOnlySafeMode) tierCounts.safeMode++;
+            if (lc.isLocked) tierCounts.locked++;
+          });
+
+          const filteredTierOrgs = orgs.filter((o: any) => {
+            const lc = getOrgSubscriptionLifecycle(o);
+            const q = searchQuery.toLowerCase();
+            const matchesSearch =
+              !searchQuery ||
+              (o.name || "").toLowerCase().includes(q) ||
+              (o.slug || "").toLowerCase().includes(q) ||
+              (o.org_category || "").toLowerCase().includes(q);
+
+            if (!matchesSearch) return false;
+
+            if (tierFilter === "free") return lc.tier === "free";
+            if (tierFilter === "starter") return lc.tier === "starter";
+            if (tierFilter === "growth") return lc.tier === "growth";
+            if (tierFilter === "pro") return lc.tier === "pro";
+            if (tierFilter === "grace") return lc.isGracePeriod;
+            if (tierFilter === "safeMode") return lc.isReadOnlySafeMode;
+            if (tierFilter === "locked") return lc.isLocked;
+            return true;
+          });
+
+          return (
+            <div className="flex flex-col gap-6 w-full">
+              {/* Matrix Tier & Lifecycle Stat Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                <div
+                  onClick={() => setTierFilter(tierFilter === "free" ? "all" : "free")}
+                  className={`bg-white dark:bg-slate-900 border rounded-2xl p-3.5 flex flex-col cursor-pointer transition ${
+                    tierFilter === "free" ? "border-indigo-500 ring-2 ring-indigo-500/20" : "border-slate-200/80 dark:border-slate-800 hover:border-slate-300"
+                  }`}
+                >
+                  <span className="text-[10px] uppercase font-mono font-bold text-slate-500">Free Forever</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-black text-slate-900 dark:text-white font-display">{tierCounts.free}</span>
+                    <span className="text-[10px] text-slate-400">Max 30 m.</span>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setTierFilter(tierFilter === "starter" ? "all" : "starter")}
+                  className={`bg-white dark:bg-slate-900 border rounded-2xl p-3.5 flex flex-col cursor-pointer transition ${
+                    tierFilter === "starter" ? "border-blue-500 ring-2 ring-blue-500/20" : "border-blue-200/60 dark:border-blue-900/40 hover:border-blue-300"
+                  }`}
+                >
+                  <span className="text-[10px] uppercase font-mono font-bold text-blue-600">Starter Plan</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-black text-blue-600 font-display">{tierCounts.starter}</span>
+                    <span className="text-[10px] text-blue-700/60">Max 100 m.</span>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setTierFilter(tierFilter === "growth" ? "all" : "growth")}
+                  className={`bg-white dark:bg-slate-900 border rounded-2xl p-3.5 flex flex-col cursor-pointer transition ${
+                    tierFilter === "growth" ? "border-emerald-500 ring-2 ring-emerald-500/20" : "border-emerald-200/60 dark:border-emerald-900/40 hover:border-emerald-300"
+                  }`}
+                >
+                  <span className="text-[10px] uppercase font-mono font-bold text-emerald-600">Growth Plan</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-black text-emerald-600 font-display">{tierCounts.growth}</span>
+                    <span className="text-[10px] text-emerald-700/60">Max 500 m.</span>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setTierFilter(tierFilter === "pro" ? "all" : "pro")}
+                  className={`bg-white dark:bg-slate-900 border rounded-2xl p-3.5 flex flex-col cursor-pointer transition ${
+                    tierFilter === "pro" ? "border-indigo-500 ring-2 ring-indigo-500/20" : "border-indigo-200/60 dark:border-indigo-900/40 hover:border-indigo-300"
+                  }`}
+                >
+                  <span className="text-[10px] uppercase font-mono font-bold text-indigo-600">Pro Plan</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-black text-indigo-600 font-display">{tierCounts.pro}</span>
+                    <span className="text-[10px] text-indigo-700/60">$40 / Unltd</span>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setTierFilter(tierFilter === "grace" ? "all" : "grace")}
+                  className={`bg-white dark:bg-slate-900 border rounded-2xl p-3.5 flex flex-col cursor-pointer transition ${
+                    tierFilter === "grace" ? "border-amber-500 ring-2 ring-amber-500/20" : "border-amber-300/80 dark:border-amber-700 hover:border-amber-400"
+                  }`}
+                >
+                  <span className="text-[10px] uppercase font-mono font-bold text-amber-700 dark:text-amber-400">3-Day Grace</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-black text-amber-700 dark:text-amber-400 font-display">{tierCounts.grace}</span>
+                    <span className="text-[10px] text-amber-600 animate-pulse font-bold">Audit</span>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setTierFilter(tierFilter === "safeMode" ? "all" : "safeMode")}
+                  className={`bg-white dark:bg-slate-900 border rounded-2xl p-3.5 flex flex-col cursor-pointer transition ${
+                    tierFilter === "safeMode" ? "border-rose-500 ring-2 ring-rose-500/20" : "border-rose-200/80 dark:border-rose-900/40 hover:border-rose-300"
+                  }`}
+                >
+                  <span className="text-[10px] uppercase font-mono font-bold text-rose-600">Safe Read-Only</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-black text-rose-600 font-display">{tierCounts.safeMode}</span>
+                    <span className="text-[10px] text-rose-500">Over Quota</span>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setTierFilter(tierFilter === "locked" ? "all" : "locked")}
+                  className={`bg-white dark:bg-slate-900 border rounded-2xl p-3.5 flex flex-col cursor-pointer transition ${
+                    tierFilter === "locked" ? "border-slate-500 ring-2 ring-slate-500/20" : "border-slate-200/80 dark:border-slate-800 hover:border-slate-300"
+                  }`}
+                >
+                  <span className="text-[10px] uppercase font-mono font-bold text-slate-500">Locked Out</span>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-black text-slate-700 dark:text-slate-300 font-display">{tierCounts.locked}</span>
+                    <span className="text-[10px] text-slate-400">Expired</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Table Container */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col gap-6 w-full">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-black font-display text-slate-900 dark:text-white">
+                      Auditor Subscription & Trial Lifecycle Matrix
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Verify tenant tier quotas, grant 3-day grace periods, or reconcile plans with mandatory audit justification notes.
+                    </p>
+                  </div>
+                  <div className="w-full md:w-80">
+                    <Input
+                      type="text"
+                      placeholder="Filter by workspace or category..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      prefixIcon={<Search className="h-4 w-4 text-slate-400" />}
+                    />
+                  </div>
+                </div>
+
+                {/* Filter Chips */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs text-slate-400 font-bold mr-1">Filter Tier:</span>
+                  {[
+                    { id: "all", label: "All Workspaces" },
+                    { id: "free", label: "Free Forever" },
+                    { id: "growth", label: "Growth Plan" },
+                    { id: "pro", label: "Pro Plan" },
+                    { id: "enterprise", label: "Enterprise" },
+                    { id: "grace", label: "In Grace Period" },
+                    { id: "safeMode", label: "Safe Read-Only" },
+                  ].map((chip) => (
+                    <button
+                      key={chip.id}
+                      onClick={() => setTierFilter(chip.id)}
+                      className={`text-[11px] font-bold px-3 py-1 rounded-lg transition ${
+                        tierFilter === chip.id
+                          ? "bg-indigo-600 text-white shadow-3xs"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
+                      }`}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Table */}
+                <div className="overflow-x-auto border border-slate-200/70 dark:border-slate-800 rounded-xl">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-400 uppercase font-mono text-[10px] tracking-wider border-b border-slate-200/70 dark:border-slate-800">
+                      <tr>
+                        <th className="py-3 px-4">Workspace</th>
+                        <th className="py-3 px-4">Category</th>
+                        <th className="py-3 px-4">Current Tier</th>
+                        <th className="py-3 px-4">Quotas (Members / Storage)</th>
+                        <th className="py-3 px-4">Lifecycle Status</th>
+                        <th className="py-3 px-4">Days Left</th>
+                        <th className="py-3 px-4 text-right">Auditor Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200/70 dark:divide-slate-800 font-medium">
+                      {filteredTierOrgs.length > 0 ? (
+                        filteredTierOrgs.map((org: any) => {
+                          const lc = getOrgSubscriptionLifecycle(org);
+                          return (
+                            <tr key={org.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                              <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
+                                <div className="flex flex-col">
+                                  <span>{org.name || "Workspace"}</span>
+                                  <span className="text-[10px] text-slate-400 font-mono font-normal">/{org.slug || org.id.slice(0, 8)}</span>
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className="text-[11px] text-slate-600 dark:text-slate-300 font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                                  {org.org_category || "General"}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <div className="flex flex-col gap-1">
+                                  {lc.activePackages.length > 0 && (
+                                    <div className="flex items-center gap-1 flex-wrap mb-0.5">
+                                      {lc.activePackages.map((pkgId) => {
+                                        const pkgDef = ADDON_PACKAGES[pkgId];
+                                        return (
+                                          <span
+                                            key={pkgId}
+                                            className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center gap-1"
+                                          >
+                                            <Zap className="h-2.5 w-2.5 text-amber-500" />
+                                            {pkgDef?.name || pkgId} (+20)
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                  <span
+                                    className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md w-fit ${
+                                      lc.tier === "pro"
+                                        ? "bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
+                                        : lc.tier === "growth"
+                                        ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                                        : lc.tier === "starter"
+                                        ? "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
+                                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                    }`}
+                                  >
+                                    {lc.tier === "pro" ? <Crown className="h-3 w-3" /> : <Layers className="h-3 w-3" />}
+                                    {lc.tierDef.name}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <div className="flex flex-col text-[11px]">
+                                  <span className="font-bold text-slate-800 dark:text-slate-200">
+                                    {lc.memberLimit === Infinity ? "Unlimited Members" : `Max ${lc.memberLimit} Members`}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-mono">Storage: {lc.storageLimit}</span>
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <Badge
+                                      color={
+                                        lc.isLocked
+                                          ? "red"
+                                          : lc.isGracePeriod
+                                          ? "amber"
+                                          : lc.isTrial
+                                          ? "blue"
+                                          : "green"
+                                      }
+                                    >
+                                      {lc.statusLabel.toUpperCase()}
+                                    </Badge>
+                                    {lc.isReadOnlySafeMode && (
+                                      <Badge color="red">SAFE READ-ONLY</Badge>
+                                    )}
+                                  </div>
+                                  {lc.subscriptionEndsAt && (
+                                    <span className="text-[9.5px] text-slate-400 font-mono">
+                                      Ends: {new Date(lc.subscriptionEndsAt).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <div className="flex items-center gap-2 font-mono font-bold text-xs">
+                                  <span
+                                    className={`h-2.5 w-2.5 rounded-full ${
+                                      lc.isLocked
+                                        ? "bg-rose-500"
+                                        : lc.isGracePeriod
+                                        ? "bg-amber-500 animate-pulse"
+                                        : lc.daysRemaining <= 5
+                                        ? "bg-amber-500"
+                                        : "bg-emerald-500"
+                                    }`}
+                                  />
+                                  <span>
+                                    {lc.isLocked ? (
+                                      <span className="text-rose-600 font-black">0d (Locked)</span>
+                                    ) : lc.isGracePeriod ? (
+                                      <span className="text-amber-600 font-black">{lc.daysRemaining}d Grace</span>
+                                    ) : lc.tier === "free" ? (
+                                      <span className="text-slate-600 dark:text-slate-400">Perpetual</span>
+                                    ) : (
+                                      <span className="text-slate-900 dark:text-slate-100">{lc.daysRemaining} Days</span>
+                                    )}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-[11px] px-2.5 font-bold rounded-lg border-indigo-200 dark:border-indigo-900/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                                    onClick={() => handleOpenTierAuditModal(org, "set_tier")}
+                                  >
+                                    Audit Plan
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-[11px] px-2 font-bold rounded-lg border-amber-200 dark:border-amber-900/60 text-amber-700 dark:text-amber-400 hover:bg-amber-50"
+                                    onClick={() => handleOpenTierAuditModal(org, "grant_grace")}
+                                    title="Grant 3-day grace period"
+                                  >
+                                    +3d Grace
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-[11px] px-2 font-bold rounded-lg border-emerald-200 dark:border-emerald-900/60 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50"
+                                    onClick={() => handleOpenTierAuditModal(org, "extend_30")}
+                                    title="Extend 30-day license"
+                                  >
+                                    +30d
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-slate-400">
+                            No organizations found matching the selected filters.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </main>
+
+      {/* Subscription Matrix Tier Audit Modal */}
+      {selectedOrgForAudit && tierAuditModalOpen && (
+        <Modal
+          title={`Auditor Plan Reconciliation: ${selectedOrgForAudit.name || "Workspace"}`}
+          isOpen={tierAuditModalOpen}
+          onClose={() => {
+            setTierAuditModalOpen(false);
+            setSelectedOrgForAudit(null);
+          }}
+        >
+          <div className="flex flex-col gap-4 text-xs">
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col gap-2 font-medium">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Workspace:</span>
+                <span className="font-bold text-slate-900 dark:text-white">{selectedOrgForAudit.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Current Tier & Status:</span>
+                <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                  {selectedOrgForAudit.subscription_tier?.toUpperCase() || "GROWTH"} ({selectedOrgForAudit.subscription_status?.toUpperCase() || "TRIAL"})
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Auditor:</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{user?.full_name || "Platform Auditor"}</span>
+              </div>
+            </div>
+
+            {/* Action Type Picker */}
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-slate-700 dark:text-slate-300">Auditor Action</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTierActionType("set_tier")}
+                  className={`p-2.5 rounded-xl border text-left flex flex-col gap-0.5 transition cursor-pointer ${
+                    tierActionType === "set_tier"
+                      ? "border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300"
+                      : "border-slate-200 dark:border-slate-700 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="font-black text-xs">Reconcile Tier</span>
+                  <span className="text-[10px] text-slate-400">Assign plan</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTierActionType("grant_grace")}
+                  className={`p-2.5 rounded-xl border text-left flex flex-col gap-0.5 transition cursor-pointer ${
+                    tierActionType === "grant_grace"
+                      ? "border-amber-600 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300"
+                      : "border-slate-200 dark:border-slate-700 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="font-black text-xs">Grant 3d Grace</span>
+                  <span className="text-[10px] text-slate-400">For collection</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTierActionType("extend_30")}
+                  className={`p-2.5 rounded-xl border text-left flex flex-col gap-0.5 transition cursor-pointer ${
+                    tierActionType === "extend_30"
+                      ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
+                      : "border-slate-200 dark:border-slate-700 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="font-black text-xs">Extend +30d</span>
+                  <span className="text-[10px] text-slate-400">Offline billing</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Target Tier Selection */}
+            {tierActionType === "set_tier" && (
+              <div className="flex flex-col gap-1.5">
+                <label className="font-bold text-slate-700 dark:text-slate-300">Target Subscription Tier</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(Object.keys(SUBSCRIPTION_TIERS) as SubscriptionTier[]).map((tKey) => {
+                    const tDef = SUBSCRIPTION_TIERS[tKey];
+                    const isSelected = newTargetTier === tKey;
+                    return (
+                      <div
+                        key={tKey}
+                        onClick={() => setNewTargetTier(tKey)}
+                        className={`p-3 rounded-xl border cursor-pointer transition flex flex-col gap-1 ${
+                          isSelected
+                            ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 ring-2 ring-indigo-500/20"
+                            : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-xs text-slate-900 dark:text-white">{tDef.name}</span>
+                          <span className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            {tDef.priceUsd === 0 ? "Free Forever" : `$${tDef.priceUsd}/mo`}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-500">
+                          {tDef.memberLimit === Infinity ? "Unlimited members" : `Up to ${tDef.memberLimit} members`} • {tDef.storageLimitMB === Infinity ? "Unlimited Storage" : tDef.storageLimitMB >= 1024 ? `${Math.round(tDef.storageLimitMB / 1024)} GB` : `${tDef.storageLimitMB} MB`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Auditor Justification Note */}
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-slate-700 dark:text-slate-300">
+                Auditor Audit Justification & Statement <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                value={tierAuditReason}
+                onChange={(e) => setTierAuditReason(e.target.value)}
+                placeholder="State the regulatory, financial, or agreement basis for this tier change..."
+                className="w-full text-xs rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 p-3 h-20 focus:ring-2 focus:ring-indigo-500 font-semibold outline-none shadow-3xs"
+              />
+              <span className="text-[10px] text-slate-400">
+                Logged permanently in the platform audit trail for Super Admin compliance verification.
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2 justify-end">
+              <Button
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => {
+                  setTierAuditModalOpen(false);
+                  setSelectedOrgForAudit(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="font-bold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700"
+                onClick={handleExecuteTierAudit}
+                loading={isProcessing}
+                disabled={!tierAuditReason.trim()}
+              >
+                Commit & Audit Stamp
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Confirmation Modal */}
       {selectedPayment && auditModalAction && (

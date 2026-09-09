@@ -16,14 +16,15 @@ import {
   Search,
   Check,
   Clock,
-  Filter
+  Filter,
+  Eye
 } from "lucide-react";
 import { Goal } from "../types";
 
 export const GoalsPage: React.FC = () => {
   const { t } = useLocalTranslation();
   const { activeOrg, activeMember } = useOrgStore();
-  const isAdmin = activeMember?.role === "org_admin";
+  const canManageGoals = activeMember?.role && activeMember.role !== "member";
 
   const { data: goals = [], isLoading, refetch } = useGoals(activeOrg?.id);
   const createGoalMutation = useCreateGoal();
@@ -126,6 +127,7 @@ export const GoalsPage: React.FC = () => {
 
   // Toggle todo status for a goal
   const handleToggleTodo = async (goal: Goal) => {
+    if (!canManageGoals) return;
     const isCompleted = goal.status === "completed" || (goal.achievement_percentage || 0) >= 100;
     const newStatus: "pending" | "completed" = isCompleted ? "pending" : "completed";
     const newAchievement = isCompleted ? 0 : 100;
@@ -147,6 +149,7 @@ export const GoalsPage: React.FC = () => {
 
   // Adjust achievement percentage for a goal
   const handleUpdateAchievement = async (goal: Goal, percent: number) => {
+    if (!canManageGoals) return;
     const clamped = Math.max(0, Math.min(100, percent));
     const newStatus: "pending" | "in_progress" | "completed" = 
       clamped >= 100 ? "completed" : clamped > 0 ? "in_progress" : "pending";
@@ -168,6 +171,7 @@ export const GoalsPage: React.FC = () => {
 
   // Open Add Goal modal prefilled with specific period
   const openAddGoalModalForPeriod = (type: "yearly" | "monthly", label: string) => {
+    if (!canManageGoals) return;
     setPeriodType(type);
     setPeriodLabel(label);
     setGoalTitle("");
@@ -378,25 +382,39 @@ export const GoalsPage: React.FC = () => {
           )}
 
           {/* Action Buttons */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsAddPeriodOpen(true)}
-            className="text-xs font-bold shrink-0"
-          >
-            {t("goals_btn_create_period")}
-          </Button>
+          {canManageGoals && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddPeriodOpen(true)}
+                className="text-xs font-bold shrink-0"
+              >
+                {t("goals_btn_create_period")}
+              </Button>
 
-          <Button
-            size="sm"
-            icon={<Plus className="h-4 w-4" />}
-            onClick={() => openAddGoalModalForPeriod("yearly", `${new Date().getFullYear()}`)}
-            className="shrink-0"
-          >
-            {t("goals_btn_add_goal")}
-          </Button>
+              <Button
+                size="sm"
+                icon={<Plus className="h-4 w-4" />}
+                onClick={() => openAddGoalModalForPeriod("yearly", `${new Date().getFullYear()}`)}
+                className="shrink-0"
+              >
+                {t("goals_btn_add_goal")}
+              </Button>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Member Read-Only Banner */}
+      {!canManageGoals && (
+        <div className="p-3 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-600 dark:text-slate-300 flex items-center gap-2">
+          <Eye className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>
+            <strong>Member Read-Only Access:</strong> You can view and track organization strategic goals and progress. Only leadership roles (Admins, Managers, Accountants, Auditors) are authorized to create or modify strategic goals.
+          </span>
+        </div>
+      )}
 
       {/* Main Period Buckets List */}
       {isLoading ? (
@@ -407,22 +425,24 @@ export const GoalsPage: React.FC = () => {
             title={t("goals_empty_title")}
             message={t("goals_empty_desc")}
             action={
-              <div className="flex flex-wrap gap-3 justify-center">
-                <Button
-                  size="sm"
-                  onClick={() => openAddGoalModalForPeriod("yearly", `${new Date().getFullYear()}`)}
-                >
-                  {t("goals_btn_add_goal")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setIsAddPeriodOpen(true)}
-                  className="font-bold"
-                >
-                  {t("goals_btn_create_period")}
-                </Button>
-              </div>
+              canManageGoals ? (
+                <div className="flex flex-wrap gap-3 justify-center">
+                  <Button
+                    size="sm"
+                    onClick={() => openAddGoalModalForPeriod("yearly", `${new Date().getFullYear()}`)}
+                  >
+                    {t("goals_btn_add_goal")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsAddPeriodOpen(true)}
+                    className="font-bold"
+                  >
+                    {t("goals_btn_create_period")}
+                  </Button>
+                </div>
+              ) : undefined
             }
           />
         </Card>
@@ -492,14 +512,16 @@ export const GoalsPage: React.FC = () => {
                         style={{ width: `${pAvgAchievement}%` }}
                       />
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openAddGoalModalForPeriod(periodGroup.type, periodGroup.label)}
-                      className="text-xs font-bold ml-1 shrink-0"
-                    >
-                      {t("goals_btn_add_item")}
-                    </Button>
+                    {canManageGoals && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openAddGoalModalForPeriod(periodGroup.type, periodGroup.label)}
+                        className="text-xs font-bold ml-1 shrink-0"
+                      >
+                        {t("goals_btn_add_item")}
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -522,13 +544,14 @@ export const GoalsPage: React.FC = () => {
                         <div className="flex items-start gap-3.5 flex-1 min-w-0">
                           <button
                             onClick={() => handleToggleTodo(goal)}
+                            disabled={!canManageGoals}
                             title={isCompleted ? "Mark as pending" : "Mark as completed"}
-                            className="mt-0.5 shrink-0 text-slate-400 hover:text-emerald-600 transition"
+                            className={`mt-0.5 shrink-0 text-slate-400 transition ${canManageGoals ? "hover:text-emerald-600 cursor-pointer" : "cursor-default opacity-80"}`}
                           >
                             {isCompleted ? (
                               <CheckCircle2 className="h-6 w-6 text-emerald-600 fill-emerald-100 dark:fill-emerald-950/80" />
                             ) : (
-                              <Circle className="h-6 w-6 text-slate-300 dark:text-slate-600 hover:text-emerald-500" />
+                              <Circle className="h-6 w-6 text-slate-300 dark:text-slate-600" />
                             )}
                           </button>
 
@@ -560,21 +583,23 @@ export const GoalsPage: React.FC = () => {
                         {/* Right: Achievement Slider & Quick Preset Buttons */}
                         <div className="flex flex-wrap items-center gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
                           {/* Percentage Preset Quick Buttons */}
-                          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
-                            {[0, 25, 50, 75, 100].map((preset) => (
-                              <button
-                                key={preset}
-                                onClick={() => handleUpdateAchievement(goal, preset)}
-                                className={`px-2 py-0.5 text-[10px] font-bold rounded-lg transition ${
-                                  achievementScore === preset
-                                    ? "bg-emerald-600 text-white shadow-xs"
-                                    : "text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                                }`}
-                              >
-                                {preset}%
-                              </button>
-                            ))}
-                          </div>
+                          {canManageGoals && (
+                            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
+                              {[0, 25, 50, 75, 100].map((preset) => (
+                                <button
+                                  key={preset}
+                                  onClick={() => handleUpdateAchievement(goal, preset)}
+                                  className={`px-2 py-0.5 text-[10px] font-bold rounded-lg transition ${
+                                    achievementScore === preset
+                                      ? "bg-emerald-600 text-white shadow-xs"
+                                      : "text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                                  }`}
+                                >
+                                  {preset}%
+                                </button>
+                              ))}
+                            </div>
+                          )}
 
                           {/* Numeric Score Tag */}
                           <div className="min-w-[3.5rem] text-right">
@@ -584,22 +609,24 @@ export const GoalsPage: React.FC = () => {
                           </div>
 
                           {/* Edit / Delete Buttons */}
-                          <div className="flex items-center gap-1 border-l pl-2 border-slate-200 dark:border-slate-700">
-                            <button
-                              onClick={() => openEditGoalModal(goal)}
-                              title="Edit Goal"
-                              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
-                            >
-                              <Edit3 className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteGoal(goal.id)}
-                              title="Delete Goal"
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
+                          {canManageGoals && (
+                            <div className="flex items-center gap-1 border-l pl-2 border-slate-200 dark:border-slate-700">
+                              <button
+                                onClick={() => openEditGoalModal(goal)}
+                                title="Edit Goal"
+                                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
+                              >
+                                <Edit3 className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteGoal(goal.id)}
+                                title="Delete Goal"
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );

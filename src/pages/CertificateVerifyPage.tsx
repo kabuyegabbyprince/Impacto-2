@@ -21,6 +21,7 @@ import {
 import { MockDB } from "../lib/mockData";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { Certificate, Organization } from "../types";
+import { APP_CONFIG } from "../config";
 
 export const CertificateVerifyPage: React.FC = () => {
   const { code: urlCode } = useParams<{ code?: string }>();
@@ -140,13 +141,13 @@ export const CertificateVerifyPage: React.FC = () => {
           </Link>
 
           <div className="flex items-center gap-3">
-            <Link
-              to="/"
+            <a
+              href={APP_CONFIG.landingUrl}
               className="text-xs font-bold text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white flex items-center gap-1.5 transition"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               <span>Back to Home</span>
-            </Link>
+            </a>
           </div>
         </div>
       </header>
@@ -398,12 +399,12 @@ export const CertificateVerifyPage: React.FC = () => {
                   >
                     Try Another Code
                   </button>
-                  <Link
-                    to="/"
+                  <a
+                    href={APP_CONFIG.landingUrl}
                     className="px-4 py-2 bg-[#156c45] hover:bg-[#115436] text-white rounded-xl text-xs font-bold transition"
                   >
                     Return to Homepage
-                  </Link>
+                  </a>
                 </div>
               </div>
             )}
@@ -417,7 +418,7 @@ export const CertificateVerifyPage: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p>© 2026 Impact-O Verification System. All rights reserved.</p>
           <div className="flex gap-4">
-            <Link to="/" className="hover:text-gray-900 dark:hover:text-white transition">Platform Home</Link>
+            <a href={APP_CONFIG.landingUrl} className="hover:text-gray-900 dark:hover:text-white transition">Platform Home</a>
             <Link to="/verify" className="text-[#156c45] font-bold hover:underline">Verify Credential</Link>
           </div>
         </div>

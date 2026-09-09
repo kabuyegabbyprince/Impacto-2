@@ -2,6 +2,7 @@ import React from "react";
 import { Navigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
+import { WaitRoomView } from "./WaitRoomView";
 
 export const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuthStore();
@@ -13,7 +14,7 @@ export const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const OrgRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuthStore();
-  const { activeOrg } = useOrgStore();
+  const { activeOrg, activeMember } = useOrgStore();
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -21,6 +22,18 @@ export const OrgRoute: React.FC<{ children: React.ReactNode }> = ({ children }) 
   if (!activeOrg) {
     return <Navigate to="/org-picker" replace />;
   }
+
+  // If user is not superadmin and not org_admin, verify their member status
+  if (!user.is_superadmin && (activeMember?.role as string) !== "org_admin") {
+    if (
+      activeMember?.status === "pending" ||
+      (activeMember?.status as string) === "awaiting_approval" ||
+      activeMember?.status === "rejected"
+    ) {
+      return <WaitRoomView />;
+    }
+  }
+
   return <>{children}</>;
 };
 

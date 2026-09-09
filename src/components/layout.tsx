@@ -37,12 +37,17 @@ import {
   Sparkles,
   PenTool,
   Upload,
-  PackageCheck
+  PackageCheck,
+  ShieldAlert,
+  Compass,
+  User
 } from "lucide-react";
+import { getOrgSubscriptionLifecycle } from "../lib/subscriptionMatrix";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
 import { useCurrencyStore } from "../store/currencyStore";
 import { Avatar, Badge, Button, Input, Card, getLucideIcon, Modal } from "./ui";
+import { WorkspaceTour, WorkspaceTourWelcomePrompt, TOUR_STEPS } from "./WorkspaceTour";
 import {
   useSubmitSubscriptionPayment,
   useSubmitErrorReport,
@@ -53,7 +58,8 @@ import {
   useNotificationSends,
   useMemberFees,
   useMembers,
-  useUserMemberships
+  useUserMemberships,
+  useOrgSubscriptionPayments
 } from "../hooks/useImpactoData";
 import { useToast } from "./Toast";
 import { MockDB } from "../lib/mockData";
@@ -98,7 +104,7 @@ export const OrgThemeInjector: React.FC = () => {
 // ==========================================
 // 2. TOPBAR COMPONENT
 // ==========================================
-export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSidebar }) => {
+export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () => void }> = ({ onToggleSidebar, onStartTour }) => {
   const { user, logout, updateUserLanguage } = useAuthStore();
   const { activeOrg, activeMember, clearOrg, setActiveOrg } = useOrgStore();
   const { data: orgs } = useOrganizations();
@@ -147,6 +153,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
   const { data: meetings } = useMeetings(activeOrg?.id);
   const { data: notificationSends } = useNotificationSends(activeOrg?.id);
   const { data: memberFees } = useMemberFees(activeOrg?.id);
+  const { data: orgSubPayments } = useOrgSubscriptionPayments(activeOrg?.id);
 
   const rawLogo = activeOrg?.logo_url || (activeOrg?.dashboard_logo && !activeOrg.dashboard_logo.startsWith("icon:") ? activeOrg.dashboard_logo : "");
   const [resolvedHeaderLogo, setResolvedHeaderLogo] = useState<string>("");
@@ -186,15 +193,31 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
     })),
     ...(notificationSends || []).map((ns) => {
       const lower = (ns.body_text || "").toLowerCase();
-      const isConfirmed = lower.includes("confirmed") || lower.includes("cleared") || lower.includes("verified");
+      const isConfirmed = lower.includes("confirmed") || lower.includes("cleared") || lower.includes("verified") || lower.includes("approved");
       const isRejected = lower.includes("rejected");
       return {
         id: "notif-" + ns.id,
         type: isConfirmed ? ("payment_success" as const) : isRejected ? ("payment_rejected" as const) : ("notification" as const),
-        title: isConfirmed ? "Payment Confirmed" : isRejected ? "Payment Rejected" : lower.includes("submitted") ? "Payment Slip Submitted" : "Cooperative Update",
+        title: isConfirmed ? "Payment / Subscription Approved" : isRejected ? "Payment Proof Rejected" : lower.includes("submitted") ? "Payment Slip Submitted" : "Cooperative Update",
         summary: ns.body_text || "Notice dispatched",
         time: ns.created_at || new Date().toISOString(),
-        path: "/dashboard/fees",
+        path: lower.includes("subscription") || lower.includes("package") ? "/dashboard/settings?tab=subscription" : "/dashboard/fees",
+      };
+    }),
+    ...(orgSubPayments || []).filter(p => p.status === "approved" || p.status === "rejected").map((p) => {
+      const isPkg = p.package_id || p.item_type === "package" || (p.plan || "").toLowerCase().includes("package");
+      const isApproved = p.status === "approved";
+      return {
+        id: `sub-payment-notif-${p.id}-${p.status}`,
+        type: isApproved ? ("payment_success" as const) : ("payment_rejected" as const),
+        title: isApproved 
+          ? (isPkg ? "🎉 Add-On Package Activated!" : "🎉 Subscription Approved & Active!")
+          : "⚠️ Subscription Payment Rejected",
+        summary: isApproved
+          ? `${p.plan || "Plan"} payment of ${(p.amount_local || 0).toLocaleString()} RWF (Ref: ${p.reference || p.transaction_reference || "TXN"}) was verified. All features active.`
+          : `${p.plan || "Plan"} proof of ${(p.amount_local || 0).toLocaleString()} RWF was rejected. Notes: ${p.audit_notes || "Please check transaction details and resubmit."}`,
+        time: p.validated_at || p.audited_at || p.submitted_at || new Date().toISOString(),
+        path: "/dashboard/settings?tab=subscription",
       };
     }),
     ...(memberFees || []).filter(f => f.status === "paid" || f.status === "pending_confirmation").map((f) => ({
@@ -299,6 +322,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
           <div className="hidden xs:flex items-center gap-2 relative">
             <span className="text-slate-300 dark:text-slate-700 font-light font-sans">/</span>
             <button
+              id="tour-org-switcher"
+              data-tour="org-switcher"
               onClick={() => setOrgSwitcherOpen(!orgSwitcherOpen)}
               className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-700/70 border border-slate-200/60 dark:border-slate-700/60 transition flex items-center gap-1.5 font-sans cursor-pointer focus:outline-none"
             >
@@ -370,6 +395,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
         {/* Currency Switcher */}
         <div className="relative flex items-center">
           <button
+            id="tour-currency-selector"
+            data-tour="currency"
             type="button"
             onClick={() => {
               setCurrencyOpen(!currencyOpen);
@@ -414,6 +441,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
         {/* Language switch */}
         <div className="relative flex items-center">
           <button
+            id="tour-lang-selector"
+            data-tour="language"
             type="button"
             onClick={() => {
               setLangMenuOpen(!langMenuOpen);
@@ -589,6 +618,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
         {user ? (
           <div className="relative">
             <button
+              id="tour-profile"
+              data-tour="profile"
               onClick={() => setUserMenuOpen(!userMenuOpen)}
               className="flex items-center gap-2 hover:opacity-90 outline-none"
             >
@@ -606,6 +637,15 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
                     <p className="text-xs text-gray-500 truncate">{user.email}</p>
                   </div>
 
+                  <Link
+                    to="/dashboard/profile"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="w-full text-left px-4 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 flex items-center gap-2 text-xs font-semibold"
+                  >
+                    <User className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    {t("nav.my_profile", "My Profile")}
+                  </Link>
+
                   {user.is_superadmin && (
                     <button
                       onClick={() => {
@@ -618,6 +658,17 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
                       {t("nav.platform_admin")}
                     </button>
                   )}
+
+                  <button
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      onStartTour?.();
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300 flex items-center gap-2 text-xs font-semibold"
+                  >
+                    <Compass className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    Workspace Tour
+                  </button>
 
                   <a
                     href="/app/impacto.apk"
@@ -669,7 +720,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void }> = ({ onToggleSide
 // ==========================================
 // 3. SIDEBAR COMPONENT
 // ==========================================
-export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
+export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; onStartTour?: () => void }> = ({ isOpen, onClose, onStartTour }) => {
   const { t } = useTranslation();
   const { activeOrg, activeMember } = useOrgStore();
   const { user } = useAuthStore();
@@ -700,7 +751,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     { name: t("nav.ledger"), path: "/dashboard/ledger", icon: Coins, allowed: isAccountant },
     { name: t("nav.grants"), path: "/dashboard/grants", icon: Award, allowed: isAccountant },
     { name: t("nav.reports"), path: "/dashboard/reports", icon: FileBarChart, allowed: isAdmin },
-    { name: t("nav.settings"), path: "/dashboard/settings", icon: Settings, allowed: isAdmin }
+    { name: t("nav.settings", "Workspace Settings"), path: "/dashboard/settings", icon: Settings, allowed: isAdmin },
   ].filter(item => item.allowed);
 
   return (
@@ -721,7 +772,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
         <div className="h-full flex flex-col justify-between p-3 select-none overflow-y-auto">
           <div className="flex flex-col gap-5 w-full">
             {/* Workspace section */}
-            <div>
+            <div id="tour-nav-workspace" data-tour="nav-workspace">
               <div className="px-3 pb-1 text-[10px] font-mono uppercase font-bold tracking-wider text-gray-400 dark:text-slate-500">
                 Workspace
               </div>
@@ -756,13 +807,16 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
 
             {/* Management section */}
             {managementNav.length > 0 && (
-              <div>
+              <div id="tour-nav-management" data-tour="nav-management">
                 <div className="px-3 pb-1 text-[10px] font-mono uppercase font-bold tracking-wider text-gray-400 dark:text-slate-500">
-                  Management
+                  {isAdmin || isStaff || isAccountant ? "Management & Settings" : "Profile & Settings"}
                 </div>
                 <nav className="flex flex-col gap-0.5 mt-1">
                   {managementNav.map((item) => {
-                    const isActive = location.pathname === item.path;
+                    const isActive =
+                      item.path === "/dashboard/settings"
+                        ? location.pathname === "/dashboard/settings"
+                        : location.pathname === item.path;
                     const Icon = item.icon;
 
                     return (
@@ -791,7 +845,42 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
             )}
           </div>
 
-          <div className="mt-6 pt-3 border-t border-gray-100 dark:border-slate-800 shrink-0">
+          <div className="mt-6 pt-3 border-t border-gray-100 dark:border-slate-800 shrink-0 flex flex-col gap-2.5">
+            {/* User Profile Card footer widget */}
+            {user && (
+              <Link
+                to="/dashboard/profile"
+                onClick={onClose}
+                className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 hover:bg-[#e8f5ee]/70 dark:hover:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 transition group text-left shadow-3xs"
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <Avatar name={user.full_name || user.email} size="sm" src={user.avatar_url} />
+                  <div className="flex flex-col truncate">
+                    <span className="text-xs font-bold text-gray-800 dark:text-slate-200 truncate group-hover:text-[#156c45] dark:group-hover:text-emerald-400">
+                      {user.full_name || user.email.split("@")[0]}
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-mono capitalize">
+                      {activeMember?.role?.replace("_", " ") || "Member"}
+                    </span>
+                  </div>
+                </div>
+                <User className="h-3.5 w-3.5 text-gray-400 group-hover:text-[#156c45] dark:group-hover:text-emerald-400 shrink-0" />
+              </Link>
+            )}
+
+            {onStartTour && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onStartTour();
+                }}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200/70 dark:border-emerald-800/60 rounded-xl text-xs font-bold text-emerald-800 dark:text-emerald-300 transition cursor-pointer shadow-3xs"
+              >
+                <Compass className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 animate-spin-slow" />
+                <span>Take Workspace Tour</span>
+              </button>
+            )}
             <div className="px-2 flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-bold tracking-tight text-gray-900 dark:text-white block font-display">
@@ -856,6 +945,43 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [sendingSupport, setSendingSupport] = useState(false);
 
+  // Interactive Tour State & Lifecycle
+  const [isTourOpen, setIsTourOpen] = useState(false);
+  const [currentTourStep, setCurrentTourStep] = useState(0);
+  const [showWelcomePrompt, setShowWelcomePrompt] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    const seenKey = `impacto_tour_seen_${user.id}`;
+    const hasSeen = localStorage.getItem(seenKey);
+    if (!hasSeen) {
+      const timer = setTimeout(() => {
+        setShowWelcomePrompt(true);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
+
+  const handleStartTour = (stepIndex = 0) => {
+    setCurrentTourStep(stepIndex);
+    setIsTourOpen(true);
+    setShowWelcomePrompt(false);
+  };
+
+  const handleCloseTour = () => {
+    setIsTourOpen(false);
+    if (user) {
+      localStorage.setItem(`impacto_tour_seen_${user.id}`, "true");
+    }
+  };
+
+  const handleDismissPrompt = () => {
+    setShowWelcomePrompt(false);
+    if (user) {
+      localStorage.setItem(`impacto_tour_seen_${user.id}`, "true");
+    }
+  };
+
   // New state variables for lockout / recommendation flows
   const [memberSupportMsg, setMemberSupportMsg] = useState("");
   const [memberSupportSuccess, setMemberSupportSuccess] = useState("");
@@ -868,30 +994,21 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     payment_name: "VIRELLIX INC"
   };
 
+  const { data: orgMembersData } = useMembers(activeOrg?.id);
+  const activeMembersCount = orgMembersData?.filter((m: any) => m.status === "active").length || 0;
+  const lifecycle = getOrgSubscriptionLifecycle(activeOrg, activeMembersCount);
+
   const isAdmin = activeMember?.role === "org_admin";
   const isBlocked = (() => {
     if (!activeOrg) return false;
+    // Explicit lockout by platform admin
     if (activeOrg.subscription_status === "expired") return true;
 
-    const now = Date.now();
-    const createdTime = activeOrg.created_at ? new Date(activeOrg.created_at).getTime() : now;
+    // Free Forever plan does not expire
+    if (activeOrg.subscription_tier === "free") return false;
 
-    // 1. Trial / unset checks (30 days limit)
-    if (activeOrg.subscription_status === "trial" || !activeOrg.subscription_status) {
-      const trialLimit = 30 * 24 * 3600 * 1000; // 30 days
-      const elapsed = now - createdTime;
-      if (elapsed > trialLimit) {
-        return true;
-      }
-    }
-
-    // 2. Active checks with ends at
-    if (activeOrg.subscription_ends_at) {
-      if (new Date(activeOrg.subscription_ends_at).getTime() < now) {
-        return true;
-      }
-    }
-
+    // Per Section 1 specification: transitioning to Free preserves all records safely.
+    // Organizations are not completely locked out of their records upon trial completion.
     return false;
   })();
 
@@ -906,8 +1023,10 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const rate = platformSettings.usd_to_rwf_rate || 1350;
       let costUsd = 25;
-      if (selectedTier.includes("Starter")) costUsd = 10;
-      if (selectedTier.includes("Pro VIP") || selectedTier.includes("Pro Plan") || selectedTier.includes("Enterprise")) costUsd = 40;
+      if (selectedTier.includes("Free")) costUsd = 0;
+      else if (selectedTier.includes("Growth")) costUsd = 25;
+      else if (selectedTier.includes("Pro")) costUsd = 40;
+      else if (selectedTier.includes("Enterprise")) costUsd = 80;
 
       const randomRef = "TXN" + Math.floor(100000000 + Math.random() * 900000000);
       const isMtn = momoPhone ? (momoPhone.startsWith("078") || momoPhone.startsWith("079")) : true;
@@ -947,8 +1066,10 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const rate = platformSettings.usd_to_rwf_rate || 1350;
       let costUsd = 25;
-      if (selectedTier.includes("Starter")) costUsd = 10;
-      if (selectedTier.includes("Pro VIP") || selectedTier.includes("Pro Plan") || selectedTier.includes("Enterprise")) costUsd = 40;
+      if (selectedTier.includes("Free")) costUsd = 0;
+      else if (selectedTier.includes("Growth")) costUsd = 25;
+      else if (selectedTier.includes("Pro")) costUsd = 40;
+      else if (selectedTier.includes("Enterprise")) costUsd = 80;
 
       const randomRef = "TXN" + Math.floor(100000000 + Math.random() * 900000000);
       const isMtn = momoPhone ? (momoPhone.startsWith("078") || momoPhone.startsWith("079")) : true;
@@ -1057,9 +1178,10 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                         onChange={(e) => setSelectedTier(e.target.value)}
                         className="w-full text-xs rounded-lg border bg-white border-gray-305 px-3 py-2 text-stone-800 select-none focus:ring-1 focus:ring-emerald-500 font-semibold dark:bg-slate-900 dark:border-slate-705 dark:text-slate-100"
                       >
-                        <option value="Starter Plan - $10/month">Starter Tier — $10 ({(10 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(10, 'USD'))})</option>
+                        <option value="Free Forever Plan - $0/month">Free Forever Plan — $0</option>
                         <option value="Growth Plan - $25/month">Growth Tier — $25 ({(25 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(25, 'USD'))})</option>
                         <option value="Pro Plan - $40/month">Pro Plan — $40 ({(40 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(40, 'USD'))})</option>
+                        <option value="Enterprise Plan - Custom">Enterprise Plan — Custom / Contact Sales</option>
                       </select>
                     </div>
 
@@ -1141,9 +1263,10 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                         onChange={(e) => setSelectedTier(e.target.value)}
                         className="w-full text-xs rounded-lg border bg-white border-gray-305 px-3 py-2 text-stone-855 select-none focus:ring-1 focus:ring-emerald-500 font-semibold dark:bg-slate-900 dark:border-slate-750 dark:text-slate-100"
                       >
-                        <option value="Starter Plan - $10/month">Starter Tier — $10 ({(10 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(10, 'USD'))})</option>
+                        <option value="Free Forever Plan - $0/month">Free Forever Plan — $0</option>
                         <option value="Growth Plan - $25/month">Growth Tier — $25 ({(25 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(25, 'USD'))})</option>
                         <option value="Pro Plan - $40/month">Pro Plan — $40 ({(40 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(40, 'USD'))})</option>
+                        <option value="Enterprise Plan - Custom">Enterprise Plan — Custom / Contact Sales</option>
                       </select>
                     </div>
 
@@ -1219,14 +1342,81 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col pt-14 text-sm">
       <OrgThemeInjector />
-      <Topbar onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Topbar 
+        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} 
+        onStartTour={() => handleStartTour(0)}
+      />
+      <Sidebar 
+        isOpen={sidebarOpen} 
+        onClose={() => setSidebarOpen(false)} 
+        onStartTour={() => handleStartTour(0)} 
+      />
       <main className="flex-1 md:pl-52 min-w-0 flex flex-col">
         <div className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-7xl mx-auto">
+          {lifecycle.isInGracePeriod && (
+            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-250 dark:border-amber-900 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in">
+              <div className="flex items-start gap-3">
+                <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                    3-Day Grace Period Active — {lifecycle.graceDaysRemaining} day{lifecycle.graceDaysRemaining === 1 ? "" : "s"} remaining
+                  </h4>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                    Your 30-day Growth Plan trial has concluded. Upgrade now to preserve full Growth capabilities (up to 250 members, DocumentOffice, QR attendance) before Free Forever limits take effect.
+                  </p>
+                </div>
+              </div>
+              <Link to="/dashboard/settings?tab=subscription">
+                <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-9 px-4 rounded-xl whitespace-nowrap">
+                  Upgrade Plan →
+                </Button>
+              </Link>
+            </div>
+          )}
+
+          {lifecycle.isReadOnlyMode && (
+            <div className="mb-6 p-4 bg-amber-50/90 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in">
+              <div className="flex items-start gap-3">
+                <ShieldAlert className="h-5 w-5 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                    Free Plan Safe Mode Active ({lifecycle.activeMemberCount}/{lifecycle.memberLimit} members)
+                  </h4>
+                  <p className="text-xs text-amber-800 dark:text-amber-400 mt-0.5">
+                    All records are securely preserved without data deletion. Because active member count exceeds the Free Forever limit of 30, excess records have entered safe read-only mode. Upgrade to Growth or Pro to resume full write privileges.
+                  </p>
+                </div>
+              </div>
+              <Link to="/dashboard/settings?tab=subscription">
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-4 rounded-xl whitespace-nowrap">
+                  Upgrade to Growth (250 members)
+                </Button>
+              </Link>
+            </div>
+          )}
+
           {children}
         </div>
       </main>
       <GuiderAssistant />
+
+      {/* Interactive Tooltips-with-Steps Tour */}
+      <WorkspaceTour
+        isOpen={isTourOpen}
+        currentStepIndex={currentTourStep}
+        onNext={() => setCurrentTourStep((prev) => Math.min(prev + 1, TOUR_STEPS.length - 1))}
+        onPrev={() => setCurrentTourStep((prev) => Math.max(prev - 1, 0))}
+        onClose={handleCloseTour}
+        onJumpToStep={(idx) => setCurrentTourStep(idx)}
+      />
+
+      {/* Non-disturbing first-time welcome invitation toast */}
+      {showWelcomePrompt && (
+        <WorkspaceTourWelcomePrompt
+          onStart={() => handleStartTour(0)}
+          onDismiss={handleDismissPrompt}
+        />
+      )}
     </div>
   );
 };
