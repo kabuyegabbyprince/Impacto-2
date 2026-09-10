@@ -35,6 +35,7 @@ export const APP_CONFIG = {
   // Public Deployment Domains & URLs
   landingUrl: getEnv("VITE_LANDING_URL", "https://impacto-landing.vercel.app/"),
   portalUrl: getEnv("VITE_PORTAL_URL", "https://impacto-portal.vercel.app/"),
+  homeUrl: getEnv("VITE_HOME_URL", "https://impacto-landing.vercel.app/"),
   
   // Supabase Backend Database Credentials
   supabase: {

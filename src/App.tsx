@@ -21,13 +21,6 @@ import {
   ResetPassword
 } from "./pages/auth";
 
-// Public Portal Pages
-import {
-  Landing,
-  OrgPublicPage,
-  DonatePage,
-  EventCheckinPage
-} from "./pages/public";
 import { CertificateVerifyPage } from "./pages/CertificateVerifyPage";
 
 // Active Dashboard & Governance Modules (from src/dash)
@@ -106,18 +99,12 @@ export default function App() {
         <Router>
           <Routes>
             {/* ==========================================
-                1. PORTAL ENTRANCE & PUBLIC DIRECTORY
+                1. PORTAL ENTRANCE & VERIFICATION
                 ========================================== */}
             <Route path="/" element={<RootPortalEntrance />} />
-            <Route path="/landing" element={<Landing />} />
+            <Route path="/landing" element={<Navigate to="/login" replace />} />
             <Route path="/verify" element={<CertificateVerifyPage />} />
             <Route path="/verify/:code" element={<CertificateVerifyPage />} />
-            <Route path="/@:slug" element={<OrgPublicPage />} />
-            <Route path="/@:slug/donate" element={<DonatePage />} />
-            <Route path="/@:slug/checkin" element={<EventCheckinPage />} />
-            <Route path="/:slug" element={<OrgPublicPage />} />
-            <Route path="/:slug/donate" element={<DonatePage />} />
-            <Route path="/:slug/checkin" element={<EventCheckinPage />} />
 
             {/* ==========================================
                 2. PUBLIC AUTH GATES

@@ -37,7 +37,8 @@ import {
   BarChart2,
   ArrowUp,
   ArrowDown,
-  Edit3
+  Edit3,
+  ShieldCheck
 } from "lucide-react";
 import { useOrgStore } from "../store/orgStore";
 import { useCurrencyStore } from "../store/currencyStore";
@@ -341,9 +342,10 @@ export const OrganizationSettingsPage: React.FC = () => {
   const [qRequired, setQRequired] = useState(false);
 
   // MoMo merchant details form
-  const [mName, setMName] = useState(activeOrg?.donation_account_name || "");
-  const [mtnNum, setMtnNum] = useState(activeOrg?.donation_mtn_number || "");
-  const [airtelNum, setAirtelNum] = useState(activeOrg?.donation_airtel_number || "");
+  const [mName, setMName] = useState(activeOrg?.dues_account_name || activeOrg?.donation_account_name || "");
+  const [mtnNum, setMtnNum] = useState(activeOrg?.dues_mtn_number || activeOrg?.donation_mtn_number || "");
+  const [airtelNum, setAirtelNum] = useState(activeOrg?.dues_airtel_number || activeOrg?.donation_airtel_number || "");
+  const [momoMerchantCode, setMomoMerchantCode] = useState(activeOrg?.momo_merchant_code || "");
   const [enableDonations, setEnableDonations] = useState(activeOrg?.donations_enabled || false);
 
   // Manual Subscription payment modal form
@@ -407,9 +409,10 @@ export const OrganizationSettingsPage: React.FC = () => {
       setDashboardTheme(activeOrg.dashboard_theme || "light");
       setDashboardLogo(activeOrg.dashboard_logo || "/logo.png");
       setMarketplaceEnabled(activeOrg.marketplace_enabled ?? true);
-      setMName(activeOrg.donation_account_name || "");
-      setMtnNum(activeOrg.donation_mtn_number || "");
-      setAirtelNum(activeOrg.donation_airtel_number || "");
+      setMName(activeOrg.dues_account_name || activeOrg.donation_account_name || activeOrg.name || "");
+      setMtnNum(activeOrg.dues_mtn_number || activeOrg.donation_mtn_number || "");
+      setAirtelNum(activeOrg.dues_airtel_number || activeOrg.donation_airtel_number || "");
+      setMomoMerchantCode(activeOrg.momo_merchant_code || "");
       setEnableDonations(activeOrg.donations_enabled || false);
       setExitSurveyEnabled(activeOrg.exit_survey_enabled ?? true);
       setExitSurveyTitle(activeOrg.exit_survey_title || "Member Departure & Offboarding Survey");
@@ -618,15 +621,13 @@ export const OrganizationSettingsPage: React.FC = () => {
 
   const handleSaveMomo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (enableDonations) {
-      if (!/^07\d{8}$/.test(mtnNum)) {
-        addToast("Error: MTN Merchant number must be exactly 10 digits and start with 07 (e.g. 07xxxxxxxx)", "error");
-        return;
-      }
-      if (!/^07\d{8}$/.test(airtelNum)) {
-        addToast("Error: Airtel Merchant number must be exactly 10 digits and start with 07 (e.g. 07xxxxxxxx)", "error");
-        return;
-      }
+    if (mtnNum && !/^07\d{8}$/.test(mtnNum)) {
+      addToast("Error: MTN Collection number must be 10 digits and start with 07 (e.g. 078xxxxxxx)", "error");
+      return;
+    }
+    if (airtelNum && !/^07\d{8}$/.test(airtelNum)) {
+      addToast("Error: Airtel Collection number must be 10 digits and start with 07 (e.g. 073xxxxxxx)", "error");
+      return;
     }
     try {
       const updated = await updateMutation.mutateAsync({
@@ -634,10 +635,14 @@ export const OrganizationSettingsPage: React.FC = () => {
         donations_enabled: enableDonations,
         donation_account_name: mName,
         donation_mtn_number: mtnNum,
-        donation_airtel_number: airtelNum
+        donation_airtel_number: airtelNum,
+        dues_account_name: mName,
+        dues_mtn_number: mtnNum,
+        dues_airtel_number: airtelNum,
+        momo_merchant_code: momoMerchantCode
       });
       setActiveOrg(updated, useOrgStore.getState().activeMember);
-      addToast("Rwandan Mobile Money merchant details synced successfully!", "success");
+      addToast("Organization Mobile Money payment receiving credentials synced successfully!", "success");
     } catch (err: any) {
       console.error(err);
       addToast(err?.message || "Failed to update MoMo merchant details.", "error");
@@ -1460,9 +1465,50 @@ export const OrganizationSettingsPage: React.FC = () => {
 
         {/* Momo credentials setup */}
         {activeTab === "momo" && canAccessMomo && (
-          <Card title={t("settings_momo_title")}>
+          <Card title="Organization MoMo & Settlement Accounts">
             <form onSubmit={handleSaveMomo} className="flex flex-col gap-6 text-xs md:text-sm font-medium">
-              <div className="flex items-center gap-3 select-none py-1 border-b">
+              <div className="bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 rounded-xl p-4 text-xs space-y-1.5">
+                <span className="font-extrabold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                  Organization Direct Payment Routing
+                </span>
+                <p className="text-stone-600 dark:text-stone-300 leading-relaxed text-[11.5px]">
+                  When your members settle monthly dues, registrations, or contributions, money is directly collected into your registered Mobile Money numbers or Merchant Pay Code configured below.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <Input
+                  label="Registered Merchant / Organization Account Name"
+                  value={mName}
+                  onChange={(e) => setMName(e.target.value)}
+                  placeholder="e.g. KIGALI FARMERS COOPERATIVE"
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    label="MTN MoMo Collection Number"
+                    value={mtnNum}
+                    onChange={(e) => setMtnNum(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    placeholder="e.g. 078XXXXXXX"
+                  />
+                  <Input
+                    label="Airtel Money Collection Number"
+                    value={airtelNum}
+                    onChange={(e) => setAirtelNum(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    placeholder="e.g. 073XXXXXXX"
+                  />
+                </div>
+
+                <Input
+                  label="Merchant Pay Code / USSD Dial Shortcut (Optional)"
+                  value={momoMerchantCode}
+                  onChange={(e) => setMomoMerchantCode(e.target.value)}
+                  placeholder="e.g. *182*8*1*123456# or 123456"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 select-none py-3 border-t border-slate-200 dark:border-slate-800">
                 <input
                   type="checkbox"
                   id="momo_active_tick"
@@ -1470,24 +1516,13 @@ export const OrganizationSettingsPage: React.FC = () => {
                   onChange={(e) => setEnableDonations(e.target.checked)}
                   className="h-4.5 w-4.5 text-[var(--org-primary)] focus:ring-[var(--org-primary)] rounded border-gray-300 cursor-pointer"
                 />
-                <label htmlFor="momo_active_tick" className="text-xs font-extrabold leading-none cursor-pointer text-stone-850">
-                  {t("Enable and Unlock public MoMo/Airtel donation forms")}
+                <label htmlFor="momo_active_tick" className="text-xs font-bold leading-none cursor-pointer text-stone-850 dark:text-stone-200">
+                  Enable public donation and contribution portal forms for external supporters
                 </label>
               </div>
 
-              {enableDonations && (
-                <div className="flex flex-col gap-4 animate-in duration-100">
-                  <Input label={t("Authorized Merchant Account Name")} value={mName} onChange={(e) => setMName(e.target.value)} placeholder="e.g. GREENING KIGALI LTD" />
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Input label={t("lbl_billing_momo_number")} value={mtnNum} onChange={(e) => setMtnNum(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="e.g. 078XXXXXXX" />
-                    <Input label={t("lbl_airtel_merchant_number")} value={airtelNum} onChange={(e) => setAirtelNum(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="e.g. 073XXXXXXX" />
-                  </div>
-                </div>
-              )}
-
-              <Button type="submit" loading={updateMutation.isPending} icon={<Save className="h-4.5 w-4.5" />} className="self-end px-6.5 mt-4 py-2.5">
-                {t("btn_save_momo_accounts")}
+              <Button type="submit" loading={updateMutation.isPending} icon={<Save className="h-4.5 w-4.5" />} className="self-end px-6.5 mt-2 py-2.5">
+                Save Organization Settlement Numbers
               </Button>
             </form>
           </Card>

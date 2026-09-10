@@ -3,11 +3,13 @@ import {
   initiatePawaPayDeposit,
   predictPawaPayProvider,
   getPawaPayActiveConfig,
+  checkPawaPayDepositStatus,
+  formatPawaPayPhoneNumber,
 } from "../services/pawapayService";
 
 const router = Router();
 
-// POST /api/payments/pawapay/deposit
+// POST /api/payments/pawapay/deposit - initiates MoMo push to user handset
 router.post("/pawapay/deposit", async (req, res) => {
   try {
     const result = await initiatePawaPayDeposit(req.body);
@@ -15,6 +17,18 @@ router.post("/pawapay/deposit", async (req, res) => {
   } catch (err: any) {
     console.error("[pawaPay Deposit Error]:", err);
     res.status(500).json({ success: false, error: err.message || "Failed to initiate deposit" });
+  }
+});
+
+// GET /api/payments/pawapay/status/:depositId - poll real-time status of the USSD prompt
+router.get("/pawapay/status/:depositId", async (req, res) => {
+  try {
+    const { depositId } = req.params;
+    const result = await checkPawaPayDepositStatus(depositId);
+    res.json(result);
+  } catch (err: any) {
+    console.error("[pawaPay Status Check Error]:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -27,7 +41,8 @@ router.get("/pawapay/active-conf", async (req, res) => {
 router.post("/predict-provider", async (req, res) => {
   const { phoneNumber } = req.body;
   const provider = predictPawaPayProvider(phoneNumber);
-  res.json({ phoneNumber, predictedProvider: provider });
+  const formattedPhone = formatPawaPayPhoneNumber(phoneNumber);
+  res.json({ phoneNumber, formattedPhone, predictedProvider: provider });
 });
 
 // POST /api/payments/webhook (Universal Payment Gateway Webhook Receiver)

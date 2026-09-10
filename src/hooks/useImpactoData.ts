@@ -19,6 +19,7 @@ import {
   Donation,
   ErrorReport,
   SubscriptionPayment,
+  SubscriptionTier,
   MemberTier,
   PlatformSettings,
   ActivityLog,
@@ -2921,6 +2922,8 @@ export function useApproveSubscription() {
       orgId,
       status,
       tier = "growth",
+      plan,
+      packageId,
       auditedBy,
       auditedByName,
       auditNotes,
@@ -2928,7 +2931,9 @@ export function useApproveSubscription() {
       paymentId: string;
       orgId: string;
       status: "approved" | "rejected";
-      tier?: "starter" | "growth" | "enterprise";
+      tier?: SubscriptionTier;
+      plan?: string;
+      packageId?: string;
       auditedBy?: string;
       auditedByName?: string;
       auditNotes?: string;
@@ -3049,6 +3054,8 @@ export function useApproveSubscription() {
       queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
       queryClient.invalidateQueries({ queryKey: ["platform_audit_logs"] });
       queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription_payments", variables.orgId] });
+      queryClient.invalidateQueries({ queryKey: ["subscription_payments"] });
 
       const store = useOrgStore.getState();
       if (store.activeOrg && store.activeOrg.id === variables.orgId) {
@@ -3070,6 +3077,36 @@ export function useApproveSubscription() {
         );
       }
     },
+  });
+}
+
+export function useOrgSubscriptionPayments(orgId?: string) {
+  return useQuery({
+    queryKey: ["subscription_payments", orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("subscription_payments")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("submitted_at", { ascending: false });
+          if (!error && data) {
+            return data as SubscriptionPayment[];
+          }
+        } catch (err) {
+          console.warn("Supabase fetch subscription payments fallback:", err);
+        }
+      }
+      await delay();
+      const pays = MockDB.getSubPayments();
+      return (pays || [])
+        .filter((p) => p.org_id === orgId)
+        .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
+    },
+    enabled: !!orgId,
+    refetchInterval: 10000,
   });
 }
 
@@ -3104,8 +3141,12 @@ export function useSubmitSubscriptionPayment() {
       MockDB.saveSubPayments(pays);
       return newPay;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+      if (data?.org_id) {
+        queryClient.invalidateQueries({ queryKey: ["subscription_payments", data.org_id] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["subscription_payments"] });
     },
   });
 }

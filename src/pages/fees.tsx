@@ -15,6 +15,7 @@ import {
 } from "../hooks/useImpactoData";
 import { Card, Input, Button, Badge, ImageUploadInput } from "../components/ui";
 import { useToast } from "../components/Toast";
+import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "../components/MoMoPushPaymentModal";
 import { 
   Coins, 
   Filter, 
@@ -193,7 +194,8 @@ export const OrganizationMemberFees: React.FC = () => {
 
   // Member Action Dialog State: "Pay or Report Payment"
   const [selectedFeeToPay, setSelectedFeeToPay] = useState<MemberFee | null>(null);
-  const [payMethod, setPayMethod] = useState<"MTN MoMo / Airtel" | "Cash">("MTN MoMo / Airtel");
+  const [openMoMoPushPromptModal, setOpenMoMoPushPromptModal] = useState(false);
+  const [payMethod, setPayMethod] = useState<"Instant MoMo Push" | "MTN MoMo / Airtel" | "Cash">("Instant MoMo Push");
   
   // MoMo state variables
   const [momoPhoneNumber, setMomoPhoneNumber] = useState("");
@@ -2334,31 +2336,66 @@ export const OrganizationMemberFees: React.FC = () => {
                 <label className="text-xs font-black text-stone-800 dark:text-slate-300 block uppercase tracking-wider select-none">
                   Choose Settlement Method
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   {[
-                    { id: "MTN MoMo / Airtel", label: "Mobile Money", icon: <Smartphone className="h-4 w-4" /> },
-                    { id: "Cash", label: "Hand Cash", icon: <Coins className="h-4 w-4" /> }
+                    { id: "Instant MoMo Push", label: "Instant MoMo Push", subtitle: "Auto USSD PIN Prompt", icon: <Zap className="h-4 w-4 text-amber-500" /> },
+                    { id: "MTN MoMo / Airtel", label: "Manual MoMo", subtitle: "SMS / Receipt Copy", icon: <Smartphone className="h-4 w-4 text-emerald-500" /> },
+                    { id: "Cash", label: "Hand Cash", subtitle: "Officer Cashier", icon: <Coins className="h-4 w-4 text-blue-500" /> }
                   ].map((method) => (
                     <button
                       key={method.id}
                       type="button"
                       id={`btn-pay-method-${method.id.replace(/\s+/g, '-')}`}
                       onClick={() => setPayMethod(method.id as any)}
-                      className={`flex flex-col items-center justify-center p-3 border rounded-xl font-bold text-xs gap-1.5 transition-all text-center cursor-pointer ${
+                      className={`flex flex-col items-center justify-center p-2.5 sm:p-3 border rounded-xl font-bold text-xs gap-1 transition-all text-center cursor-pointer ${
                         payMethod === method.id
                           ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-850 dark:text-emerald-350 shadow-xs scale-102"
                           : "border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-gray-100 text-stone-600 dark:text-slate-400"
                       }`}
                     >
                       {method.icon}
-                      <span>{method.label}</span>
+                      <span className="text-[11px] leading-tight">{method.label}</span>
+                      <span className="text-[9px] font-normal text-slate-400 hidden sm:block">{method.subtitle}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Conditional forms based on selection */}
-              {payMethod === "MTN MoMo / Airtel" ? (
+              {payMethod === "Instant MoMo Push" ? (
+                <div className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4 shadow-3xs animate-in slide-in-from-bottom-3">
+                  <div className="flex items-center gap-2 select-none border-b border-dashed border-gray-200 dark:border-slate-800 pb-3">
+                    <span className="h-7 w-7 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 flex items-center justify-center">
+                      <Zap className="h-3.5 w-3.5" />
+                    </span>
+                    <div>
+                      <span className="text-[10px] font-black text-amber-800 dark:text-amber-400 block leading-none uppercase">Instant USSD Push (PawaPay Integration)</span>
+                      <span className="text-[10px] text-gray-400">Your phone will pop up asking for your Mobile Money PIN immediately.</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 space-y-1.5">
+                    <div className="flex items-center justify-between font-bold">
+                      <span>Dues Cycle:</span>
+                      <span className="text-slate-900 dark:text-white uppercase">{selectedFeeToPay.payment_period}</span>
+                    </div>
+                    <div className="flex items-center justify-between font-bold">
+                      <span>Payable Amount:</span>
+                      <span className="text-emerald-600 font-mono text-sm">{selectedFeeToPay.amount.toLocaleString()} RWF</span>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={() => setOpenMoMoPushPromptModal(true)}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl transition shadow-xs flex items-center justify-center gap-2"
+                    id="btn-trigger-instant-momo-push"
+                  >
+                    <Smartphone className="h-4 w-4" />
+                    Launch Instant MoMo Push Prompt ({selectedFeeToPay.amount.toLocaleString()} RWF)
+                  </Button>
+                </div>
+              ) : payMethod === "MTN MoMo / Airtel" ? (
                 <form onSubmit={handleSubmitManualReport} className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4 shadow-3xs animate-in slide-in-from-bottom-3">
                   <div className="flex items-center gap-2 select-none border-b border-dashed border-gray-200 dark:border-slate-800 pb-3">
                     <span className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 flex items-center justify-center">
@@ -2482,6 +2519,73 @@ export const OrganizationMemberFees: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MoMo Push Payment Modal for Member Dues */}
+      {selectedFeeToPay && (
+        <MoMoPushPaymentModal
+          isOpen={openMoMoPushPromptModal}
+          onClose={() => setOpenMoMoPushPromptModal(false)}
+          title={`Pay Dues: ${selectedFeeToPay.payment_period.toUpperCase()} Cycle`}
+          description="Enter your phone number to receive an instant USSD PIN authorization prompt on your handset."
+          amountRwf={selectedFeeToPay.amount}
+          orgId={activeOrg?.id}
+          defaultPayerPhone={(user as any)?.phone || user?.phone_number || (activeMember as any)?.phone || (activeMember as any)?.user?.phone_number || momoPhoneNumber}
+          defaultPayerName={user?.full_name || (activeMember as any)?.user?.full_name || selectedFeeToPay.member_name}
+          itemType="dues"
+          itemName={`${activeOrg?.name || "Cooperative"} - Dues ${selectedFeeToPay.payment_period} (${selectedFeeToPay.amount.toLocaleString()} RWF)`}
+          recipientName={activeOrg?.dues_account_name || activeOrg?.donation_account_name || activeOrg?.name || "Cooperative Treasury"}
+          recipientMtnNumber={activeOrg?.dues_mtn_number || activeOrg?.donation_mtn_number || "0788100100"}
+          recipientAirtelNumber={activeOrg?.dues_airtel_number || activeOrg?.donation_airtel_number || "0733100100"}
+          recipientMerchantCode={activeOrg?.momo_merchant_code}
+          isPlatformFee={false}
+          onSuccess={async (data: MoMoPaymentSuccessData) => {
+            try {
+              const generatedTxRef = data.providerTransactionId || data.depositId;
+              await updateFeeStatusMutation.mutateAsync({
+                id: selectedFeeToPay.id,
+                org_id: activeOrg!.id,
+                member_id: selectedFeeToPay.member_id,
+                amount: selectedFeeToPay.amount,
+                payment_period: selectedFeeToPay.payment_period,
+                period_date: selectedFeeToPay.period_date,
+                status: data.method === "pawapay_push" ? "paid" : "pending_confirmation",
+                paid_by_method: data.provider || "MTN MoMo",
+                transaction_reference: generatedTxRef,
+                sender_info: `PawaPay MoMo Phone: ${data.payerPhone}, Name: ${data.payerName}`,
+                reported_at: new Date().toISOString(),
+                paid_at: data.method === "pawapay_push" ? new Date().toISOString() : undefined,
+                report_note: `[PAWAPAY-VERIFIED] Deposit ID: ${data.depositId}\nPayer: ${data.payerName}\nComment: ${data.comment || "Member dues settlement"}\nProvider TxId: ${data.providerTransactionId || "Pending telco broadcast"}`,
+                proof_url: data.proofText || `PawaPay Instant Deposit ID: ${data.depositId}`
+              });
+
+              // Notify accountants and admins
+              try {
+                await broadcastMutation.mutateAsync({
+                  org_id: activeOrg!.id,
+                  sent_by: activeMember?.id || activeOrg!.id,
+                  recipient_group: "accountants_and_admins",
+                  recipient_count: 1,
+                  body_text: `Payment ${data.method === "pawapay_push" ? "Confirmed" : "Reported"}: Member ${data.payerName} paid ${selectedFeeToPay.amount.toLocaleString()} RWF for ${selectedFeeToPay.payment_period.toUpperCase()} cycle via PawaPay. Ref: ${generatedTxRef}.`
+                });
+              } catch (notifErr) {
+                console.warn("[Payment Report] Broadcast error:", notifErr);
+              }
+
+              addToast(
+                data.method === "pawapay_push" 
+                  ? "Payment successfully confirmed on telecom gateway! Dues recorded as paid." 
+                  : "Payment report submitted! The accountant will verify shortly.", 
+                "success"
+              );
+              setOpenMoMoPushPromptModal(false);
+              setSelectedFeeToPay(null);
+            } catch (err: any) {
+              console.error("Failed to update fee record:", err);
+              addToast(err?.message || "Failed to record payment.", "error");
+            }
+          }}
+        />
       )}
 
 

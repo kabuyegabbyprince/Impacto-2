@@ -19,6 +19,10 @@ export interface Organization {
   donation_airtel_number?: string;
   donation_account_name?: string;
   donation_description?: string;
+  dues_mtn_number?: string;
+  dues_airtel_number?: string;
+  dues_account_name?: string;
+  momo_merchant_code?: string;
   subscription_status: "trial" | "active" | "expired";
   subscription_ends_at?: string;
   subscription_tier?: "free" | "starter" | "growth" | "pro" | "enterprise" | "trial";

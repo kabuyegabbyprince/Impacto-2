@@ -30,7 +30,7 @@ import {
   Smartphone
 } from "lucide-react";
 import { Organization, SubscriptionPayment } from "../types";
-import { useOrgSubscriptionPayments } from "../hooks/useImpactoData";
+import { useOrgSubscriptionPayments, useSubmitSubscriptionPayment } from "../hooks/useImpactoData";
 import { 
   getOrgSubscriptionLifecycle, 
   SUBSCRIPTION_TIERS, 
@@ -39,6 +39,7 @@ import {
 } from "../lib/subscriptionMatrix";
 import { useCurrencyStore } from "../store/currencyStore";
 import { Badge, Button, Card, Modal } from "./ui";
+import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "./MoMoPushPaymentModal";
 
 interface SubscriptionPaymentDashboardProps {
   org: Organization;
@@ -57,6 +58,8 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
   const [chartCurrency, setChartCurrency] = useState<"RWF" | "USD">("RWF");
   const [chartViewType, setChartViewType] = useState<"bar" | "cumulative">("bar");
   const [selectedPaymentDetail, setSelectedPaymentDetail] = useState<SubscriptionPayment | null>(null);
+  const [openMoMoPushModal, setOpenMoMoPushModal] = useState(false);
+  const submitPaymentMutation = useSubmitSubscriptionPayment();
 
   const lifecycle = getOrgSubscriptionLifecycle(org);
   const usdRate = 1350;
@@ -630,11 +633,20 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
             </Button>
             <Button
               size="sm"
+              onClick={() => setOpenMoMoPushModal(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8.5 rounded-xl shadow-xs flex items-center gap-1.5"
+            >
+              <Smartphone className="h-3.5 w-3.5" />
+              Instant MoMo Push Prompt
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
               onClick={onOpenRenewModal}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8.5 rounded-xl shadow-xs"
+              className="text-xs font-bold h-8.5 rounded-xl border-slate-200 text-slate-700 dark:text-slate-200"
             >
               <Crown className="h-3.5 w-3.5 mr-1" />
-              Extend / Renew Subscription
+              Manual Proof
             </Button>
           </div>
         </div>
@@ -823,6 +835,48 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
           </div>
         </Modal>
       )}
+
+      {/* Instant MoMo Push Prompt Modal */}
+      <MoMoPushPaymentModal
+        isOpen={openMoMoPushModal}
+        onClose={() => setOpenMoMoPushModal(false)}
+        title="Workspace License Renewal (MoMo Push)"
+        description="Enter your phone number to receive an automatic USSD authorization prompt on your phone screen."
+        amountRwf={25 * usdRate}
+        amountUsd={25}
+        orgId={org?.id}
+        defaultPayerName={org?.name}
+        itemType="subscription"
+        itemName={`${org?.name || "Organization"} - Growth Plan Renewal`}
+        isPlatformFee={true}
+        recipientName="Impacto Platform License Gateway"
+        recipientMtnNumber="0788100100"
+        recipientAirtelNumber="0733100100"
+        recipientMerchantCode="*182*8*1*880099#"
+        onSuccess={async (data: MoMoPaymentSuccessData) => {
+          try {
+            await submitPaymentMutation.mutateAsync({
+              org_id: org.id,
+              plan: "Growth Plan - $25/month",
+              amount_usd: 25,
+              amount_local: data.amount,
+              method: data.method === "pawapay_push" ? "pawapay_push" : data.provider.includes("AIRTEL") ? "airtel" : "mtn",
+              phone: data.payerPhone,
+              phone_number: data.payerPhone,
+              reference: data.providerTransactionId || data.depositId,
+              transaction_reference: data.providerTransactionId || data.depositId,
+              pawapay_deposit_id: data.depositId,
+              payer_name: data.payerName,
+              comment: data.comment,
+              proof_url: data.proofText || `[PawaPay Instant Push Confirmed] Deposit ID: ${data.depositId}`,
+              plan_details: `PawaPay Instant Push Prompt Verified. Deposit ID: ${data.depositId}`,
+            });
+            setOpenMoMoPushModal(false);
+          } catch (err) {
+            console.error("Failed to register subscription payment:", err);
+          }
+        }}
+      />
     </div>
   );
 };

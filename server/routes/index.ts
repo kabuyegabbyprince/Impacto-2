@@ -6,6 +6,7 @@ import feesRouter from "./fees";
 import auditRouter from "./audit";
 import storageRouter from "./storage";
 import { cleanValue } from "../services/supabaseAdmin";
+import { recordPawaPayWebhookEvent } from "../services/pawapayService";
 
 const apiRouter = Router();
 
@@ -27,6 +28,7 @@ const handlePawaPayCallback = (req: Request, res: Response) => {
   try {
     const webhookData = req.body || {};
     console.log("[pawaPay Webhook/Callback Received]:", req.path, webhookData);
+    recordPawaPayWebhookEvent(webhookData);
     const depositId = webhookData.depositId || webhookData.payoutId || webhookData.refundId || webhookData.id;
     const status = webhookData.status || "COMPLETED";
     // Always return HTTP 200 to acknowledge PawaPay notification

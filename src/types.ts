@@ -41,9 +41,14 @@ export interface Organization {
   donation_airtel_number?: string;
   donation_account_name?: string;
   donation_description?: string;
+  dues_mtn_number?: string;
+  dues_airtel_number?: string;
+  dues_account_name?: string;
+  momo_merchant_code?: string;
   subscription_status: "trial" | "active" | "expired";
   subscription_ends_at?: string;
-  subscription_tier?: "trial" | "starter" | "growth" | "enterprise";
+  subscription_tier?: "trial" | "starter" | "growth" | "enterprise" | "free" | "pro";
+  active_packages?: string[];
   org_category: string;
   created_at: string;
   // Custom public portal settings
@@ -347,18 +352,29 @@ export interface PlatformSettings {
   payment_name: string;
 }
 
+export type SubscriptionTier = "trial" | "starter" | "growth" | "enterprise" | "free" | "pro";
+
 export interface SubscriptionPayment {
   id: string;
   org_id: string;
   plan: string;
+  package_id?: string;
+  item_type?: "subscription" | "package" | string;
   amount_usd: number;
   amount_local: number;
-  method: "mtn" | "airtel";
+  method: "mtn" | "airtel" | "pawapay_push" | string;
   phone: string;
+  phone_number?: string;
   reference: string;
+  transaction_reference?: string;
+  pawapay_deposit_id?: string;
+  payer_name?: string;
+  comment?: string;
+  plan_details?: string;
   proof_url?: string;
   status: "awaiting_approval" | "approved" | "rejected";
   submitted_at: string;
+  created_at?: string;
   validated_at?: string;
   audited_by?: string;
   audited_by_name?: string;
