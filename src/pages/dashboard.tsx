@@ -730,24 +730,7 @@ export const DashboardHome: React.FC = () => {
         )}
       </div>
 
-      {/* Free Mode Dashboard Banner - shown only on free mode, reminding dashboard of all roles */}
-      {(!activeOrg?.subscription_tier || activeOrg?.subscription_tier === 'free') && (
-        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-300 font-semibold shadow-xs">
-          <div className="flex items-center gap-2.5">
-            <Sparkles className="h-4.5 w-4.5 text-amber-600 shrink-0" />
-            <span>
-              <strong>Free Mode Notice:</strong> You are currently on the Free Forever tier, viewing the dashboard across all roles. Upgrade to a paid plan to unlock expanded capacity and remove this notice.
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate("/dashboard/settings")}
-            className="self-start md:self-center px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition shrink-0"
-          >
-            Upgrade Plan →
-          </button>
-        </div>
-      )}
+
 
       {/* High priority fee warning barrier */}
       {myPendingDues.length > 0 && (
@@ -1182,69 +1165,7 @@ export const DashboardHome: React.FC = () => {
             </div>
           </div>
 
-          {/* 5. Organization Feed Card (Image 5) */}
-          <div className="card card-glow bg-white dark:bg-slate-850 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-3xs p-6">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-slate-800">
-              <div>
-                <h3 className="font-display font-bold text-base text-gray-900 dark:text-white">
-                  Organization Feed
-                </h3>
-                <p className="text-xs text-[#4a6357] dark:text-slate-400 mt-0.5">
-                  Recent announcements and postings
-                </p>
-              </div>
-              <Link to="/dashboard/news" className="text-xs font-bold text-[#156c45] dark:text-emerald-400 hover:underline flex items-center gap-1">
-                News Feed →
-              </Link>
-            </div>
 
-            <div className="pt-4">
-              {activeNews.length > 0 ? (
-                <div className="flex flex-col gap-3">
-                  {activeNews.map((n) => (
-                    <div
-                      key={n.id}
-                      onClick={() => navigate("/dashboard/news")}
-                      className="flex gap-4 p-3.5 border border-gray-100 dark:border-slate-800 rounded-xl hover:bg-[#e8f5ee]/20 dark:hover:bg-slate-800/60 hover:border-emerald-200 transition items-center cursor-pointer"
-                    >
-                      {n.cover_url && (
-                        <div className="h-12 w-12 rounded-lg overflow-hidden shrink-0 bg-slate-100">
-                          <img src={n.cover_url} alt={n.title} className="h-full w-full object-cover" />
-                        </div>
-                      )}
-                      <div className="flex flex-col text-xs leading-normal truncate flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-bold text-xs text-gray-950 dark:text-white truncate">{n.title}</span>
-                          <span className="text-[10px] text-gray-400 font-mono shrink-0">
-                            {n.published_at ? new Date(n.published_at).toLocaleDateString() : ""}
-                          </span>
-                        </div>
-                        <span className="text-gray-500 mt-0.5 line-clamp-1 text-[11px]">{n.excerpt}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-12 px-6 flex flex-col items-center text-center">
-                  <div className="w-14 h-14 rounded-full bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center mb-3 shadow-2xs">
-                    <MessageSquare className="h-6 w-6" />
-                  </div>
-                  <h4 className="text-base font-bold text-[#111c16] dark:text-white mb-1 font-display">
-                    Your workspace is quiet right now
-                  </h4>
-                  <p className="text-xs text-[#4a6357] dark:text-slate-400 max-w-sm mx-auto mb-5 leading-relaxed">
-                    No announcements have been shared yet. Post the first update to get the conversation started.
-                  </p>
-                  <button
-                    onClick={() => navigate("/dashboard/news")}
-                    className="bg-[#156c45] hover:bg-[#115436] text-white text-xs font-bold px-5 py-2.5 rounded-xl transition shadow-3xs flex items-center gap-2 cursor-pointer"
-                  >
-                    <Megaphone className="h-3.5 w-3.5" /> Post an Announcement
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Sidebar Widgets - Weekly Schedule & Attendance Radar (Image 5) */}
@@ -1604,17 +1525,19 @@ export const NewsFeed: React.FC = () => {
             >
               Active
             </button>
-            <button
-              onClick={() => setActiveTab("history")}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
-                activeTab === "history"
-                  ? "bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 shadow-3xs"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
-              }`}
-              title="Database history archive"
-            >
-              <History className="h-3.5 w-3.5" /> History Log
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab("history")}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                  activeTab === "history"
+                    ? "bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 shadow-3xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+                }`}
+                title="Database history archive"
+              >
+                <History className="h-3.5 w-3.5" /> History Log
+              </button>
+            )}
           </div>
 
           {isAdmin && activeTab === "active" && (

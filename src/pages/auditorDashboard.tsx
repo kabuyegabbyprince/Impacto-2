@@ -45,6 +45,7 @@ import {
 import { MockDB } from "../lib/mockData";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
+import { useOrgStore } from "../store/orgStore";
 import { Button, Input, Card, Badge, Modal } from "../components/ui";
 import { useToast } from "../components/Toast";
 
@@ -52,6 +53,7 @@ export const AuditorDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+  const { activeOrg } = useOrgStore();
   const { addToast } = useToast();
 
   const { data: platformData, refetch, isLoading } = usePlatformAdminData();
@@ -362,8 +364,9 @@ export const AuditorDashboard: React.FC = () => {
             variant="outline"
             className="text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 border-rose-200 dark:border-rose-900 font-bold text-xs h-10 px-3.5 rounded-xl flex items-center gap-1.5"
             onClick={() => {
+              const slug = activeOrg?.slug || "workspace";
               logout();
-              navigate("/login");
+              window.location.href = `https://impacto-landing.vercel.app/@${slug}`;
             }}
           >
             <LogOut className="h-3.5 w-3.5" /> Log Out

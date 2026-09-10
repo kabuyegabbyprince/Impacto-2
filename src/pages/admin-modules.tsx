@@ -646,26 +646,6 @@ export const MembersManagement: React.FC = () => {
       {/* Modern navigation subtabs - Clean Segmented Bar */}
       <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-1 select-none overflow-x-auto whitespace-nowrap shadow-3xs">
         <button
-          onClick={() => handleTabChange("directory")}
-          className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
-            activeTab === "directory"
-              ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
-              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
-          }`}
-        >
-          {t("tab_directory")}
-        </button>
-        <button
-          onClick={() => handleTabChange("volunteers")}
-          className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
-            activeTab === "volunteers"
-              ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
-              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
-          }`}
-        >
-          {t("tab_volunteers")}
-        </button>
-        <button
           onClick={() => handleTabChange("verifications")}
           className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
             activeTab === "verifications"

@@ -4331,7 +4331,8 @@ export function useSubmitDocument() {
       
       if (finalFileUrl.startsWith("data:")) {
         const { data, contentType } = dataUrlToUint8Array(finalFileUrl);
-        const fileName = `${payload.org_id}/${docId}-${payload.name.replace(/\s+/g, "_")}`;
+        const docName = payload?.name || "document";
+        const fileName = `${payload.org_id}/${docId}-${docName.replace(/\s+/g, "_")}`;
         await uploadFile(fileName, data, contentType);
         const { data: publicUrlData } = supabase.storage.from("impacto-files").getPublicUrl(fileName);
         finalFileUrl = publicUrlData.publicUrl;

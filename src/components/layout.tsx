@@ -693,8 +693,9 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                   <button
                     onClick={() => {
                       setUserMenuOpen(false);
+                      const slug = activeOrg?.slug || "workspace";
                       logout();
-                      navigate("/login");
+                      window.location.href = `https://impacto-landing.vercel.app/@${slug}`;
                     }}
                     className="w-full text-left px-4 py-2 hover:bg-red-50 dark:hover:bg-red-950/20 text-red-600 flex items-center gap-2 border-t border-gray-100 dark:border-slate-700 font-semibold"
                   >

@@ -481,9 +481,6 @@ export const Login: React.FC = () => {
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md flex flex-col gap-8">
         <div className="text-center flex flex-col items-center select-none">
-          <a href={APP_CONFIG.landingUrl} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-emerald-600 font-semibold mb-6 select-none bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 px-3.5 py-1.5 rounded-full shadow-xs duration-150 transition">
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to Home Page
-          </a>
           {/* Logo Knot */}
           <svg className="h-14 w-14 text-emerald-600 mb-4" viewBox="0 0 100 100" fill="none">
             <circle cx="50" cy="35" r="25" stroke="currentColor" strokeWidth="8" />
@@ -1081,9 +1078,6 @@ export const Register: React.FC = () => {
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-lg flex flex-col gap-6">
         <div className="text-center flex flex-col items-center select-none">
-          <a href={APP_CONFIG.landingUrl} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-emerald-600 font-semibold mb-6 select-none bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 px-3.5 py-1.5 rounded-full shadow-xs duration-150 transition">
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to Home Page
-          </a>
           <svg className="h-10 w-10 text-emerald-600 mb-2" viewBox="0 0 100 100" fill="none">
             <circle cx="50" cy="35" r="25" stroke="currentColor" strokeWidth="8" />
             <circle cx="35" cy="65" r="25" stroke="currentColor" strokeWidth="8" />
@@ -1252,8 +1246,9 @@ export const Register: React.FC = () => {
               <div className="text-center mt-3 pt-3 border-t">
                 <button
                   onClick={() => {
+                    const slug = useOrgStore.getState().activeOrg?.slug || "workspace";
                     logout();
-                    navigate("/login");
+                    window.location.href = `https://impacto-landing.vercel.app/@${slug}`;
                   }}
                   className="text-[10px] font-bold text-red-500 hover:underline hover:text-red-700 uppercase tracking-wider cursor-pointer bg-transparent border-0 outline-none"
                 >
@@ -1943,8 +1938,9 @@ export const OrgPicker: React.FC = () => {
   };
 
   const handleLogout = () => {
+    const slug = useOrgStore.getState().activeOrg?.slug || "workspace";
     logout();
-    navigate("/login");
+    window.location.href = `https://impacto-landing.vercel.app/@${slug}`;
   };
 
   if (isLoading) {
@@ -3090,9 +3086,9 @@ export const ResetPassword: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm flex flex-col items-center gap-4">
-        <a href={APP_CONFIG.landingUrl} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-emerald-600 font-semibold select-none bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 px-3.5 py-1.5 rounded-full shadow-xs duration-150 transition mb-2 self-start">
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to Home Page
-        </a>
+        <Link to="/login" className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-emerald-600 font-semibold select-none bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 px-3.5 py-1.5 rounded-full shadow-xs duration-150 transition mb-2 self-start">
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to Sign In
+        </Link>
         <Card title="New Credentials" className="w-full">
         {success ? (
           <div className="text-center flex flex-col items-center gap-3">

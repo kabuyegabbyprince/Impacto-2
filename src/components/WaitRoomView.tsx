@@ -47,7 +47,7 @@ export const WaitRoomView: React.FC = () => {
 
       if (freshMember && freshMember.status === "active") {
         setActiveOrg(activeOrg, freshMember);
-        addToast(`Congratulations! Your membership in ${activeOrg.name} has been confirmed. Welcome aboard!`, "success");
+        addToast(`Congratulations! Your membership in ${activeOrg?.name || "Cooperative"} has been confirmed. Welcome aboard!`, "success");
         navigate("/dashboard");
       } else if (freshMember && freshMember.status === "rejected") {
         addToast("Notice: Your membership request was declined by the organization administrator.", "error");
@@ -63,8 +63,9 @@ export const WaitRoomView: React.FC = () => {
   };
 
   const handleSignOut = () => {
+    const slug = activeOrg?.slug || "workspace";
     logout();
-    navigate("/login");
+    window.location.href = `https://impacto-landing.vercel.app/@${slug}`;
   };
 
   return (

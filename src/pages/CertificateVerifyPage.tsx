@@ -141,13 +141,12 @@ export const CertificateVerifyPage: React.FC = () => {
           </Link>
 
           <div className="flex items-center gap-3">
-            <a
-              href={APP_CONFIG.landingUrl}
+            <Link
+              to="/login"
               className="text-xs font-bold text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white flex items-center gap-1.5 transition"
             >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Back to Home</span>
-            </a>
+              <span>Sign In</span>
+            </Link>
           </div>
         </div>
       </header>
@@ -399,12 +398,12 @@ export const CertificateVerifyPage: React.FC = () => {
                   >
                     Try Another Code
                   </button>
-                  <a
-                    href={APP_CONFIG.landingUrl}
+                  <Link
+                    to="/login"
                     className="px-4 py-2 bg-[#156c45] hover:bg-[#115436] text-white rounded-xl text-xs font-bold transition"
                   >
-                    Return to Homepage
-                  </a>
+                    Go to Sign In
+                  </Link>
                 </div>
               </div>
             )}
@@ -418,7 +417,7 @@ export const CertificateVerifyPage: React.FC = () => {
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p>© 2026 Impact-O Verification System. All rights reserved.</p>
           <div className="flex gap-4">
-            <a href={APP_CONFIG.landingUrl} className="hover:text-gray-900 dark:hover:text-white transition">Platform Home</a>
+            <Link to="/login" className="hover:text-gray-900 dark:hover:text-white transition">Sign In</Link>
             <Link to="/verify" className="text-[#156c45] font-bold hover:underline">Verify Credential</Link>
           </div>
         </div>

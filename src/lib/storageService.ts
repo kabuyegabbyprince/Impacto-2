@@ -39,13 +39,17 @@ import { supabase, isSupabaseConfigured } from "./supabase";
  * Uploads a file directly to Supabase Storage bucket
  */
 export async function uploadFileToSupabase(file: File, bucketName: string, keyPrefix: string = "uploads"): Promise<string> {
+  if (!file) {
+    throw new Error("No file provided for upload.");
+  }
   // Validate file size
   const MAX_FILE_SIZE_MB = 50;
-  if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+  if ((file.size || 0) > MAX_FILE_SIZE_MB * 1024 * 1024) {
     throw new Error("File too large. Maximum size is 50MB.");
   }
   
-  const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+  const fileName = file.name || "unnamed_file";
+  const sanitizedName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
   const timestamp = Date.now();
   const uniqueKey = `${keyPrefix}/${timestamp}-${sanitizedName}`;
 

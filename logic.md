@@ -127,3 +127,114 @@ The database consists of **40+ relational tables** structured for multi-tenant i
 
 - All file uploads (Profile Avatars, Brand Logos, Cover Banners, IDs, Receipts, Voice Notes) are handled via `uploadFileToSupabase()` in `src/lib/storageService.ts`.
 - The storage engine uses standard Supabase storage buckets (`avatars`, `documents`, `chat-attachments`, `impacto-files`) with public read access and authenticated uploads.
+
+---
+
+## 6. Subscription Plans, User Stories & UI Behavior
+
+This section outlines the progressive capability tiers in Impacto. Each plan **inherits and builds upon all features of the previous plan**, adding new modules, higher member/storage quotas, and advanced governance tools. When a user purchases a package or upgrades their tier, state updates instantly via Zustand and Supabase, removing feature gates (`PlanGatedView`) in real time.
+
+---
+
+
+
+
+### Phase 1: Free Forever Plan
+* **Quotas**: Up to 30 active members • 100 MB local media storage.
+* **User Stories**:
+  - As a grassroots savings group founder, I want to create a free workspace so I can list our members, assign basic roles (Admin/Member), and broadcast announcements via standard chat.
+  - As a cooperative member, I want to view the member directory and chat with fellow members without incurring subscription fees.
+* **UI Scenarios & Behavior**:
+  - **Dashboard**: Displays core member directory, standard chat channels, and basic announcement feeds.
+  - **Gatekeeping (`PlanGatedView`)**: Advanced modules (QR attendance, DocumentOffice, automated certificate generation, marketplace catalog, and MoMo payment ledger) display a locked overlay with an "Upgrade to Unlock" call to action.
+  - **Limit Enforcement**: When member count reaches 30 or storage hits 100 MB, new member additions enter read-only safe mode without deleting historical data.
+
+---
+
+### Phase 2: Growth Trial Period (Default 30-Day Evaluation)
+* **Quotas**: Up to 250 members • 5 GB high-speed cloud storage • Full Growth feature suite unlocked.
+* **User Stories**:
+  - As a newly registered cooperative administrator, I want to explore all Growth and Pro features immediately upon signup so I can evaluate QR check-ins, member dues ledgers, and document drafting before committing funds.
+* **UI Scenarios & Behavior**:
+  - **Trial Banner**: A prominent top notification bar displays remaining trial days (e.g., "Growth Trial: 27 Days Remaining") with a quick "Upgrade Now" button.
+  - **Full Access**: All features (DocumentOffice, QR Event Attendance, Dues Ledger, Asset Tracker) are fully interactive with zero restrictions.
+  - **Grace Period**: Upon trial expiration, a 3-day grace period is granted. If unpaid, the workspace safely downgrades to Free tier limits without data loss.
+
+---
+
+### Phase 3: Starter Plan (Inherits Free + Starter Additions)
+* **Quotas**: Up to 100 members • 1 GB secure cloud storage.
+* **User Stories**:
+  - As a small agricultural cooperative manager, I want basic member dues tracking and monthly meeting scheduling alongside our free member directory so I can manage small-scale contributions efficiently.
+* **Cumulative Capabilities (All Free Features + Starter Additions)**:
+  - Member Directory & Roles (inherited).
+  - Standard Chat & Announcements (inherited).
+  - Basic Meeting Minutes & Agenda Scheduler.
+  - Simple Member Dues Tracker (up to 100 members).
+* **UI Scenarios & Behavior**:
+  - **Navigation**: Meeting minutes and basic dues tabs are unlocked.
+  - **Quotas Indicator**: Settings & Settings Billing show "Storage: 1 GB / Member Limit: 100".
+  - **Upgrades**: Attempting to add 101+ members or use QR attendance triggers a modal prompting an upgrade to Growth or Pro.
+
+---
+
+### Phase 4: Growth Plan (Inherits Starter + Growth Additions)
+* **Quotas**: Up to 250 members • 5 GB high-speed cloud storage.
+* **User Stories**:
+  - As an established cooperative president, I want to run organized community events with cryptographic QR badge check-ins, track member dues payments with Mobile Money proof uploads, and generate official compliance letters using DocumentOffice.
+* **Cumulative Capabilities (All Starter Features + Growth Additions)**:
+  - Meeting Minutes & Basic Dues (inherited).
+  - QR Code Event Attendance & Instant Badge Scanning.
+  - Member Dues Ledger with Mobile Money Push-to-Pay & Auditor Approval Workflow.
+  - DocumentOffice Suite (word letterheads, spreadsheets, digital signature blocks, CSV exports).
+  - Asset & Equipment Inventory Tracker.
+* **UI Scenarios & Behavior**:
+  - **Attendance Module**: Organizers generate cryptographic QR check-in sheets and scan member badges via camera.
+  - **Financial Ledger**: Members upload payment receipts/SMS codes; accountants and auditors verify and approve transactions in real time.
+  - **UI State**: All locks on Growth modules disappear. Settings display "Growth Plan Active (5 GB Storage)".
+
+---
+
+### Phase 5: Pro Plan (Inherits Growth + Pro Additions)
+* **Quotas**: Unlimited members • Unlimited cloud storage.
+* **User Stories**:
+  - As a federation director, I want unlimited member capacity, unlimited cloud storage for all documents and receipts, public marketplace catalog listing, automated certificate generation, and multi-branch governance oversight.
+* **Cumulative Capabilities (All Growth Features + Pro Additions)**:
+  - QR Attendance, Dues Ledger, DocumentOffice, Asset Tracker (inherited).
+  - Unlimited Members & Unlimited Cloud Storage.
+  - Automated Certificate Generation & Workshop Badge Builder.
+  - Public Marketplace Catalog for Cooperative Commodities & Share Capital Investment Tracker.
+  - Advanced Audit Logs, Role Matrix Permissions, and Multi-Branch Federation.
+* **UI Scenarios & Behavior**:
+  - **Marketplace**: Cooperative products are listed publicly on the global directory.
+  - **Certificates**: Bulk generation of official signed certificates with QR verification codes.
+  - **UI State**: Zero storage warnings, unlimited file uploads, and full administrative super-privileges across all workspace modules.
+
+---
+
+### Phase 6: Package Purchase & State Transition Flow
+* **How It Works**:
+  1. **Selection**: User clicks "Upgrade" or visits Settings → Subscription Plans.
+  2. **Payment Processing**: User selects Mobile Money (MTN/Airtel) or Card payment, providing transaction reference codes.
+  3. **Instant Activation**: Upon payment confirmation (via webhook or admin approval in Superadmin Console), the backend updates `organizations.subscription_tier` and `subscription_status` to `active`.
+  4. **Zustand & React Query Sync**: Active store (`orgStore`) instantly refreshes tenant metadata.
+  5. **UI Unlock**: All `PlanGatedView` overlays dissolve immediately. Storage quotas expand to new tier limits (e.g., 5 GB or Infinity), and the workspace enjoys uninterrupted operational access.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

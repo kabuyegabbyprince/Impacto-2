@@ -1832,10 +1832,10 @@ export const OrganizationSettingsPage: React.FC = () => {
                       {/* Org Sent Message */}
                       <div className="flex gap-3 max-w-[85%] self-start">
                         <div className="h-8 w-8 rounded-full bg-stone-100 flex items-center justify-center text-xs font-bold shrink-0">
-                          {activeOrg?.name.charAt(0)}
+                          {activeOrg?.name ? activeOrg.name.charAt(0) : "O"}
                         </div>
                         <div className="flex flex-col gap-1.5">
-                          <span className="text-[10px] text-stone-500 font-bold">{activeOrg?.name} {t("Admin")}</span>
+                          <span className="text-[10px] text-stone-500 font-bold">{activeOrg?.name || "Organization"} {t("Admin")}</span>
                           <div className="p-3 bg-gray-100 rounded-xl text-xs text-stone-850 leading-relaxed font-bold">
                             {c.description}
                           </div>
