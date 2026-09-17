@@ -526,8 +526,9 @@ export const OrganizationMemberFees: React.FC = () => {
     if (!selectedFeeToPay) return;
 
     if (payMethod === "MTN MoMo / Airtel") {
-      if (!momoPhoneNumber || momoPhoneNumber.length < 8) {
-        addToast("Please provide a valid Mobile Money number (e.g., 078XXXXXXX).", "error");
+      const cleanPhone = momoPhoneNumber.replace(/\D/g, "");
+      if (!/^07[89]\d{7}$/.test(cleanPhone)) {
+        addToast("Error: MTN phone number required. Must be 10 digits starting with 078 or 079 (e.g. 078XXXXXXX or 079XXXXXXX) to reduce errors.", "error");
         return;
       }
       if (!manualSenderInfo.trim()) {
@@ -537,6 +538,17 @@ export const OrganizationMemberFees: React.FC = () => {
       if (!resendMessageText.trim()) {
         addToast("Please paste the transaction SMS confirmation text.", "error");
         return;
+      }
+
+      // Check for duplicate SMS submission in active fees cache
+      if (resendMessageText.trim().length > 15) {
+        const isDuplicateSms = fees?.some(
+          (f) => f.id !== selectedFeeToPay.id && f.report_note && f.report_note.includes(resendMessageText.trim())
+        );
+        if (isDuplicateSms) {
+          addToast("Duplicate receipt error: This SMS confirmation message has already been submitted for another dues cycle.", "error");
+          return;
+        }
       }
     } else if (payMethod === "Cash") {
       if (!manualSenderInfo.trim()) {
@@ -2408,14 +2420,33 @@ export const OrganizationMemberFees: React.FC = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Input
-                      label="Your MoMo/Airtel Registered Phone Number"
-                      placeholder="e.g. 078XXXXXXX"
-                      required
-                      value={momoPhoneNumber}
-                      onChange={(e) => setMomoPhoneNumber(e.target.value)}
-                      id="input-momo-subscriber-phone"
-                    />
+                    <div className="flex flex-col gap-1">
+                      <Input
+                        label="MTN MoMo Registered Phone (078.. / 079..)"
+                        placeholder="078XXXXXXX or 079XXXXXXX"
+                        required
+                        value={momoPhoneNumber}
+                        onChange={(e) => setMomoPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        id="input-momo-subscriber-phone"
+                      />
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[10px] text-stone-400 font-mono">Quick prefix:</span>
+                        <button
+                          type="button"
+                          onClick={() => setMomoPhoneNumber("078")}
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700"
+                        >
+                          078
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMomoPhoneNumber("079")}
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700"
+                        >
+                          079
+                        </button>
+                      </div>
+                    </div>
                     <Input
                       label="Sender's Registered Full Name"
                       placeholder="e.g. Jean Pierre Nsanzimana"
@@ -2535,8 +2566,8 @@ export const OrganizationMemberFees: React.FC = () => {
           itemType="dues"
           itemName={`${activeOrg?.name || "Cooperative"} - Dues ${selectedFeeToPay.payment_period} (${selectedFeeToPay.amount.toLocaleString()} RWF)`}
           recipientName={activeOrg?.dues_account_name || activeOrg?.donation_account_name || activeOrg?.name || "Cooperative Treasury"}
-          recipientMtnNumber={activeOrg?.dues_mtn_number || activeOrg?.donation_mtn_number || "0788100100"}
-          recipientAirtelNumber={activeOrg?.dues_airtel_number || activeOrg?.donation_airtel_number || "0733100100"}
+          recipientMtnNumber={activeOrg?.dues_mtn_number || activeOrg?.donation_mtn_number || ""}
+          recipientAirtelNumber={activeOrg?.dues_airtel_number || activeOrg?.donation_airtel_number || ""}
           recipientMerchantCode={activeOrg?.momo_merchant_code}
           isPlatformFee={false}
           onSuccess={async (data: MoMoPaymentSuccessData) => {

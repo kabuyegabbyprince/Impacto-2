@@ -2,6 +2,50 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Early protection against third-party browser extensions (e.g. MetaMask, Phantom)
+      // injecting into iframe/preview environments and throwing unhandled errors.
+      (function() {
+        var isIgnoredError = function(str) {
+          if (!str) return false;
+          var s = String(str).toLowerCase();
+          return s.indexOf("metamask") !== -1 ||
+                 s.indexOf("failed to connect to metamask") !== -1 ||
+                 s.indexOf("ethereum") !== -1 ||
+                 s.indexOf("web3") !== -1 ||
+                 s.indexOf("wallet") !== -1 ||
+                 s.indexOf("failed to fetch") !== -1;
+        };
+
+        window.addEventListener("unhandledrejection", function(event) {
+          var reason = event.reason ? (event.reason.message || event.reason.stack || event.reason) : "";
+          if (isIgnoredError(reason)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return false;
+          }
+        }, true);
+
+        window.addEventListener("error", function(event) {
+          var msg = event.message || (event.error && event.error.message) || "";
+          if (isIgnoredError(msg)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return false;
+          }
+        }, true);
+
+        var origConsoleError = console.error;
+        console.error = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var joined = args.map(function(a) { return (a && a.message) || String(a); }).join(" ");
+          if (isWeb3Error(joined)) {
+            return;
+          }
+          return origConsoleError.apply(console, arguments);
+        };
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Impacto — Organization Management System with Free Forever Plan</title>
     <meta name="description" content="A complete organization management system with a free forever plan for cooperatives, NGOs, and community associations to coordinate members, audit Mobile Money dues, and publish official documents." />

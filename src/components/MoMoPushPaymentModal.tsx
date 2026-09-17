@@ -31,18 +31,43 @@ export interface MoMoPaymentSuccessData {
   proofText?: string;
 }
 
+/**
+ * Validates whether a phone number is an MTN Rwanda number (078... or 079...).
+ * Style required: exactly 10 digits starting with 078 or 079 (e.g. 078XXXXXXX or 079XXXXXXX).
+ * Also accepts 25078... or 25079... (12 digits).
+ */
+export function isValidMtnRwandaNumber(phone: string): boolean {
+  if (!phone) return false;
+  const digits = phone.replace(/\D/g, "");
+  return /^07[89]\d{7}$/.test(digits) || /^2507[89]\d{7}$/.test(digits);
+}
+
+/**
+ * Normalizes input to local Rwandan style (078XXXXXXX or 079XXXXXXX)
+ */
+export function normalizeMtnRwandaNumber(input: string): string {
+  if (!input) return "";
+  let digits = input.replace(/\D/g, "");
+  if (digits.startsWith("250")) {
+    digits = "0" + digits.substring(3);
+  }
+  return digits.slice(0, 10);
+}
+
 interface MoMoPushPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
   description?: string;
-  amountRwf: number;
+  amountRwf?: number;
+  amount?: number;
   amountUsd?: number;
   orgId?: string;
   defaultPayerName?: string;
   defaultPayerPhone?: string;
   defaultPhone?: string;
   itemType?: "subscription" | "package" | "member_due" | "dues" | "donation" | "general" | string;
+  itemId?: string;
   itemName?: string;
   recipientName?: string;
   recipientMtnNumber?: string;
@@ -56,14 +81,16 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
   isOpen,
   onClose,
   title = "Mobile Money Prompt (Instant Push)",
-  description = "Enter your phone number to receive a direct USSD payment prompt on your phone screen.",
-  amountRwf,
+  description = "Enter your MTN phone number (078.. or 079..) to receive a direct USSD payment prompt on your SIM card.",
+  amountRwf: rawAmountRwf,
+  amount: rawAmount,
   amountUsd,
   orgId,
   defaultPayerName = "",
   defaultPayerPhone = "",
   defaultPhone = "",
   itemType = "general",
+  itemId = "",
   itemName = "Payment",
   recipientName,
   recipientMtnNumber,
@@ -72,10 +99,11 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
   isPlatformFee,
   onSuccess,
 }) => {
+  const amountRwf = rawAmountRwf ?? rawAmount ?? 0;
   const { formatAmount } = useCurrencyStore();
   const [tab, setTab] = useState<"instant_push" | "manual_sms">("instant_push");
 
-  const effectivePhone = defaultPayerPhone || defaultPhone || "";
+  const effectivePhone = normalizeMtnRwandaNumber(defaultPayerPhone || defaultPhone || "");
 
   // Form states
   const [payerName, setPayerName] = useState(defaultPayerName);
@@ -89,8 +117,8 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
     : (itemType === "subscription" || itemType === "package");
 
   const finalRecipientName = recipientName || (isPlatformTarget ? "VIRELLIX INC (Impacto SaaS Platform)" : "Organization Treasury");
-  const finalMtnNumber = recipientMtnNumber || (isPlatformTarget ? "0788100100" : "0788100100");
-  const finalAirtelNumber = recipientAirtelNumber || (isPlatformTarget ? "0733100100" : "0733100100");
+  const finalMtnNumber = recipientMtnNumber || (isPlatformTarget ? "0788100100" : "");
+  const finalAirtelNumber = recipientAirtelNumber || (isPlatformTarget ? "0733100100" : "");
   const finalMerchantCode = recipientMerchantCode || (isPlatformTarget ? "*182*8*1*880099#" : undefined);
 
   // Push Lifecycle States: 'idle' | 'initiating' | 'awaiting_pin' | 'verifying' | 'success' | 'failed'
@@ -99,7 +127,15 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
   const [providerTxId, setProviderTxId] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [countdown, setCountdown] = useState(90);
-  const [detectedProvider, setDetectedProvider] = useState<"MTN" | "Airtel">("MTN");
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [detectedProvider] = useState<"MTN">("MTN");
+
+  // Phone number validation logic for MTN Rwanda (078.. or 079..)
+  const cleanPhone = phoneNumber.replace(/\D/g, "");
+  const isMtnPrefix = cleanPhone.startsWith("078") || cleanPhone.startsWith("079");
+  const isAirtelPrefix = cleanPhone.startsWith("072") || cleanPhone.startsWith("073");
+  const isCompleteMtn = cleanPhone.length === 10 && isMtnPrefix;
+  const isAirtelOrInvalidPrefix = cleanPhone.length >= 3 && !isMtnPrefix;
 
   // Manual fallback states
   const [manualTxRef, setManualTxRef] = useState("");
@@ -108,23 +144,6 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Detect operator from phone input
-  useEffect(() => {
-    const clean = phoneNumber.replace(/\D/g, "");
-    if (
-      clean.startsWith("072") ||
-      clean.startsWith("073") ||
-      clean.startsWith("25072") ||
-      clean.startsWith("25073") ||
-      clean.includes("72") ||
-      clean.includes("73")
-    ) {
-      setDetectedProvider("Airtel");
-    } else {
-      setDetectedProvider("MTN");
-    }
-  }, [phoneNumber]);
 
   // Cleanup timers on unmount or close
   useEffect(() => {
@@ -137,13 +156,14 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
   // Handle push prompt initiation
   const handleInitiatePush = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneNumber || phoneNumber.replace(/\D/g, "").length < 9) {
-      setStatusMessage("Please enter a valid 10-digit phone number (e.g. 078XXXXXXX or 072XXXXXXX)");
+    const cleanDigits = phoneNumber.replace(/\D/g, "");
+    if (!isValidMtnRwandaNumber(cleanDigits)) {
+      setStatusMessage("MTN number required: Please enter an MTN Rwanda number starting with 078 or 079 (e.g. 078XXXXXXX or 079XXXXXXX) to receive the push prompt on your SIM card.");
       return;
     }
 
     setPushStatus("initiating");
-    setStatusMessage("Sending Mobile Money authorization prompt to your SIM...");
+    setStatusMessage("Connecting to PawaPay and dispatching Mobile Money authorization prompt to your SIM card...");
 
     try {
       const res = await fetch("/api/payments/pawapay/deposit", {
@@ -153,13 +173,19 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
           orgId,
           amount: Math.round(amountRwf),
           currency: "RWF",
-          phoneNumber,
+          phoneNumber: cleanDigits,
           payerName: payerName || "Impacto Payer",
+          provider: "MTN_MOMO_RWA",
           customerMessage: (comment || itemName || "Impacto Payment").substring(0, 22),
-          metadata: {
-            fieldName: "itemType",
-            fieldValue: itemType,
-          },
+          itemType,
+          itemId,
+          metadata: [
+            { orgId: String(orgId || "global") },
+            { itemType: String(itemType || "general") },
+            { itemId: String(itemId || "") },
+            { payerName: String(payerName || "Impacto Payer") },
+            { payerPhone: String(cleanDigits) }
+          ],
         }),
       });
 
@@ -169,16 +195,65 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
         setDepositId(data.depositId);
         setPushStatus("awaiting_pin");
         setStatusMessage(
-          `Prompt sent to ${phoneNumber}! Check your phone screen now and enter your Mobile Money PIN.`
+          `MoMo prompt dispatched to SIM (${phoneNumber})! Please look at your phone screen now and enter your Mobile Money PIN.`
         );
         startCountdownAndPolling(data.depositId);
       } else {
         setPushStatus("failed");
-        setStatusMessage(data.message || "Could not trigger Mobile Money push. Please check your phone number or try the manual tab.");
+        setStatusMessage(data.message || "Could not trigger Mobile Money push. Please verify your MTN phone number or try the manual tab.");
       }
     } catch (err: any) {
       setPushStatus("failed");
       setStatusMessage(err.message || "Connection error. Please try again.");
+    }
+  };
+
+  // Immediate status check when user clicks "Check Status Now" or enters *182*7*1#
+  const handleCheckStatusNow = async () => {
+    if (!depositId) return;
+    setCheckingStatus(true);
+    setStatusMessage("Querying MTN network status for your authorization...");
+    try {
+      const checkRes = await fetch(`/api/payments/pawapay/status/${depositId}`);
+      if (checkRes.ok) {
+        const checkData = await checkRes.json();
+        const pawaStatus = (checkData.status || "").toUpperCase();
+        const nestedStatus = (checkData.data?.status || "").toUpperCase();
+        const txId = checkData.providerTransactionId || checkData.data?.providerTransactionId || depositId.slice(0, 8);
+
+        const isCompleted = pawaStatus === "COMPLETED" || pawaStatus === "SUCCESS" || nestedStatus === "COMPLETED" || nestedStatus === "SUCCESS";
+        const isFailed = pawaStatus === "FAILED" || pawaStatus === "REJECTED" || nestedStatus === "FAILED" || nestedStatus === "REJECTED";
+
+        if (isCompleted) {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          setProviderTxId(txId);
+          setPushStatus("success");
+          setStatusMessage("Payment authorized! Mobile Money transaction confirmed by MTN.");
+
+          await onSuccess({
+            depositId,
+            providerTransactionId: txId,
+            amount: amountRwf,
+            currency: "RWF",
+            payerPhone: phoneNumber,
+            payerName: payerName || "Payer",
+            provider: "MTN_MOMO_RWA",
+            comment: comment || itemName,
+            method: "pawapay_push",
+          });
+        } else if (isFailed) {
+          setPushStatus("failed");
+          setStatusMessage("Transaction was rejected or cancelled on handset.");
+        } else {
+          setStatusMessage("Transaction is still pending on MTN network. If you just entered your PIN, please wait a moment and click Check Status again.");
+        }
+      }
+    } catch (err: any) {
+      console.warn("Manual check error:", err);
+      setStatusMessage("Could not query network status. Please try again.");
+    } finally {
+      setCheckingStatus(false);
     }
   };
 
@@ -206,15 +281,19 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
         const checkRes = await fetch(`/api/payments/pawapay/status/${depId}`);
         if (checkRes.ok) {
           const checkData = await checkRes.json();
-          const currentStatus = (checkData.status || checkData.data?.status || "").toUpperCase();
+          const pawaStatus = (checkData.status || "").toUpperCase();
+          const nestedStatus = (checkData.data?.status || "").toUpperCase();
           const txId = checkData.providerTransactionId || checkData.data?.providerTransactionId || depId.slice(0, 8);
 
-          if (currentStatus === "COMPLETED" || currentStatus === "SUCCESS" || currentStatus === "FOUND") {
+          const isCompleted = pawaStatus === "COMPLETED" || pawaStatus === "SUCCESS" || nestedStatus === "COMPLETED" || nestedStatus === "SUCCESS";
+          const isFailed = pawaStatus === "FAILED" || pawaStatus === "REJECTED" || nestedStatus === "FAILED" || nestedStatus === "REJECTED";
+
+          if (isCompleted) {
             if (pollingRef.current) clearInterval(pollingRef.current);
             if (countdownRef.current) clearInterval(countdownRef.current);
             setProviderTxId(txId);
             setPushStatus("success");
-            setStatusMessage("Payment successfully confirmed by telecom provider!");
+            setStatusMessage("Payment authorized! Mobile Money transaction confirmed by MTN.");
 
             // Call parent onSuccess callback
             await onSuccess({
@@ -224,11 +303,11 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
               currency: "RWF",
               payerPhone: phoneNumber,
               payerName: payerName || "Payer",
-              provider: detectedProvider === "MTN" ? "MTN_MOMO_RWA" : "AIRTEL_MONEY_RWA",
+              provider: "MTN_MOMO_RWA",
               comment: comment || itemName,
               method: "pawapay_push",
             });
-          } else if (currentStatus === "FAILED" || currentStatus === "REJECTED") {
+          } else if (isFailed) {
             if (pollingRef.current) clearInterval(pollingRef.current);
             if (countdownRef.current) clearInterval(countdownRef.current);
             setPushStatus("failed");
@@ -251,7 +330,9 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualSms && !manualTxRef) {
+    const cleanRef = manualTxRef.trim();
+    const cleanSms = manualSms.trim();
+    if (!cleanSms && !cleanRef) {
       alert("Please provide the transaction reference ID or paste the SMS proof.");
       return;
     }
@@ -259,13 +340,13 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
     setManualSubmitting(true);
     try {
       await onSuccess({
-        depositId: manualTxRef || `MAN-${Date.now().toString().slice(-8)}`,
-        providerTransactionId: manualTxRef || undefined,
+        depositId: cleanRef || `MAN-${Date.now().toString().slice(-8)}`,
+        providerTransactionId: cleanRef || undefined,
         amount: amountRwf,
         currency: "RWF",
-        payerPhone: phoneNumber,
-        payerName: payerName || "Payer",
-        provider: detectedProvider === "MTN" ? "MTN_MOMO_RWA" : "AIRTEL_MONEY_RWA",
+        payerPhone: phoneNumber.trim(),
+        payerName: (payerName || "Payer").trim(),
+        provider: detectedProvider === "MTN" ? "MTN_MOMO_RWA" : "AIRTEL_RWA",
         comment: comment || itemName,
         method: "manual_proof",
         proofText: manualSms,
@@ -415,36 +496,118 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                     />
 
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-semibold text-stone-700 dark:text-stone-300">
-                          MoMo / Airtel Phone Number <span className="text-rose-500">*</span>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-bold text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
+                          <span>MTN Phone Number</span>
+                          <span className="text-rose-500">*</span>
                         </label>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 ${
-                            detectedProvider === "MTN"
-                              ? "bg-amber-100 text-amber-900 border border-amber-300"
-                              : "bg-rose-100 text-rose-900 border border-rose-300"
-                          }`}
-                        >
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${
-                              detectedProvider === "MTN" ? "bg-amber-600" : "bg-rose-600"
-                            }`}
-                          />
-                          {detectedProvider} Mobile Money
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-600 animate-pulse" />
+                          MTN Rwanda Only (078 / 079)
                         </span>
                       </div>
-                      <input
-                        type="tel"
-                        className="w-full text-sm font-mono font-bold rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3.5 py-2.5 text-stone-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition"
-                        placeholder="0788123456 or 0728123456"
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value.replace(/[^\d+]/g, ""))}
-                        required
-                      />
-                      <p className="text-[10px] text-stone-400 mt-1">
-                        The phone with this SIM card will receive the automatic popup authorization.
-                      </p>
+
+                      <div className="relative">
+                        <input
+                          type="tel"
+                          className={`w-full text-sm font-mono font-bold rounded-xl border px-3.5 py-2.5 text-stone-900 dark:text-white outline-none transition ${
+                            isCompleteMtn
+                              ? "border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 focus:ring-2 focus:ring-emerald-500"
+                              : isAirtelOrInvalidPrefix
+                              ? "border-rose-400 bg-rose-50/30 dark:bg-rose-950/20 focus:ring-2 focus:ring-rose-500"
+                              : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-amber-500"
+                          }`}
+                          placeholder="078XXXXXXX or 079XXXXXXX"
+                          value={phoneNumber}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setPhoneNumber(normalizeMtnRwandaNumber(val));
+                          }}
+                          maxLength={10}
+                          required
+                        />
+                        {isCompleteMtn && (
+                          <span className="absolute right-3 top-2.5 text-emerald-600 text-xs font-bold flex items-center gap-1">
+                            <CheckCircle2 className="h-4 w-4" /> Valid MTN
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Quick MTN Prefix Helpers */}
+                      <div className="flex items-center justify-between mt-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-stone-500 font-medium">Quick prefix:</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const rest = cleanPhone.startsWith("078") || cleanPhone.startsWith("079") ? cleanPhone.slice(3) : cleanPhone;
+                              setPhoneNumber(("078" + rest).slice(0, 10));
+                            }}
+                            className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200 transition"
+                          >
+                            078...
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const rest = cleanPhone.startsWith("078") || cleanPhone.startsWith("079") ? cleanPhone.slice(3) : cleanPhone;
+                              setPhoneNumber(("079" + rest).slice(0, 10));
+                            }}
+                            className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200 transition"
+                          >
+                            079...
+                          </button>
+                        </div>
+                        <span className="text-[10px] font-mono text-stone-400">
+                          {cleanPhone.length}/10 digits
+                        </span>
+                      </div>
+
+                      {/* Real-time Validation Feedback */}
+                      {isAirtelPrefix && (
+                        <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 rounded-xl text-xs space-y-2">
+                          <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
+                            <Smartphone className="h-4 w-4 shrink-0 text-amber-600" />
+                            <span>Airtel Money Rwanda Detected ({cleanPhone.slice(0, 3)}...)</span>
+                          </div>
+                          <p className="text-[11px] text-stone-600 dark:text-stone-400">
+                            Automated USSD push prompt is exclusive to MTN Rwanda SIMs. If you are using Airtel Money, switch to manual transfer to pay via <span className="font-mono font-bold">*500#</span> or <span className="font-mono font-bold">*182#</span> and submit your confirmation SMS.
+                          </p>
+                          <Button
+                            type="button"
+                            onClick={() => setTab("manual_sms")}
+                            className="w-full py-1.5 text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg transition"
+                          >
+                            Switch to Airtel Transfer Instructions (*500# / *182#)
+                          </Button>
+                        </div>
+                      )}
+
+                      {isAirtelOrInvalidPrefix && !isAirtelPrefix && (
+                        <div className="mt-2 p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 rounded-lg text-xs flex items-start gap-2">
+                          <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold">MTN Rwanda Number Required</p>
+                            <p className="text-[11px] text-rose-700 dark:text-rose-300">
+                              To prevent telco errors and ensure instant prompt delivery, please enter an MTN number starting with <span className="font-mono font-bold">078</span> or <span className="font-mono font-bold">079</span> (e.g. 078XXXXXXX). Airtel users can switch to the Manual SMS tab above.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {cleanPhone.length > 0 && isMtnPrefix && cleanPhone.length < 10 && (
+                        <p className="text-[11px] text-amber-700 dark:text-amber-300 font-medium mt-1 flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          Please enter all 10 digits ({10 - cleanPhone.length} more needed, e.g. 078XXXXXXX)
+                        </p>
+                      )}
+
+                      {isCompleteMtn && (
+                        <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium mt-1 flex items-center gap-1">
+                          <CheckCircle2 className="h-3 w-3" />
+                          MTN SIM verified. Prompt will be delivered to this handset automatically.
+                        </p>
+                      )}
                     </div>
 
                     <Input
@@ -464,22 +627,27 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
 
                   <Button
                     type="submit"
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-2"
+                    disabled={!isCompleteMtn}
+                    className={`w-full py-3 font-bold rounded-xl shadow-xs flex items-center justify-center gap-2 transition ${
+                      isCompleteMtn
+                        ? "bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold"
+                        : "bg-slate-300 dark:bg-slate-800 text-slate-500 cursor-not-allowed"
+                    }`}
                   >
                     <Zap className="h-4 w-4" />
-                    Send MoMo PIN Prompt ({amountRwf.toLocaleString()} RWF)
+                    Pay {amountRwf.toLocaleString()} RWF via MTN SIM Prompt (078/079)
                   </Button>
                 </form>
               )}
 
               {pushStatus === "initiating" && (
                 <div className="py-8 text-center space-y-4">
-                  <div className="h-16 w-16 mx-auto rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center animate-spin">
+                  <div className="h-16 w-16 mx-auto rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center animate-spin">
                     <RefreshCw className="h-8 w-8" />
                   </div>
                   <div>
                     <h4 className="font-bold text-stone-800 dark:text-white text-sm">
-                      Connecting to Telecom Gateway...
+                      Connecting to PawaPay Gateway...
                     </h4>
                     <p className="text-xs text-stone-400 mt-1">{statusMessage}</p>
                   </div>
@@ -489,46 +657,62 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
               {pushStatus === "awaiting_pin" && (
                 <div className="py-4 space-y-4 text-center animate-in zoom-in-95">
                   <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-30 animate-ping" />
-                    <div className="relative h-16 w-16 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg">
-                      <Smartphone className="h-8 w-8 animate-pulse" />
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-30 animate-ping" />
+                    <div className="relative h-16 w-16 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center shadow-lg font-bold">
+                      <Smartphone className="h-8 w-8 animate-pulse text-slate-950" />
                     </div>
                   </div>
 
                   <div>
                     <h4 className="font-extrabold text-stone-900 dark:text-white text-base">
-                      Prompt Sent to {phoneNumber}!
+                      Prompt Sent to MTN SIM: {phoneNumber}!
                     </h4>
                     <p className="text-xs text-stone-500 dark:text-stone-300 mt-1 max-w-xs mx-auto">
-                      Please look at your phone screen right now and enter your Mobile Money PIN to approve{" "}
-                      <span className="font-bold text-emerald-600">{amountRwf.toLocaleString()} RWF</span>.
+                      Please look at your phone screen right now and enter your MTN MoMo PIN to authorize{" "}
+                      <span className="font-bold text-amber-600 dark:text-amber-400">{amountRwf.toLocaleString()} RWF</span>.
                     </p>
                   </div>
 
                   {/* Timer & USSD manual shortcut box */}
-                  <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 text-left space-y-2">
+                  <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 text-left space-y-2.5">
                     <div className="flex items-center justify-between text-xs font-bold text-stone-700 dark:text-stone-300">
-                      <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                      <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
                         <Clock className="h-4 w-4 animate-spin" />
-                        Listening for confirmation...
+                        {countdown > 0 ? "Awaiting your PIN on phone..." : "Waiting for MTN clearance..."}
                       </span>
-                      <span className="font-mono text-stone-500">{countdown}s remaining</span>
+                      <span className="font-mono text-stone-500">
+                        {countdown > 0 ? `${countdown}s remaining` : "Extended wait"}
+                      </span>
                     </div>
 
-                    <div className="pt-2 border-t border-dashed border-slate-200 dark:border-slate-800 text-[11px] text-stone-500">
-                      <p className="font-bold text-stone-700 dark:text-stone-300 mb-1">
-                        Didn't get the pop-up on your screen?
+                    <div className="pt-2 border-t border-dashed border-slate-200 dark:border-slate-800 text-[11px] text-stone-500 space-y-1.5">
+                      <p className="font-bold text-stone-700 dark:text-stone-300">
+                        Didn't see the USSD pop-up on your screen?
                       </p>
-                      {detectedProvider === "MTN" ? (
-                        <p>
-                          Dial <span className="font-mono font-bold text-amber-700 bg-amber-50 px-1 py-0.5 rounded">*182*7*1#</span> on your phone and enter your PIN to approve pending transaction.
-                        </p>
-                      ) : (
-                        <p>
-                          Dial <span className="font-mono font-bold text-rose-700 bg-rose-50 px-1 py-0.5 rounded">*182*5*6*1#</span> on your phone to confirm the pending prompt.
-                        </p>
-                      )}
+                      <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200 dark:border-amber-900/50">
+                        <span className="text-[11px] text-amber-900 dark:text-amber-300">
+                          Dial <strong className="font-mono font-bold">*182*7*1#</strong> & enter MoMo PIN
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyCode("*182*7*1#", "ussd")}
+                          className="px-2 py-1 bg-amber-200 dark:bg-amber-800/60 hover:bg-amber-300 text-amber-900 dark:text-amber-100 rounded text-[10px] font-bold flex items-center gap-1 transition"
+                        >
+                          {copiedCode === "ussd" ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                          <span>{copiedCode === "ussd" ? "Copied" : "Copy Code"}</span>
+                        </button>
+                      </div>
                     </div>
+
+                    <Button
+                      type="button"
+                      onClick={handleCheckStatusNow}
+                      loading={checkingStatus}
+                      className="w-full py-2 text-xs bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg shadow-xs flex items-center justify-center gap-1.5 transition"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${checkingStatus ? "animate-spin" : ""}`} />
+                      I Approved PIN / Check MoMo Status Now
+                    </Button>
                   </div>
 
                   <div className="flex gap-2">
@@ -583,10 +767,21 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                   </div>
                   <div>
                     <h4 className="font-bold text-stone-900 dark:text-white text-sm">
-                      Transaction Incomplete
+                      Transaction Incomplete or Timed Out
                     </h4>
                     <p className="text-xs text-rose-600 mt-1">{statusMessage}</p>
                   </div>
+                  {depositId && (
+                    <Button
+                      type="button"
+                      onClick={handleCheckStatusNow}
+                      loading={checkingStatus}
+                      className="w-full py-2 text-xs bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg shadow-xs flex items-center justify-center gap-1.5"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${checkingStatus ? "animate-spin" : ""}`} />
+                      Re-Check Status (If Approved via *182*7*1#)
+                    </Button>
+                  )}
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
@@ -597,7 +792,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                     </Button>
                     <Button
                       onClick={() => setTab("manual_sms")}
-                      className="w-1/2 py-2 text-xs bg-emerald-600 text-white"
+                      className="w-1/2 py-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
                     >
                       Paste SMS Proof
                     </Button>
@@ -641,6 +836,13 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                     {copiedCode === "airtel" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
                     <span className="font-sans">Copy</span>
                   </button>
+                </div>
+                <div className="text-[10px] text-stone-500 bg-white/70 dark:bg-slate-900/50 p-2 rounded border border-amber-200/50">
+                  <div className="flex items-center justify-between font-mono text-stone-700 dark:text-stone-300">
+                    <span>Airtel Dial: <strong>*500#</strong> or <strong>*182#</strong></span>
+                    <span>MTN Dial: <strong>*182*1*1#</strong></span>
+                  </div>
+                  <p className="text-[9px] text-stone-400 mt-0.5">Send {amountRwf.toLocaleString()} RWF to the number above, then copy the confirmation SMS received.</p>
                 </div>
                 {finalMerchantCode && (
                   <div className="flex items-center justify-between text-stone-700 dark:text-stone-300 font-mono pt-1 border-t border-amber-200/60 dark:border-amber-900/40">

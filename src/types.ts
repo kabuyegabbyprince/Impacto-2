@@ -49,6 +49,7 @@ export interface Organization {
   subscription_ends_at?: string;
   subscription_tier?: "trial" | "starter" | "growth" | "enterprise" | "free" | "pro";
   active_packages?: string[];
+  packages_data?: Record<string, { expires_at: string; purchased_at: string }>;
   org_category: string;
   created_at: string;
   // Custom public portal settings

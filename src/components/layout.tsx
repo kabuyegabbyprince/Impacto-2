@@ -40,8 +40,10 @@ import {
   PackageCheck,
   ShieldAlert,
   Compass,
-  User
+  User,
+  Zap
 } from "lucide-react";
+import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "./MoMoPushPaymentModal";
 import { getOrgSubscriptionLifecycle } from "../lib/subscriptionMatrix";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
@@ -59,7 +61,8 @@ import {
   useMemberFees,
   useMembers,
   useUserMemberships,
-  useOrgSubscriptionPayments
+  useOrgSubscriptionPayments,
+  useUpdateOrganization
 } from "../hooks/useImpactoData";
 import { useToast } from "./Toast";
 import { MockDB } from "../lib/mockData";
@@ -321,6 +324,9 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
         {activeOrg && (
           <div className="hidden xs:flex items-center gap-2 relative">
             <span className="text-slate-300 dark:text-slate-700 font-light font-sans">/</span>
+
+            {/* FROZEN PHASE: Multi-organization switching disabled. Single organization membership mode.
+                Uncomment this button and the dropdown below to re-enable multi-workspace switching.
             <button
               id="tour-org-switcher"
               data-tour="org-switcher"
@@ -334,10 +340,22 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                 </svg>
               )}
             </button>
+            */}
+
+            {/* Static Organization Display (Single Organization Phase) */}
+            <div
+              id="tour-org-switcher"
+              data-tour="org-switcher"
+              className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5 font-sans select-none"
+            >
+              <span className="truncate max-w-[140px]">{activeOrg.name}</span>
+            </div>
+
             <span className="text-[9px] font-bold px-2 py-0.5 rounded-full select-none font-mono bg-emerald-50 text-[#156c45] border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/50">
               {activeOrg.subscription_status === "active" ? "MASTER WORKSPACE" : activeOrg.subscription_status === "expired" ? "RENEWAL DUE" : "FREE PLAN"}
             </span>
 
+            {/* FROZEN PHASE: Multi-organization switcher dropdown menu disabled.
             {orgSwitcherOpen && userMemberships.length > 1 && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setOrgSwitcherOpen(false)} />
@@ -387,6 +405,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                 </div>
               </>
             )}
+            */}
           </div>
         )}
       </div>
@@ -682,20 +701,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                   <button
                     onClick={() => {
                       setUserMenuOpen(false);
-                      clearOrg();
-                      navigate("/org-picker");
-                    }}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-300"
-                  >
-                    Switch Organization
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setUserMenuOpen(false);
-                      const slug = activeOrg?.slug || "workspace";
                       logout();
-                      window.location.href = `https://impacto-landing.vercel.app/@${slug}`;
+                      navigate("/login");
                     }}
                     className="w-full text-left px-4 py-2 hover:bg-red-50 dark:hover:bg-red-950/20 text-red-600 flex items-center gap-2 border-t border-gray-100 dark:border-slate-700 font-semibold"
                   >
@@ -945,6 +952,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
   const [supportSuccessAlert, setSupportSuccessAlert] = useState("");
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [sendingSupport, setSendingSupport] = useState(false);
+  const [openLockoutMoMo, setOpenLockoutMoMo] = useState(false);
 
   // Interactive Tour State & Lifecycle
   const [isTourOpen, setIsTourOpen] = useState(false);
@@ -989,12 +997,13 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
   const [recommendSuccess, setRecommendSuccess] = useState("");
 
   const platformSettings = platformData?.settings || {
-    usd_to_rwf_rate: 1300,
+    usd_to_rwf_rate: 1350,
     mtn_payment_number: "0788100100",
     airtel_payment_number: "0733100100",
     payment_name: "VIRELLIX INC"
   };
 
+  const updateOrgMutation = useUpdateOrganization();
   const { data: orgMembersData } = useMembers(activeOrg?.id);
   const activeMembersCount = orgMembersData?.filter((m: any) => m.status === "active").length || 0;
   const lifecycle = getOrgSubscriptionLifecycle(activeOrg, activeMembersCount);
@@ -1013,11 +1022,67 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     return false;
   })();
 
+  const handleLockoutMoMoSuccess = async (data: MoMoPaymentSuccessData) => {
+    try {
+      let costUsd = 25;
+      if (selectedTier.includes("Free")) costUsd = 0;
+      else if (selectedTier.includes("Growth")) costUsd = 25;
+      else if (selectedTier.includes("Pro")) costUsd = 40;
+      else if (selectedTier.includes("Enterprise")) costUsd = 80;
+
+      await submitPaymentMutation.mutateAsync({
+        org_id: activeOrg?.id || "",
+        plan: selectedTier,
+        amount_usd: costUsd,
+        amount_local: data.amount,
+        method: "pawapay_push",
+        phone: data.payerPhone,
+        reference: data.providerTransactionId || data.depositId,
+        proof_url: `[PawaPay Verified] Push payment authorized on MTN SIM (${data.payerPhone}). Deposit ID: ${data.depositId}`
+      });
+
+      const tierCode = selectedTier.toLowerCase().includes("growth")
+        ? "growth"
+        : selectedTier.toLowerCase().includes("pro")
+        ? "pro"
+        : selectedTier.toLowerCase().includes("enterprise")
+        ? "enterprise"
+        : "starter";
+
+      if (activeOrg) {
+        const updatedOrg = await updateOrgMutation.mutateAsync({
+          id: activeOrg.id,
+          subscription_status: "active",
+          subscription_tier: tierCode as any,
+          subscription_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        });
+        setActiveOrg(updatedOrg, activeMember);
+      }
+
+      setPaySuccessAlert(`Payment of ${data.amount.toLocaleString()} RWF authorized via MTN MoMo SIM push! Workspace unlocked on ${selectedTier}.`);
+      setOpenLockoutMoMo(false);
+      refetchSaas();
+      addToast(`Workspace unlocked! Your subscription to ${selectedTier} is now active.`, "success");
+    } catch (err: any) {
+      console.error(err);
+      addToast("MoMo prompt authorized! Updating workspace: " + (err.message || ""), "info");
+      setOpenLockoutMoMo(false);
+    }
+  };
+
   const handlePayLockout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!smsProof) {
       addToast("Please provide the payment text/message receipt to alert Superadmin.", "error");
       return;
+    }
+
+    if (momoPhone) {
+      const clean = momoPhone.replace(/\D/g, "");
+      if (!/^07[89]\d{7}$/.test(clean)) {
+        addToast("Error: MTN phone number required. Must be 10 digits starting with 078 or 079 (e.g. 078XXXXXXX or 079XXXXXXX) to reduce errors.", "error");
+        return;
+      }
     }
 
     setSubmittingPayment(true);
@@ -1061,6 +1126,14 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     if (!smsProof) {
       addToast("Please provide the payment text/message receipt to alert Superadmin.", "error");
       return;
+    }
+
+    if (momoPhone) {
+      const clean = momoPhone.replace(/\D/g, "");
+      if (!/^07[89]\d{7}$/.test(clean)) {
+        addToast("Error: MTN phone number required. Must be 10 digits starting with 078 or 079 (e.g. 078XXXXXXX or 079XXXXXXX) to reduce errors.", "error");
+        return;
+      }
     }
 
     setSubmittingPayment(true);
@@ -1162,6 +1235,34 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                   </div>
                 ) : (
                   <form onSubmit={handlePayLockout} className="flex flex-col gap-3 text-xs font-semibold text-gray-700">
+                    {/* Instant PawaPay MTN Push Option */}
+                    <div className="p-3 bg-amber-500/10 border-2 border-amber-500/70 rounded-xl flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-xs text-stone-900 dark:text-white flex items-center gap-1.5">
+                          <Zap className="h-4 w-4 text-amber-600 animate-pulse" />
+                          Direct MTN MoMo SIM Prompt (PawaPay)
+                        </span>
+                        <span className="text-[9px] font-mono font-bold bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">Instant</span>
+                      </div>
+                      <p className="text-[11px] text-stone-600 dark:text-stone-300 font-normal leading-relaxed">
+                        Trigger a prompt straight to your MTN SIM (078.. or 079..) to authorize renewal with your secret MoMo PIN.
+                      </p>
+                      <Button
+                        type="button"
+                        onClick={() => setOpenLockoutMoMo(true)}
+                        className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs rounded-lg flex items-center justify-center gap-1.5 shadow-xs"
+                      >
+                        <Zap className="h-3.5 w-3.5" />
+                        Trigger MTN MoMo SIM Prompt
+                      </Button>
+                    </div>
+
+                    <div className="relative flex py-0.5 items-center">
+                      <div className="flex-grow border-t border-gray-200"></div>
+                      <span className="flex-shrink mx-2 text-[9px] uppercase font-mono tracking-wider font-bold text-gray-400">Or Manual Transfer</span>
+                      <div className="flex-grow border-t border-gray-200"></div>
+                    </div>
+
                     <p className="text-gray-500 font-normal leading-normal text-[11px] mb-1">
                       Select a recommended plan to update your workspace license, then pay via Mobile Money.
                     </p>
@@ -1186,7 +1287,31 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       </select>
                     </div>
 
-                    <Input label="MoMo Payer Phone Number (Optional)" value={momoPhone} onChange={(e) => setMomoPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="078XXXXXXX" />
+                    <div className="flex flex-col gap-1">
+                      <Input
+                        label="MTN MoMo Payer Phone Number (078.. / 079..)"
+                        value={momoPhone}
+                        onChange={(e) => setMomoPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        placeholder="078XXXXXXX or 079XXXXXXX"
+                      />
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[10px] text-stone-400 font-mono">Quick prefix:</span>
+                        <button
+                          type="button"
+                          onClick={() => setMomoPhone("078")}
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700"
+                        >
+                          078
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMomoPhone("079")}
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700"
+                        >
+                          079
+                        </button>
+                      </div>
+                    </div>
                     <Input label="MoMo / Airtel Ref ID Key (Optional)" value={momoRef} onChange={(e) => setMomoRef(e.target.value)} placeholder="TXNXXXXXXX" />
 
                     <div className="flex flex-col gap-1 w-full">
@@ -1247,6 +1372,34 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                   </div>
                 ) : (
                   <form onSubmit={handleSubmitMemberPayment} className="flex flex-col gap-3 text-xs font-semibold text-gray-700">
+                    {/* Instant PawaPay MTN Push Option */}
+                    <div className="p-3 bg-amber-500/10 border-2 border-amber-500/70 rounded-xl flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-xs text-stone-900 dark:text-white flex items-center gap-1.5">
+                          <Zap className="h-4 w-4 text-amber-600 animate-pulse" />
+                          Direct MTN MoMo SIM Prompt (PawaPay)
+                        </span>
+                        <span className="text-[9px] font-mono font-bold bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">Instant</span>
+                      </div>
+                      <p className="text-[11px] text-stone-600 dark:text-stone-300 font-normal leading-relaxed">
+                        Trigger a prompt straight to your MTN SIM (078.. or 079..) to authorize renewal with your secret MoMo PIN.
+                      </p>
+                      <Button
+                        type="button"
+                        onClick={() => setOpenLockoutMoMo(true)}
+                        className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs rounded-lg flex items-center justify-center gap-1.5 shadow-xs"
+                      >
+                        <Zap className="h-3.5 w-3.5" />
+                        Trigger MTN MoMo SIM Prompt
+                      </Button>
+                    </div>
+
+                    <div className="relative flex py-0.5 items-center">
+                      <div className="flex-grow border-t border-gray-200"></div>
+                      <span className="flex-shrink mx-2 text-[9px] uppercase font-mono tracking-wider font-bold text-gray-400">Or Manual Transfer</span>
+                      <div className="flex-grow border-t border-gray-200"></div>
+                    </div>
+
                     <p className="text-gray-500 font-normal leading-normal text-[11px] mb-1">
                       Select the plan tier that best suits your cooperative size, pay via Mobile Money, and submit the proof details. The platform Superadmin will instantly verify the logs and unlock your workspace!
                     </p>
@@ -1271,7 +1424,31 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       </select>
                     </div>
 
-                    <Input label="MoMo Payer Phone Number (Optional)" value={momoPhone} onChange={(e) => setMomoPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="078XXXXXXX" />
+                    <div className="flex flex-col gap-1">
+                      <Input
+                        label="MTN MoMo Payer Phone Number (078.. / 079..)"
+                        value={momoPhone}
+                        onChange={(e) => setMomoPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        placeholder="078XXXXXXX or 079XXXXXXX"
+                      />
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[10px] text-stone-400 font-mono">Quick prefix:</span>
+                        <button
+                          type="button"
+                          onClick={() => setMomoPhone("078")}
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700"
+                        >
+                          078
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMomoPhone("079")}
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700"
+                        >
+                          079
+                        </button>
+                      </div>
+                    </div>
                     <Input label="MoMo / Airtel Ref ID Key (Optional)" value={momoRef} onChange={(e) => setMomoRef(e.target.value)} placeholder="TXNXXXXXXX" />
 
                     <div className="flex flex-col gap-1 w-full">
@@ -1418,6 +1595,27 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           onDismiss={handleDismissPrompt}
         />
       )}
+
+      {/* PawaPay Instant MTN MoMo Push Modal for Lockout / Renewal */}
+      <MoMoPushPaymentModal
+        isOpen={openLockoutMoMo}
+        onClose={() => setOpenLockoutMoMo(false)}
+        amount={(() => {
+          const rate = platformSettings.usd_to_rwf_rate || 1350;
+          let costUsd = 25;
+          if (selectedTier.includes("Free")) costUsd = 0;
+          else if (selectedTier.includes("Growth")) costUsd = 25;
+          else if (selectedTier.includes("Pro")) costUsd = 40;
+          else if (selectedTier.includes("Enterprise")) costUsd = 80;
+          return costUsd * rate;
+        })()}
+        orgId={activeOrg?.id}
+        defaultPayerName={activeOrg?.name}
+        description={`Impacto License Renewal: ${selectedTier}`}
+        itemType="subscription"
+        itemId={selectedTier.toLowerCase().includes("growth") ? "growth" : selectedTier.toLowerCase().includes("pro") ? "pro" : "starter"}
+        onSuccess={handleLockoutMoMoSuccess}
+      />
     </div>
   );
 };

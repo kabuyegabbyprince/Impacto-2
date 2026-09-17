@@ -40,10 +40,15 @@ export const OrgSelectField: React.FC<OrgSelectFieldProps> = ({
 
   // When selectedId changes or on initial mount, set query to the selected org's name
   useEffect(() => {
-    if (selectedId && organizations) {
-      const selected = organizations.find(o => o.id === selectedId);
+    if (selectedId && organizations && organizations.length > 0) {
+      const selected = organizations.find(
+        o => o.id === selectedId || (o.slug && o.slug.toLowerCase() === selectedId.toLowerCase())
+      );
       if (selected) {
         setQuery(selected.name);
+        if (selected.id !== selectedId) {
+          onSelect(selected.id);
+        }
       }
     }
   }, [selectedId, organizations]);
@@ -395,7 +400,8 @@ export const Login: React.FC = () => {
           }
           navigate("/dashboard");
         } else {
-          navigate("/org-picker");
+          // FROZEN PHASE: Multi-org / Workplace Hub frozen. Single organization membership mode.
+          navigate("/dashboard");
         }
       } else {
         // DEMO / OFFLINE AUTH
@@ -466,7 +472,8 @@ export const Login: React.FC = () => {
             setActiveOrg(firstOrg, newMem);
             navigate("/dashboard");
           } else {
-            navigate("/org-picker");
+            // FROZEN PHASE: Multi-org / Workplace Hub frozen. Single organization membership mode.
+            navigate("/dashboard");
           }
         }
       }
@@ -581,12 +588,32 @@ export const Register: React.FC = () => {
 
   useEffect(() => {
     if (orgIdFromParam) {
-      setPartSelectedOrg(orgIdFromParam);
+      const cleanParam = orgIdFromParam.replace(/^@/, "").trim().toLowerCase();
+      if (orgs && orgs.length > 0) {
+        const match = orgs.find(
+          (o) => o.id === orgIdFromParam || o.slug?.toLowerCase() === cleanParam
+        );
+        if (match) {
+          setPartSelectedOrg(match.id);
+        } else {
+          setPartSelectedOrg(orgIdFromParam);
+        }
+      } else {
+        const localOrgs = MockDB.getOrgs();
+        const match = localOrgs.find(
+          (o) => o.id === orgIdFromParam || o.slug?.toLowerCase() === cleanParam
+        );
+        if (match) {
+          setPartSelectedOrg(match.id);
+        } else {
+          setPartSelectedOrg(orgIdFromParam);
+        }
+      }
     }
     if (modeFromParam === "participant" || modeFromParam === "ngo") {
       setMode(modeFromParam);
     }
-  }, [orgIdFromParam, modeFromParam]);
+  }, [orgIdFromParam, modeFromParam, orgs]);
 
   // Organization Workspace Details - Step 1
   const [orgName, setOrgName] = useState("");
@@ -1110,10 +1137,10 @@ export const Register: React.FC = () => {
                         You are already logged into Impacto. Visit the workspace directory to search and join active local cooperatives.
                       </p>
                       <Button
-                        onClick={() => navigate("/org-picker")}
+                        onClick={() => navigate("/dashboard")}
                         className="w-full bg-emerald-700 hover:bg-emerald-800 py-2.5 text-xs font-bold"
                       >
-                        Go to Workspace Directory
+                        Go to Dashboard
                       </Button>
                     </div>
                   );
@@ -1144,12 +1171,13 @@ export const Register: React.FC = () => {
                             setActiveOrg(targetOrg, existingMembership);
                             navigate("/dashboard");
                           } else {
-                            navigate("/org-picker");
+                            // FROZEN PHASE: single-org mode
+                            navigate("/dashboard");
                           }
                         }}
                         className="w-full bg-emerald-700 hover:bg-emerald-800 py-2.5 text-xs font-bold"
                       >
-                        {existingMembership.status === "active" ? "Go to Dashboard" : "View Directory Roster"}
+                        {existingMembership.status === "active" ? "Go to Dashboard" : "Go to Dashboard"}
                       </Button>
                     </div>
                   );
@@ -1232,7 +1260,7 @@ export const Register: React.FC = () => {
                           navigate("/dashboard");
                         } else {
                           addToast(`Registration submitted! Your request to join ${targetOrg.name} is pending admin approval.`, "warning");
-                          navigate("/org-picker");
+                          navigate("/dashboard");
                         }
                       }}
                       className={`w-full py-2.5 text-xs font-bold ${isPublic ? "bg-emerald-600 hover:bg-emerald-700" : "bg-amber-600 hover:bg-amber-700"}`}
@@ -1246,9 +1274,8 @@ export const Register: React.FC = () => {
               <div className="text-center mt-3 pt-3 border-t">
                 <button
                   onClick={() => {
-                    const slug = useOrgStore.getState().activeOrg?.slug || "workspace";
                     logout();
-                    window.location.href = `https://impacto-landing.vercel.app/@${slug}`;
+                    navigate("/login");
                   }}
                   className="text-[10px] font-bold text-red-500 hover:underline hover:text-red-700 uppercase tracking-wider cursor-pointer bg-transparent border-0 outline-none"
                 >
@@ -1650,6 +1677,21 @@ export const OrgPicker: React.FC = () => {
     return allMembers;
   }, [user, liveUserMemberships, localMemberships]);
 
+  // FROZEN PHASE: Multi-organization switching & Workplace Hub frozen. Single organization membership mode.
+  // Automatically redirect users to their single active organization dashboard.
+  React.useEffect(() => {
+    if (!isLoading && user) {
+      const active = memberships.find((m) => m.status === "active");
+      if (active) {
+        const org = orgs?.find((o) => o.id === active.org_id) || MockDB.getOrgs().find((o) => o.id === active.org_id);
+        if (org) {
+          setActiveOrg(org, active);
+        }
+        navigate("/dashboard", { replace: true });
+      }
+    }
+  }, [isLoading, user, memberships, orgs, navigate, setActiveOrg]);
+
   const handleSelect = (memberRow: any) => {
     const org = orgs?.find((o) => o.id === memberRow.org_id) || MockDB.getOrgs().find((o) => o.id === memberRow.org_id) || null;
     setActiveOrg(org, memberRow);
@@ -1938,9 +1980,8 @@ export const OrgPicker: React.FC = () => {
   };
 
   const handleLogout = () => {
-    const slug = useOrgStore.getState().activeOrg?.slug || "workspace";
     logout();
-    window.location.href = `https://impacto-landing.vercel.app/@${slug}`;
+    navigate("/login");
   };
 
   if (isLoading) {
@@ -1994,6 +2035,68 @@ export const OrgPicker: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 flex flex-col justify-center items-center p-4">
+      {/* FROZEN PHASE: Single Organization Membership View */}
+      <div className="w-full max-w-md flex flex-col gap-6 my-8">
+        <div className="text-center flex flex-col items-center">
+          <div className="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center mb-3 shadow-xs">
+            <Building2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <h2 className="text-2xl font-extrabold tracking-tight font-display text-gray-950 dark:text-white">
+            {activeMemberships[0]
+              ? (orgs?.find((o) => o.id === activeMemberships[0].org_id) || MockDB.getOrgs().find((o) => o.id === activeMemberships[0].org_id))?.name || "Your Workspace"
+              : "Your Workspace"}
+          </h2>
+          <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+            Single organization membership mode is active.
+          </p>
+        </div>
+
+        {activeMemberships[0] ? (
+          <div className="bg-white dark:bg-slate-900 border border-emerald-600/30 rounded-2xl p-5 shadow-xs flex flex-col gap-4">
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
+              <span className="text-[11px] font-mono uppercase text-gray-400 font-bold">Role</span>
+              <Badge color={activeMemberships[0].role === "org_admin" ? "amber" : "blue"}>
+                {activeMemberships[0].role === "org_admin" ? "Administrator" : "Member"}
+              </Badge>
+            </div>
+            <Button
+              onClick={() => {
+                const mem = activeMemberships[0];
+                const org = orgs?.find((o) => o.id === mem.org_id) || MockDB.getOrgs().find((o) => o.id === mem.org_id);
+                if (org) setActiveOrg(org, mem);
+                navigate("/dashboard");
+              }}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5"
+            >
+              <span>Enter Workspace Dashboard</span>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-5 text-center flex flex-col gap-3">
+            <p className="text-xs text-gray-500">Connecting to your primary workspace...</p>
+            <Button
+              onClick={() => navigate("/dashboard")}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 text-xs rounded-xl"
+            >
+              Go to Dashboard
+            </Button>
+          </div>
+        )}
+
+        <div className="text-center pt-2">
+          <button
+            onClick={handleLogout}
+            className="text-xs font-bold text-gray-400 hover:text-red-500 inline-flex items-center gap-1.5 transition"
+          >
+            <LogOut className="h-3.5 w-3.5" /> Sign Out of Account
+          </button>
+        </div>
+      </div>
+
+      {/* FROZEN PHASE: The full multi-tenant Workplace Hub, multi-workspace directory, and membership exit pool
+          are stopped and hidden below. Set `false &&` to `true &&` (or remove the wrapper) to re-enable Workplace Hub. */}
+      {false && (
       <div className="w-full max-w-2xl flex flex-col gap-6 my-8">
         <div className="text-center flex flex-col items-center">
           <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight font-display text-gray-950 dark:text-white">
@@ -2214,7 +2317,6 @@ export const OrgPicker: React.FC = () => {
                 Submit an integration request or request to join work pools.
               </p>
             </div>
-            {/* Search Input */}
             <div className="relative w-full sm:w-64 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
@@ -2283,6 +2385,7 @@ export const OrgPicker: React.FC = () => {
           </span>
         </div>
       </div>
+      )}
 
       {/* ========================================== */}
       {/* 5. GROWTH & PRO PLAN OFFBOARDING SURVEY MODAL */}

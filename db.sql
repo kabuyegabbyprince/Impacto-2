@@ -154,6 +154,10 @@ ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS fee_notification TEXT;
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS marketplace_enabled BOOLEAN DEFAULT true;
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS is_public_directory BOOLEAN DEFAULT true;
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS allow_public_joining BOOLEAN DEFAULT true;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS dues_account_name TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS dues_mtn_number TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS dues_airtel_number TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS momo_merchant_code TEXT;
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- ---------------------------------------------------------------------

@@ -42,9 +42,15 @@ const applyAccessibilitySettings = (user?: User | null) => {
 // Check local storage for persistent demo/mock session
 const getInitialUser = (): User | null => {
   const saved = localStorage.getItem("impacto_user");
-  if (saved) {
+  const session = localStorage.getItem("impacto_session");
+  if (saved && session) {
     try {
       const parsed: User = JSON.parse(saved);
+      if (!parsed || !parsed.id) {
+        localStorage.removeItem("impacto_user");
+        localStorage.removeItem("impacto_session");
+        return null;
+      }
       // If user had a personal language saved, ensure it takes priority
       const userLang = localStorage.getItem("impacto_user_lang_" + parsed.id) as ("en" | "fr" | "rw") || parsed.preferred_language;
       if (userLang) {
@@ -57,6 +63,8 @@ const getInitialUser = (): User | null => {
       applyAccessibilitySettings(parsed);
       return parsed;
     } catch {
+      localStorage.removeItem("impacto_user");
+      localStorage.removeItem("impacto_session");
       return null;
     }
   }

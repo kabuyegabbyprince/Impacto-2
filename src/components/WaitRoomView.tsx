@@ -63,9 +63,8 @@ export const WaitRoomView: React.FC = () => {
   };
 
   const handleSignOut = () => {
-    const slug = activeOrg?.slug || "workspace";
     logout();
-    window.location.href = `https://impacto-landing.vercel.app/@${slug}`;
+    navigate("/login");
   };
 
   return (
@@ -172,6 +171,8 @@ export const WaitRoomView: React.FC = () => {
               Check Status / Refresh
             </Button>
 
+            {/* FROZEN PHASE: Switch Workspace button hidden. Single organization membership mode.
+                Uncomment to re-enable switching to other workspaces from the waiting room.
             <Button
               variant="outline"
               onClick={() => navigate("/org-picker")}
@@ -180,6 +181,7 @@ export const WaitRoomView: React.FC = () => {
               <span>Switch Workspace</span>
               <ArrowRight className="h-3.5 w-3.5" />
             </Button>
+            */}
           </div>
 
         </div>

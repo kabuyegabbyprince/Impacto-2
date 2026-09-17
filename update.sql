@@ -8,7 +8,13 @@
 --    of their own dues and submitting payment slips (pending_confirmation).
 -- =====================================================================
 
--- 1. Ensure member_fees table exists and has all required columns
+-- 1. Ensure member_fees and organizations have all required columns
+ALTER TABLE IF EXISTS public.organizations 
+  ADD COLUMN IF NOT EXISTS dues_account_name TEXT,
+  ADD COLUMN IF NOT EXISTS dues_mtn_number TEXT,
+  ADD COLUMN IF NOT EXISTS dues_airtel_number TEXT,
+  ADD COLUMN IF NOT EXISTS momo_merchant_code TEXT;
+
 CREATE TABLE IF NOT EXISTS public.member_fees (
   id TEXT PRIMARY KEY,
   org_id TEXT NOT NULL,

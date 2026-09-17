@@ -296,6 +296,26 @@ router.post("/update", async (req, res) => {
       }
     }
 
+    // Verify against duplicate transaction reference reuse (fraud / accidental double submission)
+    if (transaction_reference && typeof transaction_reference === "string" && transaction_reference.trim().length >= 4) {
+      const trimmedRef = transaction_reference.trim();
+      // Ignore system placeholders
+      if (!trimmedRef.startsWith("SYS-") && !trimmedRef.startsWith("DEP-TMP")) {
+        const { data: existingRef } = await supabaseService
+          .from("member_fees")
+          .select("id, payment_period, period_date, status")
+          .eq("transaction_reference", trimmedRef)
+          .neq("id", id)
+          .limit(1);
+
+        if (existingRef && existingRef.length > 0) {
+          return res.status(400).json({
+            error: `Duplicate Transaction Reference: Reference "${trimmedRef}" has already been registered on another fee record (${existingRef[0].payment_period} cycle). Please verify your SMS receipt to avoid duplicate submission.`,
+          });
+        }
+      }
+    }
+
     const updateData: any = {
       status,
       paid_at: paid_at || null,

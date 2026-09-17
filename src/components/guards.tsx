@@ -27,7 +27,7 @@ const ensureActiveOrg = (user: any, activeOrg: any, setActiveOrg: any) => {
 
 export const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuthStore();
-  if (!user) {
+  if (!user || !user.id) {
     return <Navigate to="/login" replace />;
   }
   return <>{children}</>;
@@ -37,7 +37,7 @@ export const OrgRoute: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const { user } = useAuthStore();
   const { activeOrg, activeMember, setActiveOrg } = useOrgStore();
 
-  if (!user) {
+  if (!user || !user.id) {
     return <Navigate to="/login" replace />;
   }
   if (!activeOrg) {
@@ -62,7 +62,7 @@ export const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }
   const { user } = useAuthStore();
   const { activeOrg, activeMember, setActiveOrg } = useOrgStore();
 
-  if (!user) {
+  if (!user || !user.id) {
     return <Navigate to="/login" replace />;
   }
   if (!activeOrg) {
@@ -78,7 +78,7 @@ export const AccountantRoute: React.FC<{ children: React.ReactNode }> = ({ child
   const { user } = useAuthStore();
   const { activeOrg, activeMember, setActiveOrg } = useOrgStore();
 
-  if (!user) {
+  if (!user || !user.id) {
     return <Navigate to="/login" replace />;
   }
   if (!activeOrg) {
@@ -93,7 +93,7 @@ export const AccountantRoute: React.FC<{ children: React.ReactNode }> = ({ child
 export const PlatformRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuthStore();
 
-  if (!user || !user.is_superadmin) {
+  if (!user || !user.id || !user.is_superadmin) {
     return <Navigate to="/login" replace />;
   }
   return <>{children}</>;
@@ -102,7 +102,7 @@ export const PlatformRoute: React.FC<{ children: React.ReactNode }> = ({ childre
 export const AuditorRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuthStore();
 
-  if (!user) {
+  if (!user || !user.id) {
     return <Navigate to="/login" replace />;
   }
   

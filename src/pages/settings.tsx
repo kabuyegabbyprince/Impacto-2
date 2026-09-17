@@ -38,8 +38,10 @@ import {
   ArrowUp,
   ArrowDown,
   Edit3,
-  ShieldCheck
+  ShieldCheck,
+  Zap
 } from "lucide-react";
+import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "../components/MoMoPushPaymentModal";
 import { useOrgStore } from "../store/orgStore";
 import { useCurrencyStore } from "../store/currencyStore";
 import { useAuthStore } from "../store/authStore";
@@ -356,6 +358,60 @@ export const OrganizationSettingsPage: React.FC = () => {
   const [momoSmsProof, setMomoSmsProof] = useState("");
   const [submittingPayment, setSubmittingPayment] = useState(false);
 
+  // Automated PawaPay MoMo Push Modal state
+  const [openMoMoModal, setOpenMoMoModal] = useState(false);
+  const [selectedPlanDetails, setSelectedPlanDetails] = useState({
+    planName: "Growth Plan - $25/month",
+    amountUsd: 25,
+    amountRwf: 25 * 1350,
+    tierCode: "growth"
+  });
+
+  const handleOpenMoMoPushPayment = (planName: string, amountUsd: number, tierCode: string) => {
+    const rate = platformSettings.usd_to_rwf_rate || 1350;
+    setSelectedPlanDetails({
+      planName,
+      amountUsd,
+      amountRwf: Math.round(amountUsd * rate),
+      tierCode
+    });
+    setOpenMoMoModal(true);
+  };
+
+  const handleSubscriptionMoMoSuccess = async (data: MoMoPaymentSuccessData) => {
+    try {
+      const tierCode = selectedPlanDetails.tierCode;
+
+      await submitPaymentMutation.mutateAsync({
+        org_id: activeOrg?.id || "",
+        plan: selectedPlanDetails.planName,
+        amount_usd: selectedPlanDetails.amountUsd,
+        amount_local: data.amount,
+        method: "pawapay_push",
+        phone: data.payerPhone,
+        reference: data.providerTransactionId || data.depositId,
+        proof_url: `[PawaPay Verified] Direct SIM push completed on MTN (${data.payerPhone}). PawaPay Deposit ID: ${data.depositId}`
+      });
+
+      if (activeOrg) {
+        const updatedOrg = await updateMutation.mutateAsync({
+          id: activeOrg.id,
+          subscription_status: "active",
+          subscription_tier: tierCode as any,
+          subscription_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        });
+        setActiveOrg(updatedOrg, activeMember);
+      }
+
+      addToast(`Payment of ${data.amount.toLocaleString()} RWF confirmed via MTN MoMo SIM push! Your workspace is activated on ${selectedPlanDetails.planName}.`, "success");
+      setOpenMoMoModal(false);
+    } catch (err: any) {
+      console.error("Subscription payment registration error:", err);
+      addToast("Payment authorized by MTN! Updating organization status: " + (err.message || ""), "info");
+      setOpenMoMoModal(false);
+    }
+  };
+
   // Support Request / Chat line Form
   const [supportMessage, setSupportMessage] = useState("");
 
@@ -621,11 +677,12 @@ export const OrganizationSettingsPage: React.FC = () => {
 
   const handleSaveMomo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (mtnNum && !/^07\d{8}$/.test(mtnNum)) {
-      addToast("Error: MTN Collection number must be 10 digits and start with 07 (e.g. 078xxxxxxx)", "error");
+    const cleanMtn = mtnNum ? mtnNum.replace(/\D/g, "") : "";
+    if (cleanMtn && !/^07[89]\d{7}$/.test(cleanMtn)) {
+      addToast("Error: MTN Collection number must be exactly 10 digits starting with 078 or 079 (e.g. 078XXXXXXX or 079XXXXXXX) to reduce payment errors.", "error");
       return;
     }
-    if (airtelNum && !/^07\d{8}$/.test(airtelNum)) {
+    if (airtelNum && !/^07\d{8}$/.test(airtelNum.replace(/\D/g, ""))) {
       addToast("Error: Airtel Collection number must be 10 digits and start with 07 (e.g. 073xxxxxxx)", "error");
       return;
     }
@@ -634,10 +691,10 @@ export const OrganizationSettingsPage: React.FC = () => {
         id: activeOrg?.id || "",
         donations_enabled: enableDonations,
         donation_account_name: mName,
-        donation_mtn_number: mtnNum,
+        donation_mtn_number: cleanMtn || mtnNum,
         donation_airtel_number: airtelNum,
         dues_account_name: mName,
-        dues_mtn_number: mtnNum,
+        dues_mtn_number: cleanMtn || mtnNum,
         dues_airtel_number: airtelNum,
         momo_merchant_code: momoMerchantCode
       });
@@ -652,12 +709,13 @@ export const OrganizationSettingsPage: React.FC = () => {
   const handlePaySubscription = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!payerPhone || !paymentRef || !momoSmsProof) {
-      addToast("Please provide all manual payment evidence details to alert Superadmin.", "error");
+      addToast("Please provide all payment evidence details to alert Superadmin.", "error");
       return;
     }
 
-    if (!/^07\d{8}$/.test(payerPhone)) {
-      addToast("Error: Payer phone number must be exactly 10 digits and start with 07 (e.g. 07xxxxxxxx)", "error");
+    const cleanPayer = payerPhone.replace(/\D/g, "");
+    if (!/^07[89]\d{7}$/.test(cleanPayer)) {
+      addToast("Error: MTN phone number required. Must be exactly 10 digits starting with 078 or 079 (e.g. 078XXXXXXX or 079XXXXXXX) to avoid telco errors.", "error");
       return;
     }
 
@@ -1548,10 +1606,11 @@ export const OrganizationSettingsPage: React.FC = () => {
                 </div>
                 <Button 
                   size="sm" 
-                  onClick={() => { setSubPlan("Growth Plan - $25/month"); setOpenSubModal(true); }}
+                  onClick={() => handleOpenMoMoPushPayment("Growth Plan - $25/month", 25, "growth")}
                   className="self-start md:self-center bg-amber-500 hover:bg-amber-600 font-extrabold text-[11px] px-4.5 py-2 text-stone-950 shadow-xs rounded-xl transition duration-150 shrink-0"
                 >
-                  {t("Upgrade Premium Plan")} →
+                  <Zap className="h-3.5 w-3.5 mr-1" />
+                  {t("Upgrade Premium Plan")} (PawaPay Push) →
                 </Button>
               </div>
             )}
@@ -1610,14 +1669,15 @@ export const OrganizationSettingsPage: React.FC = () => {
                       ✓ {t("Your Active Plan")}
                     </Button>
                   ) : (
-                    <Button variant="outline" className="w-full mt-6" onClick={() => { setSubPlan("Starter Plan - $10/month"); setOpenSubModal(true); }}>
-                      {t("Choose Starter")}
+                    <Button variant="outline" className="w-full mt-6 flex items-center justify-center gap-1.5" onClick={() => handleOpenMoMoPushPayment("Starter Plan - $10/month", 10, "starter")}>
+                      <Zap className="h-4 w-4 text-amber-600" />
+                      {t("Choose Starter")} (MoMo Push)
                     </Button>
                   )}
                   {/* Switch Link Option */}
                   <div className="text-center mt-3 select-none">
                     <span 
-                      onClick={() => { setSubPlan("Starter Plan - $10/month"); setOpenSubModal(true); }}
+                      onClick={() => handleOpenMoMoPushPayment("Starter Plan - $10/month", 10, "starter")}
                       className="text-stone-550 hover:text-emerald-700 text-[11px] font-bold underline cursor-pointer transition"
                     >
                       {t("Change Subscription to Starter Pack")}
@@ -1681,14 +1741,15 @@ export const OrganizationSettingsPage: React.FC = () => {
                       ✓ {t("Your Active Plan")}
                     </Button>
                   ) : (
-                    <Button className="w-full mt-6 bg-emerald-605 hover:bg-emerald-700" onClick={() => { setSubPlan("Growth Plan - $25/month"); setOpenSubModal(true); }}>
-                      {t("Choose Growth Option")}
+                    <Button className="w-full mt-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-1.5" onClick={() => handleOpenMoMoPushPayment("Growth Plan - $25/month", 25, "growth")}>
+                      <Zap className="h-4 w-4 text-amber-300" />
+                      {t("Choose Growth Option")} (MoMo Push)
                     </Button>
                   )}
                   {/* Switch Link Option */}
                   <div className="text-center mt-3 select-none">
                     <span 
-                      onClick={() => { setSubPlan("Growth Plan - $25/month"); setOpenSubModal(true); }}
+                      onClick={() => handleOpenMoMoPushPayment("Growth Plan - $25/month", 25, "growth")}
                       className="text-emerald-800 hover:text-emerald-605 text-[11px] font-bold underline cursor-pointer transition"
                     >
                       {t("Change Subscription to Growth Pack")}
@@ -1743,14 +1804,15 @@ export const OrganizationSettingsPage: React.FC = () => {
                       ✓ {t("Your Active Plan")}
                     </Button>
                   ) : (
-                    <Button className="w-full mt-6 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold" onClick={() => { setSubPlan("Pro Plan - $40/month"); setOpenSubModal(true); }}>
-                      {t("Upgrade to Pro Plan")}
+                    <Button className="w-full mt-6 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold flex items-center justify-center gap-1.5" onClick={() => handleOpenMoMoPushPayment("Pro Plan - $40/month", 40, "pro")}>
+                      <Zap className="h-4 w-4 text-slate-950" />
+                      {t("Upgrade to Pro Plan")} (MoMo Push)
                     </Button>
                   )}
                   {/* Switch Link Option */}
                   <div className="text-center mt-3 select-none">
                     <span 
-                      onClick={() => { setSubPlan("Pro Plan - $40/month"); setOpenSubModal(true); }}
+                      onClick={() => handleOpenMoMoPushPayment("Pro Plan - $40/month", 40, "pro")}
                       className="text-amber-400 hover:text-amber-300 text-[11px] font-bold underline cursor-pointer transition"
                     >
                       {t("Change Subscription to Pro Plan")}
@@ -2197,6 +2259,41 @@ export const OrganizationSettingsPage: React.FC = () => {
       {/* Manual Subscription payment modal details */}
       <Modal open={openSubModal} onClose={() => setOpenSubModal(false)} title={t("lbl_license_sub_gateway", "License Subscription Gateway")}>
         <form onSubmit={handlePaySubscription} className="flex flex-col gap-4 text-xs font-semibold text-stone-704">
+          {/* Automated PawaPay MTN Push Banner */}
+          <div className="p-4 bg-gradient-to-r from-amber-500/15 via-amber-400/10 to-transparent border-2 border-amber-500/70 rounded-2xl flex flex-col gap-2.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-amber-600 animate-pulse" />
+                <span className="font-extrabold text-sm text-stone-900 dark:text-white">Direct MTN MoMo SIM Prompt (PawaPay)</span>
+              </div>
+              <span className="text-[9px] font-mono uppercase tracking-wider font-extrabold bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">Instant</span>
+            </div>
+            <p className="text-[11px] text-stone-600 dark:text-stone-300 leading-relaxed font-normal">
+              No need to copy account numbers or paste SMS text! Receive a direct authorization popup prompt on your MTN SIM card (078.. / 079..) to pay with your MoMo PIN.
+            </p>
+            <Button
+              type="button"
+              onClick={() => {
+                setOpenSubModal(false);
+                let usd = 25;
+                let tier = "growth";
+                if (subPlan.includes("Starter")) { usd = 10; tier = "starter"; }
+                else if (subPlan.includes("Pro") || subPlan.includes("Enterprise")) { usd = 40; tier = "pro"; }
+                handleOpenMoMoPushPayment(subPlan, usd, tier);
+              }}
+              className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-xl flex items-center justify-center gap-2 shadow-xs"
+            >
+              <Zap className="h-4 w-4" />
+              Pay via MTN MoMo SIM Prompt (PawaPay)
+            </Button>
+          </div>
+
+          <div className="relative flex py-1 items-center">
+            <div className="flex-grow border-t border-gray-200"></div>
+            <span className="flex-shrink mx-3 text-[10px] uppercase font-mono tracking-wider font-bold text-gray-400">Or Manual Transfer Proof</span>
+            <div className="flex-grow border-t border-gray-200"></div>
+          </div>
+
           <p className="text-stone-550 font-normal leading-normal">
             {t("lbl_momo_transfer_info", "As a Rwandese localized portal, payments resolve manually via MTN MoMo / Airtel Money. Please transfer correct funds, then complete raw SMS confirmation logs below.")}
           </p>
@@ -2223,7 +2320,31 @@ export const OrganizationSettingsPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Input label={t("lbl_payer_momo_phone", "Your Payer Momo Phone Number")} value={payerPhone} onChange={(e) => setPayerPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="e.g. 0788123456" />
+            <div className="flex flex-col gap-1">
+              <Input
+                label={t("lbl_payer_momo_phone", "Your MTN MoMo Phone Number (078.. / 079..)")}
+                value={payerPhone}
+                onChange={(e) => setPayerPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                placeholder="078XXXXXXX or 079XXXXXXX"
+              />
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[10px] text-stone-400 font-mono">Quick prefix:</span>
+                <button
+                  type="button"
+                  onClick={() => setPayerPhone("078")}
+                  className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700"
+                >
+                  078
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPayerPhone("079")}
+                  className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700"
+                >
+                  079
+                </button>
+              </div>
+            </div>
             <Input label={t("lbl_momo_trans_ref", "MoMo Transaction Reference ID")} value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} placeholder="e.g. TXN2468135" />
           </div>
 
@@ -2297,6 +2418,19 @@ export const OrganizationSettingsPage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* PawaPay Instant MTN MoMo SIM Push Modal */}
+      <MoMoPushPaymentModal
+        isOpen={openMoMoModal}
+        onClose={() => setOpenMoMoModal(false)}
+        amount={selectedPlanDetails.amountRwf}
+        orgId={activeOrg?.id}
+        defaultPayerName={activeOrg?.name}
+        description={`Impacto Workspace Subscription: ${selectedPlanDetails.planName}`}
+        itemType="subscription"
+        itemId={selectedPlanDetails.tierCode}
+        onSuccess={handleSubscriptionMoMoSuccess}
+      />
     </div>
   );
 };

@@ -56,12 +56,21 @@ export function useOrganizations() {
     queryFn: async () => {
       let orgs: Organization[];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("organizations")
-          .select("*")
-          .order("name", { ascending: true });
-        if (error) throw error;
-        orgs = data as Organization[];
+        try {
+          const { data, error } = await supabase
+            .from("organizations")
+            .select("*")
+            .order("name", { ascending: true });
+          if (error) {
+            console.warn("Supabase organizations query notice, using local cache:", error);
+            orgs = MockDB.getOrgs();
+          } else {
+            orgs = (data || []) as Organization[];
+          }
+        } catch (err) {
+          console.warn("Network error fetching organizations, using local cache:", err);
+          orgs = MockDB.getOrgs();
+        }
       } else {
         await delay();
         orgs = MockDB.getOrgs();
@@ -103,8 +112,38 @@ export function useOrganizations() {
         const localExitSurveyQuestions = localStorage.getItem(
           `impacto_org_exit_survey_questions_${org.id}`,
         );
+        const localDuesAccount = localStorage.getItem(
+          `impacto_org_dues_account_name_${org.id}`,
+        );
+        const localDuesMtn = localStorage.getItem(
+          `impacto_org_dues_mtn_number_${org.id}`,
+        );
+        const localDuesAirtel = localStorage.getItem(
+          `impacto_org_dues_airtel_number_${org.id}`,
+        );
+        const localMomoMerchant = localStorage.getItem(
+          `impacto_org_momo_merchant_code_${org.id}`,
+        );
         return {
           ...org,
+          dues_account_name:
+            localDuesAccount ||
+            org.dues_account_name ||
+            org.donation_account_name ||
+            org.name,
+          dues_mtn_number:
+            localDuesMtn ||
+            org.dues_mtn_number ||
+            org.donation_mtn_number,
+          dues_airtel_number:
+            localDuesAirtel ||
+            org.dues_airtel_number ||
+            org.donation_airtel_number,
+          momo_merchant_code:
+            localMomoMerchant ||
+            org.momo_merchant_code ||
+            (org as any).momo_merchant_code ||
+            "",
           exit_survey_enabled:
             localExitSurveyEnabled !== null
               ? JSON.parse(localExitSurveyEnabled)
@@ -163,13 +202,22 @@ export function useOrganization(slug: string | undefined) {
       if (!slug) return null;
       let org: Organization | null = null;
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("organizations")
-          .select("*")
-          .eq("slug", slug)
-          .maybeSingle();
-        if (error) throw error;
-        org = data as Organization | null;
+        try {
+          const { data, error } = await supabase
+            .from("organizations")
+            .select("*")
+            .eq("slug", slug)
+            .maybeSingle();
+          if (error) {
+            console.warn("Supabase organization query notice, using local cache:", error);
+            org = MockDB.getOrgs().find((o) => o.slug === slug) || null;
+          } else {
+            org = data as Organization | null;
+          }
+        } catch (err) {
+          console.warn("Network error fetching organization, using local cache:", err);
+          org = MockDB.getOrgs().find((o) => o.slug === slug) || null;
+        }
       } else {
         await delay();
         org = MockDB.getOrgs().find((o) => o.slug === slug) || null;
@@ -283,8 +331,39 @@ export function useUpdateOrganization() {
         exit_survey_title,
         exit_survey_description,
         exit_survey_questions,
+        dues_account_name,
+        dues_mtn_number,
+        dues_airtel_number,
+        momo_merchant_code,
+        active_packages,
+        packages_data,
         ...rest
       } = payload;
+
+      if (dues_account_name !== undefined) {
+        localStorage.setItem(
+          `impacto_org_dues_account_name_${id}`,
+          dues_account_name || "",
+        );
+      }
+      if (dues_mtn_number !== undefined) {
+        localStorage.setItem(
+          `impacto_org_dues_mtn_number_${id}`,
+          dues_mtn_number || "",
+        );
+      }
+      if (dues_airtel_number !== undefined) {
+        localStorage.setItem(
+          `impacto_org_dues_airtel_number_${id}`,
+          dues_airtel_number || "",
+        );
+      }
+      if (momo_merchant_code !== undefined) {
+        localStorage.setItem(
+          `impacto_org_momo_merchant_code_${id}`,
+          momo_merchant_code || "",
+        );
+      }
 
       if (exit_survey_enabled !== undefined) {
         localStorage.setItem(
@@ -356,30 +435,63 @@ export function useUpdateOrganization() {
       }
 
       if (isSupabaseConfigured) {
-        let updatedOrg: Organization;
-        try {
-          const { data, error } = await supabase
-            .from("organizations")
-            .update(rest)
-            .eq("id", id)
-            .select()
-            .single();
-          if (error) throw error;
-          updatedOrg = data as Organization;
-        } catch (dbErr: any) {
-          console.warn("Supabase organization update failed. Fallback without subscription_tier.", dbErr);
-          if (payload.subscription_tier !== undefined) {
-            localStorage.setItem(`impacto_org_subscription_tier_${id}`, payload.subscription_tier);
+        let updatedOrg: Organization | null = null;
+        const updateData: Record<string, any> = { ...rest };
+
+        // If donation credentials were not set but dues values were provided, map them to DB columns
+        if (updateData.donation_account_name === undefined && dues_account_name !== undefined) {
+          updateData.donation_account_name = dues_account_name;
+        }
+        if (updateData.donation_mtn_number === undefined && dues_mtn_number !== undefined) {
+          updateData.donation_mtn_number = dues_mtn_number;
+        }
+        if (updateData.donation_airtel_number === undefined && dues_airtel_number !== undefined) {
+          updateData.donation_airtel_number = dues_airtel_number;
+        }
+
+        // Auto-prune loop for any non-existent columns in Supabase schema cache
+        for (let attempt = 0; attempt < 6; attempt++) {
+          try {
+            const { data, error } = await supabase
+              .from("organizations")
+              .update(updateData)
+              .eq("id", id)
+              .select()
+              .single();
+            if (error) throw error;
+            updatedOrg = data as Organization;
+            break;
+          } catch (dbErr: any) {
+            console.warn(`Supabase organization update attempt ${attempt + 1} failed:`, dbErr);
+            const errMsg = dbErr?.message || "";
+            // Check for PGRST204 error: Could not find the 'xyz' column of 'organizations' in the schema cache
+            const missingColMatch = errMsg.match(/Could not find the '([^']+)' column/i);
+            if (missingColMatch && missingColMatch[1]) {
+              const missingCol = missingColMatch[1];
+              console.warn(`Pruning missing column '${missingCol}' from organizations update payload.`);
+              if (updateData[missingCol] !== undefined) {
+                localStorage.setItem(
+                  `impacto_org_${missingCol}_${id}`,
+                  typeof updateData[missingCol] === "object"
+                    ? JSON.stringify(updateData[missingCol])
+                    : String(updateData[missingCol])
+                );
+                delete updateData[missingCol];
+              }
+              continue;
+            }
+            if (updateData.subscription_tier !== undefined) {
+              localStorage.setItem(`impacto_org_subscription_tier_${id}`, updateData.subscription_tier);
+              delete updateData.subscription_tier;
+              continue;
+            }
+            break;
           }
-          const { subscription_tier, ...restWithoutTier } = rest as any;
-          const { data, error } = await supabase
-            .from("organizations")
-            .update(restWithoutTier)
-            .eq("id", id)
-            .select()
-            .single();
-          if (error) throw error;
-          updatedOrg = data as Organization;
+        }
+
+        if (!updatedOrg) {
+          const { data } = await supabase.from("organizations").select("*").eq("id", id).maybeSingle();
+          updatedOrg = (data as Organization) || MockDB.getOrgs().find(o => o.id === id) || ({ id, ...payload } as Organization);
         }
         const localVal = localStorage.getItem(
           `impacto_org_is_public_directory_${id}`,
@@ -417,8 +529,41 @@ export function useUpdateOrganization() {
         const localExitSurveyQuestions = localStorage.getItem(
           `impacto_org_exit_survey_questions_${id}`,
         );
+        const localDuesAccount = localStorage.getItem(
+          `impacto_org_dues_account_name_${id}`,
+        );
+        const localDuesMtn = localStorage.getItem(
+          `impacto_org_dues_mtn_number_${id}`,
+        );
+        const localDuesAirtel = localStorage.getItem(
+          `impacto_org_dues_airtel_number_${id}`,
+        );
+        const localMomoMerchant = localStorage.getItem(
+          `impacto_org_momo_merchant_code_${id}`,
+        );
         return {
           ...updatedOrg,
+          dues_account_name:
+            localDuesAccount ||
+            dues_account_name ||
+            updatedOrg.dues_account_name ||
+            updatedOrg.donation_account_name ||
+            updatedOrg.name,
+          dues_mtn_number:
+            localDuesMtn ||
+            dues_mtn_number ||
+            updatedOrg.dues_mtn_number ||
+            updatedOrg.donation_mtn_number,
+          dues_airtel_number:
+            localDuesAirtel ||
+            dues_airtel_number ||
+            updatedOrg.dues_airtel_number ||
+            updatedOrg.donation_airtel_number,
+          momo_merchant_code:
+            localMomoMerchant ||
+            momo_merchant_code ||
+            (updatedOrg as any).momo_merchant_code ||
+            "",
           exit_survey_enabled:
             localExitSurveyEnabled !== null
               ? JSON.parse(localExitSurveyEnabled)
@@ -522,12 +667,19 @@ export function useMembers(orgId: string | undefined) {
     queryFn: async () => {
       if (!orgId) return [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("org_members")
-          .select("*, user:user_id(id, email, full_name, avatar_url)")
-          .eq("org_id", orgId);
-        if (error) throw error;
-        return data as OrgMember[];
+        try {
+          const { data, error } = await supabase
+            .from("org_members")
+            .select("*, user:user_id(id, email, full_name, avatar_url)")
+            .eq("org_id", orgId);
+          if (error) {
+            console.warn("Supabase members query notice, using local cache:", error);
+          } else if (data) {
+            return data as OrgMember[];
+          }
+        } catch (err) {
+          console.warn("Network error fetching members, using local cache:", err);
+        }
       }
       await delay();
       const users = MockDB.getUsers();

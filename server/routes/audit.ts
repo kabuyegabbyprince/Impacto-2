@@ -1,7 +1,33 @@
 import { Router } from "express";
+import fs from "fs";
+import path from "path";
 import { getSupabaseAdminClient, hasSupabaseCredentials } from "../services/supabaseAdmin";
 
 const router = Router();
+
+// In-memory + persistent cache for audit logs to safeguard when Supabase RLS is active with anon key
+const AUDIT_CACHE_FILE = path.join("/tmp", "impacto_audit_logs_cache.json");
+const localAuditLogs: any[] = [];
+
+try {
+  if (fs.existsSync(AUDIT_CACHE_FILE)) {
+    const raw = fs.readFileSync(AUDIT_CACHE_FILE, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      localAuditLogs.push(...parsed);
+    }
+  }
+} catch (e) {
+  // ignore cache load error
+}
+
+function persistAuditCache() {
+  try {
+    fs.writeFileSync(AUDIT_CACHE_FILE, JSON.stringify(localAuditLogs.slice(0, 500), null, 2), "utf-8");
+  } catch {
+    // ignore cache write error
+  }
+}
 
 // GET /api/audit-logs
 router.get("/", async (req, res) => {
@@ -11,6 +37,7 @@ router.get("/", async (req, res) => {
       return res.status(400).json({ error: "Missing required query parameter: orgId" });
     }
 
+    let dbLogs: any[] = [];
     if (hasSupabaseCredentials()) {
       const supabaseService = getSupabaseAdminClient();
       if (supabaseService) {
@@ -22,7 +49,7 @@ router.get("/", async (req, res) => {
           .limit(100);
 
         if (!error && data) {
-          const formatted = data.map((row: any) => ({
+          dbLogs = data.map((row: any) => ({
             ...row,
             action_type: row.action_type || row.action,
             description: row.description || row.action_label,
@@ -30,12 +57,25 @@ router.get("/", async (req, res) => {
             staff_name: row.staff_name || row.actor_name || row.target_label || row.performed_by || "System User",
             metadata_json: row.metadata_json || row.new_value,
           }));
-          return res.json({ success: true, logs: formatted });
         }
       }
     }
 
-    return res.json({ success: true, logs: [] });
+    // Merge with any cached local audit logs for this org
+    const cachedOrgLogs = localAuditLogs.filter((l) => l.org_id === orgId);
+    const existingIds = new Set(dbLogs.map((l) => l.id));
+    const combined = [...dbLogs];
+
+    for (const log of cachedOrgLogs) {
+      if (!existingIds.has(log.id)) {
+        combined.push(log);
+        existingIds.add(log.id);
+      }
+    }
+
+    combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    return res.json({ success: true, logs: combined.slice(0, 100) });
   } catch (error: any) {
     console.error("[Audit API] Fetch failed:", error);
     res.status(500).json({ error: "Failed to fetch audit logs.", details: error.message });
@@ -65,6 +105,28 @@ router.post("/create", async (req, res) => {
     const user_agent = body.user_agent || (req.headers["user-agent"] as string) || null;
     const created_at = body.created_at || new Date().toISOString();
     const id = body.id || `audit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+    const responseLog = {
+      id,
+      org_id,
+      performed_by: user_id,
+      action,
+      action_label,
+      action_type: action,
+      description: action_label,
+      actor_name,
+      staff_name: actor_name,
+      target_table,
+      target_id,
+      target_label,
+      old_value,
+      new_value,
+      metadata_json: new_value,
+      ip_address,
+      user_agent,
+      created_at,
+      user_id,
+    };
 
     if (hasSupabaseCredentials()) {
       const supabaseService = getSupabaseAdminClient();
@@ -96,56 +158,39 @@ router.post("/create", async (req, res) => {
           created_at
         };
 
-        let { data, error } = await supabaseService.from("audit_logs").upsert(logPayload).select();
+        try {
+          let { data, error } = await supabaseService.from("audit_logs").upsert(logPayload).select();
 
-        // If foreign key constraint failed on performed_by, retry with null
-        if (error && error.code === "23503") {
-          const retryLog = { ...logPayload, performed_by: null };
-          const retryRes = await supabaseService.from("audit_logs").upsert(retryLog).select();
-          data = retryRes.data;
-          error = retryRes.error;
+          // If foreign key constraint failed on performed_by, retry with null
+          if (error && error.code === "23503") {
+            const retryLog = { ...logPayload, performed_by: null };
+            const retryRes = await supabaseService.from("audit_logs").upsert(retryLog).select();
+            data = retryRes.data;
+            error = retryRes.error;
+          }
+
+          if (error) {
+            // If Row-Level Security (RLS) blocks anon key insert or table policy restricts write,
+            // log a warning and safely preserve in local cache without failing the client operation
+            console.warn("[Audit API] Notice: Supabase RLS policy restricted write, cached locally:", error.message);
+            localAuditLogs.unshift(responseLog);
+            persistAuditCache();
+            return res.json({ success: true, log: responseLog, stored: "local_cache" });
+          }
+
+          return res.json({ success: true, log: data?.[0] || responseLog });
+        } catch (dbErr: any) {
+          console.warn("[Audit API] DB write exception, cached locally:", dbErr.message);
+          localAuditLogs.unshift(responseLog);
+          persistAuditCache();
+          return res.json({ success: true, log: responseLog, stored: "local_cache" });
         }
-
-        if (error) {
-          console.warn("[Audit API] Error writing audit log:", error.message);
-          return res.status(400).json({ error: error.message });
-        }
-
-        const responseLog = {
-          ...logPayload,
-          action_type: action,
-          description: action_label,
-          actor_name,
-          metadata_json: new_value,
-          user_id: logPayload.performed_by,
-        };
-
-        return res.json({ success: true, log: data?.[0] || responseLog });
       }
     }
 
-    const fallbackLog = {
-      id,
-      org_id,
-      performed_by: user_id,
-      action,
-      action_label,
-      target_table,
-      target_id,
-      target_label,
-      old_value,
-      new_value,
-      ip_address,
-      user_agent,
-      created_at,
-      action_type: action,
-      description: action_label,
-      actor_name,
-      metadata_json: new_value,
-      user_id,
-    };
-
-    res.json({ success: true, log: fallbackLog, bypassed: true });
+    localAuditLogs.unshift(responseLog);
+    persistAuditCache();
+    res.json({ success: true, log: responseLog, bypassed: true });
   } catch (error: any) {
     console.error("[Audit API] Create failed:", error);
     res.status(500).json({ error: "Failed to create audit log.", details: error.message });

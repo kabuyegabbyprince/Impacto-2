@@ -364,9 +364,8 @@ export const AuditorDashboard: React.FC = () => {
             variant="outline"
             className="text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 border-rose-200 dark:border-rose-900 font-bold text-xs h-10 px-3.5 rounded-xl flex items-center gap-1.5"
             onClick={() => {
-              const slug = activeOrg?.slug || "workspace";
               logout();
-              window.location.href = `https://impacto-landing.vercel.app/@${slug}`;
+              navigate("/login");
             }}
           >
             <LogOut className="h-3.5 w-3.5" /> Log Out

@@ -11,8 +11,11 @@ export function cleanValue(val: string | undefined): string | undefined {
   return s;
 }
 
+const DEFAULT_SUPABASE_URL = "https://jyluwvwghtirdmazhhym.supabase.co";
+const DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp5bHV3dndnaHRpcmRtYXpoaHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0NjM5MjYsImV4cCI6MjA5NTAzOTkyNn0.KcV_8RXSnoNVObFqgeLm-9r3fBbRf7FSEM6woVjhG3Q";
+
 export function getSupabaseUrl(): string | undefined {
-  return cleanValue(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL);
+  return cleanValue(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL) || DEFAULT_SUPABASE_URL;
 }
 
 export function getSupabaseServiceRoleKey(): string | undefined {
@@ -20,7 +23,7 @@ export function getSupabaseServiceRoleKey(): string | undefined {
 }
 
 export function getSupabaseAnonKey(): string | undefined {
-  return cleanValue(process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY);
+  return cleanValue(process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY) || DEFAULT_SUPABASE_ANON_KEY;
 }
 
 export function hasSupabaseCredentials(): boolean {

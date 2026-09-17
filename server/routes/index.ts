@@ -51,8 +51,8 @@ apiRouter.all("/api/payments/pawapay/webhook", handlePawaPayCallback);
 apiRouter.get("/env.js", (req: Request, res: Response) => {
   res.setHeader("Content-Type", "application/javascript");
   const env = {
-    VITE_SUPABASE_URL: cleanValue(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ""),
-    VITE_SUPABASE_ANON_KEY: cleanValue(process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "")
+    VITE_SUPABASE_URL: cleanValue(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "") || "https://jyluwvwghtirdmazhhym.supabase.co",
+    VITE_SUPABASE_ANON_KEY: cleanValue(process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "") || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp5bHV3dndnaHRpcmRtYXpoaHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0NjM5MjYsImV4cCI6MjA5NTAzOTkyNn0.KcV_8RXSnoNVObFqgeLm-9r3fBbRf7FSEM6woVjhG3Q"
   };
   res.send(`window.__RUNTIME_ENV__ = ${JSON.stringify(env)};`);
 });

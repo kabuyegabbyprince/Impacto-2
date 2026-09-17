@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // Automatically migrate legacy hashed URLs (e.g. /#/@slug or /#/login) to standard clean paths
@@ -22,6 +22,7 @@ import {
 } from "./pages/auth";
 
 import { CertificateVerifyPage } from "./pages/CertificateVerifyPage";
+import { PublicOrgPage } from "./pages/PublicOrgPage";
 
 // Active Dashboard & Governance Modules (from src/dash)
 import {
@@ -59,6 +60,43 @@ import { useAuthStore } from "./store/authStore";
 import { useOrgStore } from "./store/orgStore";
 
 import { MockDB } from "./lib/mockData";
+
+// Public Organization Showcase Dispatcher
+// Resolves /@slug, /@slug/checkin, /org/slug, and arbitrary public showcase urls directly
+const PublicSlugRouter: React.FC = () => {
+  const params = useParams();
+  const location = useLocation();
+
+  // Extract raw slug from param or pathname
+  const rawParam = params.slug || params["*"] || "";
+  const firstPathSegment = location.pathname.split("/").filter(Boolean)[0] || "";
+  const candidate = rawParam || firstPathSegment;
+
+  const reservedPaths = new Set([
+    "login",
+    "register",
+    "signup",
+    "forgot-password",
+    "reset-password",
+    "dashboard",
+    "platform",
+    "auditor",
+    "verify",
+    "org-picker",
+    "landing",
+    "app",
+    "api"
+  ]);
+
+  const cleanSlug = candidate.replace(/^@/, "").toLowerCase().trim();
+
+  // If candidate starts with '@' or is a non-reserved slug path, render PublicOrgPage
+  if (candidate.startsWith("@") || (!reservedPaths.has(cleanSlug) && cleanSlug.length > 0)) {
+    return <PublicOrgPage />;
+  }
+
+  return <Navigate to="/" replace />;
+};
 
 // Portal entrance: Direct unauthenticated users straight to Login form
 const RootPortalEntrance: React.FC = () => {
@@ -115,12 +153,20 @@ export default function App() {
         <Router>
           <Routes>
             {/* ==========================================
-                1. PORTAL ENTRANCE & VERIFICATION
+                1. PORTAL ENTRANCE & VERIFICATION & PUBLIC PROFILE
                 ========================================== */}
             <Route path="/" element={<RootPortalEntrance />} />
             <Route path="/landing" element={<Navigate to="/login" replace />} />
             <Route path="/verify" element={<CertificateVerifyPage />} />
             <Route path="/verify/:code" element={<CertificateVerifyPage />} />
+
+            {/* Public Organization Showcase / Portal Routes */}
+            <Route path="/org/:slug" element={<PublicOrgPage />} />
+            <Route path="/org/:slug/*" element={<PublicOrgPage />} />
+            <Route path="/public/:slug" element={<PublicOrgPage />} />
+            <Route path="/public/:slug/*" element={<PublicOrgPage />} />
+            <Route path="/:slug" element={<PublicSlugRouter />} />
+            <Route path="/:slug/*" element={<PublicSlugRouter />} />
 
             {/* ==========================================
                 2. PUBLIC AUTH GATES

@@ -5,6 +5,7 @@ import {
   getPawaPayActiveConfig,
   checkPawaPayDepositStatus,
   formatPawaPayPhoneNumber,
+  recordPawaPayWebhookEvent,
 } from "../services/pawapayService";
 
 const router = Router();
@@ -51,7 +52,8 @@ router.post("/webhook", async (req, res) => {
     const payload = req.body;
     console.log("[Payment Webhook Inbound Payload]:", JSON.stringify(payload));
     
-    // Process standard Mobile Money / Card gateway callback events
+    // Process standard Mobile Money / Card gateway callback events and auto-reconcile
+    await recordPawaPayWebhookEvent(payload);
     const transactionReference = payload?.reference || payload?.depositId || payload?.tx_ref || payload?.id;
     const status = (payload?.status || payload?.state || "").toLowerCase();
     const isSuccess = status === "completed" || status === "successful" || status === "success" || status === "paid";
@@ -74,6 +76,7 @@ router.post("/momo/callback", async (req, res) => {
   try {
     const data = req.body;
     console.log("[MTN/Airtel MoMo Callback]:", data);
+    await recordPawaPayWebhookEvent(data);
     res.json({ status: "acknowledged", receivedAt: new Date().toISOString() });
   } catch (err: any) {
     res.status(500).json({ status: "error", error: err.message });
