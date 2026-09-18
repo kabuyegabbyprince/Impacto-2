@@ -8,7 +8,7 @@ import {
   Building2, 
   CheckCircle2, 
   ArrowRight,
-  Sparkles,
+  LayoutDashboard,
   Lock
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
@@ -151,7 +151,7 @@ export const WaitRoomView: React.FC = () => {
               </div>
 
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 flex items-start gap-2.5 opacity-60">
-                <Sparkles className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+                <LayoutDashboard className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
                 <div>
                   <div className="font-bold text-slate-700 dark:text-slate-300">3. Dashboard</div>
                   <div className="text-[10px] text-slate-500">Unlocks upon approval</div>

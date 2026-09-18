@@ -19,7 +19,6 @@ import {
   ExternalLink,
   Download,
   Share2,
-  Sparkles,
   Heart,
   Shield,
   ShieldCheck,
@@ -182,9 +181,6 @@ export const PublicOrgPage: React.FC = () => {
   const [momoAmount, setMomoAmount] = useState("2000");
   const [momoSenderName, setMomoSenderName] = useState("");
   const [momoReason, setMomoReason] = useState("Support Contribution");
-  const [momoStep, setMomoStep] = useState<"input" | "pushing" | "awaiting_pin" | "success">("input");
-  const [momoCountdown, setMomoCountdown] = useState(60);
-  const [momoTxId, setMomoTxId] = useState("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // Product Inquiry Modal
@@ -302,19 +298,6 @@ export const PublicOrgPage: React.FC = () => {
     }
   }, [targetSlug]);
 
-  // Countdown timer for MoMo push prompt
-  useEffect(() => {
-    let interval: any = null;
-    if (momoStep === "awaiting_pin" && momoCountdown > 0) {
-      interval = setInterval(() => {
-        setMomoCountdown((prev) => prev - 1);
-      }, 1000);
-    } else if (momoCountdown === 0 && momoStep === "awaiting_pin") {
-      addToast("MTN Push request timed out. You can dial USSD directly.", "warning");
-    }
-    return () => clearInterval(interval);
-  }, [momoStep, momoCountdown]);
-
   const handleCopy = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(field);
@@ -341,33 +324,6 @@ export const PublicOrgPage: React.FC = () => {
   const handleJoinOrganization = () => {
     if (!org) return;
     navigate(`/register?org_id=${org.id}&mode=participant`);
-  };
-
-  /**
-   * Handle MTN MoMo Push to Pay trigger
-   */
-  const handleInitiateMtnPush = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!momoSenderPhone.trim() || !momoAmount || Number(momoAmount) <= 0) {
-      addToast("Please enter your MTN phone number and a valid amount.", "warning");
-      return;
-    }
-
-    setMomoStep("pushing");
-    setMomoCountdown(60);
-
-    // Simulate initiating MTN push request to cellular telecom gateway
-    setTimeout(() => {
-      const generatedTx = `MTN-RW-${Math.floor(10000000 + Math.random() * 90000000)}`;
-      setMomoTxId(generatedTx);
-      setMomoStep("awaiting_pin");
-      addToast(`Push prompt sent to ${momoSenderPhone}. Please enter your MTN MoMo PIN on your phone.`, "info");
-    }, 1200);
-  };
-
-  const handleSimulatePinApproved = () => {
-    setMomoStep("success");
-    addToast("Payment authorized successfully! Digital receipt generated.", "success");
   };
 
   const handleInquirySubmit = async (e: React.FormEvent) => {
@@ -475,6 +431,13 @@ export const PublicOrgPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2 mt-3">
+              <a
+                href="https://impacto-landing.vercel.app/"
+                className="py-2.5 px-3.5 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-300 font-bold text-xs rounded-xl text-center flex items-center justify-center gap-1.5 transition"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Home
+              </a>
               <Link
                 to="/login"
                 className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs text-center"
@@ -483,7 +446,7 @@ export const PublicOrgPage: React.FC = () => {
               </Link>
               <Link
                 to="/verify"
-                className="py-2.5 px-4 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 text-gray-700 dark:text-slate-300 font-bold text-xs rounded-xl text-center"
+                className="py-2.5 px-3.5 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-300 font-bold text-xs rounded-xl text-center"
               >
                 Verify Badges
               </Link>
@@ -507,13 +470,13 @@ export const PublicOrgPage: React.FC = () => {
         <div className="relative w-full h-64 sm:h-80 md:h-96 overflow-hidden bg-slate-900 select-none">
           {/* Top Left Floating Home Button */}
           <div className="absolute top-4 left-4 sm:top-6 sm:left-8 z-30">
-            <Link
-              to="/"
+            <a
+              href="https://impacto-landing.vercel.app/"
               className="px-3.5 py-1.5 rounded-full bg-white/30 hover:bg-white/40 dark:bg-black/40 dark:hover:bg-black/60 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1.5 border border-white/30 shadow-xs transition"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               <span>Home</span>
-            </Link>
+            </a>
           </div>
 
           {/* Render Cover: Either Image or Smooth Atmospheric Gradient */}
@@ -730,7 +693,7 @@ export const PublicOrgPage: React.FC = () => {
                         {org.vision && (
                           <div className="flex flex-col gap-1.5 p-4 rounded-xl bg-gray-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-800">
                             <span className="text-xs font-bold text-amber-600 flex items-center gap-1.5">
-                              <Sparkles className="h-3.5 w-3.5" /> Our Vision
+                              <Target className="h-3.5 w-3.5" /> Our Vision
                             </span>
                             <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed">
                               {org.vision}
@@ -1154,7 +1117,6 @@ export const PublicOrgPage: React.FC = () => {
 
                 <button
                   onClick={() => {
-                    setMomoStep("input");
                     setMomoModalOpen(true);
                   }}
                   className="w-full mt-2 py-3 px-4 rounded-xl bg-white hover:bg-amber-50 text-orange-600 font-black text-xs shadow-sm transition active:scale-[0.98] flex items-center justify-center gap-2"
@@ -1177,6 +1139,9 @@ export const PublicOrgPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-4 text-xs font-bold text-gray-500">
+              <a href="https://impacto-landing.vercel.app/" className="hover:text-emerald-600 transition">
+                Home
+              </a>
               <Link to={`/verify?code=${org.registration_number || "CERT-2026-" + org.slug}`} className="hover:text-emerald-600 flex items-center gap-1">
                 <ShieldCheck className="h-3.5 w-3.5" /> Verify Badges
               </Link>
@@ -1186,7 +1151,7 @@ export const PublicOrgPage: React.FC = () => {
             </div>
 
             <p className="text-[11px] font-mono">
-              Powered by Impacto Cooperative Platform
+              Powered by <a href="https://impacto-landing.vercel.app/" className="hover:underline text-emerald-600 dark:text-emerald-400">Impacto Cooperative Platform</a>
             </p>
           </div>
         </footer>
@@ -1263,8 +1228,8 @@ export const PublicOrgPage: React.FC = () => {
           MODAL: PRODUCT INQUIRY
           ======================================================== */}
       {inquiryProduct && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <ShoppingBag className="h-5 w-5 text-emerald-600" />
@@ -1274,7 +1239,7 @@ export const PublicOrgPage: React.FC = () => {
               </div>
               <button
                 onClick={() => setInquiryProduct(null)}
-                className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition text-lg leading-none"
               >
                 ✕
               </button>

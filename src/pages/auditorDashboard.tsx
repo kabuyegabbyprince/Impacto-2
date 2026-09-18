@@ -26,8 +26,7 @@ import {
   Download,
   Layers,
   Crown,
-  Zap,
-  Sparkles
+  Zap
 } from "lucide-react";
 import {
   usePlatformAdminData,
@@ -1003,7 +1002,7 @@ export const AuditorDashboard: React.FC = () => {
                                     }`}
                                   >
                                     {lc.tier === "pro" ? <Crown className="h-3 w-3" /> : <Layers className="h-3 w-3" />}
-                                    {lc.tierDef.name}
+                                    {lc.tierDef?.name || "Standard Plan"}
                                   </span>
                                 </div>
                               </td>
@@ -1209,13 +1208,13 @@ export const AuditorDashboard: React.FC = () => {
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-black text-xs text-slate-900 dark:text-white">{tDef.name}</span>
+                          <span className="font-black text-xs text-slate-900 dark:text-white">{tDef?.name || tKey}</span>
                           <span className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                            {tDef.priceUsd === 0 ? "Free Forever" : `$${tDef.priceUsd}/mo`}
+                            {(tDef?.priceUsd ?? 0) === 0 ? "Free Forever" : `$${tDef?.priceUsd}/mo`}
                           </span>
                         </div>
                         <span className="text-[10px] text-slate-500">
-                          {tDef.memberLimit === Infinity ? "Unlimited members" : `Up to ${tDef.memberLimit} members`} • {tDef.storageLimitMB === Infinity ? "Unlimited Storage" : tDef.storageLimitMB >= 1024 ? `${Math.round(tDef.storageLimitMB / 1024)} GB` : `${tDef.storageLimitMB} MB`}
+                          {tDef?.memberLimit === Infinity ? "Unlimited members" : `Up to ${tDef?.memberLimit || 0} members`} • {tDef?.storageLimitMB === Infinity ? "Unlimited Storage" : (tDef?.storageLimitMB ?? 0) >= 1024 ? `${Math.round((tDef?.storageLimitMB ?? 0) / 1024)} GB` : `${tDef?.storageLimitMB ?? 0} MB`}
                         </span>
                       </div>
                     );

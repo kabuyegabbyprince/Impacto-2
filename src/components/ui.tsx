@@ -359,29 +359,29 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-300"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300"
         onClick={onClose}
       />
       {/* Content wrapper */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`relative bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl backdrop-saturate-150 rounded-3xl w-full ${sizes[size]} shadow-[0_20px_50px_rgba(0,0,0,0.1)] flex flex-col overflow-hidden max-h-[95vh] animate-in fade-in zoom-in-[0.98] duration-300 border border-black/5 dark:border-white/10`}
+        className={`relative bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-full ${sizes[size]} shadow-2xl flex flex-col overflow-hidden max-h-[90vh] animate-in fade-in zoom-in-[0.98] duration-200 border border-gray-200 dark:border-slate-800`}
       >
-        <div className="flex items-center justify-between px-6 py-4.5 border-b border-gray-100 dark:border-slate-700 shrink-0">
-          <h3 className="font-display font-semibold text-base md:text-lg text-gray-900 dark:text-slate-100">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-gray-100 dark:border-slate-800 shrink-0">
+          <h3 className="font-display font-bold text-base sm:text-lg text-gray-900 dark:text-slate-100">
             {title || "Modal"}
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition"
           >
             &#x2715;
           </button>
         </div>
-        <div className="p-4 md:p-6 overflow-y-auto w-full flex-1 flex flex-col">{children}</div>
+        <div className="p-4 sm:p-6 overflow-y-auto w-full flex-1 flex flex-col">{children}</div>
       </div>
     </div>
   );

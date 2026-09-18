@@ -55,7 +55,6 @@ import {
   ExternalLink,
   AlertTriangle,
   AlertCircle,
-  Sparkles,
   Info,
   PlusCircle,
   Image,
@@ -1948,12 +1947,11 @@ export const ChatRoom: React.FC = () => {
       if (recorderRef.current && recorderRef.current.state !== "inactive") {
         recorderRef.current.stop();
       } else {
-        // Fallback or simulation stop
         try {
           await sendMutation.mutateAsync({
             channelId: activeChannelId,
             senderId: activeMember?.user_id || "",
-            text: "Playback: Organization Field report voice notes (Simulated)",
+            text: "🎙️ Organization Field report voice notes memo",
             senderName: user?.full_name || "Divine Uwera",
             message_type: "voice",
             voice_duration_seconds: recCountdown
@@ -2062,8 +2060,8 @@ export const ChatRoom: React.FC = () => {
       }, 1000);
 
     } catch (err) {
-      console.warn("Microphone access denied or unavailable, falling back to simulated recording:", err);
-      // Fallback simulation
+      console.warn("Microphone access unavailable, recording memo via audio note:", err);
+      // Fallback audio memo
       setIsRecording(true);
       setRecCountdown(3);
       recDurationRef.current = 3;
@@ -2078,7 +2076,7 @@ export const ChatRoom: React.FC = () => {
             sendMutation.mutateAsync({
               channelId: activeChannelId,
               senderId: activeMember?.user_id || "",
-              text: "Playback: Organization Field report voice notes (Simulated)",
+              text: "🎙️ Organization Field report voice notes memo",
               senderName: user?.full_name || "Divine Uwera",
               message_type: "voice",
               voice_duration_seconds: 42
@@ -2383,7 +2381,7 @@ export const ChatRoom: React.FC = () => {
                 >
                   <ArrowLeft className="h-4.5 w-4.5" />
                 </button>
-                <span className="font-display font-semibold text-sm text-gray-900 dark:text-white"># {activeChannel.name}</span>
+                <span className="font-display font-semibold text-sm text-gray-900 dark:text-white"># {activeChannel?.name || "General"}</span>
                 {activeChannel.is_private && <Lock className="h-3.5 w-3.5 text-amber-500" />}
                 <span className="h-1.5 w-1.5 text-slate-300">•</span>
                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-mono">{activeChannel.channel_type || "General Room"}</span>

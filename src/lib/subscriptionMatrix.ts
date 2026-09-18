@@ -5,7 +5,7 @@
 
 import { Organization } from "../types";
 
-export type SubscriptionTier = "free" | "starter" | "growth" | "pro";
+export type SubscriptionTier = "free" | "starter" | "growth" | "pro" | "enterprise";
 
 export type AddOnPackageId = "event_pack" | "finance_pack" | "document_pack" | "pro_pack";
 
@@ -123,8 +123,46 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierDefinition> = {
       "End-to-End Encryption & Advanced Security"
     ],
     description: "Enterprise-grade operational velocity for large federations, unions, and institutions."
+  },
+  enterprise: {
+    id: "enterprise",
+    name: "Enterprise Plan",
+    priceUsd: 80,
+    priceRwfApprox: 108000,
+    memberLimit: Infinity,
+    storageLimitMB: Infinity,
+    storageLimitBytes: Infinity,
+    badgeColor: "purple",
+    tagline: "Unlimited scale, automated finance, marketplace & encryption",
+    coreFeatures: [
+      "Unlimited active members (No cap)",
+      "Unlimited cloud storage for files, media & receipts",
+      "Automated Certificate Generation & Public Verification",
+      "Asset & Equipment Inventory Tracker",
+      "Advanced Financial Ledger Reports & Charts",
+      "Mobile Money Live Gateway (MTN & Airtel MoMo)",
+      "Public Cooperative Marketplace & Storefront",
+      "Governance Quorum Meetings Validation & Audit Tracker",
+      "Identity Document Verification Hub",
+      "Annual Report PDF Compiler & Audit Tools",
+      "End-to-End Encryption & Advanced Security"
+    ],
+    description: "Enterprise grade governance and unlimited capacity for large federations."
   }
 };
+
+/**
+ * Safely resolves a TierDefinition with guaranteed fallbacks to prevent undefined access errors.
+ */
+export function getTierDefinition(tier?: string | null): TierDefinition {
+  if (!tier) return SUBSCRIPTION_TIERS.growth;
+  const normalized = String(tier).trim().toLowerCase();
+  if (normalized.includes("enterprise")) return SUBSCRIPTION_TIERS.enterprise || SUBSCRIPTION_TIERS.pro;
+  if (normalized.includes("pro") || normalized.includes("vip")) return SUBSCRIPTION_TIERS.pro;
+  if (normalized.includes("starter")) return SUBSCRIPTION_TIERS.starter;
+  if (normalized.includes("free")) return SUBSCRIPTION_TIERS.free;
+  return SUBSCRIPTION_TIERS[normalized as SubscriptionTier] || SUBSCRIPTION_TIERS.growth;
+}
 
 export const ADDON_PACKAGES: Record<AddOnPackageId, AddOnPackageDefinition> = {
   event_pack: {
@@ -398,7 +436,7 @@ export function getOrgSubscriptionLifecycle(
   const isEligibleForPacks = effectiveTier === "free" || effectiveTier === "starter";
   const bonusMemberSlots = isEligibleForPacks ? activePackages.length * 20 : 0;
 
-  const tierDef = SUBSCRIPTION_TIERS[effectiveTier];
+  const tierDef = getTierDefinition(effectiveTier);
   const baseMemberLimit = tierDef.memberLimit;
   const memberLimit = baseMemberLimit === Infinity ? Infinity : baseMemberLimit + bonusMemberSlots;
   const storageLimitMB = tierDef.storageLimitMB;
@@ -548,7 +586,8 @@ export function canAccessFeature(
     free: 1,
     starter: 2,
     growth: 3,
-    pro: 4
+    pro: 4,
+    enterprise: 4
   };
 
   const featureRequirementMap: Record<ImpactFeatureKey, SubscriptionTier> = {
@@ -612,6 +651,7 @@ export function canAccessFeature(
   }
 
   const packageDef = recommendedPackage ? ADDON_PACKAGES[recommendedPackage] : undefined;
+  const targetTierDef = getTierDefinition(reqTier);
 
   return {
     allowed: false,
@@ -619,7 +659,7 @@ export function canAccessFeature(
     recommendedPackage,
     packageDef,
     message: packageDef
-      ? `Unlock with the ${packageDef.name} ($4/mo, +20 members) or upgrade to ${SUBSCRIPTION_TIERS[reqTier].name}.`
-      : `Feature requires ${SUBSCRIPTION_TIERS[reqTier].name} or higher.`
+      ? `Unlock with the ${packageDef.name} ($4/mo, +20 members) or upgrade to ${targetTierDef.name}.`
+      : `Feature requires ${targetTierDef.name} or higher.`
   };
 }

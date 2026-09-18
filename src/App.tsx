@@ -98,6 +98,14 @@ const PublicSlugRouter: React.FC = () => {
   return <Navigate to="/" replace />;
 };
 
+// External landing redirect
+const LandingExternalRedirect: React.FC = () => {
+  React.useEffect(() => {
+    window.location.href = "https://impacto-landing.vercel.app/";
+  }, []);
+  return null;
+};
+
 // Portal entrance: Direct unauthenticated users straight to Login form
 const RootPortalEntrance: React.FC = () => {
   const { user } = useAuthStore();
@@ -156,7 +164,7 @@ export default function App() {
                 1. PORTAL ENTRANCE & VERIFICATION & PUBLIC PROFILE
                 ========================================== */}
             <Route path="/" element={<RootPortalEntrance />} />
-            <Route path="/landing" element={<Navigate to="/login" replace />} />
+            <Route path="/landing" element={<LandingExternalRedirect />} />
             <Route path="/verify" element={<CertificateVerifyPage />} />
             <Route path="/verify/:code" element={<CertificateVerifyPage />} />
 

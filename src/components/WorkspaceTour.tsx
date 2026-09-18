@@ -6,7 +6,7 @@ import {
   ArrowLeft,
   X,
   CheckCircle2,
-  Sparkles,
+  Lightbulb,
   Layers,
   Coins,
   Globe,
@@ -421,7 +421,7 @@ export const WorkspaceTour: React.FC<WorkspaceTourProps> = ({
 
         {/* Pro-Tip Box */}
         <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-2.5 border border-slate-200/60 dark:border-slate-800 flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300 font-medium">
-          <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+          <Lightbulb className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
           <span className="leading-snug">{currentTip}</span>
         </div>
 

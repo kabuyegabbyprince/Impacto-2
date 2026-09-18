@@ -34,7 +34,6 @@ import {
   Building2,
   Check,
   Sliders,
-  Sparkles,
   PenTool,
   Upload,
   PackageCheck,
@@ -82,7 +81,7 @@ export const OrgThemeInjector: React.FC = () => {
       root.style.setProperty("--org-primary-l", activeOrg.primary_color + "1e"); // rgba equivalent or opacity hex
       root.style.setProperty("--org-primary-d", activeOrg.primary_color); // standard fallback
       root.style.setProperty("--org-secondary", activeOrg.secondary_color);
-      document.title = `${activeOrg.name} | Impacto`;
+      document.title = `${activeOrg?.name || "Cooperative"} | Impacto`;
       
       // Inject the dashboard theme if it is not "custom"
       if (activeOrg.dashboard_theme === "dark") {
@@ -317,7 +316,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
             </svg>
           )}
           <span className="font-display font-extrabold text-lg tracking-tight text-slate-900 dark:text-white hidden sm:inline">
-            {activeOrg ? activeOrg.name : <>Impact<span className="text-[#156c45] dark:text-emerald-500 font-black">o</span></>}
+            {activeOrg?.name ? activeOrg.name : <>Impact<span className="text-[#156c45] dark:text-emerald-500 font-black">o</span></>}
           </span>
         </Link>
 
@@ -333,7 +332,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
               onClick={() => setOrgSwitcherOpen(!orgSwitcherOpen)}
               className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-700/70 border border-slate-200/60 dark:border-slate-700/60 transition flex items-center gap-1.5 font-sans cursor-pointer focus:outline-none"
             >
-              <span className="truncate max-w-[130px]">{activeOrg.name}</span>
+              <span className="truncate max-w-[130px]">{activeOrg?.name || "Workspace"}</span>
               {userMemberships.length > 1 && (
                 <svg className={`h-3 w-3 transition-transform ${orgSwitcherOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -348,7 +347,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
               data-tour="org-switcher"
               className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5 font-sans select-none"
             >
-              <span className="truncate max-w-[140px]">{activeOrg.name}</span>
+              <span className="truncate max-w-[140px]">{activeOrg?.name || "Workspace"}</span>
             </div>
 
             <span className="text-[9px] font-bold px-2 py-0.5 rounded-full select-none font-mono bg-emerald-50 text-[#156c45] border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/50">
@@ -925,12 +924,12 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         const statusChanged = dbOrg.subscription_status !== activeOrg.subscription_status;
         const endsAtChanged = dbOrg.subscription_ends_at !== activeOrg.subscription_ends_at;
         const tierChanged = dbOrg.subscription_tier !== activeOrg.subscription_tier;
-        const nameChanged = dbOrg.name !== activeOrg.name;
+        const nameChanged = dbOrg?.name !== activeOrg?.name;
         
         if (statusChanged || endsAtChanged || tierChanged || nameChanged) {
           setActiveOrg(dbOrg, activeMember);
           if (activeOrg.subscription_status !== "active" && dbOrg.subscription_status === "active") {
-            addToast(`Your cooperative workspace "${dbOrg.name}" has been approved and unlocked in real-time!`, "success");
+            addToast(`Your cooperative workspace "${dbOrg?.name || "Workspace"}" has been approved and unlocked in real-time!`, "success");
           } else {
             addToast(`Cooperative Workspace workspace configuration updated in real-time.`, "info");
           }

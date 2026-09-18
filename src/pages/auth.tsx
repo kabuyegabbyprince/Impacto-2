@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { KeyRound, Mail, User as UserIcon, Building2, ChevronRight, CornerDownRight, Landmark, ArrowLeft, ChevronLeft, Check, Sparkles, Globe, Search, LogOut, Clock, CheckCircle, AlertTriangle, ShieldCheck, RefreshCw, UserMinus, Star, MessageSquare, HelpCircle, X, ShieldAlert, Sparkle, HeartHandshake } from "lucide-react";
+import { KeyRound, Mail, User as UserIcon, Building2, ChevronRight, CornerDownRight, Landmark, ArrowLeft, ChevronLeft, Check, Globe, Search, LogOut, Clock, CheckCircle, AlertTriangle, ShieldCheck, RefreshCw, UserMinus, Star, MessageSquare, HelpCircle, X, ShieldAlert, HeartHandshake } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
 import { LogoLoader } from "../components/LogoLoader";
@@ -2404,7 +2404,7 @@ export const OrgPicker: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="p-1.5 bg-indigo-600 text-white rounded-lg">
-                  <Sparkles className="h-4 w-4" />
+                  <MessageSquare className="h-4 w-4" />
                 </span>
                 <div>
                   <h4 className="font-extrabold text-sm text-indigo-950 dark:text-indigo-200">

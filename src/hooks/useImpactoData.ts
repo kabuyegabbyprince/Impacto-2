@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { uploadFile, dataUrlToUint8Array } from "../lib/supabaseStorage";
 import { MockDB } from "../lib/mockData";
-import { notifyCrossTabChange } from "../lib/crossTabSync";
+import { notifyCrossTabChange, notifyPlanOrPackageGranted } from "../lib/crossTabSync";
 import { useOrgStore } from "../store/orgStore";
 import {
   Organization,
@@ -3127,25 +3127,47 @@ export function useApproveSubscription() {
         if (status === "approved") {
           const nextExpiry = new Date();
           nextExpiry.setDate(nextExpiry.getDate() + 30);
-          try {
-            await supabase
-              .from("organizations")
-              .update({
-                subscription_status: "active",
-                subscription_ends_at: nextExpiry.toISOString(),
-                subscription_tier: tier,
-              } as any)
-              .eq("id", orgId);
-          } catch (orgErr: any) {
-            console.warn("Extending sub fails with tier, trying without tier.", orgErr);
-            localStorage.setItem(`impacto_org_subscription_tier_${orgId}`, tier);
-            await supabase
-              .from("organizations")
-              .update({
-                subscription_status: "active",
-                subscription_ends_at: nextExpiry.toISOString(),
-              })
-              .eq("id", orgId);
+
+          if (packageId) {
+            // Add package to org packages
+            try {
+              const rawPkgs = localStorage.getItem(`impacto_org_packages_${orgId}`) || "[]";
+              let pkgs: string[] = JSON.parse(rawPkgs);
+              if (!pkgs.includes(packageId)) {
+                pkgs.push(packageId);
+                localStorage.setItem(`impacto_org_packages_${orgId}`, JSON.stringify(pkgs));
+              }
+            } catch (e) {}
+
+            try {
+              await supabase
+                .from("organizations")
+                .update({
+                  active_packages: supabase.rpc ? undefined : [packageId],
+                } as any)
+                .eq("id", orgId);
+            } catch (pkgErr: any) {}
+          } else {
+            try {
+              await supabase
+                .from("organizations")
+                .update({
+                  subscription_status: "active",
+                  subscription_ends_at: nextExpiry.toISOString(),
+                  subscription_tier: tier,
+                } as any)
+                .eq("id", orgId);
+            } catch (orgErr: any) {
+              console.warn("Extending sub fails with tier, trying without tier.", orgErr);
+              localStorage.setItem(`impacto_org_subscription_tier_${orgId}`, tier);
+              await supabase
+                .from("organizations")
+                .update({
+                  subscription_status: "active",
+                  subscription_ends_at: nextExpiry.toISOString(),
+                })
+                .eq("id", orgId);
+            }
           }
         }
       }
@@ -3173,9 +3195,20 @@ export function useApproveSubscription() {
           if (oIdx !== -1) {
             const nextExpiry = new Date();
             nextExpiry.setDate(nextExpiry.getDate() + 30);
-            orgs[oIdx].subscription_status = "active";
-            orgs[oIdx].subscription_ends_at = nextExpiry.toISOString();
-            orgs[oIdx].subscription_tier = tier;
+            if (packageId) {
+              const currentPkgs = orgs[oIdx].active_packages || [];
+              if (!currentPkgs.includes(packageId)) {
+                orgs[oIdx].active_packages = [...currentPkgs, packageId];
+              }
+              // Also ensure local storage has it
+              try {
+                localStorage.setItem(`impacto_org_packages_${orgId}`, JSON.stringify(orgs[oIdx].active_packages));
+              } catch (e) {}
+            } else {
+              orgs[oIdx].subscription_status = "active";
+              orgs[oIdx].subscription_ends_at = nextExpiry.toISOString();
+              orgs[oIdx].subscription_tier = tier;
+            }
             MockDB.saveOrgs(orgs);
           }
         }
@@ -3195,12 +3228,12 @@ export function useApproveSubscription() {
         target_org_name: matchedOrg?.name || "Workspace",
         amount: targetPaymentAmount,
         reference: targetPaymentRef,
-        notes: auditNotes || (status === "approved" ? "Transaction verified and 30-day billing period extended." : "Proof rejected during reconciliation."),
+        notes: auditNotes || (status === "approved" ? (packageId ? "Add-on feature package verified and activated." : "Transaction verified and 30-day billing period extended.") : "Proof rejected during reconciliation."),
         created_at: validatedAt
       });
       MockDB.savePlatformAuditLogs(auditLogs);
 
-      return { paymentId, orgId, tier };
+      return { paymentId, orgId, tier, packageId, plan };
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
@@ -3213,20 +3246,39 @@ export function useApproveSubscription() {
       if (store.activeOrg && store.activeOrg.id === variables.orgId) {
         const nextExpiry = new Date();
         nextExpiry.setDate(nextExpiry.getDate() + 30);
+        let updatedPackages = store.activeOrg.active_packages || [];
+        if (variables.packageId && !updatedPackages.includes(variables.packageId)) {
+          updatedPackages = [...updatedPackages, variables.packageId];
+        }
+
         store.setActiveOrg(
           {
             ...store.activeOrg,
             subscription_status:
-              variables.status === "approved"
+              variables.status === "approved" && !variables.packageId
                 ? "active"
                 : store.activeOrg.subscription_status,
+            subscription_tier:
+              variables.status === "approved" && !variables.packageId && variables.tier
+                ? variables.tier
+                : store.activeOrg.subscription_tier,
             subscription_ends_at:
-              variables.status === "approved"
+              variables.status === "approved" && !variables.packageId
                 ? nextExpiry.toISOString()
                 : store.activeOrg.subscription_ends_at,
+            active_packages: updatedPackages,
           },
           store.activeMember,
         );
+      }
+
+      // Hot reload broadcast for all open tabs
+      if (variables.status === "approved") {
+        notifyPlanOrPackageGranted(variables.orgId, {
+          tier: variables.tier,
+          packageId: variables.packageId,
+          packageName: variables.plan,
+        });
       }
     },
   });

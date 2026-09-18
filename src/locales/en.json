@@ -231,7 +231,7 @@
     "no_upcoming_calendar": "There are no upcoming calendar invites.",
     "upload_verify_doc_title": "Upload Trust Verification Document Photo",
     "select_doc_category": "Select Document Category Proof",
-    "simulated_photo_link": "Simulated Photo/Document Link",
+    "simulated_photo_link": "Document / Photo Attachment URL",
     "file_url_path_name": "File URL path name",
     "drag_drop_passport_pdf": "Drag & Drop passport PDF photo here",
     "pdf_jpg_png_limit": "PDF, JPG, PNG up to 10MB sizes.",

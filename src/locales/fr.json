@@ -231,7 +231,7 @@
     "no_upcoming_calendar": "Il n'y a pas d'invitations de calendrier à venir.",
     "upload_verify_doc_title": "Téléverser la Photo du Document de Vérification",
     "select_doc_category": "Sélectionner la Catégorie du Document de Preuve",
-    "simulated_photo_link": "Lien Simulé du Document/Photo",
+    "simulated_photo_link": "Lien du Document/Photo",
     "file_url_path_name": "Chemin de l'URL du fichier",
     "drag_drop_passport_pdf": "Glissez-déposez la photo PDF du passeport ici",
     "pdf_jpg_png_limit": "Formats autorisés : PDF, JPG, PNG jusqu'à 10 Mo.",

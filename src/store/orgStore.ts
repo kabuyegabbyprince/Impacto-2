@@ -193,13 +193,25 @@ if (typeof window !== "undefined") {
       const targetOrgId = detail.orgId || detail.org?.id;
       if (currentOrg && targetOrgId && currentOrg.id === targetOrgId) {
         let updatedOrg = detail.org ? { ...currentOrg, ...detail.org } : { ...currentOrg };
-        
+
+        // If tier was granted
+        if (detail.tier) {
+          updatedOrg.subscription_tier = detail.tier;
+          updatedOrg.subscription_status = "active";
+          const nextExpiry = new Date();
+          nextExpiry.setDate(nextExpiry.getDate() + 30);
+          updatedOrg.subscription_ends_at = nextExpiry.toISOString();
+        }
+
         // Sync active packages from local storage if fresh
         try {
           const pkgStorage = localStorage.getItem(`impacto_org_packages_${currentOrg.id}`);
-          if (pkgStorage) {
-            updatedOrg.active_packages = JSON.parse(pkgStorage);
+          let pkgs: string[] = pkgStorage ? JSON.parse(pkgStorage) : (updatedOrg.active_packages || []);
+          if (detail.packageId && !pkgs.includes(detail.packageId)) {
+            pkgs.push(detail.packageId);
+            localStorage.setItem(`impacto_org_packages_${currentOrg.id}`, JSON.stringify(pkgs));
           }
+          updatedOrg.active_packages = pkgs;
         } catch (e) {}
 
         let updatedMember = currentMember;

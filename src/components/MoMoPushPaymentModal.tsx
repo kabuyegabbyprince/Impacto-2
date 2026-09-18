@@ -368,107 +368,117 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/70 backdrop-blur-xs animate-in fade-in select-none">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in select-none">
+      <div 
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-[0.98] duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950/60 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+        <div className="px-4 py-3.5 sm:px-6 sm:py-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-10 w-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-[#156c45] dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-center shadow-xs shrink-0">
               <Smartphone className="h-5 w-5" />
             </div>
-            <div>
-              <h3 className="font-bold text-base text-stone-900 dark:text-white leading-tight">
+            <div className="min-w-0">
+              <h3 className="font-display font-bold text-sm sm:text-base text-slate-900 dark:text-white leading-tight truncate">
                 {title}
               </h3>
-              <p className="text-xs text-stone-500 dark:text-stone-400">
-                {itemName} &bull; {amountRwf.toLocaleString()} RWF
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate mt-0.5">
+                {itemName} &bull; <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{amountRwf.toLocaleString()} RWF</span>
                 {amountUsd ? ` (~$${amountUsd})` : ""}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition shrink-0 ml-2"
+            aria-label="Close"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Tab Toggle */}
-        <div className="px-6 pt-3 pb-0 flex gap-2 border-b border-slate-100 dark:border-slate-800/60">
-          <button
-            type="button"
-            onClick={() => {
-              setTab("instant_push");
-              setPushStatus("idle");
-            }}
-            className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${
-              tab === "instant_push"
-                ? "border-emerald-600 text-emerald-700 dark:text-emerald-400"
-                : "border-transparent text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
-            }`}
-          >
-            <Zap className="h-3.5 w-3.5" />
-            Instant MoMo Push (Auto PIN)
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("manual_sms")}
-            className={`pb-2.5 px-3 text-xs font-bold border-b-2 transition flex items-center gap-1.5 ${
-              tab === "manual_sms"
-                ? "border-emerald-600 text-emerald-700 dark:text-emerald-400"
-                : "border-transparent text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
-            }`}
-          >
-            <FileText className="h-3.5 w-3.5" />
-            Manual SMS / Agent Code
-          </button>
+        <div className="px-4 sm:px-6 pt-3 pb-1 shrink-0">
+          <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-800/70 rounded-xl">
+            <button
+              type="button"
+              onClick={() => {
+                setTab("instant_push");
+                setPushStatus("idle");
+              }}
+              className={`py-2 px-2.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                tab === "instant_push"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-xs"
+                  : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+              }`}
+            >
+              <Zap className="h-3.5 w-3.5" />
+              <span className="truncate">Instant MoMo Push</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("manual_sms")}
+              className={`py-2 px-2.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                tab === "manual_sms"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-xs"
+                  : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+              }`}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              <span className="truncate">Manual Transfer / SMS</span>
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-4 text-xs">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs">
           {/* Amount and Beneficiary Header Card */}
-          <div className="bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-150 dark:border-emerald-900/40 rounded-xl p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
+          <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400 block tracking-wider">
+                <span className="text-[10px] uppercase font-mono font-bold text-slate-500 dark:text-slate-400 block tracking-wider">
                   Total Payable Amount
                 </span>
-                <span className="text-xl font-black font-mono text-emerald-900 dark:text-emerald-300">
-                  {amountRwf.toLocaleString()} <span className="text-xs font-sans">RWF</span>
+                <span className="text-2xl sm:text-3xl font-black font-display text-slate-900 dark:text-white">
+                  {amountRwf.toLocaleString()} <span className="text-xs font-mono font-bold text-[#156c45] dark:text-emerald-400">RWF</span>
                 </span>
               </div>
-              <div className="text-right">
-                <span className="text-[10px] uppercase font-semibold text-stone-400 block">
-                  {isPlatformTarget ? "Platform SaaS License Receiver" : "Organization Receiver"}
+              <div className="sm:text-right">
+                <span className="text-[10px] uppercase font-mono font-semibold text-slate-400 block">
+                  {isPlatformTarget ? "Platform License Receiver" : "Beneficiary Treasury"}
                 </span>
-                <span className="text-xs font-bold text-stone-700 dark:text-stone-300 flex items-center gap-1">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                  {finalRecipientName}
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center sm:justify-end gap-1 mt-0.5">
+                  <ShieldCheck className="h-3.5 w-3.5 text-[#156c45] dark:text-emerald-400 shrink-0" />
+                  <span className="truncate max-w-[200px]">{finalRecipientName}</span>
                 </span>
               </div>
             </div>
 
             {/* Destination Credentials Strip */}
-            <div className="pt-2 border-t border-emerald-200/50 dark:border-emerald-900/40 flex flex-wrap items-center justify-between gap-2 text-[10.5px] font-mono text-stone-600 dark:text-stone-300">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9.5px] font-bold uppercase text-stone-500 font-sans">
-                  Target:
+            <div className="pt-2.5 border-t border-slate-200/70 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-600 dark:text-slate-300">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase text-slate-400 font-sans">
+                  Settlement:
                 </span>
-                <span className="bg-amber-100/80 dark:bg-amber-950/50 text-amber-900 dark:text-amber-300 px-1.5 py-0.5 rounded font-bold">
-                  MTN {finalMtnNumber}
-                </span>
-                <span className="bg-rose-100/80 dark:bg-rose-950/50 text-rose-900 dark:text-rose-300 px-1.5 py-0.5 rounded font-bold">
-                  Airtel {finalAirtelNumber}
-                </span>
+                {finalMtnNumber && (
+                  <span className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded-md font-bold text-[10px]">
+                    MTN {finalMtnNumber}
+                  </span>
+                )}
+                {finalAirtelNumber && (
+                  <span className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded-md font-bold text-[10px]">
+                    Airtel {finalAirtelNumber}
+                  </span>
+                )}
               </div>
               {finalMerchantCode && (
-                <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2 py-0.5 rounded-lg text-emerald-700 dark:text-emerald-400 font-bold">
-                  <span>Pay Code: {finalMerchantCode}</span>
+                <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2 py-0.5 rounded-md text-[#156c45] dark:text-emerald-400 font-bold text-[10px]">
+                  <span>Code: {finalMerchantCode}</span>
                   <button
                     type="button"
                     onClick={() => handleCopyCode(finalMerchantCode, "merchant_strip")}
-                    className="hover:text-emerald-900 p-0.5"
+                    className="hover:text-emerald-900 dark:hover:text-emerald-200 p-0.5"
                     title="Copy Code"
                   >
                     {copiedCode === "merchant_strip" ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
@@ -482,7 +492,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
             <div>
               {pushStatus === "idle" && (
                 <form onSubmit={handleInitiatePush} className="space-y-4">
-                  <p className="text-stone-500 dark:text-stone-400 leading-relaxed text-xs">
+                  <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed">
                     {description}
                   </p>
 
@@ -497,25 +507,25 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
 
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
-                        <label className="text-xs font-bold text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
+                        <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                           <span>MTN Phone Number</span>
                           <span className="text-rose-500">*</span>
                         </label>
-                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-700">
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-600 animate-pulse" />
-                          MTN Rwanda Only (078 / 079)
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                          MTN Rwanda (078 / 079)
                         </span>
                       </div>
 
                       <div className="relative">
                         <input
                           type="tel"
-                          className={`w-full text-sm font-mono font-bold rounded-xl border px-3.5 py-2.5 text-stone-900 dark:text-white outline-none transition ${
+                          className={`w-full text-sm font-mono font-bold rounded-xl border px-3.5 py-2.5 text-slate-900 dark:text-white outline-none transition ${
                             isCompleteMtn
                               ? "border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 focus:ring-2 focus:ring-emerald-500"
                               : isAirtelOrInvalidPrefix
                               ? "border-rose-400 bg-rose-50/30 dark:bg-rose-950/20 focus:ring-2 focus:ring-rose-500"
-                              : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-amber-500"
+                              : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-[#156c45]"
                           }`}
                           placeholder="078XXXXXXX or 079XXXXXXX"
                           value={phoneNumber}
@@ -527,8 +537,8 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                           required
                         />
                         {isCompleteMtn && (
-                          <span className="absolute right-3 top-2.5 text-emerald-600 text-xs font-bold flex items-center gap-1">
-                            <CheckCircle2 className="h-4 w-4" /> Valid MTN
+                          <span className="absolute right-3 top-2.5 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-1">
+                            <CheckCircle2 className="h-4 w-4" /> Verified
                           </span>
                         )}
                       </div>
@@ -536,14 +546,14 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                       {/* Quick MTN Prefix Helpers */}
                       <div className="flex items-center justify-between mt-1.5">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-stone-500 font-medium">Quick prefix:</span>
+                          <span className="text-[10px] text-slate-400 font-medium">Quick prefix:</span>
                           <button
                             type="button"
                             onClick={() => {
                               const rest = cleanPhone.startsWith("078") || cleanPhone.startsWith("079") ? cleanPhone.slice(3) : cleanPhone;
                               setPhoneNumber(("078" + rest).slice(0, 10));
                             }}
-                            className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200 transition"
+                            className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 transition"
                           >
                             078...
                           </button>
@@ -553,30 +563,30 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                               const rest = cleanPhone.startsWith("078") || cleanPhone.startsWith("079") ? cleanPhone.slice(3) : cleanPhone;
                               setPhoneNumber(("079" + rest).slice(0, 10));
                             }}
-                            className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200 transition"
+                            className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 transition"
                           >
                             079...
                           </button>
                         </div>
-                        <span className="text-[10px] font-mono text-stone-400">
+                        <span className="text-[10px] font-mono text-slate-400">
                           {cleanPhone.length}/10 digits
                         </span>
                       </div>
 
                       {/* Real-time Validation Feedback */}
                       {isAirtelPrefix && (
-                        <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 rounded-xl text-xs space-y-2">
+                        <div className="mt-2.5 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 rounded-xl text-xs space-y-2">
                           <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
                             <Smartphone className="h-4 w-4 shrink-0 text-amber-600" />
                             <span>Airtel Money Rwanda Detected ({cleanPhone.slice(0, 3)}...)</span>
                           </div>
-                          <p className="text-[11px] text-stone-600 dark:text-stone-400">
+                          <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
                             Automated USSD push prompt is exclusive to MTN Rwanda SIMs. If you are using Airtel Money, switch to manual transfer to pay via <span className="font-mono font-bold">*500#</span> or <span className="font-mono font-bold">*182#</span> and submit your confirmation SMS.
                           </p>
                           <Button
                             type="button"
                             onClick={() => setTab("manual_sms")}
-                            className="w-full py-1.5 text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg transition"
+                            className="w-full py-2 text-xs bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition"
                           >
                             Switch to Airtel Transfer Instructions (*500# / *182#)
                           </Button>
@@ -584,12 +594,12 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                       )}
 
                       {isAirtelOrInvalidPrefix && !isAirtelPrefix && (
-                        <div className="mt-2 p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 rounded-lg text-xs flex items-start gap-2">
+                        <div className="mt-2.5 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 rounded-xl text-xs flex items-start gap-2">
                           <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
                           <div>
                             <p className="font-bold">MTN Rwanda Number Required</p>
-                            <p className="text-[11px] text-rose-700 dark:text-rose-300">
-                              To prevent telco errors and ensure instant prompt delivery, please enter an MTN number starting with <span className="font-mono font-bold">078</span> or <span className="font-mono font-bold">079</span> (e.g. 078XXXXXXX). Airtel users can switch to the Manual SMS tab above.
+                            <p className="text-[11px] text-rose-700 dark:text-rose-300 mt-0.5">
+                              Please enter an MTN number starting with <span className="font-mono font-bold">078</span> or <span className="font-mono font-bold">079</span> (e.g. 078XXXXXXX). Airtel users can switch to the Manual SMS tab above.
                             </p>
                           </div>
                         </div>
@@ -598,13 +608,13 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                       {cleanPhone.length > 0 && isMtnPrefix && cleanPhone.length < 10 && (
                         <p className="text-[11px] text-amber-700 dark:text-amber-300 font-medium mt-1 flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          Please enter all 10 digits ({10 - cleanPhone.length} more needed, e.g. 078XXXXXXX)
+                          Please enter all 10 digits ({10 - cleanPhone.length} more needed)
                         </p>
                       )}
 
                       {isCompleteMtn && (
                         <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium mt-1 flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3" />
+                          <CheckCircle2 className="h-3.5 w-3.5" />
                           MTN SIM verified. Prompt will be delivered to this handset automatically.
                         </p>
                       )}
@@ -619,84 +629,84 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                   </div>
 
                   {statusMessage && (
-                    <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+                    <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 rounded-xl text-xs flex items-center gap-2">
                       <AlertCircle className="h-4 w-4 shrink-0" />
-                      {statusMessage}
+                      <span>{statusMessage}</span>
                     </div>
                   )}
 
-                  <Button
+                  <button
                     type="submit"
                     disabled={!isCompleteMtn}
-                    className={`w-full py-3 font-bold rounded-xl shadow-xs flex items-center justify-center gap-2 transition ${
+                    className={`w-full py-3 sm:py-3.5 px-4 font-bold text-xs sm:text-sm rounded-xl shadow-xs flex items-center justify-center gap-2 transition ${
                       isCompleteMtn
-                        ? "bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold"
-                        : "bg-slate-300 dark:bg-slate-800 text-slate-500 cursor-not-allowed"
+                        ? "bg-[#156c45] hover:bg-[#125939] active:scale-[0.99] text-white"
+                        : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed"
                     }`}
                   >
                     <Zap className="h-4 w-4" />
-                    Pay {amountRwf.toLocaleString()} RWF via MTN SIM Prompt (078/079)
-                  </Button>
+                    <span>Pay {amountRwf.toLocaleString()} RWF via MTN SIM Prompt (078/079)</span>
+                  </button>
                 </form>
               )}
 
               {pushStatus === "initiating" && (
                 <div className="py-8 text-center space-y-4">
-                  <div className="h-16 w-16 mx-auto rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center animate-spin">
-                    <RefreshCw className="h-8 w-8" />
+                  <div className="h-14 w-14 mx-auto rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-[#156c45] dark:text-emerald-400 flex items-center justify-center animate-spin">
+                    <RefreshCw className="h-6 w-6" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-stone-800 dark:text-white text-sm">
+                    <h4 className="font-display font-bold text-slate-900 dark:text-white text-sm sm:text-base">
                       Connecting to PawaPay Gateway...
                     </h4>
-                    <p className="text-xs text-stone-400 mt-1">{statusMessage}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{statusMessage}</p>
                   </div>
                 </div>
               )}
 
               {pushStatus === "awaiting_pin" && (
-                <div className="py-4 space-y-4 text-center animate-in zoom-in-95">
-                  <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-30 animate-ping" />
-                    <div className="relative h-16 w-16 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center shadow-lg font-bold">
-                      <Smartphone className="h-8 w-8 animate-pulse text-slate-950" />
+                <div className="py-3 space-y-4 text-center animate-in zoom-in-[0.98]">
+                  <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-25 animate-ping" />
+                    <div className="relative h-14 w-14 rounded-2xl bg-[#156c45] text-white flex items-center justify-center shadow-lg">
+                      <Smartphone className="h-7 w-7 animate-pulse" />
                     </div>
                   </div>
 
                   <div>
-                    <h4 className="font-extrabold text-stone-900 dark:text-white text-base">
-                      Prompt Sent to MTN SIM: {phoneNumber}!
+                    <h4 className="font-display font-extrabold text-slate-900 dark:text-white text-sm sm:text-base">
+                      Prompt Sent to MTN SIM: {phoneNumber}
                     </h4>
-                    <p className="text-xs text-stone-500 dark:text-stone-300 mt-1 max-w-xs mx-auto">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
                       Please look at your phone screen right now and enter your MTN MoMo PIN to authorize{" "}
-                      <span className="font-bold text-amber-600 dark:text-amber-400">{amountRwf.toLocaleString()} RWF</span>.
+                      <span className="font-bold text-[#156c45] dark:text-emerald-400">{amountRwf.toLocaleString()} RWF</span>.
                     </p>
                   </div>
 
                   {/* Timer & USSD manual shortcut box */}
-                  <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 text-left space-y-2.5">
-                    <div className="flex items-center justify-between text-xs font-bold text-stone-700 dark:text-stone-300">
+                  <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-left space-y-3">
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
                       <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
                         <Clock className="h-4 w-4 animate-spin" />
                         {countdown > 0 ? "Awaiting your PIN on phone..." : "Waiting for MTN clearance..."}
                       </span>
-                      <span className="font-mono text-stone-500">
+                      <span className="font-mono text-slate-500">
                         {countdown > 0 ? `${countdown}s remaining` : "Extended wait"}
                       </span>
                     </div>
 
-                    <div className="pt-2 border-t border-dashed border-slate-200 dark:border-slate-800 text-[11px] text-stone-500 space-y-1.5">
-                      <p className="font-bold text-stone-700 dark:text-stone-300">
+                    <div className="pt-2.5 border-t border-dashed border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 space-y-2">
+                      <p className="font-bold text-slate-700 dark:text-slate-300">
                         Didn't see the USSD pop-up on your screen?
                       </p>
-                      <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200 dark:border-amber-900/50">
-                        <span className="text-[11px] text-amber-900 dark:text-amber-300">
-                          Dial <strong className="font-mono font-bold">*182*7*1#</strong> & enter MoMo PIN
+                      <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                        <span className="text-[11px] text-slate-800 dark:text-slate-200">
+                          Dial <strong className="font-mono font-bold text-[#156c45] dark:text-emerald-400">*182*7*1#</strong> & enter MoMo PIN
                         </span>
                         <button
                           type="button"
                           onClick={() => handleCopyCode("*182*7*1#", "ussd")}
-                          className="px-2 py-1 bg-amber-200 dark:bg-amber-800/60 hover:bg-amber-300 text-amber-900 dark:text-amber-100 rounded text-[10px] font-bold flex items-center gap-1 transition"
+                          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition"
                         >
                           {copiedCode === "ussd" ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
                           <span>{copiedCode === "ussd" ? "Copied" : "Copy Code"}</span>
@@ -708,24 +718,24 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                       type="button"
                       onClick={handleCheckStatusNow}
                       loading={checkingStatus}
-                      className="w-full py-2 text-xs bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg shadow-xs flex items-center justify-center gap-1.5 transition"
+                      className="w-full py-2.5 text-xs bg-[#156c45] hover:bg-[#125939] text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition"
                     >
                       <RefreshCw className={`h-3.5 w-3.5 ${checkingStatus ? "animate-spin" : ""}`} />
                       I Approved PIN / Check MoMo Status Now
                     </Button>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Button
                       variant="outline"
                       onClick={() => setPushStatus("idle")}
-                      className="w-1/2 py-2 text-xs"
+                      className="w-full sm:w-1/2 py-2 text-xs rounded-xl"
                     >
                       Change Phone Number
                     </Button>
                     <Button
                       onClick={() => setTab("manual_sms")}
-                      className="w-1/2 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-white"
+                      className="w-full sm:w-1/2 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-white rounded-xl"
                     >
                       Use Manual Reference
                     </Button>
@@ -734,26 +744,26 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
               )}
 
               {pushStatus === "success" && (
-                <div className="py-6 text-center space-y-4 animate-in zoom-in-95">
-                  <div className="h-16 w-16 mx-auto rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-md">
-                    <CheckCircle2 className="h-10 w-10" />
+                <div className="py-6 text-center space-y-4 animate-in zoom-in-[0.98]">
+                  <div className="h-14 w-14 mx-auto rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-[#156c45] dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-center shadow-md">
+                    <CheckCircle2 className="h-8 w-8" />
                   </div>
                   <div>
-                    <h4 className="font-extrabold text-stone-900 dark:text-white text-lg">
+                    <h4 className="font-display font-extrabold text-slate-900 dark:text-white text-base sm:text-lg">
                       Payment Confirmed!
                     </h4>
-                    <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                       {statusMessage}
                     </p>
                     {providerTxId && (
-                      <div className="mt-2 inline-block bg-slate-100 dark:bg-slate-800 font-mono text-[11px] font-bold px-3 py-1 rounded-lg text-stone-700 dark:text-stone-300">
+                      <div className="mt-2.5 inline-block bg-slate-100 dark:bg-slate-800 font-mono text-xs font-bold px-3 py-1 rounded-lg text-slate-700 dark:text-slate-300">
                         Ref: {providerTxId}
                       </div>
                     )}
                   </div>
                   <Button
                     onClick={onClose}
-                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                    className="w-full py-3 bg-[#156c45] hover:bg-[#125939] text-white font-bold rounded-xl text-xs sm:text-sm"
                   >
                     Done & Close
                   </Button>
@@ -761,38 +771,38 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
               )}
 
               {pushStatus === "failed" && (
-                <div className="py-4 space-y-3 text-center animate-in zoom-in-95">
-                  <div className="h-14 w-14 mx-auto rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
-                    <AlertCircle className="h-8 w-8" />
+                <div className="py-4 space-y-3.5 text-center animate-in zoom-in-[0.98]">
+                  <div className="h-14 w-14 mx-auto rounded-2xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 flex items-center justify-center border border-rose-200 dark:border-rose-900/60">
+                    <AlertCircle className="h-7 w-7" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-stone-900 dark:text-white text-sm">
+                    <h4 className="font-display font-bold text-slate-900 dark:text-white text-sm sm:text-base">
                       Transaction Incomplete or Timed Out
                     </h4>
-                    <p className="text-xs text-rose-600 mt-1">{statusMessage}</p>
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">{statusMessage}</p>
                   </div>
                   {depositId && (
                     <Button
                       type="button"
                       onClick={handleCheckStatusNow}
                       loading={checkingStatus}
-                      className="w-full py-2 text-xs bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg shadow-xs flex items-center justify-center gap-1.5"
+                      className="w-full py-2.5 text-xs bg-[#156c45] hover:bg-[#125939] text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5"
                     >
                       <RefreshCw className={`h-3.5 w-3.5 ${checkingStatus ? "animate-spin" : ""}`} />
                       Re-Check Status (If Approved via *182*7*1#)
                     </Button>
                   )}
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Button
                       variant="outline"
                       onClick={() => setPushStatus("idle")}
-                      className="w-1/2 py-2 text-xs"
+                      className="w-full sm:w-1/2 py-2 text-xs rounded-xl"
                     >
                       Try Again
                     </Button>
                     <Button
                       onClick={() => setTab("manual_sms")}
-                      className="w-1/2 py-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                      className="w-full sm:w-1/2 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-white rounded-xl"
                     >
                       Paste SMS Proof
                     </Button>
@@ -802,55 +812,59 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
             </div>
           ) : (
             <form onSubmit={handleManualSubmit} className="space-y-3.5">
-              <p className="text-stone-500 dark:text-stone-400 text-xs leading-relaxed">
+              <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed">
                 If you made a manual Mobile Money transfer via dial code or bank agent, paste the SMS confirmation or reference ID below for the accountant to reconcile.
               </p>
 
-              <div className="bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl p-3 text-[11px] space-y-2">
+              <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3.5 text-xs space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wider text-[10px]">
-                    Authorized {isPlatformTarget ? "Platform" : "Organization"} Settlement Numbers:
+                  <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[10px] font-mono">
+                    Authorized Settlement Numbers:
                   </span>
-                  <span className="text-[10px] font-bold text-stone-600 dark:text-stone-300">
+                  <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 truncate max-w-[150px]">
                     {finalRecipientName}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-stone-700 dark:text-stone-300 font-mono">
-                  <span>MTN MoMo: <strong>{finalMtnNumber}</strong></span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyCode(finalMtnNumber, "mtn")}
-                    className="text-amber-700 hover:text-amber-900 p-1 flex items-center gap-1 text-[10px]"
-                  >
-                    {copiedCode === "mtn" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                    <span className="font-sans">Copy</span>
-                  </button>
-                </div>
-                <div className="flex items-center justify-between text-stone-700 dark:text-stone-300 font-mono">
-                  <span>Airtel Money: <strong>{finalAirtelNumber}</strong></span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyCode(finalAirtelNumber, "airtel")}
-                    className="text-amber-700 hover:text-amber-900 p-1 flex items-center gap-1 text-[10px]"
-                  >
-                    {copiedCode === "airtel" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                    <span className="font-sans">Copy</span>
-                  </button>
-                </div>
-                <div className="text-[10px] text-stone-500 bg-white/70 dark:bg-slate-900/50 p-2 rounded border border-amber-200/50">
-                  <div className="flex items-center justify-between font-mono text-stone-700 dark:text-stone-300">
+                {finalMtnNumber && (
+                  <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-mono bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                    <span>MTN MoMo: <strong>{finalMtnNumber}</strong></span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(finalMtnNumber, "mtn")}
+                      className="text-[#156c45] dark:text-emerald-400 hover:opacity-80 p-1 flex items-center gap-1 text-[10px] font-bold"
+                    >
+                      {copiedCode === "mtn" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                      <span className="font-sans">Copy</span>
+                    </button>
+                  </div>
+                )}
+                {finalAirtelNumber && (
+                  <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-mono bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                    <span>Airtel Money: <strong>{finalAirtelNumber}</strong></span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(finalAirtelNumber, "airtel")}
+                      className="text-[#156c45] dark:text-emerald-400 hover:opacity-80 p-1 flex items-center gap-1 text-[10px] font-bold"
+                    >
+                      {copiedCode === "airtel" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                      <span className="font-sans">Copy</span>
+                    </button>
+                  </div>
+                )}
+                <div className="text-[10px] text-slate-500 bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200/50 dark:border-slate-800">
+                  <div className="flex flex-wrap items-center justify-between font-mono text-slate-700 dark:text-slate-300 gap-1">
                     <span>Airtel Dial: <strong>*500#</strong> or <strong>*182#</strong></span>
                     <span>MTN Dial: <strong>*182*1*1#</strong></span>
                   </div>
-                  <p className="text-[9px] text-stone-400 mt-0.5">Send {amountRwf.toLocaleString()} RWF to the number above, then copy the confirmation SMS received.</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Send {amountRwf.toLocaleString()} RWF to the number above, then copy the confirmation SMS received.</p>
                 </div>
                 {finalMerchantCode && (
-                  <div className="flex items-center justify-between text-stone-700 dark:text-stone-300 font-mono pt-1 border-t border-amber-200/60 dark:border-amber-900/40">
+                  <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-mono pt-1.5 border-t border-slate-200 dark:border-slate-800">
                     <span>Merchant Pay Code: <strong>{finalMerchantCode}</strong></span>
                     <button
                       type="button"
                       onClick={() => handleCopyCode(finalMerchantCode, "code")}
-                      className="text-emerald-700 hover:text-emerald-900 p-1 flex items-center gap-1 text-[10px]"
+                      className="text-[#156c45] dark:text-emerald-400 hover:opacity-80 p-1 flex items-center gap-1 text-[10px] font-bold"
                     >
                       {copiedCode === "code" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
                       <span className="font-sans">Copy</span>
@@ -883,12 +897,12 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
               />
 
               <div>
-                <label className="text-xs font-semibold text-stone-700 dark:text-stone-300 block mb-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
                   Pasted SMS Confirmation Message <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   rows={3}
-                  className="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 p-2.5 text-stone-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-[#156c45] outline-none"
                   placeholder="Paste transaction SMS: 'You have transferred 25,000 RWF to Impacto Ltd. TxId: 98124...'"
                   value={manualSms}
                   onChange={(e) => setManualSms(e.target.value)}
@@ -896,13 +910,20 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                 />
               </div>
 
-              <Button
+              <button
                 type="submit"
-                loading={manualSubmitting}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs"
+                disabled={manualSubmitting}
+                className="w-full py-3 sm:py-3.5 bg-[#156c45] hover:bg-[#125939] active:scale-[0.99] text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition flex items-center justify-center gap-2"
               >
-                Submit Payment Slip for Accountant Verification
-              </Button>
+                {manualSubmitting ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Submitting Payment Slip...</span>
+                  </>
+                ) : (
+                  <span>Submit Payment Slip for Verification</span>
+                )}
+              </button>
             </form>
           )}
         </div>

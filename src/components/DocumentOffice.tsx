@@ -12,7 +12,7 @@ import {
   FileUp, 
   Share2, 
   X, 
-  Sparkles, 
+  Calculator, 
   Lock, 
   BarChart, 
   LineChart, 
@@ -923,7 +923,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   onClick={() => injectFormulaRow(4, "SUM")}
                   className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#156c45] rounded-lg text-xs font-bold transition"
                 >
-                  <Sparkles className="h-3.5 w-3.5" />
+                  <Calculator className="h-3.5 w-3.5" />
                   Auto-Sum
                 </button>
 
@@ -1110,7 +1110,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                         className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-400 transition"
                         title="Incorporate columns summation inside grid"
                       >
-                        <Sparkles className="h-3.5 w-3.5" />
+                        <Calculator className="h-3.5 w-3.5" />
                         Auto-Sum Shares/RWF
                       </button>
                     </div>

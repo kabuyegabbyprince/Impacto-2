@@ -4,7 +4,7 @@ import {
   Lock, 
   ArrowUpRight, 
   Check, 
-  Sparkles, 
+  Crown, 
   Coins, 
   Smartphone, 
   Users, 
@@ -29,11 +29,12 @@ import {
   ImpactFeatureKey,
   FeatureAccessResult,
   canAccessFeature,
-  getOrgSubscriptionLifecycle 
+  getOrgSubscriptionLifecycle,
+  getTierDefinition
 } from "../lib/subscriptionMatrix";
 
 interface PlanGatedViewProps {
-  requiredTier?: SubscriptionTier;
+  requiredTier?: SubscriptionTier | string;
   featureKey?: ImpactFeatureKey;
   children: React.ReactNode;
   customMessage?: string;
@@ -70,7 +71,7 @@ export const PlanGatedView: React.FC<PlanGatedViewProps> = ({
 
   const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
   const targetTier = accessResult.requiredTier || requiredTier;
-  const tierDetails = SUBSCRIPTION_TIERS[targetTier];
+  const tierDetails = getTierDefinition(targetTier as string);
   const recommendedPackage = accessResult.packageDef || (accessResult.recommendedPackage ? ADDON_PACKAGES[accessResult.recommendedPackage] : undefined);
 
   const handleOpenPackageCheckout = (pkgId: AddOnPackageId) => {
@@ -87,7 +88,11 @@ export const PlanGatedView: React.FC<PlanGatedViewProps> = ({
 
     setIsProcessing(true);
     try {
-      const pkgDef = ADDON_PACKAGES[selectedPackage];
+      const pkgDef = selectedPackage ? ADDON_PACKAGES[selectedPackage] : null;
+      if (!pkgDef) {
+        addToast("Selected package definition was not found.", "error");
+        return;
+      }
       const existingPackages = lifecycle.activePackages;
       const updatedPackages = Array.from(new Set([...existingPackages, selectedPackage]));
       const paymentRef = `PKG-${Date.now().toString().slice(-6)}`;
@@ -134,9 +139,6 @@ export const PlanGatedView: React.FC<PlanGatedViewProps> = ({
           <span className="h-16 w-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-700 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20">
             <Lock className="h-7 w-7" />
           </span>
-          <span className="absolute -top-1.5 -right-1.5 h-6 w-6 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-md animate-bounce">
-            <Sparkles className="h-3.5 w-3.5" />
-          </span>
         </div>
 
         <h2 className="text-2xl font-black font-display text-gray-900 dark:text-white leading-tight">
@@ -144,7 +146,7 @@ export const PlanGatedView: React.FC<PlanGatedViewProps> = ({
         </h2>
         
         <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 mt-2 max-w-xl font-medium leading-relaxed">
-          {customMessage || accessResult.message || `This capability is available as an affordable $4 add-on package or with the ${tierDetails.name}. Choose the option that fits your cooperative.`}
+          {customMessage || accessResult.message || `This capability is available as an affordable $4 add-on package or with the ${tierDetails?.name || "Pro Plan"}. Choose the option that fits your cooperative.`}
         </p>
 
         {/* Dual Recommendation Cards */}
@@ -221,26 +223,26 @@ export const PlanGatedView: React.FC<PlanGatedViewProps> = ({
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <div className="h-7 w-7 rounded-lg bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold">
-                    <Sparkles className="h-4 w-4" />
+                    <Crown className="h-4 w-4" />
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                      {tierDetails.name}
+                      {tierDetails?.name || "Pro Plan"}
                     </h3>
                     <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-400">
-                      ${tierDetails.priceUsd}/mo ({formatAmount(convertToRWF(tierDetails.priceUsd, "USD"))})
+                      ${tierDetails?.priceUsd || 40}/mo ({formatAmount(convertToRWF(tierDetails?.priceUsd || 40, "USD"))})
                     </span>
                   </div>
                 </div>
-                <Badge color="blue">{tierDetails.memberLimit === Infinity ? "Unlimited" : `${tierDetails.memberLimit} Members`}</Badge>
+                <Badge color="blue">{tierDetails?.memberLimit === Infinity ? "Unlimited" : `${tierDetails?.memberLimit || 500} Members`}</Badge>
               </div>
 
               <p className="text-xs text-gray-600 dark:text-slate-350 mt-2 mb-3 leading-relaxed">
-                {tierDetails.tagline}
+                {tierDetails?.tagline || "Expanded operational capacity and governance tools for cooperatives"}
               </p>
 
               <ul className="space-y-1.5 text-xs text-gray-700 dark:text-slate-300 border-t border-blue-100 dark:border-blue-950/40 pt-3">
-                {tierDetails.coreFeatures.slice(0, 4).map((feat, idx) => (
+                {(tierDetails?.coreFeatures || []).slice(0, 4).map((feat, idx) => (
                   <li key={idx} className="flex items-center gap-2">
                     <Check className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
                     <span className="text-[11px] font-medium">{feat}</span>
@@ -254,7 +256,7 @@ export const PlanGatedView: React.FC<PlanGatedViewProps> = ({
                 <Button
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-9.5 rounded-xl shadow-sm flex items-center justify-center gap-1.5"
                 >
-                  Upgrade to {tierDetails.name} <ArrowUpRight className="h-3.5 w-3.5" />
+                  Upgrade to {tierDetails?.name || "Pro Plan"} <ArrowUpRight className="h-3.5 w-3.5" />
                 </Button>
               </Link>
             </div>

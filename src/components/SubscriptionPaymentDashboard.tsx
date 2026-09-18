@@ -26,7 +26,6 @@ import {
   ChevronRight,
   ExternalLink,
   Coins,
-  Sparkles,
   Smartphone
 } from "lucide-react";
 import { Organization, SubscriptionPayment } from "../types";

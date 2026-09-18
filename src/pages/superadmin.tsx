@@ -67,6 +67,7 @@ import {
 import { useAuthStore } from "../store/authStore";
 import { Button, Input, Card, Badge, Table, Modal, EmptyState, Avatar, getLucideIcon } from "../components/ui";
 import { useToast } from "../components/Toast";
+import { notifyPlanOrPackageGranted } from "../lib/crossTabSync";
 
 const formatDuration = (startStr: string, endStr?: string) => {
   if (!endStr) return "N/A";
@@ -155,7 +156,7 @@ const SubscriptionTierCell: React.FC<{
                   ? "bg-emerald-600 text-white"
                   : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200"
               }`}
-              title={`Toggle ${ADDON_PACKAGES[pkgKey].name} (+20 members)`}
+              title={`Toggle ${ADDON_PACKAGES[pkgKey]?.name || pkgKey} (+20 members)`}
             >
               {pkgKey === "event_pack" ? "Event" : pkgKey === "finance_pack" ? "Finance" : pkgKey === "document_pack" ? "Doc" : "Pro"}{isActive ? " ✓" : ""}
             </button>
@@ -231,6 +232,13 @@ export const SuperadminDashboard: React.FC = () => {
         });
         setSuccessMsg(`Upgraded ${name} to ${actionOrTier.toUpperCase()} Plan (+30 days active)`);
       }
+
+      // Instant hot reload for any user viewing this workspace
+      notifyPlanOrPackageGranted(orgId, {
+        tier: actionOrTier === "extend_30" ? matchedOrg?.subscription_tier : actionOrTier,
+        packageName: `${actionOrTier.toUpperCase()} Plan`
+      });
+
       refetch();
       setTimeout(() => setSuccessMsg(""), 3500);
     } catch (err: any) {
@@ -249,15 +257,27 @@ export const SuperadminDashboard: React.FC = () => {
         pkgs = [];
       }
 
-      if (pkgs.includes(pkgId)) {
+      const willActivate = !pkgs.includes(pkgId);
+      if (!willActivate) {
         pkgs = pkgs.filter((p) => p !== pkgId);
-        addToast(`Revoked ${ADDON_PACKAGES[pkgId].name} for workspace`, "info");
+        addToast(`Revoked ${ADDON_PACKAGES[pkgId]?.name || pkgId} for workspace`, "info");
       } else {
         pkgs.push(pkgId);
-        addToast(`Granted ${ADDON_PACKAGES[pkgId].name} (+20 members) to workspace!`, "success");
+        addToast(`Granted ${ADDON_PACKAGES[pkgId]?.name || pkgId} (+20 members) to workspace!`, "success");
       }
 
       localStorage.setItem(`impacto_org_packages_${orgId}`, JSON.stringify(pkgs));
+
+      // Instant hot reload for user's dashboard
+      if (willActivate) {
+        notifyPlanOrPackageGranted(orgId, {
+          packageId: pkgId,
+          packageName: ADDON_PACKAGES[pkgId]?.name || pkgId
+        });
+      } else {
+        window.dispatchEvent(new CustomEvent("impacto_org_updated", { detail: { orgId } }));
+      }
+
       refetch();
     } catch (err) {
       console.error(err);
@@ -722,7 +742,7 @@ export const SuperadminDashboard: React.FC = () => {
 
   const filteredOrgs = orgs.filter((o) => {
     const query = search.toLowerCase();
-    return o.name.toLowerCase().includes(query) || o.slug.toLowerCase().includes(query);
+    return (o?.name || "").toLowerCase().includes(query) || (o?.slug || "").toLowerCase().includes(query);
   });
 
   return (

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { Award, Download, Printer, Plus, CheckCircle2, ShieldCheck, QrCode, Search, RefreshCw, X, Sparkles, Filter } from "lucide-react";
+import { Award, Download, Printer, Plus, CheckCircle2, ShieldCheck, QrCode, Search, RefreshCw, X, Filter } from "lucide-react";
 import { Certificate, OrgMember } from "../types";
 import { MockDB } from "../lib/mockData";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
@@ -137,7 +137,7 @@ export const CertificateGenerator: React.FC<CertificateGeneratorProps> = ({ memb
             onClick={() => setShowBatchDesignerModal(true)}
             className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-emerald-600 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-xs"
           >
-            <Sparkles className="h-4 w-4" /> Certificate / Badge Designer
+            <Award className="h-4 w-4" /> Certificate / Badge Designer
           </button>
           <button
             onClick={() => setShowCreateModal(true)}

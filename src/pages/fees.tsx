@@ -2083,8 +2083,8 @@ export const OrganizationMemberFees: React.FC = () => {
 
       {/* Record Contribution modal (Accountant workspace) */}
       {showAddModal && isAccountant && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in" id="add-fee-modal">
-          <div className="bg-white dark:bg-slate-900 border rounded-xl shadow-lg w-full max-w-md p-6 relative">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in" id="add-fee-modal">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md p-5 sm:p-6 relative max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-stone-900 dark:text-white flex items-center gap-1.5 mb-4">
               <Landmark className="h-5 w-5 text-emerald-700" /> Charge Cooperative Dues Row
             </h2>
@@ -2305,12 +2305,12 @@ export const OrganizationMemberFees: React.FC = () => {
 
       {/* Member Pay / Report Payment Modal */}
       {selectedFeeToPay && (
-        <div className="fixed inset-0 bg-stone-950/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in" id="pay-report-modal">
-          <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95">
-            <div className="p-5 bg-gradient-to-r from-emerald-800 to-emerald-900 text-white flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in" id="pay-report-modal">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95">
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-800 to-emerald-900 text-white flex items-center justify-between shrink-0">
               <div>
                 <span className="text-[10px] font-black tracking-widest uppercase text-emerald-200">Payment Gateway</span>
-                <h3 className="text-lg font-extrabold flex items-center gap-1.5 mt-0.5">
+                <h3 className="text-base sm:text-lg font-extrabold flex items-center gap-1.5 mt-0.5">
                   <Smartphone className="h-5 w-5" /> Settle Account Contribution
                 </h3>
               </div>
@@ -2323,7 +2323,7 @@ export const OrganizationMemberFees: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
               {/* Target summary card */}
               <div className="p-4 bg-emerald-50/50 dark:bg-slate-950/20 border border-emerald-100 dark:border-slate-850 rounded-xl flex items-center justify-between">
                 <div>
@@ -2623,23 +2623,23 @@ export const OrganizationMemberFees: React.FC = () => {
 
       {/* Accountant Review / Resolve Payment Report Modal */}
       {reviewingFee && isAccountant && (
-        <div className="fixed inset-0 bg-stone-950/75 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in" id="admin-review-modal">
-          <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
-            <div className="px-5 py-4 bg-slate-100 dark:bg-slate-950 border-b dark:border-slate-850 flex items-center justify-between select-none">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in" id="admin-review-modal">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95">
+            <div className="px-5 py-4 bg-slate-100 dark:bg-slate-950 border-b dark:border-slate-850 flex items-center justify-between select-none shrink-0">
               <div className="flex flex-col">
                 <span className="text-[10px] uppercase font-black text-amber-600 tracking-wider">Pending Slip Verification</span>
                 <span className="font-extrabold text-sm text-stone-900 dark:text-white mt-0.5">Audit reported member check-in</span>
               </div>
               <button 
                 onClick={() => setReviewingFee(null)}
-                className="text-gray-400 hover:text-stone-900 dark:hover:text-white"
+                className="text-gray-400 hover:text-stone-900 dark:hover:text-white p-1 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-800 transition"
                 id="btn-close-review-modal"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
               <div className="bg-amber-50 dark:bg-amber-950/15 border border-amber-100 p-3.5 rounded-xl flex flex-col gap-2 font-semibold">
                 <div className="flex items-center gap-1.5 text-xs text-amber-850 dark:text-amber-400">
                   <AlertCircle className="h-4 w-4 shrink-0" />
@@ -3157,8 +3157,8 @@ export const OrganizationMemberFees: React.FC = () => {
 
       {/* Edit Fee Modal */}
       {editingFee && isAccountant && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-in fade-in" id="edit-fee-modal">
-          <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 relative">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[70] animate-in fade-in" id="edit-fee-modal">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md p-5 sm:p-6 relative max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-stone-900 dark:text-white flex items-center gap-1.5 mb-1">
               <Pencil className="h-5 w-5 text-blue-600" /> Edit Member Fee / Charge
             </h2>
@@ -3278,8 +3278,8 @@ export const OrganizationMemberFees: React.FC = () => {
 
       {/* Delete Fee Confirmation Modal */}
       {deletingFee && isAccountant && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-in fade-in" id="delete-fee-modal">
-          <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 relative">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[70] animate-in fade-in" id="delete-fee-modal">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md p-5 sm:p-6 relative max-h-[90vh] overflow-y-auto">
             <div className="h-12 w-12 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto mb-3">
               <Trash2 className="h-6 w-6" />
             </div>
@@ -3358,8 +3358,8 @@ export const OrganizationMemberFees: React.FC = () => {
 
       {/* Delete Entire Cycle Direct Modal */}
       {deletingCycle && isAccountant && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-[70] animate-in fade-in" id="delete-cycle-modal">
-          <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl shadow-2xl w-full max-w-sm p-6 relative">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[70] animate-in fade-in" id="delete-cycle-modal">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-sm p-5 sm:p-6 relative max-h-[90vh] overflow-y-auto">
             <div className="h-12 w-12 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto mb-3">
               <Trash2 className="h-6 w-6" />
             </div>
@@ -3393,13 +3393,13 @@ export const OrganizationMemberFees: React.FC = () => {
 
       {/* Official Payment Receipt Modal */}
       {viewingReceiptFee && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-[85] animate-in fade-in" id="view-receipt-modal">
-          <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative animate-in zoom-in-95">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[85] animate-in fade-in" id="view-receipt-modal">
+          <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] relative animate-in zoom-in-95">
             {/* Header */}
-            <div className="bg-gradient-to-r from-emerald-800 to-emerald-950 p-6 text-white text-center relative select-none">
+            <div className="bg-gradient-to-r from-emerald-800 to-emerald-950 p-5 sm:p-6 text-white text-center relative select-none shrink-0">
               <button 
                 onClick={() => setViewingReceiptFee(null)}
-                className="absolute top-4 right-4 text-emerald-200 hover:text-white transition"
+                className="absolute top-4 right-4 text-emerald-200 hover:text-white p-1 rounded-lg hover:bg-white/10 transition"
                 id="btn-close-receipt-modal"
               >
                 <X className="h-5 w-5" />
@@ -3410,7 +3410,7 @@ export const OrganizationMemberFees: React.FC = () => {
               <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300">
                 {activeOrg?.name || "COOPERATIVE SOCIETY"}
               </span>
-              <h2 className="text-xl font-black mt-0.5 tracking-tight font-display">
+              <h2 className="text-lg sm:text-xl font-black mt-0.5 tracking-tight font-display">
                 Official Payment Receipt
               </h2>
               <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-[9px] font-mono font-black bg-white/20 text-emerald-100 border border-white/20">
@@ -3419,7 +3419,7 @@ export const OrganizationMemberFees: React.FC = () => {
             </div>
 
             {/* Receipt Body */}
-            <div className="p-6 space-y-4 text-xs">
+            <div className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto flex-1">
               <div className="flex items-center justify-between pb-3 border-b border-dashed dark:border-slate-800">
                 <span className="text-stone-500 dark:text-slate-400 font-medium">Payment Status:</span>
                 <span className="inline-flex items-center gap-1 font-black text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/40">
@@ -3486,7 +3486,7 @@ export const OrganizationMemberFees: React.FC = () => {
             </div>
 
             {/* Modal Actions */}
-            <div className="p-4 bg-stone-50 dark:bg-slate-950/80 border-t dark:border-slate-800 flex items-center justify-end gap-2">
+            <div className="p-4 bg-stone-50 dark:bg-slate-950/80 border-t dark:border-slate-800 flex items-center justify-end gap-2 shrink-0">
               <Button
                 variant="outline"
                 size="xs"

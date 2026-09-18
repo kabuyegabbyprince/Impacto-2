@@ -5,9 +5,12 @@ import { isSupabaseConfigured, supabase } from "./supabase";
 const CHANNEL_NAME = "impacto_crosstab_sync_v1";
 
 export type CrossTabEvent = {
-  type: "MUTATION" | "STORAGE";
+  type: "MUTATION" | "STORAGE" | "ORG_PLAN_GRANTED";
   key?: string;
   orgId?: string;
+  tier?: string;
+  packageId?: string;
+  packageName?: string;
   timestamp: number;
 };
 
@@ -41,6 +44,52 @@ export function notifyCrossTabChange(key?: string, orgId?: string) {
 }
 
 /**
+ * Broadcasts an instant plan or package grant to hot-reload the user's dashboard in real-time.
+ */
+export function notifyPlanOrPackageGranted(
+  orgId: string,
+  details: { tier?: string; packageId?: string; packageName?: string }
+) {
+  const payload: CrossTabEvent = {
+    type: "ORG_PLAN_GRANTED",
+    orgId,
+    tier: details.tier,
+    packageId: details.packageId,
+    packageName: details.packageName,
+    timestamp: Date.now(),
+  };
+
+  // Broadcast to other tabs
+  if (broadcastChannel) {
+    try {
+      broadcastChannel.postMessage(payload);
+    } catch (e) {}
+  }
+
+  // Trigger native storage event across windows
+  try {
+    localStorage.setItem(
+      `impacto_last_org_grant_${orgId}`,
+      JSON.stringify({ ...details, time: Date.now() })
+    );
+  } catch (e) {}
+
+  // Dispatch local in-window event
+  try {
+    window.dispatchEvent(
+      new CustomEvent("impacto_org_updated", {
+        detail: {
+          orgId,
+          tier: details.tier,
+          packageId: details.packageId,
+          packageName: details.packageName,
+        },
+      })
+    );
+  } catch (e) {}
+}
+
+/**
  * Initializes cross-tab event listeners and optional Supabase Realtime subscriptions.
  * Whenever another tab updates data or Supabase pushes a change, React Query invalidates queries.
  */
@@ -51,7 +100,30 @@ export function initCrossTabSync(queryClient: QueryClient) {
 
   // 1. BroadcastChannel Listener (Instant messaging between tabs)
   const handleBcMessage = (event: MessageEvent<CrossTabEvent>) => {
-    if (event.data && (event.data.type === "MUTATION" || event.data.type === "STORAGE")) {
+    if (!event.data) return;
+    if (event.data.type === "ORG_PLAN_GRANTED") {
+      try {
+        window.dispatchEvent(
+          new CustomEvent("impacto_org_updated", {
+            detail: {
+              orgId: event.data.orgId,
+              tier: event.data.tier,
+              packageId: event.data.packageId,
+              packageName: event.data.packageName,
+            },
+          })
+        );
+        window.dispatchEvent(
+          new CustomEvent("impacto_plan_granted_alert", {
+            detail: event.data,
+          })
+        );
+      } catch (e) {}
+      invalidateAllData();
+      return;
+    }
+
+    if (event.data.type === "MUTATION" || event.data.type === "STORAGE") {
       invalidateAllData();
     }
   };
@@ -62,7 +134,43 @@ export function initCrossTabSync(queryClient: QueryClient) {
 
   // 2. Native Storage Event Listener (triggers in background tabs when localStorage changes)
   const handleStorageChange = (e: StorageEvent) => {
-    if (e.key && (e.key.startsWith("impacto_") || e.key.startsWith("sb-"))) {
+    if (!e.key) return;
+    if (e.key.startsWith("impacto_last_org_grant_")) {
+      const orgId = e.key.replace("impacto_last_org_grant_", "");
+      try {
+        const parsed = e.newValue ? JSON.parse(e.newValue) : null;
+        window.dispatchEvent(
+          new CustomEvent("impacto_org_updated", {
+            detail: {
+              orgId,
+              tier: parsed?.tier,
+              packageId: parsed?.packageId,
+              packageName: parsed?.packageName,
+            },
+          })
+        );
+        window.dispatchEvent(
+          new CustomEvent("impacto_plan_granted_alert", {
+            detail: { orgId, ...parsed },
+          })
+        );
+      } catch (err) {}
+      invalidateAllData();
+      return;
+    }
+
+    if (e.key.startsWith("impacto_org_packages_")) {
+      const orgId = e.key.replace("impacto_org_packages_", "");
+      window.dispatchEvent(
+        new CustomEvent("impacto_org_updated", {
+          detail: { orgId },
+        })
+      );
+      invalidateAllData();
+      return;
+    }
+
+    if (e.key.startsWith("impacto_") || e.key.startsWith("sb-")) {
       invalidateAllData();
     }
   };

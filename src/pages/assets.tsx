@@ -16,7 +16,6 @@ import {
   AlertTriangle,
   Clock,
   ShieldCheck,
-  Sparkles,
   Download,
   Info,
   Layers,

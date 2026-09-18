@@ -13,7 +13,6 @@ import {
   UserCheck, 
   ShieldCheck, 
   QrCode, 
-  Sparkles, 
   PenTool, 
   FileBadge,
   LayoutTemplate,

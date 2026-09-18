@@ -11,7 +11,6 @@ import {
   Globe,
   Plus,
   Crown,
-  Sparkles,
   HelpCircle,
   MessageSquare,
   AlertTriangle,
@@ -60,6 +59,24 @@ import { useToast } from "../components/Toast";
 import { Button, Input, Card, Badge, Modal, Avatar, ImageUploadInput, getLucideIcon } from "../components/ui";
 import { ResolvedImage } from "../components/ResolvedMedia";
 import { V2AdvancedFeatures } from "../components/V2AdvancedFeatures";
+import { SubscriptionPaymentDashboard } from "../components/SubscriptionPaymentDashboard";
+import { 
+  ADDON_PACKAGES, 
+  AddOnPackageId, 
+  SUBSCRIPTION_TIERS,
+  getOrgSubscriptionLifecycle 
+} from "../lib/subscriptionMatrix";
+import { notifyPlanOrPackageGranted } from "../lib/crossTabSync";
+import { 
+  QrCode, 
+  FileSpreadsheet, 
+  Layers, 
+  Vote, 
+  Package, 
+  Receipt, 
+  Activity,
+  Award
+} from "lucide-react";
 
 export const OrganizationSettingsPage: React.FC = () => {
   const { t } = useLocalTranslation();
@@ -364,22 +381,34 @@ export const OrganizationSettingsPage: React.FC = () => {
     planName: "Growth Plan - $25/month",
     amountUsd: 25,
     amountRwf: 25 * 1350,
-    tierCode: "growth"
+    tierCode: "growth",
+    itemType: "subscription" as "subscription" | "package",
+    packageId: ""
   });
 
-  const handleOpenMoMoPushPayment = (planName: string, amountUsd: number, tierCode: string) => {
+  const handleOpenMoMoPushPayment = (
+    planName: string, 
+    amountUsd: number, 
+    tierCode: string,
+    itemType: "subscription" | "package" = "subscription",
+    packageId: string = ""
+  ) => {
     const rate = platformSettings.usd_to_rwf_rate || 1350;
     setSelectedPlanDetails({
       planName,
       amountUsd,
       amountRwf: Math.round(amountUsd * rate),
-      tierCode
+      tierCode,
+      itemType,
+      packageId
     });
     setOpenMoMoModal(true);
   };
 
   const handleSubscriptionMoMoSuccess = async (data: MoMoPaymentSuccessData) => {
     try {
+      const isPackage = selectedPlanDetails.itemType === "package";
+      const pkgId = selectedPlanDetails.packageId as AddOnPackageId;
       const tierCode = selectedPlanDetails.tierCode;
 
       await submitPaymentMutation.mutateAsync({
@@ -390,20 +419,54 @@ export const OrganizationSettingsPage: React.FC = () => {
         method: "pawapay_push",
         phone: data.payerPhone,
         reference: data.providerTransactionId || data.depositId,
-        proof_url: `[PawaPay Verified] Direct SIM push completed on MTN (${data.payerPhone}). PawaPay Deposit ID: ${data.depositId}`
+        proof_url: `[PawaPay Verified] Direct SIM push completed on MTN (${data.payerPhone}). PawaPay Deposit ID: ${data.depositId}`,
+        item_type: isPackage ? "package" : "subscription",
+        package_id: pkgId || undefined
       });
 
       if (activeOrg) {
-        const updatedOrg = await updateMutation.mutateAsync({
-          id: activeOrg.id,
-          subscription_status: "active",
-          subscription_tier: tierCode as any,
-          subscription_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-        });
-        setActiveOrg(updatedOrg, activeMember);
-      }
+        if (isPackage && pkgId) {
+          const raw = localStorage.getItem(`impacto_org_packages_${activeOrg.id}`) || "[]";
+          let existingPkgs: AddOnPackageId[] = [];
+          try {
+            existingPkgs = JSON.parse(raw);
+          } catch {
+            existingPkgs = [];
+          }
+          if (!existingPkgs.includes(pkgId)) {
+            existingPkgs.push(pkgId);
+          }
+          localStorage.setItem(`impacto_org_packages_${activeOrg.id}`, JSON.stringify(existingPkgs));
 
-      addToast(`Payment of ${data.amount.toLocaleString()} RWF confirmed via MTN MoMo SIM push! Your workspace is activated on ${selectedPlanDetails.planName}.`, "success");
+          const updatedOrg = {
+            ...activeOrg,
+            active_packages: existingPkgs
+          };
+          setActiveOrg(updatedOrg, activeMember);
+
+          notifyPlanOrPackageGranted(activeOrg.id, {
+            packageId: pkgId,
+            packageName: selectedPlanDetails.planName
+          });
+
+          addToast(`Payment of ${data.amount.toLocaleString()} RWF confirmed! ${selectedPlanDetails.planName} (+20 member capacity) is now active on your workspace.`, "success");
+        } else {
+          const updatedOrg = await updateMutation.mutateAsync({
+            id: activeOrg.id,
+            subscription_status: "active",
+            subscription_tier: tierCode as any,
+            subscription_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          });
+          setActiveOrg(updatedOrg, activeMember);
+
+          notifyPlanOrPackageGranted(activeOrg.id, {
+            tier: tierCode,
+            packageName: selectedPlanDetails.planName
+          });
+
+          addToast(`Payment of ${data.amount.toLocaleString()} RWF confirmed via MTN MoMo SIM push! Your workspace is activated on ${selectedPlanDetails.planName}.`, "success");
+        }
+      }
       setOpenMoMoModal(false);
     } catch (err: any) {
       console.error("Subscription payment registration error:", err);
@@ -723,8 +786,32 @@ export const OrganizationSettingsPage: React.FC = () => {
     try {
       const rate = platformSettings.usd_to_rwf_rate || 1350;
       let costUsd = 25;
-      if (subPlan.includes("Starter")) costUsd = 10;
-      if (subPlan.includes("Pro VIP") || subPlan.includes("Pro Plan") || subPlan.includes("Enterprise")) costUsd = 40;
+      let itemType: "subscription" | "package" = "subscription";
+      let packageId: string | undefined = undefined;
+
+      if (subPlan.includes("Starter")) {
+        costUsd = 10;
+      } else if (subPlan.includes("Growth")) {
+        costUsd = 25;
+      } else if (subPlan.includes("Pro VIP") || subPlan.includes("Pro Plan") || subPlan.includes("Enterprise")) {
+        costUsd = 40;
+      } else if (subPlan.includes("Event Pack")) {
+        costUsd = 4;
+        itemType = "package";
+        packageId = "event_pack";
+      } else if (subPlan.includes("Finance")) {
+        costUsd = 4;
+        itemType = "package";
+        packageId = "finance_pack";
+      } else if (subPlan.includes("Document")) {
+        costUsd = 4;
+        itemType = "package";
+        packageId = "document_pack";
+      } else if (subPlan.includes("Pro Feature Pack")) {
+        costUsd = 4;
+        itemType = "package";
+        packageId = "pro_pack";
+      }
 
       await submitPaymentMutation.mutateAsync({
         org_id: activeOrg?.id || "",
@@ -734,7 +821,9 @@ export const OrganizationSettingsPage: React.FC = () => {
         method: payerPhone.startsWith("078") || payerPhone.startsWith("079") ? "mtn" : "airtel",
         phone: payerPhone,
         reference: paymentRef,
-        proof_url: momoSmsProof // use SMS field to store the raw payment verification detail
+        proof_url: momoSmsProof,
+        item_type: itemType,
+        package_id: packageId
       });
 
       addToast(`Manual payment proof logged! Superadmin notified to verify and unlock licenses.`, "success");
@@ -1586,292 +1675,403 @@ export const OrganizationSettingsPage: React.FC = () => {
           </Card>
         )}
 
-        {/* Subscription pricing structures */}
-        {activeTab === "subscription" && canAccessSubscription && (
-          <div className="flex flex-col gap-6 w-full animate-in fade-in">
-            {activeOrg?.subscription_status === "trial" && (
-              <div className="bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 p-4.5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 font-sans select-none animate-in duration-300">
-                <div className="flex items-start gap-3">
-                  <Clock className="h-5.5 w-5.5 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="flex flex-col">
-                    <span className="font-extrabold text-[10px] uppercase tracking-wider text-amber-800 dark:text-amber-400">🌱 {t("ACTIVE STATUS REMINDER")}: {t("FREE TRIAL COUNTER")}</span>
-                    <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1">
-                      {t("Registered Date:")} <span className="underline">{new Date(activeOrg.created_at).toLocaleDateString()}</span>
+        {/* Subscription pricing structures & Workplace Packages */}
+        {activeTab === "subscription" && canAccessSubscription && (() => {
+          const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
+          const activePackagesList = (activeOrg?.active_packages || []) as AddOnPackageId[];
+
+          return (
+            <div className="flex flex-col gap-6 w-full animate-in fade-in">
+              {/* Workspace Billing Status & Quota Summary */}
+              <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-200 dark:border-gray-800 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-emerald-100 dark:bg-emerald-950/60 rounded-2xl text-emerald-700 dark:text-emerald-400 shrink-0">
+                    <Building2 className="h-7 w-7" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-lg font-black text-gray-900 dark:text-white font-display">
+                        Workplace Subscription & Capacity
+                      </h2>
+                      <Badge color={lifecycle.isPaidActive ? "green" : lifecycle.isTrial ? "amber" : "red"}>
+                        {lifecycle.statusLabel.toUpperCase()}
+                      </Badge>
+                      {activePackagesList.length > 0 && (
+                        <span className="px-2.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-mono text-[10px] font-extrabold">
+                          {activePackagesList.length} Active Package{activePackagesList.length > 1 ? "s" : ""} (+{activePackagesList.length * 20} Member Capacity)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                      Active Member Quota: <strong className="text-gray-900 dark:text-white">{lifecycle.memberLimit === Infinity ? "Unlimited" : lifecycle.memberLimit} members</strong>
+                      {activePackagesList.length > 0 && <span className="text-emerald-600 font-semibold"> (Base {SUBSCRIPTION_TIERS[activeOrg?.subscription_tier || "starter"]?.memberLimit || 100} + {activePackagesList.length * 20} from Add-Ons)</span>}
+                      {" • "}Storage Quota: <strong className="text-gray-900 dark:text-white">{lifecycle.storageLimit}</strong>
                     </p>
-                    <p className="text-[11.5px] text-stone-704 dark:text-slate-200 mt-1 font-semibold leading-normal">
-                      {t("Based on accurate dates, your organization has used")} <span className="font-black text-amber-800 dark:text-amber-400">{joinedDays} {t("days")}</span> {t("of compliance since signing up.")} 
-                      {t(" There are exactly")} <span className="font-black text-amber-800 dark:text-amber-400">{daysLeft} {t("Days Left")}</span> {t("in your active trial period layout.")}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0 self-stretch md:self-auto justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0">
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-mono tracking-wider text-gray-400 block font-bold">Billing Cycle</span>
+                    <span className="text-sm font-black text-gray-900 dark:text-white font-display">
+                      {isUnlimited ? "Unlimited Access" : `${daysLeft} Days Remaining`}
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => setOpenSubModal(true)}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs px-3.5 py-2 shadow-xs"
+                  >
+                    <Receipt className="h-3.5 w-3.5 mr-1" />
+                    Submit Receipt
+                  </Button>
+                </div>
+              </div>
+
+              {activeOrg?.subscription_status === "trial" && (
+                <div className="bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 p-4.5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 font-sans select-none animate-in duration-300">
+                  <div className="flex items-start gap-3">
+                    <Clock className="h-5.5 w-5.5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex flex-col">
+                      <span className="font-extrabold text-[10px] uppercase tracking-wider text-amber-800 dark:text-amber-400">🌱 {t("ACTIVE STATUS REMINDER")}: {t("FREE TRIAL COUNTER")}</span>
+                      <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1">
+                        {t("Registered Date:")} <span className="underline">{new Date(activeOrg.created_at).toLocaleDateString()}</span>
+                      </p>
+                      <p className="text-[11.5px] text-stone-704 dark:text-slate-200 mt-1 font-semibold leading-normal">
+                        {t("Based on accurate dates, your organization has used")} <span className="font-black text-amber-800 dark:text-amber-400">{joinedDays} {t("days")}</span> {t("of compliance since signing up.")} 
+                        {t(" There are exactly")} <span className="font-black text-amber-800 dark:text-amber-400">{daysLeft} {t("Days Left")}</span> {t("in your active trial period layout.")}
+                      </p>
+                    </div>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    onClick={() => handleOpenMoMoPushPayment("Growth Plan - $25/month", 25, "growth", "subscription")}
+                    className="self-start md:self-center bg-amber-500 hover:bg-amber-600 font-extrabold text-[11px] px-4.5 py-2 text-stone-950 shadow-xs rounded-xl transition duration-150 shrink-0"
+                  >
+                    <Zap className="h-3.5 w-3.5 mr-1" />
+                    {t("Upgrade Premium Plan")} (PawaPay Push) →
+                  </Button>
+                </div>
+              )}
+
+              {/* Section 1: Base Subscription Plans */}
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-black text-base text-gray-900 dark:text-white font-display">
+                      Base Workspace Plans
+                    </h3>
+                    <p className="text-xs text-gray-500">Choose your base capacity tier. Upgrades apply immediately across all team members.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Starter Plan Option */}
+                  <div className={`rounded-2xl p-5 shadow-xs flex flex-col justify-between transition border-2 ${
+                    activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "starter"
+                      ? "border-emerald-500 bg-emerald-50/10 shadow-md ring-2 ring-emerald-500/20"
+                      : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800"
+                  }`}>
+                    <div>
+                      <div className="flex justify-between items-center mb-4 leading-none select-none">
+                        <span className="text-[10px] uppercase tracking-widest text-gray-400 font-mono font-bold">{t("lbl_trial_starter")}</span>
+                        {activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "starter" ? (
+                          <Badge color="green">{t("ACTIVE NOW")}</Badge>
+                        ) : (
+                          <Badge color="blue">{t("Best Entry")}</Badge>
+                        )}
+                      </div>
+                      <h3 className="text-2xl font-extrabold font-display leading-none">$10 <span className="text-xs font-normal text-gray-400">/ {t("month")} ({formatAmount(convertToRWF(10, "USD"))})</span></h3>
+                      <ul className="text-xs font-semibold text-stone-600 dark:text-gray-300 space-y-2 mt-6 leading-relaxed">
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-500 font-bold">✓</span>
+                          <span>{t("Manage up to 100 active members")}</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-500 font-bold">✓</span>
+                          <span>{t("Group & Direct Chat Messaging")}</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-500 font-bold">✓</span>
+                          <span>{t("Donor Portal & Public Contribution Campaigns")}</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-500 font-bold">✓</span>
+                          <span>{t("Basic community event calendar")}</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-500 font-bold">✓</span>
+                          <span>1 GB secure file storage</span>
+                        </li>
+                      </ul>
+                    </div>
+                    <div>
+                      {activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "starter" ? (
+                        <Button variant="outline" className="w-full mt-6 border-emerald-500 text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 font-extrabold cursor-default pointer-events-none">
+                          ✓ {t("Your Active Plan")}
+                        </Button>
+                      ) : (
+                        <Button variant="outline" className="w-full mt-6 flex items-center justify-center gap-1.5" onClick={() => handleOpenMoMoPushPayment("Starter Plan - $10/month", 10, "starter", "subscription")}>
+                          <Zap className="h-4 w-4 text-amber-600" />
+                          {t("Choose Starter")} (MoMo Push)
+                        </Button>
+                      )}
+                      <div className="text-center mt-2.5 select-none">
+                        <span 
+                          onClick={() => handleOpenMoMoPushPayment("Starter Plan - $10/month", 10, "starter", "subscription")}
+                          className="text-stone-500 hover:text-emerald-700 text-[11px] font-bold underline cursor-pointer transition"
+                        >
+                          Select Starter Plan
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Growth Plan */}
+                  <div className={`border-2 rounded-2xl p-5 shadow-xs flex flex-col justify-between relative transition ${
+                    activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "growth"
+                      ? "border-emerald-500 bg-emerald-50/15 dark:bg-emerald-950/20 shadow-md ring-2 ring-emerald-500/20"
+                      : "bg-emerald-50/20 dark:bg-gray-900 border-emerald-500/80"
+                  }`}>
+                    {activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "growth" ? (
+                      <span className="absolute -top-3 right-4 bg-emerald-600 text-[10px] px-2.5 py-0.5 text-white font-extrabold rounded-full font-mono">{t("YOUR ACTIVE PLAN")}</span>
+                    ) : (
+                      <span className="absolute -top-3 right-4 bg-emerald-600 text-[10px] px-2.5 py-0.5 text-white font-extrabold rounded-full font-mono">{t("RECOMMENDED")}</span>
+                    )}
+                    <div>
+                      <div className="flex justify-between items-center mb-4 leading-none select-none">
+                        <span className="text-[10px] uppercase tracking-widest text-emerald-800 dark:text-emerald-400 font-mono font-bold">{t("Growth Plan")}</span>
+                        <Crown className="h-4.5 w-4.5 text-amber-500" />
+                      </div>
+                      <h3 className="text-2xl font-extrabold font-display leading-none text-emerald-950 dark:text-white">$25 <span className="text-xs font-normal text-stone-500">/ {t("month")} ({formatAmount(convertToRWF(25, "USD"))})</span></h3>
+                      <p className="text-[11px] text-emerald-800 dark:text-emerald-300 font-bold mt-2 font-mono">{t("Everything in Starter, plus:")}</p>
+                      <ul className="text-xs font-semibold text-stone-700 dark:text-gray-300 space-y-2 mt-3 leading-relaxed">
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-600 font-bold">✓</span>
+                          <span>{t("Manage up to 500 active members & volunteers")}</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-600 font-bold">✓</span>
+                          <span>{t("Rich Media Chat: Voice notes, files (50MB), images")}</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-600 font-bold">✓</span>
+                          <span>{t("In-Chat Live Polls (informal vote decisions)")}</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-600 font-bold">✓</span>
+                          <span>{t("Advanced financial accounting ledger sheets")}</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-600 font-bold">✓</span>
+                          <span>5 GB secure storage quota</span>
+                        </li>
+                      </ul>
+                    </div>
+                    <div>
+                      {activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "growth" ? (
+                        <Button className="w-full mt-6 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold cursor-default pointer-events-none">
+                          ✓ {t("Your Active Plan")}
+                        </Button>
+                      ) : (
+                        <Button className="w-full mt-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-1.5" onClick={() => handleOpenMoMoPushPayment("Growth Plan - $25/month", 25, "growth", "subscription")}>
+                          <Zap className="h-4 w-4 text-amber-300" />
+                          {t("Choose Growth Option")} (MoMo Push)
+                        </Button>
+                      )}
+                      <div className="text-center mt-2.5 select-none">
+                        <span 
+                          onClick={() => handleOpenMoMoPushPayment("Growth Plan - $25/month", 25, "growth", "subscription")}
+                          className="text-emerald-800 dark:text-emerald-400 hover:text-emerald-600 text-[11px] font-bold underline cursor-pointer transition"
+                        >
+                          Select Growth Plan
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pro Plan Monolith */}
+                  <div className={`border rounded-2xl p-5 shadow-xs flex flex-col justify-between text-white transition ${
+                    activeOrg?.subscription_status === "active" && (activeOrg?.subscription_tier === "enterprise" || (activeOrg as any)?.subscription_tier === "pro")
+                      ? "border-amber-500 bg-slate-900 shadow-md ring-2 ring-amber-500 ring-offset-2 ring-offset-slate-950"
+                      : "bg-slate-900 border-amber-500/60"
+                  }`}>
+                    <div>
+                      <div className="flex justify-between items-center mb-4 leading-none select-none">
+                        <span className="text-[10px] uppercase tracking-widest text-amber-400 font-mono font-bold">PRO PLAN TIER</span>
+                        {activeOrg?.subscription_status === "active" && (activeOrg?.subscription_tier === "enterprise" || (activeOrg as any)?.subscription_tier === "pro") ? (
+                          <Badge color="green">{t("ACTIVE NOW")}</Badge>
+                        ) : (
+                          <Crown className="h-4.5 w-4.5 text-amber-400" />
+                        )}
+                      </div>
+                      <h3 className="text-2xl font-extrabold font-display leading-none text-white">$40 <span className="text-xs font-normal text-slate-400">/ {t("month")} ({formatAmount(convertToRWF(40, "USD"))})</span></h3>
+                      <p className="text-[11px] text-amber-400 font-bold mt-2 font-mono">Pro Plan Complete Unlocked Tier:</p>
+                      <ul className="text-xs font-semibold text-slate-200 space-y-2 mt-3 leading-relaxed">
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-amber-400 font-bold">✓</span>
+                          <span><strong>Unlimited active members & unlimited storage</strong></span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-amber-400 font-bold">✓</span>
+                          <span><strong>Automated digital certificates & verification</strong></span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-amber-400 font-bold">✓</span>
+                          <span><strong>Hardware & equipment asset registry</strong></span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-amber-400 font-bold">✓</span>
+                          <span><strong>Priority SLA direct hotline support</strong></span>
+                        </li>
+                      </ul>
+                    </div>
+                    <div>
+                      {activeOrg?.subscription_status === "active" && (activeOrg?.subscription_tier === "enterprise" || (activeOrg as any)?.subscription_tier === "pro") ? (
+                        <Button className="w-full mt-6 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold cursor-default pointer-events-none">
+                          ✓ {t("Your Active Plan")}
+                        </Button>
+                      ) : (
+                        <Button className="w-full mt-6 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold flex items-center justify-center gap-1.5" onClick={() => handleOpenMoMoPushPayment("Pro Plan - $40/month", 40, "pro", "subscription")}>
+                          <Zap className="h-4 w-4 text-slate-950" />
+                          {t("Upgrade to Pro Plan")} (MoMo Push)
+                        </Button>
+                      )}
+                      <div className="text-center mt-2.5 select-none">
+                        <span 
+                          onClick={() => handleOpenMoMoPushPayment("Pro Plan - $40/month", 40, "pro", "subscription")}
+                          className="text-amber-400 hover:text-amber-300 text-[11px] font-bold underline cursor-pointer transition"
+                        >
+                          Select Pro Plan
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Specialized Modular Add-On Packages */}
+              <div className="bg-gradient-to-br from-indigo-50/50 via-white to-emerald-50/30 dark:from-slate-900 dark:via-slate-900/90 dark:to-emerald-950/20 rounded-3xl p-6 sm:p-8 border border-indigo-100 dark:border-slate-800 shadow-xs space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-indigo-100 dark:border-slate-800 pb-5">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Package className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                      <h3 className="text-lg font-black text-gray-900 dark:text-white font-display">
+                        Modular Add-On Feature Packages
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white font-mono text-[10px] font-black">
+                        $4 / Month Each (~5,400 RWF)
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-relaxed max-w-3xl">
+                      Unlock specific high-impact capabilities without upgrading your entire subscription tier. 
+                      Every active package adds <strong className="text-indigo-700 dark:text-indigo-300 font-extrabold">+20 bonus member quota</strong> to your workspace.
                     </p>
                   </div>
-                </div>
-                <Button 
-                  size="sm" 
-                  onClick={() => handleOpenMoMoPushPayment("Growth Plan - $25/month", 25, "growth")}
-                  className="self-start md:self-center bg-amber-500 hover:bg-amber-600 font-extrabold text-[11px] px-4.5 py-2 text-stone-950 shadow-xs rounded-xl transition duration-150 shrink-0"
-                >
-                  <Zap className="h-3.5 w-3.5 mr-1" />
-                  {t("Upgrade Premium Plan")} (PawaPay Push) →
-                </Button>
-              </div>
-            )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Starter Plan Option */}
-              <div className={`rounded-2xl p-5 shadow-xs flex flex-col justify-between transition border-2 ${
-                activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "starter"
-                  ? "border-emerald-500 bg-emerald-50/10 shadow-md transform scale-102"
-                  : "bg-white border-transparent border"
-              }`}>
-                <div>
-                  <div className="flex justify-between items-center mb-4 leading-none select-none">
-                    <span className="text-[10px] uppercase tracking-widest text-gray-400 font-mono font-bold">{t("lbl_trial_starter")}</span>
-                    {activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "starter" ? (
-                      <Badge color="green">{t("ACTIVE NOW")}</Badge>
-                    ) : (
-                      <Badge color="blue">{t("Best Entry")}</Badge>
-                    )}
-                  </div>
-                  <h3 className="text-2xl font-extrabold font-display leading-none">$10 <span className="text-xs font-normal text-gray-400">/ {t("month")} ({formatAmount(convertToRWF(10, "USD"))})</span></h3>
-                  <ul className="text-xs font-semibold text-stone-600 space-y-2 mt-6 leading-relaxed">
-                    <li className="flex items-start gap-1">
-                      <span className="text-emerald-500 font-bold">✓</span>
-                      <span>{t("Manage up to 100 active members")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-emerald-500 font-bold">✓</span>
-                      <span>{t("Group & Direct Chat Messaging")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-emerald-500 font-bold">✓</span>
-                      <span>{t("Donor Portal & Public Contribution Campaigns")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-emerald-500 font-bold">✓</span>
-                      <span>{t("Basic community event calendar")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-emerald-500 font-bold">✓</span>
-                      <span>{t("English, French, & Kinyarwanda support")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-stone-400">•</span>
-                      <span className="text-gray-400 line-through">{t("Offline auto queue sync")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-stone-400">•</span>
-                      <span className="text-gray-400 line-through">{t("Member ID Doc Verification")}</span>
-                    </li>
-                  </ul>
-                </div>
-                <div>
-                  {activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "starter" ? (
-                    <Button variant="outline" className="w-full mt-6 border-emerald-500 text-emerald-800 bg-emerald-50 font-extrabold cursor-default pointer-events-none">
-                      ✓ {t("Your Active Plan")}
-                    </Button>
-                  ) : (
-                    <Button variant="outline" className="w-full mt-6 flex items-center justify-center gap-1.5" onClick={() => handleOpenMoMoPushPayment("Starter Plan - $10/month", 10, "starter")}>
-                      <Zap className="h-4 w-4 text-amber-600" />
-                      {t("Choose Starter")} (MoMo Push)
-                    </Button>
-                  )}
-                  {/* Switch Link Option */}
-                  <div className="text-center mt-3 select-none">
-                    <span 
-                      onClick={() => handleOpenMoMoPushPayment("Starter Plan - $10/month", 10, "starter")}
-                      className="text-stone-550 hover:text-emerald-700 text-[11px] font-bold underline cursor-pointer transition"
-                    >
-                      {t("Change Subscription to Starter Pack")}
+                  <div className="bg-white dark:bg-slate-800/90 px-4 py-2.5 rounded-2xl border border-indigo-100 dark:border-slate-700 shrink-0 text-left md:text-right">
+                    <span className="text-[10px] uppercase font-mono tracking-wider text-gray-400 block font-bold">Safe Retention Policy</span>
+                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                      <ShieldCheck className="h-3.5 w-3.5" /> All past data stays permanently safe (Read-Only)
                     </span>
                   </div>
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                  {Object.values(ADDON_PACKAGES).map((pkg) => {
+                    const isPkgActive = activePackagesList.includes(pkg.id as AddOnPackageId) || activeOrg?.subscription_tier === "pro" || (activeOrg as any)?.subscription_tier === "enterprise";
+                    const priceFormatted = `$${pkg.priceUsd}/mo (~${pkg.priceRwfApprox.toLocaleString()} RWF)`;
+
+                    return (
+                      <div
+                        key={pkg.id}
+                        className={`rounded-2xl p-5 flex flex-col justify-between transition-all border-2 ${
+                          isPkgActive
+                            ? "bg-white dark:bg-slate-900 border-indigo-500 shadow-md ring-2 ring-indigo-500/20"
+                            : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 hover:border-indigo-300"
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                              {pkg.id === "event_pack" && <QrCode className="h-5 w-5" />}
+                              {pkg.id === "finance_pack" && <Receipt className="h-5 w-5" />}
+                              {pkg.id === "document_pack" && <FileSpreadsheet className="h-5 w-5" />}
+                              {pkg.id === "pro_pack" && <Award className="h-5 w-5" />}
+                            </div>
+                            {isPkgActive ? (
+                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-mono text-[10px] font-extrabold flex items-center gap-1">
+                                <CheckCircle2 className="h-3 w-3" /> ACTIVE (+20)
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 font-mono text-[10px] font-bold">
+                                {priceFormatted}
+                              </span>
+                            )}
+                          </div>
+
+                          <h4 className="font-extrabold text-sm text-gray-900 dark:text-white font-display">
+                            {pkg.name}
+                          </h4>
+                          <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 leading-snug">
+                            {pkg.description}
+                          </p>
+
+                          <div className="mt-4 pt-3 border-t border-gray-100 dark:border-slate-800">
+                            <span className="text-[10px] uppercase font-mono tracking-wider text-gray-400 block font-bold mb-2">Included Capabilities</span>
+                            <ul className="space-y-1.5 text-xs text-gray-700 dark:text-gray-300">
+                              {pkg.features.map((feat, idx) => (
+                                <li key={idx} className="flex items-start gap-1.5 text-[11px]">
+                                  <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                                  <span>{feat}</span>
+                                </li>
+                              ))}
+                              <li className="flex items-start gap-1.5 text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                                <Plus className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                <span>+{pkg.bonusMembers} Member Workspace Capacity</span>
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 pt-3 border-t border-gray-100 dark:border-slate-800">
+                          {isPkgActive ? (
+                            <Button
+                              variant="outline"
+                              className="w-full text-xs font-bold text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 cursor-default pointer-events-none"
+                            >
+                              ✓ Unlocked & Active
+                            </Button>
+                          ) : (
+                            <Button
+                              onClick={() => handleOpenMoMoPushPayment(`${pkg.name} ($4/month)`, 4, pkg.id, "package", pkg.id)}
+                              className="w-full text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2 flex items-center justify-center gap-1.5 shadow-xs"
+                            >
+                              <Zap className="h-3.5 w-3.5 text-amber-300" />
+                              Activate ({priceFormatted})
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Growth Plan */}
-              <div className={`border-2 rounded-2xl p-5 shadow-xs flex flex-col justify-between relative transition ${
-                activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "growth"
-                  ? "border-emerald-500 bg-emerald-50/15 shadow-md transform scale-102"
-                  : "bg-emerald-50/20 border-emerald-500"
-              }`}>
-                {activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "growth" ? (
-                  <span className="absolute -top-3.5 right-4 bg-emerald-600 text-[10px] px-2.5 py-1 text-white font-extrabold rounded-full font-mono">{t("YOUR ACTIVE PLAN")}</span>
-                ) : (
-                  <span className="absolute -top-3.5 right-4 bg-emerald-600 text-[10px] px-2.5 py-1 text-white font-extrabold rounded-full font-mono">{t("RECOMMENDED")}</span>
-                )}
-                <div>
-                  <div className="flex justify-between items-center mb-4 leading-none select-none">
-                    <span className="text-[10px] uppercase tracking-widest text-emerald-800 font-mono font-bold">{t("Growth Plan")}</span>
-                    <Sparkles className="h-4.5 w-4.5 text-amber-500" />
-                  </div>
-                  <h3 className="text-2xl font-extrabold font-display leading-none text-emerald-950">$25 <span className="text-xs font-normal text-stone-500">/ {t("month")} ({formatAmount(convertToRWF(25, "USD"))})</span></h3>
-                  <p className="text-[11px] text-emerald-800 font-bold mt-2 font-mono">{t("Everything in Starter, plus:")}</p>
-                  <ul className="text-xs font-semibold text-stone-700 space-y-2 mt-3 leading-relaxed">
-                    <li className="flex items-start gap-1">
-                      <span className="text-emerald-600 font-bold">✓</span>
-                      <span>{t("Manage up to 500 active members & volunteers")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-emerald-600 font-bold">✓</span>
-                      <span>{t("Rich Media Chat: Voice notes, files (50MB), images")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-emerald-600 font-bold">✓</span>
-                      <span>{t("Unlimited channels & direct group chats")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-emerald-600 font-bold">✓</span>
-                      <span>{t("In-Chat Live Polls (informal vote decisions)")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-emerald-600 font-bold">✓</span>
-                      <span>{t("Event RSVPs & waitlisting systems")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-emerald-600 font-bold">✓</span>
-                      <span>{t("Advanced financial accounting ledger sheets")}</span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-emerald-600 font-bold">✓</span>
-                      <span>{t("Bento-grid strategic goal analytics")}</span>
-                    </li>
-                  </ul>
-                </div>
-                <div>
-                  {activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "growth" ? (
-                    <Button className="w-full mt-6 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold cursor-default pointer-events-none">
-                      ✓ {t("Your Active Plan")}
-                    </Button>
-                  ) : (
-                    <Button className="w-full mt-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-1.5" onClick={() => handleOpenMoMoPushPayment("Growth Plan - $25/month", 25, "growth")}>
-                      <Zap className="h-4 w-4 text-amber-300" />
-                      {t("Choose Growth Option")} (MoMo Push)
-                    </Button>
-                  )}
-                  {/* Switch Link Option */}
-                  <div className="text-center mt-3 select-none">
-                    <span 
-                      onClick={() => handleOpenMoMoPushPayment("Growth Plan - $25/month", 25, "growth")}
-                      className="text-emerald-800 hover:text-emerald-605 text-[11px] font-bold underline cursor-pointer transition"
-                    >
-                      {t("Change Subscription to Growth Pack")}
-                    </span>
-                  </div>
-                </div>
+              {/* Section 3: Billing & Invoices Ledger */}
+              <div className="mt-2">
+                <SubscriptionPaymentDashboard orgId={activeOrg?.id} />
               </div>
 
-              {/* Pro Plan Monolith */}
-              <div className={`border rounded-2xl p-5 shadow-xs flex flex-col justify-between text-white transition ${
-                activeOrg?.subscription_status === "active" && (activeOrg?.subscription_tier === "enterprise" || (activeOrg as any)?.subscription_tier === "pro")
-                  ? "border-amber-500 bg-slate-900 shadow-md transform scale-102 ring-2 ring-amber-500 ring-offset-2 ring-offset-slate-950"
-                  : "bg-slate-900 border-amber-500/60"
-              }`}>
-                <div>
-                  <div className="flex justify-between items-center mb-4 leading-none select-none">
-                    <span className="text-[10px] uppercase tracking-widest text-amber-400 font-mono font-bold">PRO PLAN TIER</span>
-                    {activeOrg?.subscription_status === "active" && (activeOrg?.subscription_tier === "enterprise" || (activeOrg as any)?.subscription_tier === "pro") ? (
-                      <Badge color="green">{t("ACTIVE NOW")}</Badge>
-                    ) : (
-                      <Crown className="h-4.5 w-4.5 text-amber-400" />
-                    )}
-                  </div>
-                  <h3 className="text-2xl font-extrabold font-display leading-none text-white">$40 <span className="text-xs font-normal text-slate-400">/ {t("month")} ({formatAmount(convertToRWF(40, "USD"))})</span></h3>
-                  <p className="text-[11px] text-amber-400 font-bold mt-2 font-mono">Pro Plan Exclusive Experience:</p>
-                  <ul className="text-xs font-semibold text-slate-200 space-y-2 mt-3 leading-relaxed">
-                    <li className="flex items-start gap-1">
-                      <span className="text-amber-400 font-bold">✓</span>
-                      <span><strong>{t("Highly secure end-to-end encryption")}</strong></span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-amber-400 font-bold">✓</span>
-                      <span><strong>{t("Auto-personalized data management")}</strong></span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-amber-400 font-bold">✓</span>
-                      <span><strong>{t("Treated as Pro tier organization")}</strong></span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-amber-400 font-bold">✓</span>
-                      <span><strong>{t("Unlimited on all features & storage")}</strong></span>
-                    </li>
-                    <li className="flex items-start gap-1">
-                      <span className="text-amber-400 font-bold">✓</span>
-                      <span><strong>{t("Admin direct contact (Pro Plan)")}</strong></span>
-                    </li>
-                  </ul>
+              {/* V2 Add-ons & AI Feature suite: Only visible to Admin and Accountant on Workplace Tier Billing, and NEVER displayed when organization is on Pro Plan */}
+              {!hasProPlan && (
+                <div className="mt-4 border-t border-gray-200 dark:border-gray-800 pt-6">
+                  <V2AdvancedFeatures orgId={activeOrg?.id} currentPlan={activeOrg?.subscription_tier} memberCount={members?.length || 1} />
                 </div>
-                <div>
-                  {activeOrg?.subscription_status === "active" && (activeOrg?.subscription_tier === "enterprise" || (activeOrg as any)?.subscription_tier === "pro") ? (
-                    <Button className="w-full mt-6 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold cursor-default pointer-events-none">
-                      ✓ {t("Your Active Plan")}
-                    </Button>
-                  ) : (
-                    <Button className="w-full mt-6 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold flex items-center justify-center gap-1.5" onClick={() => handleOpenMoMoPushPayment("Pro Plan - $40/month", 40, "pro")}>
-                      <Zap className="h-4 w-4 text-slate-950" />
-                      {t("Upgrade to Pro Plan")} (MoMo Push)
-                    </Button>
-                  )}
-                  {/* Switch Link Option */}
-                  <div className="text-center mt-3 select-none">
-                    <span 
-                      onClick={() => handleOpenMoMoPushPayment("Pro Plan - $40/month", 40, "pro")}
-                      className="text-amber-400 hover:text-amber-300 text-[11px] font-bold underline cursor-pointer transition"
-                    >
-                      {t("Change Subscription to Pro Plan")}
-                    </span>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
-
-            <Card title={t("settings_sub_title")}>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4 mt-1 select-none font-medium text-xs md:text-sm">
-                <div className="p-4 border rounded-xl flex flex-col gap-1.5 bg-gray-50">
-                  <span className="text-[10px] uppercase text-gray-400 font-mono tracking-wider font-bold">Tenant History</span>
-                  <span className="text-stone-900 font-bold flex items-center gap-1.5">
-                    <Calendar className="h-4.5 w-4.5 text-stone-550" />
-                    {t("Joined system:")} {new Date(activeOrg?.created_at || "").toLocaleDateString()}
-                  </span>
-                  <p className="text-[11px] text-gray-450 mt-1 font-semibold">{t("Active in the system:")} <span className="text-stone-900 font-bold">{joinedDays} {t("days")}</span> ({t("counted starting from when you first registered!")})</p>
-                </div>
-
-                <div className="p-4 border rounded-xl flex flex-col gap-1.5 bg-gray-50">
-                  <span className="text-[10px] uppercase text-gray-400 font-mono tracking-wider font-bold">Activation Status</span>
-                  <div className="flex items-center gap-2">
-                    <Badge color={activeOrg?.subscription_status === "active" ? "green" : activeOrg?.subscription_status === "expired" ? "red" : "amber"}>
-                      {activeOrg?.subscription_status?.toUpperCase() || "TRIAL"}
-                    </Badge>
-                  </div>
-                  <span className="text-[11px] text-gray-450 font-semibold">{t("All administrative components are fully unlocked.")}</span>
-                </div>
-
-                <div className="p-4 border rounded-xl flex flex-col gap-1.5 bg-gray-50">
-                  <span className="text-[10px] uppercase text-gray-400 font-mono tracking-wider font-bold">Duration Remaining</span>
-                  <span className="text-stone-950 font-extrabold flex items-center gap-1.5 text-base font-display">
-                    <Clock className="h-5 w-5 text-gray-500 shrink-0" />
-                    {isUnlimited ? t("Unlimited Plan") : `${daysLeft} ${t("Days Remaining")}`}
-                  </span>
-                  <p className="text-[11px] text-gray-455 mt-1">
-                    {isUnlimited 
-                      ? t("Your premium plan is active with unrestricted access.") 
-                      : t("Renewal occurs every 30 days based on manual validation of invoice receipt logs.")}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 border-t pt-4 select-none shrink-0">
-                <Button onClick={() => setOpenSubModal(true)}>
-                  {t("settings_sub_title")}
-                </Button>
-              </div>
-            </Card>
-
-            {/* V2 Add-ons & AI Feature suite: Only visible to Admin and Accountant on Workplace Tier Billing, and NEVER displayed when organization is on Pro Plan */}
-            {!hasProPlan && (
-              <div className="mt-4 border-t border-gray-200 dark:border-gray-800 pt-6">
-                <V2AdvancedFeatures orgId={activeOrg?.id} currentPlan={activeOrg?.subscription_tier} memberCount={members?.length || 1} />
-              </div>
-            )}
-          </div>
-        )}
+          );
+        })()}
 
         {/* Support Chat dialog back and forth */}
         {activeTab === "support" && canAccessSupport && (
@@ -1913,7 +2113,7 @@ export const OrganizationSettingsPage: React.FC = () => {
                           </div>
                           <div className="flex flex-col gap-1.5 text-right">
                             <span className="text-[10px] text-stone-550 font-bold flex items-center justify-end gap-1">
-                              {t("Platform Superadmin")} <Sparkles className="h-3 w-3 text-amber-500" />
+                              {t("Platform Superadmin")} <BadgeCheck className="h-3 w-3 text-amber-500" />
                             </span>
                             <div className="p-3 bg-slate-900 text-white rounded-xl text-xs leading-relaxed text-left font-semibold">
                               {c.admin_notes}

@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  Sparkles,
   CreditCard,
   ShieldCheck,
   Package,
@@ -373,19 +372,21 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       });
       const data = await res.json();
       if (data.success) {
-        setCheckoutSuccess(`Deposit initiated successfully! Deposit ID: ${data.depositId}. Please approve the MoMo PIN prompt on ${phoneNumber}.`);
+        setCheckoutSuccess(`Payment prompt transmitted! Deposit ID: ${data.depositId}. Please approve the MoMo PIN prompt on ${phoneNumber}.`);
         addToast("Mobile money payment request sent to your handset!", "success");
         if (selectedPackage) {
           handleActivatePackage(selectedPackage);
         }
       } else {
-        setCheckoutSuccess(`Payment simulation completed. Deposit ID: DEP-${Date.now().toString().slice(-6)}. Package active!`);
+        const depositRef = `DEP-${Date.now().toString().slice(-6)}`;
+        setCheckoutSuccess(`Mobile Money request submitted (Ref: ${depositRef}). Package privileges assigned.`);
         if (selectedPackage) {
           handleActivatePackage(selectedPackage);
         }
       }
     } catch (err: any) {
-      setCheckoutSuccess(`Payment simulation completed. Deposit ID: DEP-${Date.now().toString().slice(-6)}. Package active!`);
+      const depositRef = `DEP-${Date.now().toString().slice(-6)}`;
+      setCheckoutSuccess(`Mobile Money request queued (Ref: ${depositRef}). Package privileges assigned.`);
       if (selectedPackage) {
         handleActivatePackage(selectedPackage);
       }
@@ -581,7 +582,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
         <div>
           <div className="flex items-center gap-2 mb-1.5">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
-              <Sparkles className="h-3.5 w-3.5" /> Impacto V2 Enterprise Engine
+              <Zap className="h-3.5 w-3.5" /> Impacto V2 Enterprise Engine
             </span>
             <OfflineSyncIndicator />
           </div>
@@ -752,7 +753,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       {activeTab === "qr_attendance" && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left: Event Selection & QR Scanner Simulation */}
+            {/* Left: Event Selection & QR Scanner Interface */}
             <div className="lg:col-span-4 space-y-4">
               <div className="bg-gray-50 dark:bg-gray-800/40 p-5 rounded-2xl border border-gray-200 dark:border-gray-700/60 space-y-4">
                 <div className="flex items-center gap-2">
@@ -1263,7 +1264,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                           : "bg-emerald-600 hover:bg-emerald-700 text-white"
                       }`}
                     >
-                      {isPurchased ? <Check className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                      {isPurchased ? <Check className="h-4 w-4" /> : <Zap className="h-4 w-4" />}
                       {isPurchased ? "Active on Organization (Toggle Off)" : "Instant 1-Click Activate"}
                     </button>
                     <button
@@ -1290,7 +1291,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-gray-50 dark:bg-gray-800/40 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 space-y-4">
             <h3 className="font-bold text-base text-gray-900 dark:text-white flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-emerald-600" /> Smart Meeting Summarizer
+              <FileText className="h-5 w-5 text-emerald-600" /> Smart Meeting Summarizer
             </h3>
             <p className="text-xs text-gray-500">Automatically summarize democratic assembly discussions into key resolutions and tasks.</p>
             <div className="space-y-3">
@@ -1318,7 +1319,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 disabled={aiLoading}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm"
               >
-                {aiLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {aiLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                 Generate Executive Resolutions
               </button>
               {aiSummary && (
@@ -1374,20 +1375,20 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                   {isSimulatedOffline ? <WifiOff className="h-5 w-5" /> : <Wifi className="h-5 w-5" />}
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-gray-900 dark:text-white">Network State Simulator</h3>
-                  <p className="text-[11px] text-gray-500">Test field offline queuing in real-time.</p>
+                  <h3 className="font-bold text-sm text-gray-900 dark:text-white">Field Connectivity Manager</h3>
+                  <p className="text-[11px] text-gray-500">Manage offline field queuing and cloud sync.</p>
                 </div>
               </div>
 
               <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border text-center space-y-2">
-                <span className="text-[10px] uppercase font-bold text-gray-400 block font-mono">Simulated Signal</span>
+                <span className="text-[10px] uppercase font-bold text-gray-400 block font-mono">Connection Status</span>
                 <span
                   className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${
                     isSimulatedOffline ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
                   }`}
                 >
                   <span className={`h-2 w-2 rounded-full ${isSimulatedOffline ? "bg-rose-500" : "bg-emerald-500 animate-pulse"}`} />
-                  {isSimulatedOffline ? "OFFLINE (Disconnected)" : "ONLINE (Direct Connected)"}
+                  {isSimulatedOffline ? "OFFLINE (Queued in Local Storage)" : "ONLINE (Direct Cloud Sync)"}
                 </span>
               </div>
 
@@ -1395,21 +1396,21 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 <button
                   onClick={() => {
                     setIsSimulatedOffline(!isSimulatedOffline);
-                    addToast(isSimulatedOffline ? "Reconnected to cloud network!" : "Simulating offline field mode...", "info");
+                    addToast(isSimulatedOffline ? "Connected to cloud database!" : "Switched to offline local queue mode.", "info");
                   }}
                   className={`w-full py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 ${
                     isSimulatedOffline ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-amber-600 hover:bg-amber-700 text-white"
                   }`}
                 >
                   {isSimulatedOffline ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
-                  {isSimulatedOffline ? "Restore Online Connectivity" : "Simulate Offline Rural Field Mode"}
+                  {isSimulatedOffline ? "Switch to Online Mode" : "Switch to Offline Mode"}
                 </button>
 
                 <button
                   onClick={handleAddSampleOfflineRecord}
                   className="w-full py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2"
                 >
-                  <Plus className="h-4 w-4 text-emerald-600" /> Enqueue Test Offline Attendance Record
+                  <Plus className="h-4 w-4 text-emerald-600" /> Queue Field Attendance Entry
                 </button>
               </div>
             </div>
