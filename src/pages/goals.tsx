@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useLocalTranslation } from "../locales/additional-translations";
 import { useOrgStore } from "../store/orgStore";
 import { useGoals, useCreateGoal, useUpdateGoal, useDeleteGoal } from "../hooks/useImpactoData";
-import { Card, Button, Input, Badge, EmptyState, Modal, Tabs } from "../components/ui";
+import { Card, Button, Input, Badge, EmptyState, Modal } from "../components/ui";
 import { 
   Plus, 
   CheckCircle2, 
@@ -17,14 +17,26 @@ import {
   Check,
   Clock,
   Filter,
-  Eye
+  Eye,
+  FileDown,
+  BarChart2,
+  Lock,
+  PieChart as PieIcon,
+  Sparkles
 } from "lucide-react";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend } from "recharts";
+import jsPDF from "jspdf";
 import { Goal } from "../types";
+import { getOrgSubscriptionLifecycle } from "../lib/subscriptionMatrix";
+import { GoalProgressCharts } from "../components/GoalProgressCharts";
 
 export const GoalsPage: React.FC = () => {
   const { t } = useLocalTranslation();
   const { activeOrg, activeMember } = useOrgStore();
   const canManageGoals = activeMember?.role && activeMember.role !== "member";
+
+  const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
+  const isPaidGrowthOrPro = lifecycle.effectiveTier === "growth" || lifecycle.effectiveTier === "pro" || lifecycle.effectiveTier === "enterprise";
 
   const { data: goals = [], isLoading, refetch } = useGoals(activeOrg?.id);
   const createGoalMutation = useCreateGoal();
@@ -72,6 +84,161 @@ export const GoalsPage: React.FC = () => {
 
     return list;
   }, [goals]);
+
+  // Chart data for Growth/Pro visualization
+  const chartBarData = useMemo(() => {
+    return goals.slice(0, 8).map(g => ({
+      name: g.title.length > 14 ? g.title.substring(0, 12) + "..." : g.title,
+      Target: 100,
+      Progress: g.achievement_percentage || 0,
+    }));
+  }, [goals]);
+
+  const pieStatusData = useMemo(() => {
+    const completed = goals.filter(g => g.status === "completed" || (g.achievement_percentage || 0) >= 100).length;
+    const inProgress = goals.filter(g => (g.achievement_percentage || 0) > 0 && (g.achievement_percentage || 0) < 100).length;
+    const pending = goals.filter(g => !g.achievement_percentage || g.achievement_percentage === 0).length;
+    return [
+      { name: "Completed", value: completed, color: "#10B981" },
+      { name: "In Progress", value: inProgress, color: "#F59E0B" },
+      { name: "Pending", value: pending, color: "#64748B" }
+    ].filter(d => d.value > 0);
+  }, [goals]);
+
+  // PDF Export for Growth & Pro
+  const exportGoalsPDF = () => {
+    try {
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+      });
+
+      const primaryColor = [21, 108, 69];
+      const slateDark = [15, 23, 42];
+
+      // Header Banner
+      doc.setFillColor(245, 248, 246);
+      doc.rect(0, 0, 210, 42, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.text(activeOrg?.name || "Organization", 14, 18);
+
+      doc.setFontSize(11);
+      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+      doc.text("STRATEGIC GOALS & PERFORMANCE REPORT", 14, 26);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, 14, 34);
+      doc.text(`Plan Tier: ${(activeOrg?.subscription_tier || "Growth").toUpperCase()} | Verified Ledger`, 120, 34);
+
+      // KPI Summary Box
+      let y = 48;
+      doc.setDrawColor(226, 232, 240);
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(14, y, 182, 22, 3, 3, "FD");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text("TOTAL STRATEGIC GOALS", 20, y + 7);
+      doc.text("COMPLETED OBJECTIVES", 80, y + 7);
+      doc.text("OVERALL PROGRESS", 140, y + 7);
+
+      doc.setFontSize(13);
+      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+      doc.text(`${totalGoals}`, 20, y + 16);
+      doc.text(`${completedGoalsCount} / ${totalGoals}`, 80, y + 16);
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.text(`${overallAvgAchievement}%`, 140, y + 16);
+
+      y += 30;
+
+      // Table Header
+      doc.setFillColor(21, 108, 69);
+      doc.rect(14, y, 182, 8, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      doc.text("#", 17, y + 5.5);
+      doc.text("GOAL TITLE", 26, y + 5.5);
+      doc.text("PERIOD", 100, y + 5.5);
+      doc.text("DEADLINE", 125, y + 5.5);
+      doc.text("STATUS", 152, y + 5.5);
+      doc.text("PROGRESS", 176, y + 5.5);
+
+      y += 8;
+
+      goals.forEach((g, idx) => {
+        if (y > 265) {
+          doc.addPage();
+          y = 20;
+        }
+
+        const isEven = idx % 2 === 0;
+        if (isEven) {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(14, y, 182, 10, "F");
+        }
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+        doc.text(`${idx + 1}`, 17, y + 6.5);
+
+        const titleText = g.title.length > 36 ? g.title.substring(0, 34) + "..." : g.title;
+        doc.setFont("helvetica", "bold");
+        doc.text(titleText, 26, y + 6.5);
+
+        doc.setFont("helvetica", "normal");
+        const periodText = `${(g.period_type || "yr").toUpperCase()}: ${g.period_label || "-"}`;
+        doc.text(periodText, 100, y + 6.5);
+
+        const deadlineText = g.deadline ? new Date(g.deadline).toLocaleDateString() : "-";
+        doc.text(deadlineText, 125, y + 6.5);
+
+        const statusLabel = (g.status || "pending").toUpperCase();
+        doc.text(statusLabel, 152, y + 6.5);
+
+        const score = `${g.achievement_percentage || 0}%`;
+        doc.setFont("helvetica", "bold");
+        doc.text(score, 178, y + 6.5);
+
+        y += 10;
+      });
+
+      // Certification Signature Lines
+      if (y > 240) {
+        doc.addPage();
+        y = 25;
+      } else {
+        y += 14;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text("EXECUTIVE VERIFICATION & BOARD SIGN-OFF", 14, y);
+      
+      y += 4;
+      doc.setDrawColor(203, 213, 225);
+      doc.line(14, y + 14, 85, y + 14);
+      doc.line(110, y + 14, 185, y + 14);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.text("Executive Chairperson / President Signature", 14, y + 19);
+      doc.text("Audit Committee / Secretary Signature", 110, y + 19);
+
+      doc.save(`${activeOrg?.slug || "org"}-strategic-goals-report.pdf`);
+    } catch (err) {
+      console.error("Failed to generate goals PDF:", err);
+    }
+  };
 
   // Group goals into period buckets
   const groupedGoals = useMemo(() => {
@@ -382,29 +549,60 @@ export const GoalsPage: React.FC = () => {
           )}
 
           {/* Action Buttons */}
-          {canManageGoals && (
-            <>
+          <div className="flex flex-wrap items-center gap-2">
+            {isPaidGrowthOrPro ? (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setIsAddPeriodOpen(true)}
-                className="text-xs font-bold shrink-0"
+                icon={<FileDown className="h-4 w-4 text-emerald-600" />}
+                onClick={exportGoalsPDF}
+                className="text-xs font-bold shrink-0 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 cursor-pointer"
               >
-                {t("goals_btn_create_period")}
+                Download PDF
               </Button>
+            ) : (
+              <div 
+                title="Download PDF is restricted to Growth and Pro plan users"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 text-xs font-medium cursor-not-allowed select-none"
+              >
+                <Lock className="h-3.5 w-3.5 text-slate-400" />
+                <span>Download PDF (Growth & Pro)</span>
+              </div>
+            )}
 
-              <Button
-                size="sm"
-                icon={<Plus className="h-4 w-4" />}
-                onClick={() => openAddGoalModalForPeriod("yearly", `${new Date().getFullYear()}`)}
-                className="shrink-0"
-              >
-                {t("goals_btn_add_goal")}
-              </Button>
-            </>
-          )}
+            {canManageGoals && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAddPeriodOpen(true)}
+                  className="text-xs font-bold shrink-0"
+                >
+                  {t("goals_btn_create_period")}
+                </Button>
+
+                <Button
+                  size="sm"
+                  icon={<Plus className="h-4 w-4" />}
+                  onClick={() => openAddGoalModalForPeriod("yearly", `${new Date().getFullYear()}`)}
+                  className="shrink-0"
+                >
+                  {t("goals_btn_add_goal")}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Growth/Pro Visual Charts or Free Plan Static Mode */}
+      <GoalProgressCharts
+        goals={goals}
+        isPaidGrowthOrPro={isPaidGrowthOrPro}
+        activeOrg={activeOrg}
+        onExportPDF={exportGoalsPDF}
+        canManageGoals={canManageGoals}
+      />
 
       {/* Member Read-Only Banner */}
       {!canManageGoals && (
@@ -582,31 +780,45 @@ export const GoalsPage: React.FC = () => {
 
                         {/* Right: Achievement Slider & Quick Preset Buttons */}
                         <div className="flex flex-wrap items-center gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
-                          {/* Percentage Preset Quick Buttons */}
-                          {canManageGoals && (
-                            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
-                              {[0, 25, 50, 75, 100].map((preset) => (
-                                <button
-                                  key={preset}
-                                  onClick={() => handleUpdateAchievement(goal, preset)}
-                                  className={`px-2 py-0.5 text-[10px] font-bold rounded-lg transition ${
-                                    achievementScore === preset
-                                      ? "bg-emerald-600 text-white shadow-xs"
-                                      : "text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                                  }`}
-                                >
-                                  {preset}%
-                                </button>
-                              ))}
+                          {isPaidGrowthOrPro ? (
+                            <>
+                              {/* Percentage Preset Quick Buttons (Growth/Pro) */}
+                              {canManageGoals && (
+                                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
+                                  {[0, 25, 50, 75, 100].map((preset) => (
+                                    <button
+                                      key={preset}
+                                      onClick={() => handleUpdateAchievement(goal, preset)}
+                                      className={`px-2 py-0.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
+                                        achievementScore === preset
+                                          ? "bg-emerald-600 text-white shadow-xs"
+                                          : "text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                                      }`}
+                                    >
+                                      {preset}%
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Numeric Score Tag */}
+                              <div className="min-w-[3.5rem] text-right">
+                                <span className="text-sm font-black text-slate-900 dark:text-white">
+                                  {achievementScore}%
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            /* Static Goal Tracker on Free Plan */
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 font-semibold">
+                                Target: {goal.target || 100} {goal.unit || "%"}
+                              </span>
+                              <Badge color={isCompleted ? "green" : "gray"}>
+                                {isCompleted ? "COMPLETED" : "TARGET SET"}
+                              </Badge>
                             </div>
                           )}
-
-                          {/* Numeric Score Tag */}
-                          <div className="min-w-[3.5rem] text-right">
-                            <span className="text-sm font-black text-slate-900 dark:text-white">
-                              {achievementScore}%
-                            </span>
-                          </div>
 
                           {/* Edit / Delete Buttons */}
                           {canManageGoals && (

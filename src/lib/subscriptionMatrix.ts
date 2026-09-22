@@ -98,7 +98,8 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierDefinition> = {
       "Meeting Minutes Recorder & Action Items",
       "Interactive Polls in Chat Channels",
       "Basic Double-Entry Financial Accounting Ledger",
-      "DocumentOffice Suite (Word Letterhead & Spreadsheets)"
+      "DocumentOffice Suite (Word Letterhead & Spreadsheets)",
+      "Security & System Audit Logs (Real-time tracking of record creates, edits & deletions)"
     ],
     description: "Full suite for expanding cooperatives, agricultural unions, and active NGOs."
   },
@@ -120,6 +121,7 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierDefinition> = {
       "Advanced Financial Ledger Reports & Charts",
       "Mobile Money Live Gateway (MTN & Airtel MoMo)",
       "Public Cooperative Marketplace & Storefront",
+      "Full Security & System Audit Trail Dossiers (CSV & JSON export, multi-tenant compliance)",
       "End-to-End Encryption & Advanced Security"
     ],
     description: "Enterprise-grade operational velocity for large federations, unions, and institutions."
@@ -361,18 +363,20 @@ export function getOrgSubscriptionLifecycle(
   }
 
   // Normalize tier name
-  let rawTier: SubscriptionTier = "growth";
-  const tierStr = (org.subscription_tier || "").toLowerCase();
+  let rawTier: SubscriptionTier = "free";
+  const tierStr = (org.subscription_tier || (org as any).subscription_plan || "").toLowerCase();
   if (tierStr.includes("enterprise") || tierStr.includes("pro") || tierStr.includes("vip")) rawTier = "pro";
   else if (tierStr.includes("starter")) rawTier = "starter";
+  else if (tierStr.includes("growth")) rawTier = "growth";
+  else if (tierStr.includes("trial")) rawTier = "growth";
   else if (tierStr.includes("free")) rawTier = "free";
-  else rawTier = "growth";
+  else rawTier = org.subscription_status === "active" ? "starter" : "free";
 
   const createdTime = org.created_at ? new Date(org.created_at).getTime() : now;
   const elapsedMs = Math.max(0, now - createdTime);
   const daysSinceCreation = Math.floor(elapsedMs / (1000 * 3600 * 24));
 
-  const isExplicitTrial = org.subscription_status === "trial" || !org.subscription_status;
+  const isExplicitTrial = (org.subscription_tier === "trial" || (org.subscription_status === "trial" && !org.subscription_tier)) && rawTier !== "free";
   const isExplicitActive = org.subscription_status === "active";
   const isExplicitExpired = org.subscription_status === "expired";
 
@@ -388,7 +392,10 @@ export function getOrgSubscriptionLifecycle(
   let graceDaysRemaining = 0;
   let subscriptionDaysRemaining = 0;
 
-  if (isExplicitTrial) {
+  if (rawTier === "free") {
+    // Free forever tier is static and persistent
+    subscriptionDaysRemaining = Infinity;
+  } else if (isExplicitTrial) {
     if (elapsedMs < trialMs) {
       isTrial = true;
       trialDaysRemaining = Math.max(0, Math.ceil((trialMs - elapsedMs) / (1000 * 3600 * 24)));
@@ -400,10 +407,7 @@ export function getOrgSubscriptionLifecycle(
       isTrialExpired = true;
     }
   } else if (isExplicitActive) {
-    if (rawTier === "free") {
-      // Free plan never expires
-      subscriptionDaysRemaining = Infinity;
-    } else if (org.subscription_ends_at) {
+    if (org.subscription_ends_at) {
       const endsTime = new Date(org.subscription_ends_at).getTime();
       if (endsTime > now) {
         subscriptionDaysRemaining = Math.max(0, Math.ceil((endsTime - now) / (1000 * 3600 * 24)));
@@ -421,14 +425,18 @@ export function getOrgSubscriptionLifecycle(
   }
 
   // Effective tier deduction
-  // Growth Plan is the default trial plan!
-  // If trial or grace period is active, effective tier is Growth.
-  // If trial or paid expired, transition to Free Forever (preserving all records safely).
+  // If Free Plan, always Free Forever
+  // If Trial is active, effective tier is Growth.
+  // If Trial or Paid expired, transition to Free Forever.
   let effectiveTier: SubscriptionTier = rawTier;
-  if (isTrial || isInGracePeriod) {
+  if (rawTier === "free") {
+    effectiveTier = "free";
+  } else if (isTrial || isInGracePeriod) {
     effectiveTier = "growth";
   } else if (isTrialExpired || isSubscriptionExpired) {
-    effectiveTier = "free"; // Resumption & preservation on Free Forever
+    effectiveTier = "free"; // Resumption on Free Forever
+  } else if (isExplicitActive) {
+    effectiveTier = rawTier;
   }
 
   // Active add-on packages (apply to Free and Starter plans)
@@ -598,10 +606,10 @@ export function canAccessFeature(
     dues_charges: "free",
     payment_proofs: "free",
     goals_tracker: "free",
-    chat_polls: "growth",
-    qr_attendance: "growth",
+    chat_polls: "starter",
+    qr_attendance: "starter",
     excel_export: "growth",
-    meeting_minutes: "growth",
+    meeting_minutes: "starter",
     financial_ledger: "growth",
     document_office: "growth",
     automated_certificates: "pro",
@@ -612,7 +620,7 @@ export function canAccessFeature(
     multi_branch: "pro",
     id_verification: "pro",
     quorum_governance: "pro",
-    audit_trail: "pro"
+    audit_trail: "growth"
   };
 
   const featureToPackageMap: Partial<Record<ImpactFeatureKey, AddOnPackageId>> = {

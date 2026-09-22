@@ -265,7 +265,7 @@ export const AuditorDashboard: React.FC = () => {
         });
         actionLabel = `Auditor granted 3-day grace period to ${orgName}`;
       } else if (tierActionType === "extend_30") {
-        const currentEnds = selectedOrgForAudit.subscription_ends_at ? new Date(selectedOrgForAudit.subscription_ends_at).getTime() : Date.now();
+        const currentEnds = selectedOrgForAudit?.subscription_ends_at ? new Date(selectedOrgForAudit.subscription_ends_at).getTime() : Date.now();
         const base = Math.max(Date.now(), currentEnds);
         const newEnds = new Date(base + 30 * 24 * 3600 * 1000).toISOString();
         await updateOrgMutation.mutateAsync({

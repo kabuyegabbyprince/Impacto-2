@@ -43,6 +43,7 @@ import {
   MarketplaceLead,
   Asset,
 } from "../types";
+import { recordSystemAuditEvent } from "../lib/auditLogger";
 
 // Helper for fake latency/promises
 const delay = (ms = 400) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -93,6 +94,9 @@ export function useOrganizations() {
         );
         const localTier = localStorage.getItem(
           `impacto_org_subscription_tier_${org.id}`,
+        );
+        const localPackages = localStorage.getItem(
+          `impacto_org_packages_${org.id}`,
         );
         const localMarketplace = localStorage.getItem(
           `impacto_org_marketplace_enabled_${org.id}`,
@@ -160,7 +164,8 @@ export function useOrganizations() {
             localExitSurveyQuestions !== null
               ? JSON.parse(localExitSurveyQuestions)
               : (org.exit_survey_questions || []),
-          subscription_tier: (localTier as any) || org.subscription_tier || "trial",
+          subscription_tier: (localTier as any) || org.subscription_tier || (org as any).subscription_plan || "free",
+          active_packages: localPackages ? JSON.parse(localPackages) : (org.active_packages || []),
           marketplace_enabled:
             localMarketplace !== null
               ? JSON.parse(localMarketplace)
@@ -241,6 +246,9 @@ export function useOrganization(slug: string | undefined) {
         const localTier = localStorage.getItem(
           `impacto_org_subscription_tier_${org.id}`,
         );
+        const localPackages = localStorage.getItem(
+          `impacto_org_packages_${org.id}`,
+        );
         const localMarketplace = localStorage.getItem(
           `impacto_org_marketplace_enabled_${org.id}`,
         );
@@ -277,7 +285,8 @@ export function useOrganization(slug: string | undefined) {
             localExitSurveyQuestions !== null
               ? JSON.parse(localExitSurveyQuestions)
               : (org.exit_survey_questions || []),
-          subscription_tier: (localTier as any) || org.subscription_tier || "trial",
+          subscription_tier: (localTier as any) || org.subscription_tier || (org as any).subscription_plan || "free",
+          active_packages: localPackages ? JSON.parse(localPackages) : (org.active_packages || []),
           marketplace_enabled:
             localMarketplace !== null
               ? JSON.parse(localMarketplace)
@@ -511,6 +520,9 @@ export function useUpdateOrganization() {
         const localTier = localStorage.getItem(
           `impacto_org_subscription_tier_${id}`,
         );
+        const localPackages = localStorage.getItem(
+          `impacto_org_packages_${id}`,
+        );
         const localMarketplace = localStorage.getItem(
           `impacto_org_marketplace_enabled_${id}`,
         );
@@ -580,7 +592,8 @@ export function useUpdateOrganization() {
             localExitSurveyQuestions !== null
               ? JSON.parse(localExitSurveyQuestions)
               : (updatedOrg.exit_survey_questions || []),
-          subscription_tier: (localTier as any) || updatedOrg.subscription_tier || "trial",
+          subscription_tier: (localTier as any) || updatedOrg.subscription_tier || (updatedOrg as any).subscription_plan || "free",
+          active_packages: localPackages ? JSON.parse(localPackages) : (updatedOrg.active_packages || []),
           marketplace_enabled:
             localMarketplace !== null
               ? JSON.parse(localMarketplace)
@@ -762,12 +775,17 @@ export function useMemberTiers(orgId: string | undefined) {
     queryFn: async () => {
       if (!orgId) return [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("member_tiers")
-          .select("*")
-          .eq("org_id", orgId);
-        if (error) throw error;
-        return data as MemberTier[];
+        try {
+          const { data, error } = await supabase
+            .from("member_tiers")
+            .select("*")
+            .eq("org_id", orgId);
+          if (!error && data && data.length > 0) {
+            return data as MemberTier[];
+          }
+        } catch (err) {
+          console.warn("[MemberTiers] Fetch notice:", err);
+        }
       }
       await delay();
       return MockDB.getTiers().filter((t) => t.org_id === orgId);
@@ -927,11 +945,26 @@ export function useUpdateMemberStatus() {
         await autoAssignActiveFeesToMember(updatedRecord.org_id, updatedRecord.id);
       }
 
+      try {
+        recordSystemAuditEvent({
+          org_id: updatedRecord?.org_id || "org-1",
+          action: "member.updated",
+          action_label: `Record Edited: Member roster record modified`,
+          target_table: "members",
+          target_id: id,
+          target_label: updatedRecord?.full_name || updatedRecord?.name || id,
+          new_value: { status: updatedRecord?.status, role: updatedRecord?.role, is_volunteer: updatedRecord?.is_volunteer },
+        });
+      } catch (logErr) {
+        console.warn("[Audit] Failed to log member update:", logErr);
+      }
+
       return updatedRecord;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["members", data.org_id] });
       queryClient.invalidateQueries({ queryKey: ["member_fees", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", data.org_id] });
       const { activeMember, setActiveOrg, activeOrg } = useOrgStore.getState();
       if (activeMember && activeMember.id === data.id) {
         const updatedMember = { ...activeMember, ...data };
@@ -945,23 +978,43 @@ export function useDeleteMember() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, orgId }: { id: string; orgId: string }) => {
+      const members = MockDB.getMembers();
+      const existingMember = members.find((m) => m.id === id);
+
       if (isSupabaseConfigured) {
         const { error } = await supabase
           .from("org_members")
           .delete()
           .eq("id", id);
         if (error) throw error;
-        return { id, orgId };
+      } else {
+        await delay();
+        const updated = members.filter((m) => m.id !== id);
+        MockDB.saveMembers(updated);
       }
-      await delay();
-      const members = MockDB.getMembers();
-      const updated = members.filter((m) => m.id !== id);
-      MockDB.saveMembers(updated);
+
+      try {
+        const memberDisplayName = existingMember?.user?.full_name || (existingMember as any)?.full_name || (existingMember as any)?.name || id;
+        recordSystemAuditEvent({
+          org_id: orgId,
+          action: "member.deleted",
+          action_label: `Record Deleted: Member '${memberDisplayName}' removed from workspace`,
+          target_table: "members",
+          target_id: id,
+          target_label: memberDisplayName,
+          old_value: existingMember ? { name: memberDisplayName, role: existingMember.role, status: existingMember.status } : null,
+          new_value: null,
+        });
+      } catch (logErr) {
+        console.warn("[Audit] Failed to log member deletion:", logErr);
+      }
+
       return { id, orgId };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["members", data.orgId] });
       queryClient.invalidateQueries({ queryKey: ["member_fees", data.orgId] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", data.orgId] });
     },
   });
 }
@@ -1052,11 +1105,26 @@ export function useCreateMember() {
         await autoAssignActiveFeesToMember(orgId, createdMember.id);
       }
 
+      try {
+        recordSystemAuditEvent({
+          org_id: orgId,
+          action: "member.created",
+          action_label: `Record Created: New member '${fullName || email}' registered to roster`,
+          target_table: "members",
+          target_id: createdMember?.id || "mem-" + Date.now(),
+          target_label: fullName || email,
+          new_value: { fullName, email, role, status: "active" },
+        });
+      } catch (logErr) {
+        console.warn("[Audit] Failed to log member creation:", logErr);
+      }
+
       return createdMember;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["members", data.org_id] });
       queryClient.invalidateQueries({ queryKey: ["member_fees", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", data.org_id] });
     },
   });
 }
@@ -1687,12 +1755,17 @@ export function useChatChannels(orgId: string | undefined) {
     queryFn: async () => {
       if (!orgId) return [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("chat_channels")
-          .select("*")
-          .eq("org_id", orgId);
-        if (error) throw error;
-        return data as ChatChannel[];
+        try {
+          const { data, error } = await supabase
+            .from("chat_channels")
+            .select("*")
+            .eq("org_id", orgId);
+          if (!error && data && data.length > 0) {
+            return data as ChatChannel[];
+          }
+        } catch (err) {
+          console.warn("[ChatChannels] Fetch notice:", err);
+        }
       }
       await delay();
       return MockDB.getChannels().filter((c) => c.org_id === orgId);
@@ -1731,20 +1804,24 @@ export function useChatMessages(channelId: string | undefined) {
     queryKey: ["messages", channelId],
     queryFn: async () => {
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("chat_messages")
-          .select("*, sender:sender_id(full_name, avatar_url)")
-          .eq("channel_id", channelId)
-          .order("created_at", { ascending: false })
-          .limit(100);
-        if (error) throw error;
-        const sorted = (data || []).reverse();
-        // Mapping from relational nested info
-        return sorted.map((m: any) => ({
-          ...m,
-          sender_name: m.sender?.full_name || "Unknown User",
-          sender_avatar: m.sender?.avatar_url || "",
-        })) as ChatMessage[];
+        try {
+          const { data, error } = await supabase
+            .from("chat_messages")
+            .select("*, sender:sender_id(full_name, avatar_url)")
+            .eq("channel_id", channelId)
+            .order("created_at", { ascending: false })
+            .limit(100);
+          if (!error && data) {
+            const sorted = (data || []).reverse();
+            return sorted.map((m: any) => ({
+              ...m,
+              sender_name: m.sender?.full_name || "Unknown User",
+              sender_avatar: m.sender?.avatar_url || "",
+            })) as ChatMessage[];
+          }
+        } catch (err) {
+          console.warn("[ChatMessages] Fetch notice:", err);
+        }
       }
       await delay(100); // lower delay for crisp chatting click
       const filtered = MockDB.getMessages().filter(
@@ -1969,33 +2046,57 @@ export function useCreateGoal() {
     ) => {
       const startProg =
         payload.current_progress !== undefined ? payload.current_progress : 0;
+      let createdGoal: Goal | null = null;
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("goals")
-          .insert({
-            ...payload,
-            current_progress: startProg,
-            created_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
-        if (error) throw error;
-        return data as Goal;
+        try {
+          const { data, error } = await supabase
+            .from("goals")
+            .insert({
+              ...payload,
+              current_progress: startProg,
+              created_at: new Date().toISOString(),
+            })
+            .select()
+            .single();
+          if (error) throw error;
+          createdGoal = data as Goal;
+        } catch (dbErr) {
+          console.warn("Supabase create goal error, using local fallback:", dbErr);
+        }
       }
-      await delay();
-      const goals = MockDB.getGoals();
-      const newGoal: Goal = {
-        ...payload,
-        id: "goal-" + Math.random().toString(36).substr(2, 9),
-        current_progress: startProg,
-        created_at: new Date().toISOString(),
-      };
-      goals.push(newGoal);
-      MockDB.saveGoals(goals);
-      return newGoal;
+      if (!createdGoal) {
+        await delay();
+        const goals = MockDB.getGoals();
+        const newGoal: Goal = {
+          ...payload,
+          id: "goal-" + Math.random().toString(36).substr(2, 9),
+          current_progress: startProg,
+          created_at: new Date().toISOString(),
+        };
+        goals.push(newGoal);
+        MockDB.saveGoals(goals);
+        createdGoal = newGoal;
+      }
+
+      try {
+        recordSystemAuditEvent({
+          org_id: payload.org_id,
+          action: "goal.created",
+          action_label: `Record Created: Strategic goal '${payload.title}' established`,
+          target_table: "goals",
+          target_id: createdGoal.id,
+          target_label: payload.title,
+          new_value: { title: payload.title, target: payload.target, current_progress: startProg, unit: payload.unit },
+        });
+      } catch (logErr) {
+        console.warn("[Audit] Failed to log goal creation:", logErr);
+      }
+
+      return createdGoal;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["goals", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", data.org_id] });
     },
   });
 }
@@ -2014,6 +2115,9 @@ export function useUpdateGoalProgress() {
       note?: string;
       orgId: string;
     }) => {
+      const goals = MockDB.getGoals();
+      const oldGoal = goals.find((g) => g.id === goalId);
+
       if (isSupabaseConfigured) {
         let data: any = null;
         let error: any = null;
@@ -2053,21 +2157,35 @@ export function useUpdateGoalProgress() {
         if (data) {
           data.last_note = note;
         }
-
-        return { data, orgId };
       }
       await delay();
-      const goals = MockDB.getGoals();
       const idx = goals.findIndex((g) => g.id === goalId);
       if (idx !== -1) {
         goals[idx].current_progress = value;
         goals[idx].last_note = note;
         MockDB.saveGoals(goals);
       }
+
+      try {
+        recordSystemAuditEvent({
+          org_id: orgId,
+          action: "goal.updated",
+          action_label: `Record Edited: Goal progress updated to ${value}`,
+          target_table: "goals",
+          target_id: goalId,
+          target_label: oldGoal?.title || goalId,
+          old_value: oldGoal ? { current_progress: oldGoal.current_progress, note: oldGoal.last_note } : null,
+          new_value: { current_progress: value, note },
+        });
+      } catch (logErr) {
+        console.warn("[Audit] Failed to log goal progress update:", logErr);
+      }
+
       return { goalId, orgId };
     },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["goals", res.orgId] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", res.orgId] });
     },
   });
 }
@@ -2080,6 +2198,9 @@ export function useUpdateGoal() {
     ) => {
       const { id, org_id, ...updates } = payload;
       const last_edited_at = new Date().toISOString();
+      const goals = MockDB.getGoals();
+      const oldGoal = goals.find((g) => g.id === id);
+
       if (isSupabaseConfigured) {
         try {
           const { data, error } = await supabase
@@ -2108,17 +2229,36 @@ export function useUpdateGoal() {
         }
       }
       await delay();
-      const goals = MockDB.getGoals();
       const idx = goals.findIndex((g) => g.id === id);
+      let resGoal: Goal;
       if (idx !== -1) {
         goals[idx] = { ...goals[idx], ...updates, last_edited_at };
         MockDB.saveGoals(goals);
-        return goals[idx];
+        resGoal = goals[idx];
+      } else {
+        throw new Error("Goal not found");
       }
-      throw new Error("Goal not found");
+
+      try {
+        recordSystemAuditEvent({
+          org_id: org_id,
+          action: "goal.updated",
+          action_label: `Record Edited: Goal '${updates.title || oldGoal?.title || id}' modified`,
+          target_table: "goals",
+          target_id: id,
+          target_label: updates.title || oldGoal?.title || id,
+          old_value: oldGoal ? { title: oldGoal.title, target: oldGoal.target } : null,
+          new_value: updates,
+        });
+      } catch (logErr) {
+        console.warn("[Audit] Failed to log goal update:", logErr);
+      }
+
+      return resGoal;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["goals", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", data.org_id] });
     },
   });
 }
@@ -2128,6 +2268,9 @@ export function useDeleteGoal() {
   return useMutation({
     mutationFn: async ({ id, org_id }: { id: string; org_id: string }) => {
       const last_edited_at = new Date().toISOString();
+      const goals = MockDB.getGoals();
+      const oldGoal = goals.find((g) => g.id === id);
+
       if (isSupabaseConfigured) {
         try {
           const { error } = await supabase
@@ -2150,19 +2293,34 @@ export function useDeleteGoal() {
             throw dbErr;
           }
         }
-        return { id, org_id };
       }
       await delay();
-      const goals = MockDB.getGoals();
       const idx = goals.findIndex((g) => g.id === id);
       if (idx !== -1) {
         goals[idx] = { ...goals[idx], is_deleted: true, last_edited_at };
         MockDB.saveGoals(goals);
       }
+
+      try {
+        recordSystemAuditEvent({
+          org_id: org_id,
+          action: "goal.deleted",
+          action_label: `Record Deleted: Goal '${oldGoal?.title || id}' removed`,
+          target_table: "goals",
+          target_id: id,
+          target_label: oldGoal?.title || id,
+          old_value: oldGoal ? { title: oldGoal.title, target: oldGoal.target } : null,
+          new_value: null,
+        });
+      } catch (logErr) {
+        console.warn("[Audit] Failed to log goal deletion:", logErr);
+      }
+
       return { id, org_id };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["goals", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", data.org_id] });
     },
   });
 }
@@ -2240,11 +2398,26 @@ export function useCreateGrant() {
       grants.push(newGrant);
       MockDB.saveGrants(grants);
 
+      try {
+        recordSystemAuditEvent({
+          org_id: payload.org_id,
+          action: "grant.created",
+          action_label: `Record Created: Grant proposal registered`,
+          target_table: "grants",
+          target_id: newGrant.id,
+          target_label: payload.title,
+          new_value: { title: payload.title, funder: payload.funder, amount_range: payload.amount_range, currency: payload.currency, status: payload.status },
+        });
+      } catch (logErr) {
+        console.warn("[Audit] Failed to log grant creation:", logErr);
+      }
+
       return newGrant;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["grants", data.org_id] });
       queryClient.invalidateQueries({ queryKey: ["grants"] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", data.org_id] });
     },
   });
 }
@@ -2261,6 +2434,9 @@ export function useUpdateGrantStatus() {
       status: Grant["status"];
       orgId: string;
     }) => {
+      const grants = MockDB.getGrants();
+      const oldGrant = grants.find((g) => g.id === grantId);
+
       if (isSupabaseConfigured) {
         try {
           const { error } = await supabase
@@ -2272,7 +2448,6 @@ export function useUpdateGrantStatus() {
           console.warn("Supabase update grant error fallback:", err);
         }
       }
-      const grants = MockDB.getGrants();
       const idx = grants.findIndex((g) => g.id === grantId);
       if (idx !== -1) {
         grants[idx].status = status;
@@ -2281,12 +2456,28 @@ export function useUpdateGrantStatus() {
         await delay();
       }
 
+      try {
+        recordSystemAuditEvent({
+          org_id: orgId,
+          action: "grant.updated",
+          action_label: `Record Edited: Grant status changed to ${status}`,
+          target_table: "grants",
+          target_id: grantId,
+          target_label: oldGrant?.title || grantId,
+          old_value: oldGrant ? { status: oldGrant.status } : null,
+          new_value: { status },
+        });
+      } catch (logErr) {
+        console.warn("[Audit] Failed to log grant status update:", logErr);
+      }
+
       return { grantId, status, orgId };
     },
     onSuccess: (res, variables) => {
       const targetOrg = res?.orgId || variables.orgId;
       queryClient.invalidateQueries({ queryKey: ["grants", targetOrg] });
       queryClient.invalidateQueries({ queryKey: ["grants"] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", targetOrg] });
     },
   });
 }
@@ -2340,6 +2531,7 @@ export function useCreateLedgerEntry() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: Omit<LedgerEntry, "id">) => {
+      let createdEntry: LedgerEntry | null = null;
       if (isSupabaseConfigured) {
         try {
           const { data, error } = await supabase
@@ -2348,23 +2540,42 @@ export function useCreateLedgerEntry() {
             .select()
             .single();
           if (error) throw error;
-          return data as LedgerEntry;
+          createdEntry = data as LedgerEntry;
         } catch (dbErr) {
           console.warn("Supabase ledger_entries insert failed or RLS blocked, falling back to local entry:", dbErr);
         }
       }
-      await delay();
-      const ledger = MockDB.getLedger();
-      const newEntry: LedgerEntry = {
-        ...payload,
-        id: "led-" + Math.random().toString(36).substr(2, 9),
-      };
-      ledger.push(newEntry);
-      MockDB.saveLedger(ledger);
-      return newEntry;
+      if (!createdEntry) {
+        await delay();
+        const ledger = MockDB.getLedger();
+        const newEntry: LedgerEntry = {
+          ...payload,
+          id: "led-" + Math.random().toString(36).substr(2, 9),
+        };
+        ledger.push(newEntry);
+        MockDB.saveLedger(ledger);
+        createdEntry = newEntry;
+      }
+
+      try {
+        recordSystemAuditEvent({
+          org_id: payload.org_id,
+          action: "ledger_entry.created",
+          action_label: `Record Created: ${payload.type === "income" ? "Income" : "Expense"} of ${payload.amount} ${payload.currency || "RWF"}`,
+          target_table: "ledger_entries",
+          target_id: createdEntry.id,
+          target_label: payload.description || "Ledger Entry",
+          new_value: { type: payload.type, amount: payload.amount, currency: payload.currency, category: payload.category, description: payload.description, date: payload.date },
+        });
+      } catch (logErr) {
+        console.warn("[Audit] Failed to log ledger creation:", logErr);
+      }
+
+      return createdEntry;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["ledger", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", data.org_id] });
     },
   });
 }
@@ -2374,6 +2585,9 @@ export function useUpdateLedgerEntry() {
   return useMutation({
     mutationFn: async (payload: Partial<LedgerEntry> & { id: string; org_id: string }) => {
       const { id, org_id, ...updates } = payload;
+      const ledger = MockDB.getLedger();
+      const oldEntry = ledger.find((l) => l.id === id);
+
       if (isSupabaseConfigured) {
         try {
           const { data, error } = await supabase
@@ -2389,17 +2603,36 @@ export function useUpdateLedgerEntry() {
         }
       }
       await delay();
-      const ledger = MockDB.getLedger();
       const idx = ledger.findIndex((l) => l.id === id);
+      let resEntry: LedgerEntry;
       if (idx !== -1) {
         ledger[idx] = { ...ledger[idx], ...updates };
         MockDB.saveLedger(ledger);
-        return ledger[idx];
+        resEntry = ledger[idx];
+      } else {
+        resEntry = { id, org_id, ...updates } as LedgerEntry;
       }
-      return { id, org_id, ...updates } as LedgerEntry;
+
+      try {
+        recordSystemAuditEvent({
+          org_id: org_id,
+          action: "ledger_entry.updated",
+          action_label: `Record Edited: Ledger transaction updated`,
+          target_table: "ledger_entries",
+          target_id: id,
+          target_label: updates.description || oldEntry?.description || id,
+          old_value: oldEntry ? { amount: oldEntry.amount, type: oldEntry.type, description: oldEntry.description } : null,
+          new_value: updates,
+        });
+      } catch (logErr) {
+        console.warn("[Audit] Failed to log ledger update:", logErr);
+      }
+
+      return resEntry;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["ledger", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", data.org_id] });
     },
   });
 }
@@ -2408,6 +2641,9 @@ export function useDeleteLedgerEntry() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, org_id }: { id: string; org_id: string }) => {
+      const ledger = MockDB.getLedger();
+      const oldEntry = ledger.find((l) => l.id === id);
+
       if (isSupabaseConfigured) {
         try {
           const { error } = await supabase
@@ -2420,13 +2656,29 @@ export function useDeleteLedgerEntry() {
         }
       }
       await delay();
-      const ledger = MockDB.getLedger();
       const updated = ledger.filter((l) => l.id !== id);
       MockDB.saveLedger(updated);
+
+      try {
+        recordSystemAuditEvent({
+          org_id: org_id,
+          action: "ledger_entry.deleted",
+          action_label: `Record Deleted: Ledger transaction deleted`,
+          target_table: "ledger_entries",
+          target_id: id,
+          target_label: oldEntry?.description || id,
+          old_value: oldEntry ? { amount: oldEntry.amount, type: oldEntry.type, description: oldEntry.description } : null,
+          new_value: null,
+        });
+      } catch (logErr) {
+        console.warn("[Audit] Failed to log ledger deletion:", logErr);
+      }
+
       return { id, org_id };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["ledger", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", data.org_id] });
     },
   });
 }
@@ -2634,20 +2886,25 @@ export function useErrorReports(orgId: string | undefined) {
     queryFn: async () => {
       if (!orgId) return [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("error_reports")
-          .select("*")
-          .eq("org_id", orgId)
-          .order("created_at", { ascending: false })
-          .limit(100);
-        if (error) throw error;
-        return data as ErrorReport[];
+        try {
+          const { data, error } = await supabase
+            .from("error_reports")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("created_at", { ascending: false })
+            .limit(100);
+          if (!error && data) {
+            return data as ErrorReport[];
+          }
+        } catch (err) {
+          console.warn("[ErrorReports] Fetch notice:", err);
+        }
       }
       await delay();
       return MockDB.getErrors().filter((e) => e.org_id === orgId);
     },
     enabled: !!orgId,
-    refetchInterval: 5000,
+    refetchInterval: 30000,
   });
 }
 
@@ -3000,56 +3257,60 @@ export function usePlatformAdminData() {
     queryKey: ["platform_admin_data"],
     queryFn: async () => {
       if (isSupabaseConfigured) {
-        const { data: orgs } = await supabase.from("organizations").select("*");
-        const { data: payments } = await supabase
-          .from("subscription_payments")
-          .select("*")
-          .order("submitted_at", { ascending: false })
-          .limit(100);
-        const { data: errors } = await supabase
-          .from("error_reports")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(100);
-        const { data: settingsData } = await supabase
-          .from("platform_settings")
-          .select("*")
-          .eq("id", "global")
-          .maybeSingle();
-        const { data: staffData } = await supabase.from("platform_staff").select("*");
-        const { data: auditLogsData } = await supabase.from("platform_audit_logs").select("*").order("created_at", { ascending: false }).limit(200);
-        const { count: usersCount } = await supabase.from("users").select("*", { count: "exact", head: true });
-        const { count: membersCount } = await supabase.from("org_members").select("*", { count: "exact", head: true });
+        try {
+          const { data: orgs } = await supabase.from("organizations").select("*");
+          const { data: payments } = await supabase
+            .from("subscription_payments")
+            .select("*")
+            .order("submitted_at", { ascending: false })
+            .limit(100);
+          const { data: errors } = await supabase
+            .from("error_reports")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(100);
+          const { data: settingsData } = await supabase
+            .from("platform_settings")
+            .select("*")
+            .eq("id", "global")
+            .maybeSingle();
+          const { data: staffData } = await supabase.from("platform_staff").select("*");
+          const { data: auditLogsData } = await supabase.from("platform_audit_logs").select("*").order("created_at", { ascending: false }).limit(200);
+          const { count: usersCount } = await supabase.from("users").select("*", { count: "exact", head: true });
+          const { count: membersCount } = await supabase.from("org_members").select("*", { count: "exact", head: true });
 
-        const defaultSettings = MockDB.getPlatformSettings();
-        const enrichedOrgs = (orgs || []).map((org) => {
+          const defaultSettings = MockDB.getPlatformSettings();
+          const enrichedOrgs = ((orgs && orgs.length > 0) ? orgs : MockDB.getOrgs()).map((org: any) => {
+            return {
+              ...org,
+              subscription_tier: org.subscription_tier || "trial",
+            };
+          });
+          const enrichedPayments = ((payments && payments.length > 0) ? payments : MockDB.getSubPayments()).map((p: any) => {
+            return {
+              ...p,
+              validated_at: p.validated_at || null,
+            };
+          });
+          let finalStaff = (staffData && staffData.length > 0) ? staffData : MockDB.getPlatformStaff();
+          if (Array.isArray(finalStaff) && !finalStaff.some((s: any) => s.role === "superadmin")) {
+             const superAdmins = MockDB.getPlatformStaff().filter((s: any) => s.role === "superadmin");
+             finalStaff = [...superAdmins, ...finalStaff];
+          }
+
           return {
-            ...org,
-            subscription_tier: org.subscription_tier || "trial",
+            orgs: enrichedOrgs as Organization[],
+            payments: enrichedPayments as SubscriptionPayment[],
+            errors: ((errors && errors.length > 0) ? errors : MockDB.getErrors()) as ErrorReport[],
+            settings: settingsData || defaultSettings,
+            staff: finalStaff,
+            auditLogs: (auditLogsData && auditLogsData.length > 0) ? auditLogsData : MockDB.getPlatformAuditLogs(),
+            totalUsers: usersCount || MockDB.getUsers().length,
+            totalMembers: membersCount || MockDB.getMembers().length,
           };
-        });
-        const enrichedPayments = (payments || []).map((p: any) => {
-          return {
-            ...p,
-            validated_at: p.validated_at || null,
-          };
-        });
-        let finalStaff = staffData || MockDB.getPlatformStaff();
-        if (Array.isArray(finalStaff) && !finalStaff.some(s => s.role === "superadmin")) {
-           const superAdmins = MockDB.getPlatformStaff().filter(s => s.role === "superadmin");
-           finalStaff = [...superAdmins, ...finalStaff];
+        } catch (err) {
+          console.warn("[PlatformAdminData] Fallback to MockDB due to fetch notice:", err);
         }
-
-        return {
-          orgs: enrichedOrgs as Organization[],
-          payments: enrichedPayments as SubscriptionPayment[],
-          errors: (errors || []) as ErrorReport[],
-          settings: settingsData || defaultSettings,
-          staff: finalStaff,
-          auditLogs: auditLogsData || MockDB.getPlatformAuditLogs(),
-          totalUsers: usersCount || MockDB.getUsers().length,
-          totalMembers: membersCount || MockDB.getMembers().length,
-        };
       }
       await delay();
       return {
@@ -3478,7 +3739,8 @@ export function useAuditLogs(orgId: string | undefined) {
         }
       }
       await delay(150);
-      return MockDB.getAuditLogs().filter((l) => l.org_id === orgId);
+      const allLogs = MockDB.getAuditLogs();
+      return allLogs.filter((l) => l.org_id === orgId);
     },
     enabled: !!orgId,
   });
@@ -3516,15 +3778,20 @@ export function usePollMessages(channelId: string | undefined) {
     queryFn: async () => {
       if (!channelId) return [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("polls")
-          .select("*")
-          .eq("channel_id", channelId);
-        if (error) throw error;
-        return (data || []).map((item: any) => ({
-          ...item,
-          id: item.poll_id || item.id,
-        })) as PollMessage[];
+        try {
+          const { data, error } = await supabase
+            .from("polls")
+            .select("*")
+            .eq("channel_id", channelId);
+          if (!error && data) {
+            return (data || []).map((item: any) => ({
+              ...item,
+              id: item.poll_id || item.id,
+            })) as PollMessage[];
+          }
+        } catch (err) {
+          console.warn("[Polls] Fetch notice:", err);
+        }
       }
       return [];
     },
@@ -3791,14 +4058,19 @@ export function useActivityLogs(orgId: string | undefined) {
     queryFn: async () => {
       if (!orgId) return [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("activity_logs")
-          .select("*")
-          .eq("org_id", orgId)
-          .order("activity_date", { ascending: false })
-          .limit(100);
-        if (error) throw error;
-        return data as ActivityLog[];
+        try {
+          const { data, error } = await supabase
+            .from("activity_logs")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("activity_date", { ascending: false })
+            .limit(100);
+          if (!error && data && data.length > 0) {
+            return data as ActivityLog[];
+          }
+        } catch (err) {
+          console.warn("[ActivityLogs] Fetch notice:", err);
+        }
       }
       await delay(200);
       return MockDB.getActivityLogs().filter((l) => l.org_id === orgId);
@@ -3813,12 +4085,17 @@ export function useActivityAttendance(activityId: string | undefined) {
     queryFn: async () => {
       if (!activityId) return [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("activity_attendance")
-          .select("*")
-          .eq("activity_id", activityId);
-        if (error) throw error;
-        return data as ActivityAttendance[];
+        try {
+          const { data, error } = await supabase
+            .from("activity_attendance")
+            .select("*")
+            .eq("activity_id", activityId);
+          if (!error && data) {
+            return data as ActivityAttendance[];
+          }
+        } catch (err) {
+          console.warn("[ActivityAttendance] Fetch notice:", err);
+        }
       }
       await delay(100);
       return MockDB.getActivityAttendance().filter(
@@ -3950,12 +4227,17 @@ export function useMessageTemplates(orgId: string | undefined) {
     queryFn: async () => {
       if (!orgId) return [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("message_templates")
-          .select("*")
-          .eq("org_id", orgId);
-        if (error) throw error;
-        return data as MessageTemplate[];
+        try {
+          const { data, error } = await supabase
+            .from("message_templates")
+            .select("*")
+            .eq("org_id", orgId);
+          if (!error && data) {
+            return data as MessageTemplate[];
+          }
+        } catch (err) {
+          console.warn("[MessageTemplates] Fetch notice:", err);
+        }
       }
       await delay(100);
       return MockDB.getMessageTemplates().filter((t) => t.org_id === orgId);
@@ -4169,12 +4451,17 @@ export function useEventRSVPs(eventId: string | undefined) {
     queryFn: async () => {
       if (!eventId) return [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("event_rsvps")
-          .select("*")
-          .eq("event_id", eventId);
-        if (error) throw error;
-        return data as EventRSVP[];
+        try {
+          const { data, error } = await supabase
+            .from("event_rsvps")
+            .select("*")
+            .eq("event_id", eventId);
+          if (!error && data) {
+            return data as EventRSVP[];
+          }
+        } catch (err) {
+          console.warn("[EventRSVPs] Fetch notice:", err);
+        }
       }
       await delay(100);
       return MockDB.getEventRSVPs().filter((r) => r.event_id === eventId);
@@ -4241,12 +4528,17 @@ export function useEventWaitlist(eventId: string | undefined) {
     queryFn: async () => {
       if (!eventId) return [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("event_waitlist")
-          .select("*")
-          .eq("event_id", eventId);
-        if (error) throw error;
-        return data as EventWaitlist[];
+        try {
+          const { data, error } = await supabase
+            .from("event_waitlist")
+            .select("*")
+            .eq("event_id", eventId);
+          if (!error && data) {
+            return data as EventWaitlist[];
+          }
+        } catch (err) {
+          console.warn("[EventWaitlist] Fetch notice:", err);
+        }
       }
       await delay(100);
       return MockDB.getEventWaitlist().filter((w) => w.event_id === eventId);
@@ -4301,12 +4593,17 @@ export function useIdentityVerifications(orgId: string | undefined) {
     queryFn: async () => {
       if (!orgId) return [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("identity_verifications")
-          .select("*")
-          .eq("org_id", orgId);
-        if (error) throw error;
-        return data as IdentityVerification[];
+        try {
+          const { data, error } = await supabase
+            .from("identity_verifications")
+            .select("*")
+            .eq("org_id", orgId);
+          if (!error && data) {
+            return data as IdentityVerification[];
+          }
+        } catch (err) {
+          console.warn("[IdentityVerifications] Fetch notice:", err);
+        }
       }
       await delay(150);
       return MockDB.getIdentityVerifications().filter((v) => v.org_id === orgId);
@@ -4953,12 +5250,17 @@ export function useEventAttendance(eventId: string | undefined) {
     queryFn: async () => {
       if (!eventId) return [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("event_attendance")
-          .select("*")
-          .eq("event_id", eventId);
-        if (error) throw error;
-        return data as EventAttendance[];
+        try {
+          const { data, error } = await supabase
+            .from("event_attendance")
+            .select("*")
+            .eq("event_id", eventId);
+          if (!error && data) {
+            return data as EventAttendance[];
+          }
+        } catch (err) {
+          console.warn("[EventAttendance] Fetch notice:", err);
+        }
       }
       await delay(100);
       return MockDB.getEventAttendance().filter(
@@ -5991,31 +6293,35 @@ export function useMarketplaceLeads(orgId: string | undefined) {
     queryFn: async () => {
       if (!orgId) return [];
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("marketplace_leads")
-          .select(
-            "*, member:member_id(*, user:user_id(full_name, email)), product:product_id(title, org_id)",
-          )
-          .order("created_at", { ascending: false });
-        if (error) throw error;
-
-        // Filter those belonging to this org
-        const filtered = (data || []).filter(
-          (l) => l.product?.org_id === orgId,
-        );
-        return filtered.map(
-          (l) =>
-            ({
-              id: l.id,
-              product_id: l.product_id,
-              member_id: l.member_id,
-              message: l.message,
-              created_at: l.created_at,
-              member_name: l.member?.user?.full_name || "Unknown Member",
-              member_email: l.member?.user?.email || "Unknown Email",
-              product_title: l.product?.title || "Unknown Product",
-            }) as MarketplaceLead,
-        );
+        try {
+          const { data, error } = await supabase
+            .from("marketplace_leads")
+            .select(
+              "*, member:member_id(*, user:user_id(full_name, email)), product:product_id(title, org_id)",
+            )
+            .order("created_at", { ascending: false });
+          if (!error && data) {
+            // Filter those belonging to this org
+            const filtered = (data || []).filter(
+              (l) => l.product?.org_id === orgId,
+            );
+            return filtered.map(
+              (l) =>
+                ({
+                  id: l.id,
+                  product_id: l.product_id,
+                  member_id: l.member_id,
+                  message: l.message,
+                  created_at: l.created_at,
+                  member_name: l.member?.user?.full_name || "Unknown Member",
+                  member_email: l.member?.user?.email || "Unknown Email",
+                  product_title: l.product?.title || "Unknown Product",
+                }) as MarketplaceLead,
+            );
+          }
+        } catch (err) {
+          console.warn("[MarketplaceLeads] Fetch notice:", err);
+        }
       }
       await delay(150);
       const leads = MockDB.getMarketplaceLeads();

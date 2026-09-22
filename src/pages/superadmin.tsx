@@ -550,11 +550,11 @@ export const SuperadminDashboard: React.FC = () => {
 
   // Stats
   const totalOrgs = orgs.length;
-  const trialOrgs = orgs.filter((o) => o.subscription_status === "trial").length;
+  const trialOrgs = orgs.filter((o) => o?.subscription_status === "trial").length;
   const now = new Date();
-  const activeOrgsList = orgs.filter((o) => o.subscription_status === "active" && o.subscription_ends_at && new Date(o.subscription_ends_at) > now);
+  const activeOrgsList = orgs.filter((o) => o?.subscription_status === "active" && o?.subscription_ends_at && new Date(o.subscription_ends_at) > now);
   const activeOrgs = activeOrgsList.length;
-  const expiredOrgs = orgs.filter((o) => o.subscription_status === "expired" || (o.subscription_ends_at && new Date(o.subscription_ends_at) < now)).length;
+  const expiredOrgs = orgs.filter((o) => o?.subscription_status === "expired" || (o?.subscription_ends_at && new Date(o.subscription_ends_at) < now)).length;
   const pendingBugs = errors.filter((e) => e.status !== "resolved").length;
   const awaitingPayments = payments.filter((p) => p.status === "awaiting_approval").length;
   const totalUsers = (platformData as any)?.totalUsers || orgs.length;

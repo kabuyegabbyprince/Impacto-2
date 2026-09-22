@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -38,6 +38,9 @@ import {
   Upload,
   PackageCheck,
   ShieldAlert,
+  ShieldCheck,
+  ChevronDown,
+  ChevronRight,
   Compass,
   User,
   Zap
@@ -74,29 +77,49 @@ import { resolveFileUrl } from "../lib/storageService";
 export const OrgThemeInjector: React.FC = () => {
   const { activeOrg } = useOrgStore();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
     if (activeOrg) {
-      root.style.setProperty("--org-primary", activeOrg.primary_color);
-      root.style.setProperty("--org-primary-l", activeOrg.primary_color + "1e"); // rgba equivalent or opacity hex
-      root.style.setProperty("--org-primary-d", activeOrg.primary_color); // standard fallback
-      root.style.setProperty("--org-secondary", activeOrg.secondary_color);
-      document.title = `${activeOrg?.name || "Cooperative"} | Impacto`;
+      const hex = (activeOrg.primary_color || "#15803D").trim();
+      const cleanHex = hex.replace("#", "");
+      let r = 21, g = 128, b = 61;
+      if (cleanHex.length === 6) {
+        r = parseInt(cleanHex.substring(0, 2), 16) || 21;
+        g = parseInt(cleanHex.substring(2, 4), 16) || 128;
+        b = parseInt(cleanHex.substring(4, 6), 16) || 61;
+      } else if (cleanHex.length === 3) {
+        r = parseInt(cleanHex[0] + cleanHex[0], 16) || 21;
+        g = parseInt(cleanHex[1] + cleanHex[1], 16) || 128;
+        b = parseInt(cleanHex[2] + cleanHex[2], 16) || 61;
+      }
+
+      root.style.setProperty("--org-primary", hex);
+      root.style.setProperty("--org-primary-rgb", `${r}, ${g}, ${b}`);
+      root.style.setProperty("--org-primary-l", `rgba(${r}, ${g}, ${b}, 0.12)`);
+      root.style.setProperty("--org-primary-d", `rgb(${Math.max(0, r - 35)}, ${Math.max(0, g - 35)}, ${Math.max(0, b - 35)})`);
+      root.style.setProperty("--org-secondary", activeOrg.secondary_color || "#F59E0B");
+
+      if (activeOrg.name) {
+        document.title = `${activeOrg.name} — Impacto`;
+      }
       
-      // Inject the dashboard theme if it is not "custom"
+      // Inject the dashboard theme if specified
       if (activeOrg.dashboard_theme === "dark") {
         root.setAttribute("data-theme", "dark");
+        root.classList.add("dark");
         localStorage.setItem("theme", "dark");
       } else if (activeOrg.dashboard_theme === "light") {
         root.setAttribute("data-theme", "light");
+        root.classList.remove("dark");
         localStorage.setItem("theme", "light");
       }
     } else {
-      root.style.setProperty("--org-primary", "#15803D"); // Default Impacto Green
+      root.style.setProperty("--org-primary", "#15803D");
+      root.style.setProperty("--org-primary-rgb", "21, 128, 61");
       root.style.setProperty("--org-primary-l", "rgba(21, 128, 61, 0.12)");
       root.style.setProperty("--org-primary-d", "#14532D");
       root.style.setProperty("--org-secondary", "#F59E0B");
-      document.title = "Impacto";
+      document.title = "Impacto — Organization Management System with Free Forever Plan";
     }
   }, [activeOrg]);
 
@@ -275,8 +298,11 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
       <div className="flex items-center gap-3">
         {/* Mobile menu toggle */}
         <button
+          id="tour-mobile-menu-toggle"
+          data-tour="mobile-menu-toggle"
           onClick={onToggleSidebar}
-          className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 md:hidden"
+          className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 md:hidden cursor-pointer"
+          aria-label="Toggle mobile menu"
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -758,8 +784,34 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; onStartTo
     { name: t("nav.ledger"), path: "/dashboard/ledger", icon: Coins, allowed: isAccountant },
     { name: t("nav.grants"), path: "/dashboard/grants", icon: Award, allowed: isAccountant },
     { name: t("nav.reports"), path: "/dashboard/reports", icon: FileBarChart, allowed: isAdmin },
+    { name: "Audit Logs", path: "/dashboard/audit-logs", icon: ShieldCheck, allowed: isAdmin },
     { name: t("nav.settings", "Workspace Settings"), path: "/dashboard/settings", icon: Settings, allowed: isAdmin },
   ].filter(item => item.allowed);
+
+  // Check if current route is within the management section
+  const isManagementRouteActive = managementNav.some(item => location.pathname === item.path);
+
+  // Collapsible state: Non-admin users start collapsed to declutter; auto-expand if on active route
+  const [isManagementExpanded, setIsManagementExpanded] = useState<boolean>(() => {
+    const saved = localStorage.getItem("impacto_sidebar_mgmt_expanded");
+    if (saved !== null) return saved === "true";
+    return isAdmin || isManagementRouteActive;
+  });
+
+  // Keep expanded if user navigates to an active management sub-route
+  useEffect(() => {
+    if (isManagementRouteActive) {
+      setIsManagementExpanded(true);
+    }
+  }, [isManagementRouteActive]);
+
+  const toggleManagement = () => {
+    setIsManagementExpanded((prev) => {
+      const next = !prev;
+      localStorage.setItem("impacto_sidebar_mgmt_expanded", String(next));
+      return next;
+    });
+  };
 
   return (
     <>
@@ -812,42 +864,62 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; onStartTo
               </nav>
             </div>
 
-            {/* Management section */}
+            {/* Management section (Collapsible Pattern) */}
             {managementNav.length > 0 && (
-              <div id="tour-nav-management" data-tour="nav-management">
-                <div className="px-3 pb-1 text-[10px] font-mono uppercase font-bold tracking-wider text-gray-400 dark:text-slate-500">
-                  {isAdmin || isStaff || isAccountant ? "Management & Settings" : "Profile & Settings"}
-                </div>
-                <nav className="flex flex-col gap-0.5 mt-1">
-                  {managementNav.map((item) => {
-                    const isActive =
-                      item.path === "/dashboard/settings"
-                        ? location.pathname === "/dashboard/settings"
-                        : location.pathname === item.path;
-                    const Icon = item.icon;
+              <div id="tour-nav-management" data-tour="nav-management" className="flex flex-col">
+                <button
+                  type="button"
+                  onClick={toggleManagement}
+                  aria-expanded={isManagementExpanded}
+                  className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-mono uppercase font-bold tracking-wider text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200 transition group rounded-lg hover:bg-slate-100/60 dark:hover:bg-slate-800/40 cursor-pointer"
+                >
+                  <span className="flex items-center gap-1.5 truncate">
+                    <span>{isAdmin || isStaff || isAccountant ? "Management Tools" : "Account & Tools"}</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-slate-200/70 dark:bg-slate-700/70 text-slate-600 dark:text-slate-300 font-mono">
+                      {managementNav.length}
+                    </span>
+                  </span>
+                  <span className="text-gray-400 group-hover:text-gray-600 dark:text-slate-500 dark:group-hover:text-slate-300 transition-transform duration-150 shrink-0">
+                    {isManagementExpanded ? (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    )}
+                  </span>
+                </button>
 
-                    return (
-                      <Link
-                        key={item.path}
-                        to={item.path}
-                        onClick={onClose}
-                        className={`flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-150 ${
-                          isActive
-                            ? "bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 font-bold shadow-2xs"
-                            : "text-gray-600 hover:text-[#156c45] hover:bg-[#e8f5ee]/40 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-emerald-400"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 truncate">
-                          <Icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? "text-[#156c45] dark:text-emerald-400" : "text-gray-400 dark:text-slate-500"}`} />
-                          <span className="truncate">{item.name}</span>
-                        </div>
-                        {isActive && (
-                          <span className="h-1.5 w-1.5 rounded-full bg-[#156c45] dark:bg-emerald-400 shrink-0" />
-                        )}
-                      </Link>
-                    );
-                  })}
-                </nav>
+                {isManagementExpanded && (
+                  <nav className="flex flex-col gap-0.5 mt-1 transition-all duration-200">
+                    {managementNav.map((item) => {
+                      const isActive =
+                        item.path === "/dashboard/settings"
+                          ? location.pathname === "/dashboard/settings"
+                          : location.pathname === item.path;
+                      const Icon = item.icon;
+
+                      return (
+                        <Link
+                          key={item.path}
+                          to={item.path}
+                          onClick={onClose}
+                          className={`flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-150 ${
+                            isActive
+                              ? "bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 font-bold shadow-2xs"
+                              : "text-gray-600 hover:text-[#156c45] hover:bg-[#e8f5ee]/40 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-emerald-400"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 truncate">
+                            <Icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? "text-[#156c45] dark:text-emerald-400" : "text-gray-400 dark:text-slate-500"}`} />
+                            <span className="truncate">{item.name}</span>
+                          </div>
+                          {isActive && (
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#156c45] dark:bg-emerald-400 shrink-0" />
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </nav>
+                )}
               </div>
             )}
           </div>
@@ -919,16 +991,16 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
   // Synchronize active organization status in real-time
   useEffect(() => {
     if (activeOrg && platformData?.orgs) {
-      const dbOrg = platformData.orgs.find(o => o.id === activeOrg.id);
+      const dbOrg = platformData.orgs.find(o => o?.id === activeOrg?.id);
       if (dbOrg) {
-        const statusChanged = dbOrg.subscription_status !== activeOrg.subscription_status;
-        const endsAtChanged = dbOrg.subscription_ends_at !== activeOrg.subscription_ends_at;
-        const tierChanged = dbOrg.subscription_tier !== activeOrg.subscription_tier;
+        const statusChanged = dbOrg?.subscription_status !== activeOrg?.subscription_status;
+        const endsAtChanged = dbOrg?.subscription_ends_at !== activeOrg?.subscription_ends_at;
+        const tierChanged = dbOrg?.subscription_tier !== activeOrg?.subscription_tier;
         const nameChanged = dbOrg?.name !== activeOrg?.name;
         
         if (statusChanged || endsAtChanged || tierChanged || nameChanged) {
           setActiveOrg(dbOrg, activeMember);
-          if (activeOrg.subscription_status !== "active" && dbOrg.subscription_status === "active") {
+          if (activeOrg?.subscription_status !== "active" && dbOrg?.subscription_status === "active") {
             addToast(`Your cooperative workspace "${dbOrg?.name || "Workspace"}" has been approved and unlocked in real-time!`, "success");
           } else {
             addToast(`Cooperative Workspace workspace configuration updated in real-time.`, "info");
@@ -1581,10 +1653,12 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
       <WorkspaceTour
         isOpen={isTourOpen}
         currentStepIndex={currentTourStep}
-        onNext={() => setCurrentTourStep((prev) => Math.min(prev + 1, TOUR_STEPS.length - 1))}
+        onNext={() => setCurrentTourStep((prev) => prev + 1)}
         onPrev={() => setCurrentTourStep((prev) => Math.max(prev - 1, 0))}
         onClose={handleCloseTour}
         onJumpToStep={(idx) => setCurrentTourStep(idx)}
+        isSidebarOpen={sidebarOpen}
+        onOpenSidebar={() => setSidebarOpen(true)}
       />
 
       {/* Non-disturbing first-time welcome invitation toast */}

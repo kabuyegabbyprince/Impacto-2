@@ -195,7 +195,7 @@ export const OrganizationMemberFees: React.FC = () => {
   // Member Action Dialog State: "Pay or Report Payment"
   const [selectedFeeToPay, setSelectedFeeToPay] = useState<MemberFee | null>(null);
   const [openMoMoPushPromptModal, setOpenMoMoPushPromptModal] = useState(false);
-  const [payMethod, setPayMethod] = useState<"Instant MoMo Push" | "MTN MoMo / Airtel" | "Cash">("Instant MoMo Push");
+  const [payMethod, setPayMethod] = useState<"MTN MoMo / Airtel" | "Cash">("MTN MoMo / Airtel");
   
   // MoMo state variables
   const [momoPhoneNumber, setMomoPhoneNumber] = useState("");
@@ -2348,10 +2348,9 @@ export const OrganizationMemberFees: React.FC = () => {
                 <label className="text-xs font-black text-stone-800 dark:text-slate-300 block uppercase tracking-wider select-none">
                   Choose Settlement Method
                 </label>
-                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   {[
-                    { id: "Instant MoMo Push", label: "Instant MoMo Push", subtitle: "Auto USSD PIN Prompt", icon: <Zap className="h-4 w-4 text-amber-500" /> },
-                    { id: "MTN MoMo / Airtel", label: "Manual MoMo", subtitle: "SMS / Receipt Copy", icon: <Smartphone className="h-4 w-4 text-emerald-500" /> },
+                    { id: "MTN MoMo / Airtel", label: "Mobile Money (MoMo / Airtel)", subtitle: "SMS / Receipt Copy", icon: <Smartphone className="h-4 w-4 text-emerald-500" /> },
                     { id: "Cash", label: "Hand Cash", subtitle: "Officer Cashier", icon: <Coins className="h-4 w-4 text-blue-500" /> }
                   ].map((method) => (
                     <button
@@ -2374,40 +2373,7 @@ export const OrganizationMemberFees: React.FC = () => {
               </div>
 
               {/* Conditional forms based on selection */}
-              {payMethod === "Instant MoMo Push" ? (
-                <div className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4 shadow-3xs animate-in slide-in-from-bottom-3">
-                  <div className="flex items-center gap-2 select-none border-b border-dashed border-gray-200 dark:border-slate-800 pb-3">
-                    <span className="h-7 w-7 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 flex items-center justify-center">
-                      <Zap className="h-3.5 w-3.5" />
-                    </span>
-                    <div>
-                      <span className="text-[10px] font-black text-amber-800 dark:text-amber-400 block leading-none uppercase">Instant USSD Push (PawaPay Integration)</span>
-                      <span className="text-[10px] text-gray-400">Your phone will pop up asking for your Mobile Money PIN immediately.</span>
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 space-y-1.5">
-                    <div className="flex items-center justify-between font-bold">
-                      <span>Dues Cycle:</span>
-                      <span className="text-slate-900 dark:text-white uppercase">{selectedFeeToPay.payment_period}</span>
-                    </div>
-                    <div className="flex items-center justify-between font-bold">
-                      <span>Payable Amount:</span>
-                      <span className="text-emerald-600 font-mono text-sm">{selectedFeeToPay.amount.toLocaleString()} RWF</span>
-                    </div>
-                  </div>
-
-                  <Button
-                    type="button"
-                    onClick={() => setOpenMoMoPushPromptModal(true)}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl transition shadow-xs flex items-center justify-center gap-2"
-                    id="btn-trigger-instant-momo-push"
-                  >
-                    <Smartphone className="h-4 w-4" />
-                    Launch Instant MoMo Push Prompt ({selectedFeeToPay.amount.toLocaleString()} RWF)
-                  </Button>
-                </div>
-              ) : payMethod === "MTN MoMo / Airtel" ? (
+              {payMethod === "MTN MoMo / Airtel" ? (
                 <form onSubmit={handleSubmitManualReport} className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4 shadow-3xs animate-in slide-in-from-bottom-3">
                   <div className="flex items-center gap-2 select-none border-b border-dashed border-gray-200 dark:border-slate-800 pb-3">
                     <span className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 flex items-center justify-center">

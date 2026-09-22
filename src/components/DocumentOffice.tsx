@@ -490,6 +490,16 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
   // --- Export Excel Grid as CSV ---
   const handleExportCSV = () => {
+    const isFree = !activeOrg?.subscription_plan || activeOrg.subscription_plan === "free";
+    if (isFree) {
+      addToast({
+        title: "Free Plan: Save as PDF",
+        message: "On the Free plan, documents can be saved and printed as PDF. Upgrade to unlock raw CSV spreadsheet exports.",
+        type: "info"
+      });
+      window.print();
+      return;
+    }
     const csvContent = "data:text/csv;charset=utf-8," 
       + gridData.map(e => e.map(cell => `"${(cell || "").replace(/"/g, '""')}"`).join(",")).join("\n");
     const encodedUri = encodeURI(csvContent);
@@ -745,6 +755,16 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                 <span>Private</span>
               </label>
             )}
+
+            <button 
+              onClick={() => window.print()}
+              type="button"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl transition cursor-pointer"
+              title="Save or Export as PDF"
+            >
+              <Printer className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Save as PDF</span>
+            </button>
 
             {!readOnly && (
               <button 

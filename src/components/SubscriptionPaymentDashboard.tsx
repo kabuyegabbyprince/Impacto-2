@@ -36,28 +36,32 @@ import {
   ADDON_PACKAGES,
   AddOnPackageId 
 } from "../lib/subscriptionMatrix";
+import { useOrgStore } from "../store/orgStore";
 import { useCurrencyStore } from "../store/currencyStore";
 import { Badge, Button, Card, Modal } from "./ui";
-import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "./MoMoPushPaymentModal";
 
 interface SubscriptionPaymentDashboardProps {
-  org: Organization;
-  onOpenRenewModal: () => void;
-  onOpenAddonModal: (pkgId?: AddOnPackageId) => void;
+  org?: Organization | null;
+  orgId?: string;
+  onOpenRenewModal?: () => void;
+  onOpenAddonModal?: (pkgId?: AddOnPackageId) => void;
 }
 
 export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboardProps> = ({
-  org,
+  org: propOrg,
+  orgId,
   onOpenRenewModal,
   onOpenAddonModal,
 }) => {
   const { t } = useTranslation();
-  const { data: payments = [], isLoading } = useOrgSubscriptionPayments(org?.id);
+  const { activeOrg } = useOrgStore();
+  const org = propOrg || activeOrg;
+  const targetOrgId = org?.id || orgId;
+  const { data: payments = [], isLoading } = useOrgSubscriptionPayments(targetOrgId);
   const { formatAmount, convertToRWF } = useCurrencyStore();
   const [chartCurrency, setChartCurrency] = useState<"RWF" | "USD">("RWF");
   const [chartViewType, setChartViewType] = useState<"bar" | "cumulative">("bar");
   const [selectedPaymentDetail, setSelectedPaymentDetail] = useState<SubscriptionPayment | null>(null);
-  const [openMoMoPushModal, setOpenMoMoPushModal] = useState(false);
   const submitPaymentMutation = useSubmitSubscriptionPayment();
 
   const lifecycle = getOrgSubscriptionLifecycle(org);
@@ -90,10 +94,10 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
 
     // Determine upcoming renewal date
     let renewalDate: Date;
-    if (org.subscription_ends_at) {
+    if (org?.subscription_ends_at) {
       renewalDate = new Date(org.subscription_ends_at);
     } else {
-      const created = org.created_at ? new Date(org.created_at) : new Date();
+      const created = org?.created_at ? new Date(org.created_at) : new Date();
       renewalDate = new Date(created.getTime() + 30 * 24 * 60 * 60 * 1000);
     }
 
@@ -621,32 +625,27 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
           </div>
 
           <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onOpenAddonModal()}
-              className="text-xs font-bold h-8.5 rounded-xl border-slate-200"
-            >
-              <Package className="h-3.5 w-3.5 mr-1" />
-              Browse Add-Ons ($4/mo)
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => setOpenMoMoPushModal(true)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8.5 rounded-xl shadow-xs flex items-center gap-1.5"
-            >
-              <Smartphone className="h-3.5 w-3.5" />
-              Instant MoMo Push Prompt
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onOpenRenewModal}
-              className="text-xs font-bold h-8.5 rounded-xl border-slate-200 text-slate-700 dark:text-slate-200"
-            >
-              <Crown className="h-3.5 w-3.5 mr-1" />
-              Manual Proof
-            </Button>
+            {onOpenAddonModal && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onOpenAddonModal()}
+                className="text-xs font-bold h-8.5 rounded-xl border-slate-200"
+              >
+                <Package className="h-3.5 w-3.5 mr-1" />
+                Browse Add-Ons ($4/mo)
+              </Button>
+            )}
+            {onOpenRenewModal && (
+              <Button
+                size="sm"
+                onClick={() => onOpenRenewModal()}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8.5 rounded-xl shadow-xs flex items-center gap-1.5"
+              >
+                <Crown className="h-3.5 w-3.5 mr-1" />
+                Renew License
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -834,48 +833,6 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
           </div>
         </Modal>
       )}
-
-      {/* Instant MoMo Push Prompt Modal */}
-      <MoMoPushPaymentModal
-        isOpen={openMoMoPushModal}
-        onClose={() => setOpenMoMoPushModal(false)}
-        title="Workspace License Renewal (MoMo Push)"
-        description="Enter your phone number to receive an automatic USSD authorization prompt on your phone screen."
-        amountRwf={25 * usdRate}
-        amountUsd={25}
-        orgId={org?.id}
-        defaultPayerName={org?.name}
-        itemType="subscription"
-        itemName={`${org?.name || "Organization"} - Growth Plan Renewal`}
-        isPlatformFee={true}
-        recipientName="Impacto Platform License Gateway"
-        recipientMtnNumber="0788100100"
-        recipientAirtelNumber="0733100100"
-        recipientMerchantCode="*182*8*1*880099#"
-        onSuccess={async (data: MoMoPaymentSuccessData) => {
-          try {
-            await submitPaymentMutation.mutateAsync({
-              org_id: org.id,
-              plan: "Growth Plan - $25/month",
-              amount_usd: 25,
-              amount_local: data.amount,
-              method: data.method === "pawapay_push" ? "pawapay_push" : data.provider.includes("AIRTEL") ? "airtel" : "mtn",
-              phone: data.payerPhone,
-              phone_number: data.payerPhone,
-              reference: data.providerTransactionId || data.depositId,
-              transaction_reference: data.providerTransactionId || data.depositId,
-              pawapay_deposit_id: data.depositId,
-              payer_name: data.payerName,
-              comment: data.comment,
-              proof_url: data.proofText || `[PawaPay Instant Push Confirmed] Deposit ID: ${data.depositId}`,
-              plan_details: `PawaPay Instant Push Prompt Verified. Deposit ID: ${data.depositId}`,
-            });
-            setOpenMoMoPushModal(false);
-          } catch (err) {
-            console.error("Failed to register subscription payment:", err);
-          }
-        }}
-      />
     </div>
   );
 };

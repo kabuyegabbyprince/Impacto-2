@@ -46,6 +46,7 @@ import { OfflineSyncIndicator } from "./OfflineSyncIndicator";
 import { OfflineSyncService } from "../lib/offlineSyncService";
 import { MockDB } from "../lib/mockData";
 import { DocumentSignature } from "../types";
+import { canAccessFeature, getOrgSubscriptionLifecycle } from "../lib/subscriptionMatrix";
 
 interface V2AdvancedFeaturesProps {
   orgId?: string;
@@ -152,16 +153,22 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       theme: "Finance",
       price: 30000,
       features: [
-        "MTN / Airtel Mobile Money (pawaPay)",
-        "Automated Dues Push Requests",
+        "MTN / Airtel Mobile Money Gateway",
+        "Automated Dues Ledger Management",
         "Excel Attendance & Ledger Export"
       ],
-      desc: "Accelerate revenue collections with automated MoMo push-to-pay and standard Excel balance sheets."
+      desc: "Accelerate revenue collections with verified Mobile Money records and standard Excel balance sheets."
     }
   ];
 
   // QR Attendance Handler
   const handleQrCheckIn = async (memberId: string) => {
+    const access = canAccessFeature(activeOrg, "qr_attendance");
+    if (!access.allowed) {
+      addToast("QR Attendance check-in is disabled on Free plan. Upgrade or activate the Event & Attendance Package to unlock.", "error");
+      return;
+    }
+
     if (!selectedEventId && events.length > 0) {
       setSelectedEventId(events[0].id);
     }
@@ -750,8 +757,32 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       {/* ========================================================================= */}
       {/* TAB 1: QR ATTENDANCE & EXCEL EXPORT */}
       {/* ========================================================================= */}
-      {activeTab === "qr_attendance" && (
+      {activeTab === "qr_attendance" && (() => {
+        const qrAccess = canAccessFeature(activeOrg, "qr_attendance");
+        const isQrAllowed = qrAccess.allowed;
+
+        return (
         <div className="space-y-6">
+          {!isQrAllowed && (
+            <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-start gap-3">
+              <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <p className="font-bold text-amber-900 dark:text-amber-200">QR Attendance Check-in is Locked</p>
+                <p className="text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">
+                  Marking attendance and live QR check-ins are disabled on the Free Forever tier. Activate the <strong>Event & Attendance Package ($4/mo / 5,000 RWF)</strong> or upgrade to <strong>Starter, Growth, or Pro</strong> to scan badges and record attendances.
+                </p>
+                <div className="mt-3">
+                  <button
+                    onClick={() => setActiveTab("subscription_packages")}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                  >
+                    View Add-on Packages ($4/mo)
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left: Event Selection & QR Scanner Interface */}
             <div className="lg:col-span-4 space-y-4">
@@ -802,25 +833,31 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="Scan badge or enter member ID..."
+                      placeholder={isQrAllowed ? "Scan badge or enter member ID..." : "Attendance check-in locked on Free plan"}
                       value={qrScanInput}
+                      disabled={!isQrAllowed}
                       onChange={(e) => setQrScanInput(e.target.value)}
                       onKeyDown={(e) => {
+                        if (!isQrAllowed) return;
                         if (e.key === "Enter" && qrScanInput) {
                           const m = members.find((mem) => mem.id === qrScanInput || mem.member_number === qrScanInput || mem.user?.email === qrScanInput);
                           if (m) handleQrCheckIn(m.id);
                           else addToast("Member ID not found in directory", "error");
                         }
                       }}
-                      className="flex-1 px-3 py-1.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs"
+                      className="flex-1 px-3 py-1.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     <button
                       onClick={() => {
+                        if (!isQrAllowed) {
+                          addToast("QR Attendance check-in is disabled on Free plan. Upgrade or activate the Event Package.", "error");
+                          return;
+                        }
                         const m = members.find((mem) => mem.id === qrScanInput || mem.member_number === qrScanInput || mem.user?.email === qrScanInput) || members[0];
                         if (m) handleQrCheckIn(m.id);
                       }}
-                      disabled={qrScanning}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1"
+                      disabled={qrScanning || !isQrAllowed}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {qrScanning ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                       Check-in
@@ -888,7 +925,8 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* TAB 2: CERTIFICATE GENERATOR */}
@@ -1215,72 +1253,102 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Curated Impacto Feature Packs</h3>
-              <p className="text-xs text-gray-500">Click to instantly toggle and activate add-on packages directly on your organization.</p>
+              <p className="text-xs text-gray-500">Add-on capabilities tailored for cooperative administration and field operations.</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {packages.map((pkg) => {
-              const isPurchased = (activeOrg?.active_packages || []).includes(pkg.id);
+          {/* Package visibility gating: Only visible for Free and Starter plans (or trial) */}
+          {(() => {
+            const plan = activeOrg?.subscription_tier || (activeOrg as any)?.subscription_plan || "free";
+            const shouldShow = plan === "free" || plan === "starter" || activeOrg?.subscription_status === "trial";
+            if (!shouldShow) {
               return (
-                <div
-                  key={pkg.id}
-                  className={`rounded-3xl border p-6 flex flex-col justify-between transition ${
-                    isPurchased
-                      ? "bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-500 shadow-md ring-1 ring-emerald-500"
-                      : "bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700"
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200">
-                        {pkg.theme}
-                      </span>
-                      <span className="font-extrabold text-lg text-emerald-600">{pkg.price.toLocaleString()} RWF</span>
+                <div className="p-8 rounded-3xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-emerald-600 text-white rounded-2xl shadow-sm">
+                      <ShieldCheck className="h-8 w-8" />
                     </div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-bold text-gray-900 dark:text-white text-base">{pkg.name}</h4>
-                      {isPurchased && (
-                        <span className="px-2 py-0.5 bg-emerald-600 text-white rounded-full text-[10px] font-bold">
-                          ACTIVE
-                        </span>
-                      )}
+                    <div>
+                      <h4 className="text-base font-bold text-emerald-950 dark:text-emerald-100">
+                        All Enterprise Features Active on Your Plan
+                      </h4>
+                      <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
+                        Your organization is subscribed to the <strong>{plan.toUpperCase()}</strong> tier. All add-on packs and unlimited features are unlocked.
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-500 mb-4 leading-relaxed">{pkg.desc}</p>
-                    <ul className="space-y-2 mb-6">
-                      {pkg.features.map((f, i) => (
-                        <li key={i} className="text-xs flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> {f}
-                        </li>
-                      ))}
-                    </ul>
                   </div>
-                  <div className="space-y-2">
-                    <button
-                      onClick={() => handleActivatePackage(pkg)}
-                      className={`w-full py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm ${
-                        isPurchased
-                          ? "bg-stone-800 hover:bg-stone-900 text-white"
-                          : "bg-emerald-600 hover:bg-emerald-700 text-white"
-                      }`}
-                    >
-                      {isPurchased ? <Check className="h-4 w-4" /> : <Zap className="h-4 w-4" />}
-                      {isPurchased ? "Active on Organization (Toggle Off)" : "Instant 1-Click Activate"}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedPackage(pkg);
-                        setShowCheckout(true);
-                      }}
-                      className="w-full py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 text-gray-700 dark:text-gray-300 rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1.5"
-                    >
-                      <CreditCard className="h-3.5 w-3.5 text-emerald-600" /> Pay via MoMo Direct
-                    </button>
-                  </div>
+                  <span className="px-4 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-full">
+                    Full Access Unlocked
+                  </span>
                 </div>
               );
-            })}
-          </div>
+            }
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {packages.map((pkg) => {
+                  const isPurchased = (activeOrg?.active_packages || []).includes(pkg.id);
+                  return (
+                    <div
+                      key={pkg.id}
+                      className={`rounded-3xl border p-6 flex flex-col justify-between transition ${
+                        isPurchased
+                          ? "bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-500 shadow-md ring-1 ring-emerald-500"
+                          : "bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200">
+                            {pkg.theme}
+                          </span>
+                          <span className="font-extrabold text-lg text-emerald-600">{pkg.price.toLocaleString()} RWF</span>
+                        </div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-bold text-gray-900 dark:text-white text-base">{pkg.name}</h4>
+                          {isPurchased && (
+                            <span className="px-2 py-0.5 bg-emerald-600 text-white rounded-full text-[10px] font-bold">
+                              ACTIVE
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mb-4 leading-relaxed">{pkg.desc}</p>
+                        <ul className="space-y-2 mb-6">
+                          {pkg.features.map((f, i) => (
+                            <li key={i} className="text-xs flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> {f}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="space-y-2">
+                        <button
+                          onClick={() => handleActivatePackage(pkg)}
+                          className={`w-full py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm ${
+                            isPurchased
+                              ? "bg-stone-800 hover:bg-stone-900 text-white"
+                              : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                          }`}
+                        >
+                          {isPurchased ? <Check className="h-4 w-4" /> : <Zap className="h-4 w-4" />}
+                          {isPurchased ? "Active on Organization (Toggle Off)" : "Instant 1-Click Activate"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedPackage(pkg);
+                            setShowCheckout(true);
+                          }}
+                          className="w-full py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 text-gray-700 dark:text-gray-300 rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1.5"
+                        >
+                          <CreditCard className="h-3.5 w-3.5 text-emerald-600" /> Pay via MoMo Transfer
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -1458,13 +1526,13 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* PAWAPAY CHECKOUT MODAL */}
+      {/* MOBILE MONEY CHECKOUT MODAL */}
       {/* ========================================================================= */}
       {showCheckout && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 max-w-md w-full border border-gray-200 dark:border-gray-800 shadow-2xl">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-2">
-              <CreditCard className="h-5 w-5 text-emerald-600" /> pawaPay Mobile Money Checkout
+              <CreditCard className="h-5 w-5 text-emerald-600" /> Mobile Money Payment Gateway
             </h3>
             <p className="text-xs text-gray-500 mb-4">
               {selectedPackage ? `Purchasing ${selectedPackage.name}` : "Upgrading to Pro Tier (Unlimited Capacity)"} —{" "}
@@ -1478,7 +1546,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                   type="text"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="250780000000"
+                  placeholder="078XXXXXXX or 079XXXXXXX"
                   className="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs font-mono text-gray-900 dark:text-white"
                 />
               </div>
@@ -1513,7 +1581,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                   className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm"
                 >
                   {checkoutLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                  Confirm MoMo Deposit
+                  Confirm MoMo Payment
                 </button>
               </div>
             </div>

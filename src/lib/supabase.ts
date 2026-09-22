@@ -15,6 +15,30 @@ if (!isSupabaseConfigured) {
 
 export const supabase = createClient(
   supabaseUrl || "https://placeholder-project-id.supabase.co",
-  supabaseAnonKey || "placeholder-anon-key-placeholder-anon-key-placeholder-anon-key"
+  supabaseAnonKey || "placeholder-anon-key-placeholder-anon-key-placeholder-anon-key",
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: false, // Prevents uncaught background network rejections on invalid/mock tokens
+      detectSessionInUrl: false,
+    },
+    global: {
+      fetch: async (url, options) => {
+        try {
+          return await fetch(url, options);
+        } catch (err: any) {
+          console.warn("[Supabase Client] Network fetch error:", err?.message || err);
+          return new Response(
+            JSON.stringify({ error: err?.message || "Failed to fetch", data: null }),
+            {
+              status: 503,
+              statusText: "Service Unavailable",
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+      },
+    },
+  }
 );
 

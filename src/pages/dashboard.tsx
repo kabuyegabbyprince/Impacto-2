@@ -1,5 +1,6 @@
 import { GoalsPage } from "./goals";
 import { WaitRoomView } from "../components/WaitRoomView";
+import { DynamicAttendanceGrid } from "../components/DynamicAttendanceGrid";
 
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -33,6 +34,7 @@ import {
   Edit,
   ThumbsUp,
   FileSpreadsheet,
+  LayoutGrid,
   FileText,
   PieChart,
   BarChart3,
@@ -142,6 +144,7 @@ import {
 } from "../hooks/useImpactoData";
 import { Button, Input, Card, Badge, Avatar, ProgressBar, EmptyState, Modal, Table } from "../components/ui";
 import { MockDB } from "../lib/mockData";
+import { canAccessFeature, getOrgSubscriptionLifecycle, ADDON_PACKAGES } from "../lib/subscriptionMatrix";
 
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { useToast } from "../components/Toast";
@@ -724,7 +727,7 @@ export const DashboardHome: React.FC = () => {
         {activeOrg?.subscription_status === "trial" && (
           <div className="px-4 py-2.5 bg-amber-550/10 border border-amber-500/20 text-amber-800 dark:text-amber-400 rounded-xl text-xs font-semibold leading-normal flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
-            {t("dashboard_labels.active_trial")} {new Date(activeOrg.subscription_ends_at || "").toLocaleDateString()})
+            {t("dashboard_labels.active_trial")} {activeOrg?.subscription_ends_at ? new Date(activeOrg.subscription_ends_at).toLocaleDateString() : ""}
           </div>
         )}
       </div>
@@ -1762,7 +1765,11 @@ export const ChatRoom: React.FC = () => {
   const [newChanCategory, setNewChanCategory] = useState("general");
   const [newChanPrivate, setNewChanPrivate] = useState(false);
 
+  const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
+  const isFreePlan = lifecycle.effectiveTier === "free";
+
   const [openPollModal, setOpenPollModal] = useState(false);
+  const [showPollUpgradeModal, setShowPollUpgradeModal] = useState(false);
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOpts, setPollOpts] = useState(["", "", ""]);
   const [pollError, setPollError] = useState("");
@@ -2198,6 +2205,13 @@ export const ChatRoom: React.FC = () => {
   const handleCreatePollSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPollError("");
+
+    if (isFreePlan) {
+      setPollError("Live community polls require Starter, Growth, or Pro. Please upgrade your organization plan.");
+      setShowPollUpgradeModal(true);
+      addToast("Community polls are locked on the Free plan. Please upgrade to unlock.", "error");
+      return;
+    }
     const filteredOptions = pollOpts.map(o => o.trim()).filter(o => o !== "");
     if (!pollQuestion.trim()) {
       setPollError("Please specify a poll question.");
@@ -2386,9 +2400,36 @@ export const ChatRoom: React.FC = () => {
                 <span className="h-1.5 w-1.5 text-slate-300">•</span>
                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-mono">{activeChannel.channel_type || "General Room"}</span>
               </div>
-              <Badge color={activeChannel.is_private ? "amber" : "blue"}>
-                {activeChannel.is_private ? "Staff Only" : "Active Feed"}
-              </Badge>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isFreePlan) {
+                      setShowPollUpgradeModal(true);
+                      addToast("Upgrade to Growth to enable polls", "info");
+                      return;
+                    }
+                    setOpenPollModal(true);
+                  }}
+                  title={isFreePlan ? "Upgrade to Growth to enable polls" : "Launch Poll"}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-3xs cursor-pointer ${
+                    isFreePlan
+                      ? "bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
+                      : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800"
+                  }`}
+                >
+                  {isFreePlan ? <Lock className="h-3.5 w-3.5 text-amber-500" /> : <BarChart3 className="h-3.5 w-3.5 text-emerald-600" />}
+                  <span>Launch Poll</span>
+                  {isFreePlan && (
+                    <span className="hidden sm:inline-block text-[10px] text-amber-600 dark:text-amber-400 font-normal">
+                      (Upgrade to Growth to enable polls)
+                    </span>
+                  )}
+                </button>
+                <Badge color={activeChannel.is_private ? "amber" : "blue"}>
+                  {activeChannel.is_private ? "Staff Only" : "Active Feed"}
+                </Badge>
+              </div>
             </div>
 
             {/* Message Stream */}
@@ -2563,24 +2604,78 @@ export const ChatRoom: React.FC = () => {
                       <Paperclip className="h-5 w-5 text-indigo-500" /> Any Other Local File
                     </button>
                     <div className="h-px bg-gray-100 dark:border-slate-800 my-1" />
-                    <button type="button" onClick={() => { setOpenPollModal(true); setShowAttachMenu(false); }} className="w-full text-left px-3 py-2 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-bold cursor-pointer flex items-center gap-3 text-emerald-700 dark:text-emerald-400 text-[12px] transition">
-                      <PieChart className="h-5 w-5 text-emerald-500" /> Create Live Poll
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAttachMenu(false);
+                        if (isFreePlan) {
+                          setShowPollUpgradeModal(true);
+                          addToast("Upgrade to Growth to enable polls", "info");
+                          return;
+                        }
+                        setOpenPollModal(true);
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-lg font-bold cursor-pointer flex items-center justify-between text-[12px] transition ${
+                        isFreePlan
+                          ? "text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          : "text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                      }`}
+                      title={isFreePlan ? "Upgrade to Growth to enable polls" : "Launch Poll"}
+                    >
+                      <div className="flex items-center gap-3">
+                        <PieChart className={`h-5 w-5 ${isFreePlan ? "text-slate-400" : "text-emerald-500"}`} />
+                        <span>Launch Poll</span>
+                      </div>
+                      {isFreePlan && (
+                        <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/60 px-1.5 py-0.5 rounded">
+                          <Lock className="h-3 w-3" /> Upgrade to Growth
+                        </span>
+                      )}
                     </button>
                   </div>
                 )}
               </div>
 
-              {/* Dedicated Live Poll Trigger Icon next to the file/attachment wrapper */}
-              <Button
-                size="md"
-                variant="outline"
-                type="button"
-                onClick={() => setOpenPollModal(true)}
-                className="px-3 border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300 h-13 w-13 flex items-center justify-center transition-all hover:bg-emerald-100 dark:hover:bg-emerald-900/30 rounded-xl cursor-pointer shadow-sm shrink-0"
-                title="Create Live Decision Poll"
-              >
-                <BarChart3 className="h-7 w-7" />
-              </Button>
+              {/* Dedicated Live Poll Trigger Icon next to the file/attachment wrapper with Tooltip and Lock for Free Plan */}
+              <div className="relative group shrink-0">
+                <Button
+                  size="md"
+                  variant="outline"
+                  type="button"
+                  onClick={() => {
+                    if (isFreePlan) {
+                      setShowPollUpgradeModal(true);
+                      addToast("Upgrade to Growth to enable polls", "info");
+                      return;
+                    }
+                    setOpenPollModal(true);
+                  }}
+                  className={`px-3 h-13 w-13 flex items-center justify-center transition-all rounded-xl cursor-pointer shadow-xs shrink-0 relative ${
+                    isFreePlan
+                      ? "border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                      : "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/30"
+                  }`}
+                  title={isFreePlan ? "Upgrade to Growth to enable polls" : "Launch Poll"}
+                >
+                  <BarChart3 className="h-7 w-7" />
+                  {isFreePlan && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white rounded-full p-0.5 shadow-xs">
+                      <Lock className="h-3 w-3" />
+                    </span>
+                  )}
+                </Button>
+
+                {/* Free plan hover tooltip */}
+                {isFreePlan && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none">
+                    <div className="bg-slate-900 text-white text-[11px] font-medium py-1.5 px-3 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1.5 border border-slate-700">
+                      <Lock className="h-3 w-3 text-amber-400" />
+                      <span>Upgrade to Growth to enable polls</span>
+                    </div>
+                    <div className="w-2 h-2 bg-slate-900 rotate-45 -mt-1 border-r border-b border-slate-700"></div>
+                  </div>
+                )}
+              </div>
 
 
               <div className="flex-1 relative">
@@ -2849,6 +2944,53 @@ export const ChatRoom: React.FC = () => {
         </form>
       </Modal>
 
+      {/* Poll Upgrade Restriction Modal for Free Plan Users */}
+      <Modal open={showPollUpgradeModal} onClose={() => setShowPollUpgradeModal(false)} title="Upgrade to Growth to enable polls">
+        <div className="flex flex-col gap-4 p-2 text-center items-center">
+          <div className="h-14 w-14 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-inner">
+            <Lock className="h-7 w-7" />
+          </div>
+          <div className="space-y-1.5 max-w-sm">
+            <div className="inline-block px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 text-[10px] font-bold uppercase tracking-wider font-mono">
+              Growth Plan Feature
+            </div>
+            <h4 className="text-base font-bold text-slate-900 dark:text-white">
+              Upgrade to Growth to enable polls
+            </h4>
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              Real-time interactive decision polls and voting are restricted on the Free plan. <strong>Upgrade to Growth to enable polls</strong> and unlock live consensus polling directly in your team channels.
+            </p>
+          </div>
+
+          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-xl text-left w-full text-xs space-y-1.5">
+            <span className="font-bold text-emerald-800 dark:text-emerald-300 block">With Growth and Pro Plans you get:</span>
+            <ul className="text-emerald-700 dark:text-emerald-400 text-[11px] space-y-1">
+              <li>• Unlimited interactive multi-choice decision polls</li>
+              <li>• Real-time anonymous or attributed vote auditing</li>
+              <li>• Automatic consensus calculation & exportable tallies</li>
+            </ul>
+          </div>
+
+          <div className="flex gap-3 w-full mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowPollUpgradeModal(false)}
+              className="flex-1 text-xs font-bold"
+            >
+              Maybe Later
+            </Button>
+            <Button
+              onClick={() => {
+                setShowPollUpgradeModal(false);
+                navigate("/dashboard/settings");
+              }}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs"
+            >
+              View Upgrade Plans
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* 3. Media / Document Inline Preview Modal */}
       {activePreviewDoc && (
@@ -3410,6 +3552,7 @@ export const MeetingsMinutes: React.FC = () => {
   const { t } = useLocalTranslation();
   const { activeOrg, activeMember } = useOrgStore();
   const { addToast } = useToast();
+  const navigate = useNavigate();
   const { data: meets, refetch } = useMeetings(activeOrg?.id);
   const createMutation = useCreateMeeting();
   const updateMutation = useUpdateMeeting();
@@ -3920,175 +4063,237 @@ export const MeetingsMinutes: React.FC = () => {
 
       {/* Meeting Attendance Modal */}
       <Modal open={!!attendanceMeeting} onClose={() => setAttendanceMeeting(null)} title={t("Meeting Attendance Checklist", "Meeting Attendance Checklist")}>
-        {attendanceMeeting && (
-          <div className="flex flex-col gap-4">
-            <p className="text-xs text-gray-500">
-              {t("Log which cooperative members checked-in and attended the physical or virtual session for **{title}**.", { title: attendanceMeeting.title })}
-            </p>
+        {attendanceMeeting && (() => {
+          const attendanceAccess = canAccessFeature(activeOrg, "qr_attendance");
+          const isAllowed = attendanceAccess.allowed;
 
-            {/* Attendance Fast Controls */}
-            <div className="flex items-center gap-3 justify-end border-b pb-3 mb-1">
-              <button
-                type="button"
-                onClick={() => {
-                  const allActive = orgMembersList?.filter(m => m.status === "active").map((m) => m.id) || [];
-                  setTempCheckedInIds(allActive);
-                }}
-                className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-xs font-bold transition flex items-center gap-1 cursor-pointer border border-emerald-200"
-              >
-                {t("Mark All Present")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setTempCheckedInIds([])}
-                className="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-800 hover:bg-rose-100 text-xs font-bold transition flex items-center gap-1 cursor-pointer border border-rose-200"
-              >
-                {t("Clear Attendance")}
-              </button>
-            </div>
+          return (
+            <div className="flex flex-col gap-4">
+              <p className="text-xs text-gray-500">
+                {t("Log which cooperative members checked-in and attended the physical or virtual session for **{title}**.", { title: attendanceMeeting.title })}
+              </p>
 
-            {/* Filter Input */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder={t("Filter members by name...")}
-                value={attendanceSearch}
-                onChange={(e) => setAttendanceSearch(e.target.value)}
-                className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 pl-9 pr-4 py-2 outline-none focus:ring-1 focus:ring-emerald-600 text-stone-850 dark:text-white transition"
-              />
-            </div>
-
-            {/* Attendees list */}
-            <div className="max-h-72 overflow-y-auto flex flex-col gap-1.5 pr-1 py-1">
-              {orgMembersList && orgMembersList.filter(m => m.status === "active").length > 0 ? (
-                orgMembersList
-                  .filter(m => m.status === "active")
-                  .filter(m => !attendanceSearch || m.user?.full_name?.toLowerCase().includes(attendanceSearch.toLowerCase()))
-                  .map((m) => {
-                    const isChecked = tempCheckedInIds.includes(m.id);
-                    // Load any attendance mismatch details
-                    const detailKey = `meet_att_detail_${attendanceMeeting.id}_${m.id}`;
-                    const detail = (() => {
-                      try {
-                        const stored = localStorage.getItem(detailKey);
-                        return stored ? JSON.parse(stored) : null;
-                      } catch (_) {
-                        return null;
-                      }
-                    })();
-
-                    return (
-                      <div
-                        key={m.id}
-                        className={`flex items-center justify-between p-3 rounded-xl border transition-all select-none ${
-                          isChecked
-                            ? "bg-emerald-50/70 border-emerald-200 dark:bg-emerald-950/20"
-                            : "bg-white border-gray-150 hover:bg-gray-50/55 dark:bg-slate-900 dark:border-slate-800"
-                        }`}
+              {!isAllowed && (
+                <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-start gap-3">
+                  <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 text-xs">
+                    <p className="font-bold text-amber-900 dark:text-amber-200">Attendance Marking Locked on Free Forever Plan</p>
+                    <p className="text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">
+                      Marking live member attendance is disabled on the Free tier. Unlock attendance marking across all events and meetings with the <strong>Event & Attendance Package ($4/mo / 5,000 RWF)</strong> or by upgrading to <strong>Starter, Growth, or Pro</strong>.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-1.5 px-3 rounded-xl cursor-pointer"
+                        onClick={() => {
+                          setAttendanceMeeting(null);
+                          navigate("/dashboard/settings");
+                        }}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="h-7 w-7 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shadow-xs border border-emerald-200">
-                            {m.user?.full_name?.charAt(0).toUpperCase() || "?"}
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-xs font-bold text-gray-800 dark:text-slate-200">
-                              {m.user?.full_name || "Anonymous Member"}
-                            </span>
-                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                              <span className="text-[10px] text-gray-400 font-mono">
-                                Role: {m.role}
+                        Activate Event Package ($4/mo) / Upgrade
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Attendance Fast Controls */}
+              <div className="flex items-center gap-3 justify-end border-b pb-3 mb-1">
+                <button
+                  type="button"
+                  disabled={!isAllowed}
+                  onClick={() => {
+                    if (!isAllowed) {
+                      addToast("Marking attendance requires the Event Package or a Paid Plan.", "error");
+                      return;
+                    }
+                    const allActive = orgMembersList?.filter(m => m.status === "active").map((m) => m.id) || [];
+                    setTempCheckedInIds(allActive);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 border ${
+                    !isAllowed
+                      ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                      : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 cursor-pointer border-emerald-200"
+                  }`}
+                >
+                  {t("Mark All Present")}
+                </button>
+                <button
+                  type="button"
+                  disabled={!isAllowed}
+                  onClick={() => {
+                    if (!isAllowed) return;
+                    setTempCheckedInIds([]);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 border ${
+                    !isAllowed
+                      ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                      : "bg-rose-50 text-rose-800 hover:bg-rose-100 cursor-pointer border-rose-200"
+                  }`}
+                >
+                  {t("Clear Attendance")}
+                </button>
+              </div>
+
+              {/* Filter Input */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder={t("Filter members by name...")}
+                  value={attendanceSearch}
+                  onChange={(e) => setAttendanceSearch(e.target.value)}
+                  className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 pl-9 pr-4 py-2 outline-none focus:ring-1 focus:ring-emerald-600 text-stone-850 dark:text-white transition"
+                />
+              </div>
+
+              {/* Attendees list */}
+              <div className="max-h-72 overflow-y-auto flex flex-col gap-1.5 pr-1 py-1">
+                {orgMembersList && orgMembersList.filter(m => m.status === "active").length > 0 ? (
+                  orgMembersList
+                    .filter(m => m.status === "active")
+                    .filter(m => !attendanceSearch || m.user?.full_name?.toLowerCase().includes(attendanceSearch.toLowerCase()))
+                    .map((m) => {
+                      const isChecked = tempCheckedInIds.includes(m.id);
+                      // Load any attendance mismatch details
+                      const detailKey = `meet_att_detail_${attendanceMeeting.id}_${m.id}`;
+                      const detail = (() => {
+                        try {
+                          const stored = localStorage.getItem(detailKey);
+                          return stored ? JSON.parse(stored) : null;
+                        } catch (_) {
+                          return null;
+                        }
+                      })();
+
+                      return (
+                        <div
+                          key={m.id}
+                          className={`flex items-center justify-between p-3 rounded-xl border transition-all select-none ${
+                            isChecked
+                              ? "bg-emerald-50/70 border-emerald-200 dark:bg-emerald-950/20"
+                              : "bg-white border-gray-150 hover:bg-gray-50/55 dark:bg-slate-900 dark:border-slate-800"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-7 w-7 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shadow-xs border border-emerald-200">
+                              {m.user?.full_name?.charAt(0).toUpperCase() || "?"}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-gray-800 dark:text-slate-200">
+                                {m.user?.full_name || "Anonymous Member"}
                               </span>
-                              {detail && (
-                                <>
-                                  <span className="text-gray-300">•</span>
-                                  {detail.status === "mismatch" && (
-                                    <span className="px-1.5 py-0.5 rounded-lg bg-amber-50 text-amber-800 font-mono text-[9px] border border-amber-200 flex items-center gap-1">
-                                      ⚠️ Tried to Attend (Geofence Mismatch: {detail.distance_meters?.toFixed(0)}m away)
-                                    </span>
-                                  )}
-                                  {detail.status === "attempted" && (
-                                    <span className="px-1.5 py-0.5 rounded-lg bg-orange-50 text-orange-800 font-mono text-[9px] border border-orange-200 flex items-center gap-1">
-                                      ⚠️ Tried to Attend (GPS Blocked)
-                                    </span>
-                                  )}
-                                  {detail.status === "present" && (
-                                    <span className="px-1.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 font-mono text-[9px] border border-emerald-200 flex items-center gap-1">
-                                      ✅ Verified GPS ({detail.check_in_method === "online_confirm" ? "Online Confirm" : "On-Site"})
-                                    </span>
-                                  )}
-                                </>
-                              )}
+                              <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] text-gray-400 font-mono">
+                                  Role: {m.role}
+                                </span>
+                                {detail && (
+                                  <>
+                                    <span className="text-gray-300">•</span>
+                                    {detail.status === "mismatch" && (
+                                      <span className="px-1.5 py-0.5 rounded-lg bg-amber-50 text-amber-800 font-mono text-[9px] border border-amber-200 flex items-center gap-1">
+                                        ⚠️ Tried to Attend (Geofence Mismatch: {detail.distance_meters?.toFixed(0)}m away)
+                                      </span>
+                                    )}
+                                    {detail.status === "attempted" && (
+                                      <span className="px-1.5 py-0.5 rounded-lg bg-orange-50 text-orange-800 font-mono text-[9px] border border-orange-200 flex items-center gap-1">
+                                        ⚠️ Tried to Attend (GPS Blocked)
+                                      </span>
+                                    )}
+                                    {detail.status === "present" && (
+                                      <span className="px-1.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 font-mono text-[9px] border border-emerald-200 flex items-center gap-1">
+                                        ✅ Verified GPS ({detail.check_in_method === "online_confirm" ? "Online Confirm" : "On-Site"})
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-3">
-                          {!isChecked && detail && (detail.status === "mismatch" || detail.status === "attempted") && (
-                            <button
-                              type="button"
-                              onClick={() => setTempCheckedInIds([...tempCheckedInIds, m.id])}
-                              className="px-2 py-1 rounded bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-[10px] tracking-wide transition cursor-pointer"
-                            >
-                              Approve Presence
-                            </button>
-                          )}
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setTempCheckedInIds([...tempCheckedInIds, m.id]);
-                              } else {
-                                setTempCheckedInIds(tempCheckedInIds.filter(id => id !== m.id));
-                              }
-                            }}
-                            className="h-4.5 w-4.5 text-emerald-600 rounded bg-white border-gray-300 focus:ring-[var(--org-primary)] cursor-pointer"
-                          />
+                          <div className="flex items-center gap-3">
+                            {!isChecked && detail && (detail.status === "mismatch" || detail.status === "attempted") && isAllowed && (
+                              <button
+                                type="button"
+                                onClick={() => setTempCheckedInIds([...tempCheckedInIds, m.id])}
+                                className="px-2 py-1 rounded bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-[10px] tracking-wide transition cursor-pointer"
+                              >
+                                Approve Presence
+                              </button>
+                            )}
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              disabled={!isAllowed}
+                              onChange={(e) => {
+                                if (!isAllowed) {
+                                  addToast("Marking attendance requires the Event Package or a Paid Plan.", "error");
+                                  return;
+                                }
+                                if (e.target.checked) {
+                                  setTempCheckedInIds([...tempCheckedInIds, m.id]);
+                                } else {
+                                  setTempCheckedInIds(tempCheckedInIds.filter(id => id !== m.id));
+                                }
+                              }}
+                              className={`h-4.5 w-4.5 text-emerald-600 rounded bg-white border-gray-300 focus:ring-[var(--org-primary)] ${
+                                !isAllowed ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                              }`}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })
-              ) : (
-                <p className="text-center py-6 text-xs text-stone-400 font-medium font-sans">
-                  {t("No members registered in this cooperative organization workspace yet.")}
-                </p>
-              )}
-            </div>
+                      );
+                    })
+                ) : (
+                  <p className="text-center py-6 text-xs text-stone-400 font-medium font-sans">
+                    {t("No members registered in this cooperative organization workspace yet.")}
+                  </p>
+                )}
+              </div>
 
-            {/* Bottom Actions */}
-            <div className="flex items-center justify-between border-t pt-4 mt-2">
-              <span className="text-xs font-bold text-stone-500 font-mono font-sans">
-                {tempCheckedInIds.length} {t("Present")} / {(orgMembersList?.filter(m => m.status === "active") || []).length} {t("Active")}
-              </span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setAttendanceMeeting(null)}>
-                  {t("Cancel")}
-                </Button>
-                <Button
-                  size="sm"
-                  loading={saveAttendanceMutation.isPending}
-                  className="bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white font-bold cursor-pointer transition flex items-center gap-1.5"
-                  onClick={async () => {
-                    try {
-                      await saveAttendanceMutation.mutateAsync({
-                        meetingId: attendanceMeeting.id,
-                        memberIds: tempCheckedInIds
-                      });
-                      addToast(t("Meeting attendance log updated successfully."), "success");
-                      setAttendanceMeeting(null);
-                      refetch();
-                    } catch (err: any) {
-                      addToast(err?.message || t("Failed to save meeting attendance"), "error");
-                    }
-                  }}
-                >
-                  {t("Submit Attendance")}
-                </Button>
+              {/* Bottom Actions */}
+              <div className="flex items-center justify-between border-t pt-4 mt-2">
+                <span className="text-xs font-bold text-stone-500 font-mono font-sans">
+                  {tempCheckedInIds.length} {t("Present")} / {(orgMembersList?.filter(m => m.status === "active") || []).length} {t("Active")}
+                </span>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setAttendanceMeeting(null)}>
+                    {t("Cancel")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!isAllowed}
+                    loading={saveAttendanceMutation.isPending}
+                    className={`font-bold transition flex items-center gap-1.5 ${
+                      !isAllowed
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        : "bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white cursor-pointer"
+                    }`}
+                    onClick={async () => {
+                      if (!isAllowed) {
+                        addToast("Marking attendance requires the Event Package or a Paid Plan.", "error");
+                        return;
+                      }
+                      try {
+                        await saveAttendanceMutation.mutateAsync({
+                          meetingId: attendanceMeeting.id,
+                          memberIds: tempCheckedInIds
+                        });
+                        addToast(t("Meeting attendance log updated successfully."), "success");
+                        setAttendanceMeeting(null);
+                        refetch();
+                      } catch (err: any) {
+                        addToast(err?.message || t("Failed to save meeting attendance"), "error");
+                      }
+                    }}
+                  >
+                    {t("Submit Attendance")}
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </Modal>
 
       {/* QR Code Ticket Modal */}
@@ -5532,6 +5737,7 @@ export const EventsCalendar: React.FC = () => {
   const { activeOrg, activeMember } = useOrgStore();
   const { addToast } = useToast();
   const { t } = useLocalTranslation();
+  const navigate = useNavigate();
   const { data, refetch } = useEvents(activeOrg?.id);
   const events = (data || []) as ImpactEvent[];
   const createMutation = useCreateEvent();
@@ -5558,6 +5764,11 @@ export const EventsCalendar: React.FC = () => {
 
   const canManageEvents = Boolean(activeMember?.role && activeMember?.role !== "member");
   const isAdmin = canManageEvents;
+
+  const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
+  const attAccess = canAccessFeature(activeOrg, "qr_attendance");
+  const isPaidPlan = lifecycle.effectiveTier !== "free" || attAccess.allowed;
+  const [viewMode, setViewMode] = useState<"grid" | "schedule">("grid");
 
   const exportAttendanceMatrixExcel = () => {
     const activeMembers = orgMembers?.filter((m) => m.status === "active") || [];
@@ -5766,21 +5977,98 @@ export const EventsCalendar: React.FC = () => {
           <h2 className="text-xl md:text-2xl font-bold font-display text-gray-901">{t("dashboard_labels.events_board_title")}</h2>
           <p className="text-xs text-gray-500 font-medium">{t("dashboard_labels.events_board_subtitle")}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Direct Local Excel Export: direct, prominent, and unblocked for Free plan users */}
+          <Button
+            size="sm"
+            variant="outline"
+            icon={<FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
+            onClick={exportAttendanceMatrixExcel}
+            className="border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 font-bold text-xs shadow-xs cursor-pointer"
+            title="Export full attendance matrix to local Excel file"
+          >
+            {isPaidPlan ? "Export Master Matrix (Excel)" : "Export Local Attendance (Excel)"}
+          </Button>
           {isAdmin && (
-            <>
-              <Button size="sm" variant="outline" icon={<FileSpreadsheet className="h-4 w-4 text-[#156c45] dark:text-emerald-400" />} onClick={exportAttendanceMatrixExcel}>
-                Export Master Matrix (Excel)
-              </Button>
-              <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setOpenAddModal(true)}>
-                {t("dashboard_labels.schedule_session")}
-              </Button>
-            </>
+            <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setOpenAddModal(true)}>
+              {t("dashboard_labels.schedule_session")}
+            </Button>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* View Mode Switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/40 p-2 rounded-2xl border border-slate-200/70 dark:border-slate-800">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-200/60 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+          <button
+            type="button"
+            onClick={() => setViewMode("grid")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              viewMode === "grid"
+                ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            <span>Dynamic Matrix Grid (Users in Columns, Events in Rows)</span>
+            {isPaidPlan ? (
+              <span className="text-[9px] font-mono bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded font-bold">
+                Paid Live
+              </span>
+            ) : (
+              <span className="text-[9px] font-mono bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 px-1.5 py-0.2 rounded font-bold">
+                Free Mode
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("schedule")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              viewMode === "schedule"
+                ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            }`}
+          >
+            <CalendarDays className="h-3.5 w-3.5" />
+            <span>Event Schedule & Session Roster</span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+          <span>Events: <strong>{events.length}</strong></span>
+          <span>•</span>
+          <span>Active Members: <strong>{orgMembers?.filter(m => m.status === 'active').length || 0}</strong></span>
+        </div>
+      </div>
+
+      {viewMode === "grid" ? (
+        <DynamicAttendanceGrid
+          events={events}
+          members={orgMembers || []}
+          allAttendance={allAttendanceData || []}
+          isPaidPlan={isPaidPlan}
+          activeOrg={activeOrg}
+          canManageAttendance={canManageEvents}
+          onCheckIn={async (eventId, memberId) => {
+            await checkInMutation.mutateAsync({
+              event_id: eventId,
+              member_id: memberId,
+              method: "manual",
+            });
+            refetchAttendance();
+          }}
+          onCheckOut={async (eventId, memberId) => {
+            await checkOutMutation.mutateAsync({
+              event_id: eventId,
+              member_id: memberId,
+            });
+            refetchAttendance();
+          }}
+          addToast={addToast}
+        />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Events Schedule list */}
         <div className="lg:col-span-2 flex flex-col gap-6">
           <div className="relative w-full max-w-sm mb-2">
@@ -5821,14 +6109,18 @@ export const EventsCalendar: React.FC = () => {
                   <span>Venue: <span className="text-gray-901">{ev.location}</span></span>
                 </div>
 
-                {isAdmin && (
-                  <div className="flex justify-between items-center mt-6 pt-4 border-t border-dashed leading-none select-none shrink-0">
-                    <span className="text-[10px] text-emerald-600 font-mono">Click to load checklist</span>
-                    <Button size="sm" variant={selectedEvent?.id === ev.id ? "default" : "outline"} onClick={() => setSelectedEvent(ev)}>
-                      Mark Attendance
-                    </Button>
-                  </div>
-                )}
+                {isAdmin && (() => {
+                  const attAccess = canAccessFeature(activeOrg, "qr_attendance");
+                  return (
+                    <div className="flex justify-between items-center mt-6 pt-4 border-t border-dashed leading-none select-none shrink-0">
+                      <span className="text-[10px] text-emerald-600 font-mono">Click to load checklist</span>
+                      <Button size="sm" variant={selectedEvent?.id === ev.id ? "default" : "outline"} onClick={() => setSelectedEvent(ev)} className="flex items-center gap-1.5">
+                        {!attAccess.allowed && <Lock className="h-3 w-3 text-amber-500" />}
+                        {attAccess.allowed ? "Mark Attendance" : "View Attendance"}
+                      </Button>
+                    </div>
+                  );
+                })()}
               </Card>
             );
           })
@@ -5840,7 +6132,11 @@ export const EventsCalendar: React.FC = () => {
         {/* Attendance Tracker Roster Widget with Checkboxes */}
         <div className="flex flex-col gap-6">
           <Card title="Event Attendance Checklist">
-            {selectedEvent ? (
+            {selectedEvent ? (() => {
+              const attAccess = canAccessFeature(activeOrg, "qr_attendance");
+              const isAllowed = attAccess.allowed;
+
+              return (
               <div className="space-y-4">
                 <div className="border-b pb-3 space-y-1.5 text-xs">
                   <span className="text-[10px] uppercase font-black tracking-wider text-emerald-800">Selected Event</span>
@@ -5850,6 +6146,27 @@ export const EventsCalendar: React.FC = () => {
                     <span>Total: {orgMembers?.filter((m) => m.status === "active").length || 0} active</span>
                   </div>
                 </div>
+
+                {!isAllowed && (
+                  <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-start gap-2.5">
+                    <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="text-xs">
+                      <p className="font-bold text-amber-900 dark:text-amber-200">Attendance Marking Locked on Free Plan</p>
+                      <p className="text-amber-700 dark:text-amber-300 mt-1 leading-relaxed text-[11px]">
+                        Marking attendance is disabled on the Free Forever plan. Activate the <strong>Event & Attendance Package ($4/mo / 5,000 RWF)</strong> or upgrade your plan to mark attendance.
+                      </p>
+                      <div className="mt-2.5">
+                        <Button
+                          size="sm"
+                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] py-1 px-2.5 rounded-lg cursor-pointer"
+                          onClick={() => navigate("/dashboard/settings")}
+                        >
+                          Activate Event Package ($4/mo) / Upgrade
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Live Filter */}
                 <Input
@@ -5870,10 +6187,12 @@ export const EventsCalendar: React.FC = () => {
                         return (
                           <label
                             key={m.id}
-                            className={`flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-colors ${
-                              isPresent
-                                ? "bg-emerald-50/70 hover:bg-emerald-100/60 dark:bg-emerald-990/40"
-                                : "hover:bg-white dark:hover:bg-slate-900"
+                            className={`flex items-center justify-between p-2.5 rounded-lg transition-colors ${
+                              !isAllowed
+                                ? "cursor-not-allowed opacity-75"
+                                : isPresent
+                                ? "bg-emerald-50/70 hover:bg-emerald-100/60 dark:bg-emerald-990/40 cursor-pointer"
+                                : "hover:bg-white dark:hover:bg-slate-900 cursor-pointer"
                             }`}
                           >
                             <div className="flex flex-col leading-snug">
@@ -5884,7 +6203,12 @@ export const EventsCalendar: React.FC = () => {
                             <input
                               type="checkbox"
                               checked={!!isPresent}
+                              disabled={!isAllowed}
                               onChange={async (e) => {
+                                if (!isAllowed) {
+                                  addToast("Marking attendance requires the Event Package or a Paid Plan.", "error");
+                                  return;
+                                }
                                 const checked = e.target.checked;
                                 try {
                                   if (checked) {
@@ -5905,7 +6229,9 @@ export const EventsCalendar: React.FC = () => {
                                   addToast(err.message || "Attendance modification failed", "error");
                                 }
                               }}
-                              className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 rounded border-gray-300 transition cursor-pointer"
+                              className={`h-4 w-4 text-emerald-600 focus:ring-emerald-500 rounded border-gray-300 transition ${
+                                !isAllowed ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                              }`}
                             />
                           </label>
                         );
@@ -5916,7 +6242,9 @@ export const EventsCalendar: React.FC = () => {
                 </div>
 
                 <div className="text-[10px] text-gray-400 italic leading-relaxed text-center">
-                  Checkboxes verify member presence immediately in local files and active cloud schemas. Left unchecked, members are set to Absent.
+                  {isAllowed 
+                    ? "Checkboxes verify member presence immediately in local files and active cloud schemas. Left unchecked, members are set to Absent."
+                    : "Attendance modifications are read-only on the Free plan."}
                 </div>
 
                 <Button
@@ -5930,7 +6258,8 @@ export const EventsCalendar: React.FC = () => {
                   Submit & Export Attendance (Excel)
                 </Button>
               </div>
-            ) : (
+              );
+            })() : (
               <div className="text-center py-10">
                 <CalendarDays className="h-10 w-10 text-gray-300 mx-auto mb-2" />
                 <p className="text-xs text-gray-500 max-w-xs mx-auto">
@@ -5941,6 +6270,7 @@ export const EventsCalendar: React.FC = () => {
           </Card>
         </div>
       </div>
+      )}
 
       {/* Edit event Modal */}
       <Modal open={openEditModal} onClose={() => setOpenEditModal(false)} title="Edit Scheduled Session">

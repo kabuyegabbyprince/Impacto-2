@@ -250,7 +250,7 @@ export const PublicOrgPage: React.FC = () => {
               if (gData) setGoals(gData as Goal[]);
 
               const { data: nData } = await supabase
-                .from("news")
+                .from("news_posts")
                 .select("*")
                 .eq("org_id", matchedOrg.id);
               if (nData) setNews(nData as NewsPost[]);

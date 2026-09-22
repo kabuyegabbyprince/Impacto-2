@@ -48,10 +48,11 @@ import {
 } from "./dash";
 
 import { V2AdvancedFeatures } from "./components/V2AdvancedFeatures";
+import { AuditLogsDashboard } from "./components/AuditLogsDashboard";
 
 // Guard Gatewards & Layouts
 import { PrivateRoute, OrgRoute, AdminRoute, AccountantRoute, PlatformRoute, AuditorRoute } from "./components/guards";
-import { DashboardLayout } from "./components/layout";
+import { DashboardLayout, OrgThemeInjector } from "./components/layout";
 import { AuditorDashboard } from "./pages/auditorDashboard";
 
 import { ToastProvider } from "./components/Toast";
@@ -142,7 +143,7 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false, // Prevent refetching when window regains focus to save egress
       refetchOnReconnect: false,   // Prevent refetching on network reconnect spikes
-      retry: 1,                    // Limit retries
+      retry: 0,                    // Do not loop on failures
       staleTime: 5 * 60 * 1000,    // 5 minutes stale time so data is served from local cache instantly
       gcTime: 30 * 60 * 1000,      // 30 minutes garbage collection cache retention
     }
@@ -159,6 +160,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <Router>
+          <OrgThemeInjector />
           <Routes>
             {/* ==========================================
                 1. PORTAL ENTRANCE & VERIFICATION & PUBLIC PROFILE
@@ -391,6 +393,17 @@ export default function App() {
                 <AdminRoute>
                   <DashboardLayout>
                     <AnnualReports />
+                  </DashboardLayout>
+                </AdminRoute>
+              }
+            />
+
+            <Route
+              path="/dashboard/audit-logs"
+              element={
+                <AdminRoute>
+                  <DashboardLayout>
+                    <AuditLogsDashboard />
                   </DashboardLayout>
                 </AdminRoute>
               }

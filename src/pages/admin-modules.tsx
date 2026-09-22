@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { useLocalTranslation } from "../locales/additional-translations";
@@ -27,6 +27,7 @@ import {
   TrendingUp,
   SlidersHorizontal,
   Mail,
+  FileSpreadsheet,
   AlertCircle,
   AlertTriangle,
   Crown,
@@ -79,6 +80,8 @@ import { Button, Input, Card, Badge, Avatar, Table, Modal, EmptyState } from "..
 import { useToast } from "../components/Toast";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { PlanGatedView } from "../components/PlanGatedView";
+import { EmptyLedgerState, EmptyGrantsState, EmptyReportsState } from "../components/EmptyModuleStates";
+import { BulkMemberInviteModal } from "../components/BulkMemberInviteModal";
 
 // ==========================================
 // 1. ROSTER MEMBERS LISTS (Admin Route)
@@ -318,6 +321,7 @@ export const MembersManagement: React.FC = () => {
   };
 
   const [openInviteModal, setOpenInviteModal] = useState(false);
+  const [openBulkInviteModal, setOpenBulkInviteModal] = useState(false);
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"org_admin" | "member">("member");
@@ -616,9 +620,19 @@ export const MembersManagement: React.FC = () => {
           <h2 className="text-xl md:text-2xl font-bold font-display text-slate-900 dark:text-white leading-none">{t("members_dir_title")}</h2>
           <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">{t("members_dir_subtitle")}</p>
         </div>
-        <Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpenInviteModal(true)} className="rounded-xl bg-emerald-700 hover:bg-emerald-800">
-          {t("btn_invite_member")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            icon={<FileSpreadsheet className="h-4 w-4 text-emerald-600" />}
+            onClick={() => setOpenBulkInviteModal(true)}
+            className="rounded-xl text-xs font-bold"
+          >
+            Bulk Invite (CSV / List)
+          </Button>
+          <Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpenInviteModal(true)} className="rounded-xl bg-emerald-700 hover:bg-emerald-800">
+            {t("btn_invite_member")}
+          </Button>
+        </div>
       </div>
 
       {isOverLimit && (
@@ -1482,6 +1496,17 @@ export const MembersManagement: React.FC = () => {
         </form>
       </Modal>
 
+      {/* Bulk Member Invite modal */}
+      <BulkMemberInviteModal
+        open={openBulkInviteModal}
+        onClose={() => setOpenBulkInviteModal(false)}
+        onSuccess={() => refetch()}
+        activeMembersCount={activeMembersCount}
+        currentLimit={currentLimit}
+        orgTier={orgTier}
+        existingEmails={(members || []).map((m: any) => m.email || m.user?.email || "").filter(Boolean)}
+      />
+
       {/* Log Hours and Task modal */}
       <Modal open={openHourLogModal} onClose={() => setOpenHourLogModal(false)} title={t("modal_log_contribution_title")}>
         <form onSubmit={handleLogHours} className="flex flex-col gap-4">
@@ -2269,7 +2294,14 @@ export const LedgerBookkeeping: React.FC = () => {
               </Button>
             </div>
 
-            <Table columns={columns} data={ledger || []} emptyMessage={t("empty_transactions")} />
+            {(!ledger || ledger.length === 0) ? (
+              <EmptyLedgerState
+                onAddTransaction={() => setOpenAddModal(true)}
+                onBatchEntry={() => setOpenAddModal(true)}
+              />
+            ) : (
+              <Table columns={columns} data={ledger || []} emptyMessage={t("empty_transactions")} />
+            )}
 
             {/* Add Entry Modal */}
             <Modal open={openAddModal} onClose={() => setOpenAddModal(false)} title={t("modal_ledger_title")}>
@@ -3040,7 +3072,10 @@ export const GrantsTracker: React.FC<GrantsTrackerProps> = ({ defaultTab = "gran
             })
           ) : (
             <div className="col-span-1 md:col-span-2">
-              <EmptyState title={t("empty_grants")} message={t("empty_grants_msg")} />
+              <EmptyGrantsState
+                onAddGrant={() => setOpenAddGrantModal(true)}
+                onAddDonation={() => setOpenAddDonationModal(true)}
+              />
             </div>
           )}
         </div>
@@ -3312,6 +3347,7 @@ export const AnnualReports: React.FC = () => {
   const { t } = useLocalTranslation();
   const { activeOrg } = useOrgStore();
   const { formatAmount } = useCurrencyStore();
+  const navigate = useNavigate();
   const [downloading, setDownloading] = useState(false);
   const [activeReportSubTab, setActiveReportSubTab] = useState<"real_time" | "annual_audit" | "rca_compliance">("real_time");
 
@@ -3492,6 +3528,12 @@ export const AnnualReports: React.FC = () => {
       </div>
 
       {activeReportSubTab === "real_time" && (
+        (!ledger || ledger.length === 0) && (!goals || goals.length === 0) ? (
+          <EmptyReportsState
+            onRecordTransactions={() => navigate("/dashboard/ledger")}
+            onDefineGoals={() => navigate("/dashboard/goals")}
+          />
+        ) : (
         <div className="flex flex-col gap-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm flex flex-col justify-between">
@@ -3570,6 +3612,7 @@ export const AnnualReports: React.FC = () => {
             </div>
           </div>
         </div>
+        )
       )}
 
       {activeReportSubTab === "annual_audit" && (

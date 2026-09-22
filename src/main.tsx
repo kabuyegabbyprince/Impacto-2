@@ -17,9 +17,9 @@ if (typeof window !== "undefined") {
       low.includes("failed to fetch")
     ) {
       event.preventDefault();
-      console.warn("[Impacto] Handled transient network/rejection notice:", reason);
+      event.stopImmediatePropagation();
     }
-  });
+  }, true);
 
   window.addEventListener("error", (event) => {
     const msg = event.message || "";
@@ -30,9 +30,9 @@ if (typeof window !== "undefined") {
       low.includes("failed to fetch")
     ) {
       event.preventDefault();
-      console.warn("[Impacto] Handled transient network error:", msg);
+      event.stopImmediatePropagation();
     }
-  });
+  }, true);
 }
 
 // Forces light mode by default unless stored otherwise

@@ -48,6 +48,7 @@ export interface Organization {
   subscription_status: "trial" | "active" | "expired";
   subscription_ends_at?: string;
   subscription_tier?: "trial" | "starter" | "growth" | "enterprise" | "free" | "pro";
+  subscription_plan?: string;
   active_packages?: string[];
   packages_data?: Record<string, { expires_at: string; purchased_at: string }>;
   org_category: string;

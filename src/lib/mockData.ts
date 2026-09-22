@@ -206,7 +206,20 @@ export class MockDB {
   }
   static saveResignations(data: any[]) { saveLocal("impacto_mock_resignations", data); }
 
-  static getAuditLogs(): any[] { return getLocal("impacto_mock_audit_logs", []); }
+  static getAuditLogs(): any[] {
+    const stored = getLocal("impacto_mock_audit_logs", []);
+    if (Array.isArray(stored) && stored.length > 0) {
+      // Strip any legacy hardcoded static mock logs (e.g. audit-1 through audit-8)
+      const staticIds = new Set(["audit-1", "audit-2", "audit-3", "audit-4", "audit-5", "audit-6", "audit-7", "audit-8"]);
+      const filtered = stored.filter((log: any) => !staticIds.has(log.id));
+      if (filtered.length !== stored.length) {
+        saveLocal("impacto_mock_audit_logs", filtered);
+        return filtered;
+      }
+      return stored;
+    }
+    return [];
+  }
   static saveAuditLogs(data: any[]) { saveLocal("impacto_mock_audit_logs", data); }
 
   static getSupportConversations(): any[] { return getLocal("impacto_mock_support_conversations", []); }

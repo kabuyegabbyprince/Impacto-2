@@ -35,11 +35,29 @@
           }
         }, true);
 
+        if (typeof window.fetch === "function") {
+          var nativeFetch = window.fetch;
+          window.fetch = function() {
+            var fetchArgs = arguments;
+            return nativeFetch.apply(window, fetchArgs).catch(function(err) {
+              var errMsg = err && (err.message || String(err));
+              if (errMsg && String(errMsg).toLowerCase().indexOf("failed to fetch") !== -1) {
+                return new Response(JSON.stringify({ error: "Network unavailable", message: errMsg, data: null }), {
+                  status: 503,
+                  statusText: "Service Unavailable",
+                  headers: { "Content-Type": "application/json" }
+                });
+              }
+              return Promise.reject(err);
+            });
+          };
+        }
+
         var origConsoleError = console.error;
         console.error = function() {
           var args = Array.prototype.slice.call(arguments);
           var joined = args.map(function(a) { return (a && a.message) || String(a); }).join(" ");
-          if (isWeb3Error(joined)) {
+          if (isIgnoredError(joined)) {
             return;
           }
           return origConsoleError.apply(console, arguments);
@@ -82,11 +100,41 @@
           "url": "https://impact-o.app",
           "description": "A complete organization management system with a free forever plan for cooperatives, NGOs, and community associations to coordinate members, audit Mobile Money dues, and publish official documents.",
           "offers": {
-            "@type": "Offer",
-            "price": "0",
+            "@type": "AggregateOffer",
             "priceCurrency": "USD",
-            "name": "Free Forever Plan",
-            "category": "Free"
+            "lowPrice": "0",
+            "highPrice": "40",
+            "offerCount": "4",
+            "offers": [
+              {
+                "@type": "Offer",
+                "name": "Free Forever Plan",
+                "price": "0",
+                "priceCurrency": "USD",
+                "description": "Full access to branded public portal, member roster up to 50 members, and local Excel exports."
+              },
+              {
+                "@type": "Offer",
+                "name": "Starter Plan",
+                "price": "10",
+                "priceCurrency": "USD",
+                "description": "Up to 100 members, donor campaigns, community event calendar, and 1 GB cloud storage."
+              },
+              {
+                "@type": "Offer",
+                "name": "Growth Plan",
+                "price": "25",
+                "priceCurrency": "USD",
+                "description": "Up to 500 members, rich media chat, in-chat live polls, financial accounting ledger, and PDF reports."
+              },
+              {
+                "@type": "Offer",
+                "name": "Pro Plan",
+                "price": "40",
+                "priceCurrency": "USD",
+                "description": "Unlimited members, digital certificates with verification, equipment asset registry, and priority SLA."
+              }
+            ]
           },
           "featureList": [
             "Branded Public Portals with Custom URL",
@@ -113,6 +161,41 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <script type="module" src="/env.js" data-vite-ignore></script>
+    <script>
+      (function() {
+        try {
+          var raw = localStorage.getItem("impacto_active_org");
+          var cached = raw ? JSON.parse(raw) : null;
+          var primary = (cached && cached.primary_color) || "#15803D";
+          var secondary = (cached && cached.secondary_color) || "#F59E0B";
+          var theme = (cached && cached.dashboard_theme) || localStorage.getItem("theme") || "light";
+          var root = document.documentElement;
+          var cleanHex = primary.replace("#", "").trim();
+          var r = 21, g = 128, b = 61;
+          if (cleanHex.length === 6) {
+            r = parseInt(cleanHex.substring(0, 2), 16) || 21;
+            g = parseInt(cleanHex.substring(2, 4), 16) || 128;
+            b = parseInt(cleanHex.substring(4, 6), 16) || 61;
+          } else if (cleanHex.length === 3) {
+            r = parseInt(cleanHex[0] + cleanHex[0], 16) || 21;
+            g = parseInt(cleanHex[1] + cleanHex[1], 16) || 128;
+            b = parseInt(cleanHex[2] + cleanHex[2], 16) || 61;
+          }
+          root.style.setProperty("--org-primary", primary);
+          root.style.setProperty("--org-primary-rgb", r + ", " + g + ", " + b);
+          root.style.setProperty("--org-primary-l", "rgba(" + r + ", " + g + ", " + b + ", 0.12)");
+          root.style.setProperty("--org-primary-d", "rgb(" + Math.max(0, r - 35) + ", " + Math.max(0, g - 35) + ", " + Math.max(0, b - 35) + ")");
+          root.style.setProperty("--org-secondary", secondary);
+          if (theme === "dark") {
+            root.setAttribute("data-theme", "dark");
+            root.classList.add("dark");
+          } else {
+            root.setAttribute("data-theme", "light");
+            root.classList.remove("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
