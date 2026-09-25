@@ -325,6 +325,8 @@ export const Login: React.FC = () => {
           };
         }
 
+        // Returning user logging in: suppress workspace tour prompt so it is not noisy
+        localStorage.setItem(`impacto_tour_seen_${dbUser.id}`, "true");
         setUser(dbUser);
         setSession(authSession || { token: "active-session" });
 
@@ -429,6 +431,8 @@ export const Login: React.FC = () => {
           created_at: new Date().toISOString()
         };
 
+        // Returning demo user logging in: suppress workspace tour prompt
+        localStorage.setItem(`impacto_tour_seen_${loginUser.id}`, "true");
         setUser(loginUser);
         setSession({ token: "demo-session" });
 
@@ -746,6 +750,7 @@ export const Register: React.FC = () => {
           localStorage.setItem("impacto_user_passwords", JSON.stringify(map));
         } catch (e) {}
 
+        sessionStorage.setItem("impacto_just_registered", "true");
         setUser(dbUser);
 
         if (partSelectedOrg && orgRecord && memberRecord) {
@@ -807,6 +812,7 @@ export const Register: React.FC = () => {
         } catch (e) {}
 
         // Automatically log them in and navigate directly to their registered organization's dashboard
+        sessionStorage.setItem("impacto_just_registered", "true");
         setUser(newUser);
         setSession({ token: "demo" });
 
@@ -981,6 +987,7 @@ export const Register: React.FC = () => {
           localStorage.setItem("impacto_user_passwords", JSON.stringify(map));
         } catch (e) {}
 
+        sessionStorage.setItem("impacto_just_registered", "true");
         setUser(dbUser);
         setActiveOrg(finalOrg, finalMember);
         navigate("/dashboard");
@@ -1088,6 +1095,7 @@ export const Register: React.FC = () => {
         MockDB.saveMessages(msgsList);
 
         // Set Store to auto login
+        sessionStorage.setItem("impacto_just_registered", "true");
         setUser(newUser);
         setSession({ token: "demo" });
         setActiveOrg(newOrg, newMember);

@@ -1025,7 +1025,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
   const [sendingSupport, setSendingSupport] = useState(false);
   const [openLockoutMoMo, setOpenLockoutMoMo] = useState(false);
 
-  // Interactive Tour State & Lifecycle
+  // Interactive Tour State & Lifecycle (Shown ONLY on first-time entrance to avoid noisy repeated prompts)
   const [isTourOpen, setIsTourOpen] = useState(false);
   const [currentTourStep, setCurrentTourStep] = useState(0);
   const [showWelcomePrompt, setShowWelcomePrompt] = useState(false);
@@ -1034,7 +1034,21 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     if (!user) return;
     const seenKey = `impacto_tour_seen_${user.id}`;
     const hasSeen = localStorage.getItem(seenKey);
-    if (!hasSeen) {
+    if (hasSeen) return;
+
+    // Determine if the user is truly entering the system for the very first time:
+    const justRegistered = sessionStorage.getItem("impacto_just_registered") === "true";
+    const isBrandNewAccount =
+      Boolean(user.created_at) &&
+      Date.now() - new Date(user.created_at).getTime() < 15 * 60 * 1000;
+
+    const isFirstTime = justRegistered || isBrandNewAccount;
+
+    // Immediately mark as seen so it will never show again on future logins or page reloads
+    localStorage.setItem(seenKey, "true");
+    sessionStorage.removeItem("impacto_just_registered");
+
+    if (isFirstTime) {
       const timer = setTimeout(() => {
         setShowWelcomePrompt(true);
       }, 1500);
@@ -1046,6 +1060,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     setCurrentTourStep(stepIndex);
     setIsTourOpen(true);
     setShowWelcomePrompt(false);
+    if (user) {
+      localStorage.setItem(`impacto_tour_seen_${user.id}`, "true");
+    }
   };
 
   const handleCloseTour = () => {

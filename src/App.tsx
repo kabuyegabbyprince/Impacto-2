@@ -57,6 +57,8 @@ import { AuditorDashboard } from "./pages/auditorDashboard";
 
 import { ToastProvider } from "./components/Toast";
 import { initCrossTabSync } from "./lib/crossTabSync";
+import { processOfflineQueue } from "./lib/offlineSync";
+import { OfflineIndicator } from "./components/OfflineIndicator";
 import { useAuthStore } from "./store/authStore";
 import { useOrgStore } from "./store/orgStore";
 
@@ -153,12 +155,23 @@ const queryClient = new QueryClient({
 export default function App() {
   React.useEffect(() => {
     const cleanup = initCrossTabSync(queryClient);
-    return () => cleanup();
+    const handleOnline = () => {
+      processOfflineQueue(queryClient);
+    };
+    window.addEventListener("online", handleOnline);
+    if (navigator.onLine) {
+      processOfflineQueue(queryClient);
+    }
+    return () => {
+      cleanup();
+      window.removeEventListener("online", handleOnline);
+    };
   }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
+        <OfflineIndicator />
         <Router>
           <OrgThemeInjector />
           <Routes>
