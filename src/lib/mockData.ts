@@ -88,9 +88,10 @@ export class MockDB {
       usd_to_rwf_rate: 1300,
       eur_to_rwf_rate: 1400,
       kes_to_rwf_rate: 10,
-      mtn_payment_number: "",
-      airtel_payment_number: "",
-      payment_name: ""
+      mtn_payment_number: "0788100100",
+      airtel_payment_number: "0733100100",
+      payment_name: "VIRELLIX INC",
+      momo_merchant_code: "880099"
     });
   }
 

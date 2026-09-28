@@ -16,6 +16,7 @@ import {
 import { Card, Input, Button, Badge, ImageUploadInput } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "../components/MoMoPushPaymentModal";
+import { UssdPaymentHelper } from "../components/UssdPaymentHelper";
 import { 
   Coins, 
   Filter, 
@@ -2307,66 +2308,70 @@ export const OrganizationMemberFees: React.FC = () => {
       {selectedFeeToPay && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in" id="pay-report-modal">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95">
-            <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-800 to-emerald-900 text-white flex items-center justify-between shrink-0">
+            {/* Header: matched to other cards in the system (clean card surface, not solid green banner) */}
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 bg-white dark:bg-slate-900">
               <div>
-                <span className="text-[10px] font-black tracking-widest uppercase text-emerald-200">Payment Gateway</span>
-                <h3 className="text-base sm:text-lg font-extrabold flex items-center gap-1.5 mt-0.5">
-                  <Smartphone className="h-5 w-5" /> Settle Account Contribution
+                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  Pay cooperative dues
                 </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Record a payment via mobile money or cash
+                </p>
               </div>
               <button 
+                type="button"
                 onClick={() => setSelectedFeeToPay(null)}
-                className="text-white/80 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition"
+                className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
                 id="btn-close-pay-modal"
+                aria-label="Close modal"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
               {/* Target summary card */}
-              <div className="p-4 bg-emerald-50/50 dark:bg-slate-950/20 border border-emerald-100 dark:border-slate-850 rounded-xl flex items-center justify-between">
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg flex items-center justify-between">
                 <div>
-                  <span className="text-[9px] font-extrabold text-[#15803D] uppercase tracking-wider">Assigned invoice dues</span>
-                  <p className="text-sm font-black text-stone-900 dark:text-white mt-1 uppercase">
-                    Cooperative Solidarity ({selectedFeeToPay.payment_period})
+                  <span className="text-xs text-slate-500 font-medium">Invoice period</span>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">
+                    {selectedFeeToPay.payment_period}
                   </p>
-                  <p className="text-xs text-gray-400 font-mono font-bold mt-0.5">
-                    For Dues Cycle: {selectedFeeToPay.period_date}
+                  <p className="text-xs text-slate-500 font-mono mt-0.5">
+                    Date: {selectedFeeToPay.period_date}
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-[9px] font-extrabold text-stone-400 block uppercase">REQUIRED VALUE</span>
-                  <span className="text-lg font-black font-mono text-emerald-800 dark:text-emerald-400 mt-1">
+                  <span className="text-xs text-slate-500 block">Amount due</span>
+                  <span className="text-base font-semibold font-mono text-slate-900 dark:text-white mt-0.5">
                     {selectedFeeToPay.amount.toLocaleString()} RWF
                   </span>
                 </div>
               </div>
 
               {/* Selector for payment reported method */}
-              <div className="space-y-2">
-                <label className="text-xs font-black text-stone-800 dark:text-slate-300 block uppercase tracking-wider select-none">
-                  Choose Settlement Method
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
+                  Payment method
                 </label>
-                <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: "MTN MoMo / Airtel", label: "Mobile Money (MoMo / Airtel)", subtitle: "SMS / Receipt Copy", icon: <Smartphone className="h-4 w-4 text-emerald-500" /> },
-                    { id: "Cash", label: "Hand Cash", subtitle: "Officer Cashier", icon: <Coins className="h-4 w-4 text-blue-500" /> }
+                    { id: "MTN MoMo / Airtel", label: "Mobile Money", subtitle: "MTN or Airtel transfer" },
+                    { id: "Cash", label: "Cash payment", subtitle: "Direct to cashier" }
                   ].map((method) => (
                     <button
                       key={method.id}
                       type="button"
                       id={`btn-pay-method-${method.id.replace(/\s+/g, '-')}`}
                       onClick={() => setPayMethod(method.id as any)}
-                      className={`flex flex-col items-center justify-center p-2.5 sm:p-3 border rounded-xl font-bold text-xs gap-1 transition-all text-center cursor-pointer ${
+                      className={`flex flex-col items-start p-2.5 border rounded-lg text-left transition cursor-pointer ${
                         payMethod === method.id
-                          ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-850 dark:text-emerald-350 shadow-xs scale-102"
-                          : "border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-gray-100 text-stone-600 dark:text-slate-400"
+                          ? "border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 text-slate-900 dark:text-slate-100"
+                          : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 text-slate-700 dark:text-slate-400"
                       }`}
                     >
-                      {method.icon}
-                      <span className="text-[11px] leading-tight">{method.label}</span>
-                      <span className="text-[9px] font-normal text-slate-400 hidden sm:block">{method.subtitle}</span>
+                      <span className="text-xs font-semibold">{method.label}</span>
+                      <span className="text-[11px] text-slate-500">{method.subtitle}</span>
                     </button>
                   ))}
                 </div>
@@ -2374,22 +2379,28 @@ export const OrganizationMemberFees: React.FC = () => {
 
               {/* Conditional forms based on selection */}
               {payMethod === "MTN MoMo / Airtel" ? (
-                <form onSubmit={handleSubmitManualReport} className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4 shadow-3xs animate-in slide-in-from-bottom-3">
-                  <div className="flex items-center gap-2 select-none border-b border-dashed border-gray-200 dark:border-slate-800 pb-3">
-                    <span className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 flex items-center justify-center">
-                      <Zap className="h-3.5 w-3.5" />
-                    </span>
-                    <div>
-                      <span className="text-[10px] font-black text-emerald-800 dark:text-emerald-400 block leading-none uppercase">Mobile Money Payment Details</span>
-                      <span className="text-[10px] text-gray-400">Please enter actual sender details and SMS text.</span>
-                    </div>
+                <form id="form-momo-report" onSubmit={handleSubmitManualReport} className="space-y-4">
+                  <div className="border-b border-slate-200 dark:border-slate-800 pb-2">
+                    <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 block">Payment details & receipt</span>
+                    <span className="text-[11px] text-slate-500">Enter the sender phone number and paste the confirmation SMS.</span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Auto-generated USSD Quick Dial Helper for Organization */}
+                  <UssdPaymentHelper
+                    targetType="organization"
+                    mtnNumber={activeOrg?.dues_mtn_number || activeOrg?.donation_mtn_number}
+                    merchantCode={activeOrg?.momo_merchant_code}
+                    airtelNumber={activeOrg?.dues_airtel_number || activeOrg?.donation_airtel_number}
+                    recipientName={activeOrg?.dues_account_name || activeOrg?.name}
+                    amountRwf={selectedFeeToPay?.amount}
+                    itemName={`Dues: ${selectedFeeToPay?.payment_period || "Cycle"}`}
+                  />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div className="flex flex-col gap-1">
                       <Input
-                        label="MTN MoMo Registered Phone (078.. / 079..)"
-                        placeholder="078XXXXXXX or 079XXXXXXX"
+                        label="MTN MoMo Phone (078 / 079)"
+                        placeholder="078XXXXXXX or 079..."
                         required
                         value={momoPhoneNumber}
                         onChange={(e) => setMomoPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
@@ -2415,7 +2426,7 @@ export const OrganizationMemberFees: React.FC = () => {
                     </div>
                     <Input
                       label="Sender's Registered Full Name"
-                      placeholder="e.g. Jean Pierre Nsanzimana"
+                      placeholder="e.g. Jean Pierre N."
                       required
                       value={manualSenderInfo}
                       onChange={(e) => setManualSenderInfo(e.target.value)}
@@ -2452,27 +2463,23 @@ export const OrganizationMemberFees: React.FC = () => {
                       id="input-manual-momo-note"
                     />
                   </div>
-
-                  <Button type="submit" className="w-full bg-[#15803D] hover:bg-emerald-800 text-white font-extrabold py-2.5 rounded-xl transition shadow-3xs" id="btn-submit-momo-manual-report">
-                    Submit Mobile Money Payment Report
-                  </Button>
                 </form>
               ) : (
-                <form onSubmit={handleSubmitManualReport} className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4 shadow-3xs animate-in slide-in-from-bottom-3">
-                  <div className="flex items-center gap-2 select-none border-b border-dashed border-gray-200 dark:border-slate-800 pb-3">
-                    <span className="h-7 w-7 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 flex items-center justify-center">
+                <form id="form-cash-report" onSubmit={handleSubmitManualReport} className="space-y-4 animate-in slide-in-from-bottom-2">
+                  <div className="flex items-center gap-2 select-none border-b border-gray-150 dark:border-slate-800 pb-2.5">
+                    <span className="h-6 w-6 rounded-lg bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 flex items-center justify-center">
                       <Coins className="h-3.5 w-3.5" />
                     </span>
                     <div>
-                      <span className="text-[10px] font-black text-amber-800 dark:text-amber-400 block leading-none uppercase">Hand Cash Submission</span>
-                      <span className="text-[10px] text-gray-400">Confirm the member payer name and officer cashier recipient.</span>
+                      <span className="text-[11px] font-black text-amber-850 dark:text-amber-400 block leading-tight uppercase">Hand Cash Submission</span>
+                      <span className="text-[10px] text-gray-500 dark:text-slate-400">Confirm the member payer name and officer cashier recipient.</span>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <Input
                       label="Payer Member Name"
-                      placeholder="e.g. Jean Pierre Nsanzimana"
+                      placeholder="e.g. Jean Pierre N."
                       required
                       value={manualSenderInfo}
                       onChange={(e) => setManualSenderInfo(e.target.value)}
@@ -2497,21 +2504,25 @@ export const OrganizationMemberFees: React.FC = () => {
                       placeholder="e.g. Handed cash directly to supervisor at Kigali forest nurseries sector."
                       value={manualNote}
                       onChange={(e) => setManualNote(e.target.value)}
-                      className="w-full text-xs rounded-lg border bg-white dark:bg-slate-950 border-gray-300 dark:border-slate-800 p-2.5 outline-none focus:ring-1 focus:ring-emerald-700 text-stone-800 dark:text-stone-100"
+                      className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-300 dark:border-slate-800 p-2.5 outline-none focus:ring-2 focus:ring-emerald-700 text-stone-800 dark:text-stone-100"
                       id="input-manual-cash-note"
                     />
                   </div>
-
-                  <Button type="submit" className="w-full bg-[#15803D] hover:bg-emerald-800 text-white font-extrabold py-2.5 rounded-xl transition" id="btn-submit-cash-report">
-                    Submit Hand Cash Payment Report
-                  </Button>
                 </form>
               )}
             </div>
 
-            <div className="p-4 bg-gray-50 dark:bg-slate-950 border-t flex justify-end">
+            <div className="p-4 bg-gray-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0">
               <Button variant="outline" onClick={() => setSelectedFeeToPay(null)} id="btn-cancel-payment-panel">
-                Close Panel
+                Close
+              </Button>
+              <Button
+                type="submit"
+                form={payMethod === "MTN MoMo / Airtel" ? "form-momo-report" : "form-cash-report"}
+                className="bg-[#15803D] hover:bg-emerald-800 text-white font-extrabold px-5 py-2.5 rounded-xl transition shadow-xs"
+                id="btn-submit-momo-manual-report"
+              >
+                Submit Payment Report
               </Button>
             </div>
           </div>

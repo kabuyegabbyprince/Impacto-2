@@ -43,9 +43,20 @@ import {
   ChevronRight,
   Compass,
   User,
-  Zap
+  Eye,
+  EyeOff,
+  Maximize2,
+  Minimize2,
+  Layers,
+  Sparkles,
+  Lock,
+  Copy,
+  Smartphone,
+  PhoneCall,
+  Store
 } from "lucide-react";
 import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "./MoMoPushPaymentModal";
+import { UssdPaymentHelper, cleanMerchantCode, cleanPhoneNumber } from "./UssdPaymentHelper";
 import { getOrgSubscriptionLifecycle } from "../lib/subscriptionMatrix";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
@@ -68,7 +79,6 @@ import {
 } from "../hooks/useImpactoData";
 import { useToast } from "./Toast";
 import { MockDB } from "../lib/mockData";
-import { GuiderAssistant } from "./GuiderAssistant";
 import { resolveFileUrl } from "../lib/storageService";
 
 // ==========================================
@@ -1084,11 +1094,15 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
   const [memberSupportSuccess, setMemberSupportSuccess] = useState("");
   const [recommendSuccess, setRecommendSuccess] = useState("");
 
+  // Glassmorphic transparency controls for unpaid/blocked state
+  const [isPeekMode, setIsPeekMode] = useState(true);
+  const [glassTransparency, setGlassTransparency] = useState<"crystal" | "frosted" | "balanced">("crystal");
+
   const platformSettings = platformData?.settings || {
     usd_to_rwf_rate: 1350,
-    mtn_payment_number: "0788100100",
-    airtel_payment_number: "0733100100",
-    payment_name: "VIRELLIX INC"
+    mtn_payment_number: "",
+    airtel_payment_number: "",
+    payment_name: "Impacto Platform"
   };
 
   const updateOrgMutation = useUpdateOrganization();
@@ -1292,81 +1306,263 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // If blocked (30-day trial limit finished or subscription expired), block all users out
-  if (isBlocked) {
-    return (
-      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col pt-14 text-sm select-none font-sans">
-        <OrgThemeInjector />
-        <Topbar onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
-        
-        <div className="flex-1 max-w-4xl mx-auto p-4 md:p-8 flex flex-col gap-6 justify-center items-center w-full my-auto animate-in zoom-in-95">
-          <div className="text-center flex flex-col items-center gap-2 mb-2 select-none">
-            <div className="h-16 w-16 bg-red-100 border border-red-200 text-red-600 flex items-center justify-center rounded-3xl shrink-0 shadow-lg mb-2">
-              <AlertTriangle className="h-8 w-8 shrink-0 animate-bounce" />
+  // Glassmorphism Unpaid / Subscription Lockout Overlay
+  // Uses true transparent glassmorphism so users can clearly see that their underlying data is 100% safe, intact, and preserved in the background
+  const renderBlockedGlassmorphismOverlay = () => {
+    if (!isBlocked) return null;
+
+    const rate = platformSettings.usd_to_rwf_rate || 1350;
+    let costUsd = 25;
+    if (selectedTier.includes("Free")) costUsd = 0;
+    else if (selectedTier.includes("Growth")) costUsd = 25;
+    else if (selectedTier.includes("Pro")) costUsd = 40;
+    else if (selectedTier.includes("Enterprise")) costUsd = 80;
+    const amountRwf = costUsd * rate;
+
+    const cleanMCode = cleanMerchantCode(platformSettings.momo_merchant_code || platformSettings.mtn_merchant_code || "");
+    const cleanNum = cleanPhoneNumber(platformSettings.mtn_payment_number || "");
+    const merchantUssdPrimary = cleanMCode && amountRwf > 0 ? `*182*8*1*${cleanMCode}*${Math.round(amountRwf)}#` : (cleanMCode ? `*182*8*1*${cleanMCode}#` : "");
+    const p2pUssdPrimary = cleanNum && amountRwf > 0 ? `*182*1*1*${cleanNum}*${Math.round(amountRwf)}#` : (cleanNum ? `*182*1*1*${cleanNum}#` : "");
+
+    // Read-Only Transparent Mode: Renders a floating settlement dock while background documents and tables remain readable
+    if (isPeekMode) {
+      return (
+        <aside aria-label="Workspace Lockout Settlement Bar" className="fixed bottom-4 sm:bottom-5 left-1/2 -translate-x-1/2 z-50 max-w-4xl w-[94%] bg-slate-900/95 dark:bg-slate-950/95 text-white backdrop-blur-xl border border-slate-700/80 rounded-2xl p-3.5 sm:p-4 shadow-xl flex flex-col md:flex-row items-center justify-between gap-3.5 animate-in slide-in-from-bottom-5">
+          <div className="flex items-center gap-3 min-w-0 w-full md:w-auto">
+            <div className="h-9 w-9 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+              <Lock className="h-4.5 w-4.5 text-amber-400" />
             </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold font-display leading-none tracking-tight text-gray-901">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs sm:text-sm font-semibold text-white">
+                  Workspace Read-Only Mode
+                </span>
+                <span className="text-xs text-slate-400">
+                  · Preserved Archive
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 truncate mt-0.5">
+                All records, rosters, and documents are preserved. Settle renewal below to restore full editing and exports.
+              </p>
+            </div>
+          </div>
+
+          {/* Quick USSD Dial Codes & Action Buttons on Dock */}
+          <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end flex-wrap">
+            {merchantUssdPrimary ? (
+              <div className="flex items-center gap-1.5 bg-white/10 dark:bg-white/5 border border-white/10 rounded-lg px-2.5 py-1 text-xs font-mono font-medium">
+                <span className="text-slate-300">MoMo:</span>
+                <span className="text-white select-all">{merchantUssdPrimary}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(merchantUssdPrimary);
+                    addToast(`USSD Code copied: ${merchantUssdPrimary}`, "success");
+                  }}
+                  className="hover:text-amber-300 p-0.5 ml-1 text-slate-300 cursor-pointer"
+                  title="Copy USSD"
+                >
+                  <Copy className="h-3 w-3" />
+                </button>
+              </div>
+            ) : null}
+
+            <div className="flex items-center gap-2 shrink-0">
+              {merchantUssdPrimary ? (
+                <a
+                  href={`tel:${encodeURIComponent(merchantUssdPrimary)}`}
+                  className="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center gap-1 transition shadow-xs cursor-pointer"
+                >
+                  <Smartphone className="h-3.5 w-3.5" />
+                  <span>Dial</span>
+                </a>
+              ) : null}
+
+              <Button
+                size="sm"
+                onClick={() => setIsPeekMode(false)}
+                className="h-8 bg-white hover:bg-slate-100 text-slate-900 font-medium text-xs px-3.5 rounded-lg flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
+              >
+                <span>Restore Full Access</span>
+              </Button>
+            </div>
+          </div>
+        </aside>
+      );
+    }
+
+    const glassContainerClasses =
+      glassTransparency === "crystal"
+        ? "bg-white/45 dark:bg-slate-950/45 border-white/70 dark:border-white/20 backdrop-blur-md shadow-[0_20px_50px_rgba(0,0,0,0.25)]"
+        : glassTransparency === "frosted"
+        ? "bg-white/65 dark:bg-slate-950/65 border-white/80 dark:border-white/30 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,0.3)]"
+        : "bg-white/85 dark:bg-slate-950/85 border-white/90 dark:border-white/40 backdrop-blur-xl shadow-2xl";
+
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/15 dark:bg-black/35 backdrop-blur-[1.5px] flex items-center justify-center p-3 sm:p-6 md:p-8 animate-in fade-in duration-300">
+        <div className={`relative max-w-4xl w-full my-auto rounded-3xl border ${glassContainerClasses} p-5 sm:p-8 flex flex-col gap-6 text-stone-900 dark:text-stone-100 transition-all duration-300`}>
+          
+          {/* Top Glassmorphic Transparency & Peek Controls Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white/40 dark:bg-slate-900/40 border border-white/60 dark:border-white/10 rounded-2xl backdrop-blur-xs">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                Transparent Glass View: Workspace Data Visible in Background
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Glass transparency level toggle */}
+              <div className="flex items-center bg-black/10 dark:bg-white/10 rounded-xl p-0.5 text-[10px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setGlassTransparency("crystal")}
+                  className={`px-2 py-1 rounded-lg transition ${
+                    glassTransparency === "crystal"
+                      ? "bg-white dark:bg-slate-800 text-stone-900 dark:text-white shadow-xs"
+                      : "text-stone-600 dark:text-stone-300 hover:text-stone-900"
+                  }`}
+                >
+                  Crystal (45%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGlassTransparency("frosted")}
+                  className={`px-2 py-1 rounded-lg transition ${
+                    glassTransparency === "frosted"
+                      ? "bg-white dark:bg-slate-800 text-stone-900 dark:text-white shadow-xs"
+                      : "text-stone-600 dark:text-stone-300 hover:text-stone-900"
+                  }`}
+                >
+                  Frosted (65%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGlassTransparency("balanced")}
+                  className={`px-2 py-1 rounded-lg transition ${
+                    glassTransparency === "balanced"
+                      ? "bg-white dark:bg-slate-800 text-stone-900 dark:text-white shadow-xs"
+                      : "text-stone-600 dark:text-stone-300 hover:text-stone-900"
+                  }`}
+                >
+                  Balanced (85%)
+                </button>
+              </div>
+
+              {/* Peek background button */}
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setIsPeekMode(true)}
+                className="bg-emerald-600/90 hover:bg-emerald-600 text-white font-bold text-xs h-7 px-2.5 rounded-xl flex items-center gap-1.5 shadow-xs"
+                title="Minimize to inspect background data"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                <span>Peek at Preserved Data</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Informational Banner: Data Preserved in Read-Only Mode */}
+          <div className="p-4 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center gap-3.5 shadow-xs">
+            <div className="h-9 w-9 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                  Organization Records Preserved in Read-Only Mode
+                </h4>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed">
+                All organization rosters, ledgers, and documents remain visible and preserved. Choose a subscription below to restore interactive editing and exports.
+              </p>
+            </div>
+          </div>
+
+          <div className="text-center flex flex-col items-center gap-2 select-none">
+            <div className="h-11 w-11 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-600 flex items-center justify-center rounded-xl shrink-0">
+              <AlertTriangle className="h-5 w-5 shrink-0" />
+            </div>
+            <h1 className="text-xl md:text-2xl font-bold font-display leading-none tracking-tight text-slate-900 dark:text-white">
               Workspace Access Paused
             </h1>
-            <p className="text-xs text-gray-400 font-medium">
-              The active licensing subscription plan or 30-day trial for <span className="text-emerald-750 font-bold">@{activeOrg?.slug}</span> has hit its limit.
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+              The active licensing subscription plan for <span className="text-slate-900 dark:text-white font-semibold">@{activeOrg?.slug}</span> has reached its term limit.
             </p>
           </div>
           
           {isAdmin ? (
             // ADMIN LICENSE UPGRADE & ESCALATION CONTROL HUB
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full font-medium">
-              <Card title="Recommend Plan Tier Upgrade & Subscriptions">
+              <div className="rounded-xl p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col gap-4">
+                <div className="border-b border-slate-200 dark:border-slate-800 pb-2.5">
+                  <h3 className="font-display font-semibold text-sm text-slate-900 dark:text-white">
+                    Select Subscription Plan
+                  </h3>
+                </div>
                 {paySuccessAlert ? (
-                  <div className="p-3 bg-emerald-50 border border-emerald-150 text-[11px] text-emerald-800 font-semibold rounded-lg flex flex-col gap-2 leading-relaxed">
-                    <span className="font-bold flex items-center gap-1.5"><CheckCircle className="h-4 w-4 shrink-0" /> Receipt Sent</span>
+                  <div className="p-3 bg-emerald-50 border border-emerald-150 text-xs text-emerald-800 font-medium rounded-lg flex flex-col gap-1.5 leading-relaxed">
+                    <span className="font-semibold flex items-center gap-1.5"><CheckCircle className="h-4 w-4 shrink-0" /> Receipt Sent</span>
                     <p>{paySuccessAlert}</p>
                   </div>
                 ) : (
-                  <form onSubmit={handlePayLockout} className="flex flex-col gap-3 text-xs font-semibold text-gray-700">
-                    {/* Instant PawaPay MTN Push Option */}
-                    <div className="p-3 bg-amber-500/10 border-2 border-amber-500/70 rounded-xl flex flex-col gap-2">
+                  <form onSubmit={handlePayLockout} className="flex flex-col gap-3 text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    {/* Instant MTN MoMo Push Option */}
+                    <div className="p-3.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col gap-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-xs text-stone-900 dark:text-white flex items-center gap-1.5">
-                          <Zap className="h-4 w-4 text-amber-600 animate-pulse" />
-                          Direct MTN MoMo SIM Prompt (PawaPay)
+                        <span className="font-semibold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <Smartphone className="h-4 w-4 text-emerald-600" />
+                          Direct MTN MoMo SIM Prompt
                         </span>
-                        <span className="text-[9px] font-mono font-bold bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">Instant</span>
                       </div>
-                      <p className="text-[11px] text-stone-600 dark:text-stone-300 font-normal leading-relaxed">
-                        Trigger a prompt straight to your MTN SIM (078.. or 079..) to authorize renewal with your secret MoMo PIN.
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-normal leading-relaxed">
+                        Trigger a prompt straight to your registered phone number to authorize renewal with your secret MoMo PIN.
                       </p>
                       <Button
                         type="button"
                         onClick={() => setOpenLockoutMoMo(true)}
-                        className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs rounded-lg flex items-center justify-center gap-1.5 shadow-xs"
+                        className="w-full py-2 bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-medium text-xs rounded-lg flex items-center justify-center gap-1.5 shadow-xs"
                       >
-                        <Zap className="h-3.5 w-3.5" />
-                        Trigger MTN MoMo SIM Prompt
+                        <Smartphone className="h-3.5 w-3.5" />
+                        Send MoMo SIM Prompt
                       </Button>
                     </div>
 
                     <div className="relative flex py-0.5 items-center">
-                      <div className="flex-grow border-t border-gray-200"></div>
-                      <span className="flex-shrink mx-2 text-[9px] uppercase font-mono tracking-wider font-bold text-gray-400">Or Manual Transfer</span>
-                      <div className="flex-grow border-t border-gray-200"></div>
+                      <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+                      <span className="flex-shrink mx-2 text-xs text-slate-400 font-medium">Or manual USSD transfer</span>
+                      <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
                     </div>
 
-                    <p className="text-gray-500 font-normal leading-normal text-[11px] mb-1">
-                      Select a recommended plan to update your workspace license, then pay via Mobile Money.
-                    </p>
-
-                    <div className="bg-amber-50/50 border border-amber-250 p-2.5 rounded-lg text-[10px] text-amber-950 font-mono flex flex-col leading-5 select-none">
-                      <span className="font-bold uppercase tracking-wider text-amber-800 mb-1 text-[9px]">Platform Transfer Targets</span>
-                      <span>MTN: <span className="font-extrabold">{platformSettings.mtn_payment_number}</span> ({platformSettings.payment_name})</span>
-                      <span>Airtel: <span className="font-extrabold">{platformSettings.airtel_payment_number}</span> ({platformSettings.payment_name})</span>
-                    </div>
+                    {/* Auto-generated USSD Codes with Super Admin Check */}
+                    <UssdPaymentHelper
+                      targetType="platform"
+                      mtnNumber={platformSettings.mtn_payment_number}
+                      merchantCode={platformSettings.momo_merchant_code || platformSettings.mtn_merchant_code}
+                      airtelNumber={platformSettings.airtel_payment_number}
+                      recipientName={platformSettings.payment_name}
+                      amountRwf={amountRwf}
+                      itemName={selectedTier}
+                      onRequestAdmin={async () => {
+                        await supportMutation.mutateAsync({
+                          org_id: activeOrg?.id || "",
+                          title: "Request for Platform MoMo Payment Credentials",
+                          description: `Organization @${activeOrg?.slug} is requesting Superadmin to configure MTN MoMo settlement credentials to pay for plan ${selectedTier}.`,
+                          priority: "critical"
+                        });
+                      }}
+                    />
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] uppercase text-gray-400 font-mono tracking-wider font-bold">Select Active Tier</label>
+                      <label className="text-xs text-slate-600 dark:text-slate-400 font-medium">Select active tier</label>
                       <select
                         value={selectedTier}
                         onChange={(e) => setSelectedTier(e.target.value)}
-                        className="w-full text-xs rounded-lg border bg-white border-gray-305 px-3 py-2 text-stone-800 select-none focus:ring-1 focus:ring-emerald-500 font-semibold dark:bg-slate-900 dark:border-slate-705 dark:text-slate-100"
+                        className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100 select-none focus:ring-1 focus:ring-emerald-500 font-medium"
                       >
                         <option value="Free Forever Plan - $0/month">Free Forever Plan — $0</option>
                         <option value="Growth Plan - $25/month">Growth Tier — $25 ({(25 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(25, 'USD'))})</option>
@@ -1377,24 +1573,24 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
 
                     <div className="flex flex-col gap-1">
                       <Input
-                        label="MTN MoMo Payer Phone Number (078.. / 079..)"
+                        label="MTN MoMo Phone (078 / 079)"
                         value={momoPhone}
                         onChange={(e) => setMomoPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                        placeholder="078XXXXXXX or 079XXXXXXX"
+                        placeholder="078XXXXXXX or 079..."
                       />
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="text-[10px] text-stone-400 font-mono">Quick prefix:</span>
                         <button
                           type="button"
                           onClick={() => setMomoPhone("078")}
-                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700"
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700 dark:bg-slate-800 dark:text-slate-200"
                         >
                           078
                         </button>
                         <button
                           type="button"
                           onClick={() => setMomoPhone("079")}
-                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700"
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700 dark:bg-slate-800 dark:text-slate-200"
                         >
                           079
                         </button>
@@ -1403,9 +1599,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                     <Input label="MoMo / Airtel Ref ID Key (Optional)" value={momoRef} onChange={(e) => setMomoRef(e.target.value)} placeholder="TXNXXXXXXX" />
 
                     <div className="flex flex-col gap-1 w-full">
-                      <label className="text-[10px] uppercase text-emerald-800 font-mono tracking-wider font-bold">Payment SMS Message / Proof of Transfer <span className="text-red-500">*</span></label>
+                      <label className="text-[10px] uppercase text-emerald-800 dark:text-emerald-400 font-mono tracking-wider font-bold">Payment SMS Message / Proof of Transfer <span className="text-red-500">*</span></label>
                       <textarea
-                        className="w-full text-xs rounded-lg border bg-white border-gray-350 p-2.5 h-20 bg-slate-50/20 text-stone-900 font-sans focus:ring-1 focus:ring-emerald-500"
+                        className="w-full text-xs rounded-lg border bg-white/80 border-gray-300 p-2.5 h-20 text-stone-900 dark:bg-slate-950/80 dark:border-slate-800 dark:text-white font-sans focus:ring-1 focus:ring-emerald-500"
                         value={smsProof}
                         onChange={(e) => setSmsProof(e.target.value)}
                         required
@@ -1413,29 +1609,34 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       />
                     </div>
 
-                    <Button type="submit" loading={submittingPayment} className="w-full py-2.5 mt-2">
+                    <Button type="submit" loading={submittingPayment} className="w-full py-2.5 mt-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl">
                       Submit Plan Upgrade & Proof
                     </Button>
                   </form>
                 )}
-              </Card>
+              </div>
 
-              <Card title="Contact Platform Superadmin Direct Line">
+              <div className="rounded-2xl p-5 bg-white/45 dark:bg-slate-900/40 backdrop-blur-md border border-white/60 dark:border-white/10 shadow-xs flex flex-col gap-4">
+                <div className="border-b border-stone-200/50 dark:border-slate-800/60 pb-2.5">
+                  <h3 className="font-display font-bold text-sm text-stone-900 dark:text-white flex items-center justify-between">
+                    <span>Contact Platform Superadmin Direct Line</span>
+                  </h3>
+                </div>
                 {supportSuccessAlert ? (
-                  <div className="p-3 bg-emerald-55/10 border border-emerald-500/25 text-emerald-800 text-[11px] font-semibold rounded-lg flex flex-col gap-1.5 leading-relaxed">
+                  <div className="p-3 bg-emerald-55/10 border border-emerald-500/25 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold rounded-lg flex flex-col gap-1.5 leading-relaxed">
                     <span className="font-bold flex items-center gap-1.5"><CheckCircle className="h-4 w-4 shrink-0" /> Conversation Log Update</span>
                     {supportSuccessAlert}
                   </div>
                 ) : (
-                  <form onSubmit={handleSupportLockout} className="flex flex-col gap-4 text-xs font-semibold text-gray-700">
-                    <p className="text-gray-500 font-normal leading-normal text-[11px]">
+                  <form onSubmit={handleSupportLockout} className="flex flex-col gap-4 text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    <p className="text-gray-500 dark:text-gray-400 font-normal leading-normal text-[11px]">
                       Stuck or experiencing confirmation lags? Text platform superadmin directly below.
                     </p>
 
                     <div className="flex flex-col gap-1.5 w-full">
                       <label className="text-[10px] uppercase text-gray-400 font-mono tracking-wider font-bold">Write support ticket message or just talk</label>
                       <textarea
-                        className="w-full text-xs rounded-lg border bg-white border-gray-305 p-3 h-28 bg-slate-50/20 text-stone-900 font-sans"
+                        className="w-full text-xs rounded-lg border bg-white/80 border-gray-300 p-3 h-28 text-stone-900 dark:bg-slate-950/80 dark:border-slate-800 dark:text-white font-sans"
                         value={supportText}
                         onChange={(e) => setSupportText(e.target.value)}
                         placeholder="Type direct support Comments here, e.g. Just paid Growth plan, please approve..."
@@ -1447,63 +1648,76 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                     </Button>
                   </form>
                 )}
-              </Card>
+              </div>
             </div>
           ) : (
             // MEMBER/STAFF LOCK SCREEN: RECOMMEND PLAN & TEXT ADMIN
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full font-medium">
-              <Card title="Pay & Recommend Plan Tier Upgrade">
+              <div className="rounded-2xl p-5 bg-white/45 dark:bg-slate-900/40 backdrop-blur-md border border-white/60 dark:border-white/10 shadow-xs flex flex-col gap-4">
+                <div className="border-b border-stone-200/50 dark:border-slate-800/60 pb-2.5">
+                  <h3 className="font-display font-bold text-sm text-stone-900 dark:text-white flex items-center justify-between">
+                    <span>Select Subscription Plan</span>
+                  </h3>
+                </div>
                 {recommendSuccess ? (
-                  <div className="p-3.5 bg-emerald-50 border border-emerald-150 text-emerald-850 rounded-lg font-bold flex flex-col gap-2 text-xs">
-                    <span className="flex items-center gap-2 text-sm text-emerald-900"><CheckCircle className="h-5 w-5 shrink-0" /> Submission Successful</span>
-                    <p className="font-normal text-[11px] text-emerald-800 leading-relaxed">{recommendSuccess}</p>
+                  <div className="p-3 bg-emerald-50 border border-emerald-150 text-xs text-emerald-800 font-medium rounded-lg flex flex-col gap-1.5 leading-relaxed">
+                    <span className="font-semibold flex items-center gap-1.5"><CheckCircle className="h-4 w-4 shrink-0" /> Submission Successful</span>
+                    <p>{recommendSuccess}</p>
                   </div>
                 ) : (
-                  <form onSubmit={handleSubmitMemberPayment} className="flex flex-col gap-3 text-xs font-semibold text-gray-700">
-                    {/* Instant PawaPay MTN Push Option */}
-                    <div className="p-3 bg-amber-500/10 border-2 border-amber-500/70 rounded-xl flex flex-col gap-2">
+                  <form onSubmit={handleSubmitMemberPayment} className="flex flex-col gap-3 text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    {/* Instant MTN MoMo Push Option */}
+                    <div className="p-3.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col gap-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-extrabold text-xs text-stone-900 dark:text-white flex items-center gap-1.5">
-                          <Zap className="h-4 w-4 text-amber-600 animate-pulse" />
-                          Direct MTN MoMo SIM Prompt (PawaPay)
+                        <span className="font-semibold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <Smartphone className="h-4 w-4 text-emerald-600" />
+                          Direct MTN MoMo SIM Prompt
                         </span>
-                        <span className="text-[9px] font-mono font-bold bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">Instant</span>
                       </div>
-                      <p className="text-[11px] text-stone-600 dark:text-stone-300 font-normal leading-relaxed">
-                        Trigger a prompt straight to your MTN SIM (078.. or 079..) to authorize renewal with your secret MoMo PIN.
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-normal leading-relaxed">
+                        Trigger a prompt straight to your registered phone number to authorize renewal with your secret MoMo PIN.
                       </p>
                       <Button
                         type="button"
                         onClick={() => setOpenLockoutMoMo(true)}
-                        className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs rounded-lg flex items-center justify-center gap-1.5 shadow-xs"
+                        className="w-full py-2 bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-medium text-xs rounded-lg flex items-center justify-center gap-1.5 shadow-xs"
                       >
-                        <Zap className="h-3.5 w-3.5" />
-                        Trigger MTN MoMo SIM Prompt
+                        <Smartphone className="h-3.5 w-3.5" />
+                        Send MoMo SIM Prompt
                       </Button>
                     </div>
 
                     <div className="relative flex py-0.5 items-center">
-                      <div className="flex-grow border-t border-gray-200"></div>
-                      <span className="flex-shrink mx-2 text-[9px] uppercase font-mono tracking-wider font-bold text-gray-400">Or Manual Transfer</span>
-                      <div className="flex-grow border-t border-gray-200"></div>
+                      <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+                      <span className="flex-shrink mx-2 text-xs text-slate-400 font-medium">Or manual USSD transfer</span>
+                      <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
                     </div>
 
-                    <p className="text-gray-500 font-normal leading-normal text-[11px] mb-1">
-                      Select the plan tier that best suits your cooperative size, pay via Mobile Money, and submit the proof details. The platform Superadmin will instantly verify the logs and unlock your workspace!
-                    </p>
-
-                    <div className="bg-amber-50/50 border border-amber-250 p-2.5 rounded-lg text-[10px] text-amber-950 font-mono flex flex-col leading-5 select-none">
-                      <span className="font-bold uppercase tracking-wider text-amber-800 mb-1 text-[9px]">Platform Transfer Targets</span>
-                      <span>MTN: <span className="font-extrabold">{platformSettings.mtn_payment_number}</span> ({platformSettings.payment_name})</span>
-                      <span>Airtel: <span className="font-extrabold">{platformSettings.airtel_payment_number}</span> ({platformSettings.payment_name})</span>
-                    </div>
+                    {/* Auto-generated USSD Codes with Super Admin Check */}
+                    <UssdPaymentHelper
+                      targetType="platform"
+                      mtnNumber={platformSettings.mtn_payment_number}
+                      merchantCode={platformSettings.momo_merchant_code || platformSettings.mtn_merchant_code}
+                      airtelNumber={platformSettings.airtel_payment_number}
+                      recipientName={platformSettings.payment_name}
+                      amountRwf={amountRwf}
+                      itemName={selectedTier}
+                      onRequestAdmin={async () => {
+                        await supportMutation.mutateAsync({
+                          org_id: activeOrg?.id || "",
+                          title: "Request for Platform MoMo Payment Credentials",
+                          description: `Member from @${activeOrg?.slug} is requesting Superadmin to configure MTN MoMo settlement credentials to pay for plan ${selectedTier}.`,
+                          priority: "critical"
+                        });
+                      }}
+                    />
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] uppercase text-gray-400 font-mono tracking-wider font-bold">Select Tier to Recommend & Pay</label>
+                      <label className="text-xs text-slate-600 dark:text-slate-400 font-medium">Select tier to pay</label>
                       <select
                         value={selectedTier}
                         onChange={(e) => setSelectedTier(e.target.value)}
-                        className="w-full text-xs rounded-lg border bg-white border-gray-305 px-3 py-2 text-stone-855 select-none focus:ring-1 focus:ring-emerald-500 font-semibold dark:bg-slate-900 dark:border-slate-750 dark:text-slate-100"
+                        className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100 select-none focus:ring-1 focus:ring-emerald-500 font-medium"
                       >
                         <option value="Free Forever Plan - $0/month">Free Forever Plan — $0</option>
                         <option value="Growth Plan - $25/month">Growth Tier — $25 ({(25 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(25, 'USD'))})</option>
@@ -1514,24 +1728,24 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
 
                     <div className="flex flex-col gap-1">
                       <Input
-                        label="MTN MoMo Payer Phone Number (078.. / 079..)"
+                        label="MTN MoMo Phone (078 / 079)"
                         value={momoPhone}
                         onChange={(e) => setMomoPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                        placeholder="078XXXXXXX or 079XXXXXXX"
+                        placeholder="078XXXXXXX or 079..."
                       />
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="text-[10px] text-stone-400 font-mono">Quick prefix:</span>
                         <button
                           type="button"
                           onClick={() => setMomoPhone("078")}
-                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700"
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700 dark:bg-slate-800 dark:text-slate-200"
                         >
                           078
                         </button>
                         <button
                           type="button"
                           onClick={() => setMomoPhone("079")}
-                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700"
+                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700 dark:bg-slate-800 dark:text-slate-200"
                         >
                           079
                         </button>
@@ -1540,9 +1754,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                     <Input label="MoMo / Airtel Ref ID Key (Optional)" value={momoRef} onChange={(e) => setMomoRef(e.target.value)} placeholder="TXNXXXXXXX" />
 
                     <div className="flex flex-col gap-1 w-full">
-                      <label className="text-[10px] uppercase text-emerald-800 font-mono tracking-wider font-bold">Payment SMS Message / Proof of Transfer <span className="text-red-500">*</span></label>
+                      <label className="text-[10px] uppercase text-emerald-800 dark:text-emerald-400 font-mono tracking-wider font-bold">Payment SMS Message / Proof of Transfer <span className="text-red-500">*</span></label>
                       <textarea
-                        className="w-full text-xs rounded-lg border bg-white border-gray-350 p-2.5 h-20 bg-slate-50/20 text-stone-900 font-sans focus:ring-1 focus:ring-emerald-500"
+                        className="w-full text-xs rounded-lg border bg-white/80 border-gray-300 p-2.5 h-20 text-stone-900 dark:bg-slate-950/80 dark:border-slate-800 dark:text-white font-sans focus:ring-1 focus:ring-emerald-500"
                         value={smsProof}
                         onChange={(e) => setSmsProof(e.target.value)}
                         required
@@ -1550,27 +1764,32 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       />
                     </div>
 
-                    <Button type="submit" loading={submittingPayment} icon={<Crown className="h-4 w-4" />} className="w-full py-2.5 mt-1">
+                    <Button type="submit" loading={submittingPayment} icon={<Crown className="h-4 w-4" />} className="w-full py-2.5 mt-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl">
                       Submit Payment Proof & Recommend
                     </Button>
                   </form>
                 )}
-              </Card>
+              </div>
 
-              <Card title="Text/Message Workspace Admin">
+              <div className="rounded-2xl p-5 bg-white/45 dark:bg-slate-900/40 backdrop-blur-md border border-white/60 dark:border-white/10 shadow-xs flex flex-col gap-4">
+                <div className="border-b border-stone-200/50 dark:border-slate-800/60 pb-2.5">
+                  <h3 className="font-display font-bold text-sm text-stone-900 dark:text-white flex items-center justify-between">
+                    <span>Text/Message Workspace Admin</span>
+                  </h3>
+                </div>
                 {memberSupportSuccess ? (
                   <div className="p-3.5 bg-emerald-50 border border-emerald-150 text-emerald-850 rounded-lg font-bold flex items-center gap-2 text-xs">
                     <CheckCircle className="h-4.5 w-4.5" /> {memberSupportSuccess}
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-4 text-xs font-semibold text-gray-700">
-                    <p className="text-gray-500 font-normal leading-normal text-[11px]">
+                  <div className="flex flex-col gap-4 text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    <p className="text-gray-500 dark:text-gray-400 font-normal leading-normal text-[11px]">
                       Send a secure internal text message or pager notice to your Workspace Admin requesting to restore workspace access.
                     </p>
                     <div className="flex flex-col gap-1.5 w-full">
                       <label className="text-[10px] uppercase text-gray-400 font-mono tracking-wider font-bold">Write message to admin</label>
                       <textarea
-                        className="w-full text-xs rounded-lg border bg-white border-gray-305 p-3 h-24 bg-slate-50/20 text-stone-900 font-sans"
+                        className="w-full text-xs rounded-lg border bg-white/80 border-gray-300 p-3 h-24 text-stone-900 dark:bg-slate-950/80 dark:border-slate-800 dark:text-white font-sans"
                         value={memberSupportMsg}
                         onChange={(e) => setMemberSupportMsg(e.target.value)}
                         placeholder="e.g. Hi Admin, our 30-day trial is finished and we are locked out. Please upgrade our subscription so we can record today's ledger..."
@@ -1597,13 +1816,13 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                     </Button>
                   </div>
                 )}
-              </Card>
+              </div>
             </div>
           )}
         </div>
       </div>
     );
-  }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col pt-14 text-sm">
@@ -1617,7 +1836,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         onClose={() => setSidebarOpen(false)} 
         onStartTour={() => handleStartTour(0)} 
       />
-      <main className="flex-1 md:pl-52 min-w-0 flex flex-col">
+      <main className="flex-1 md:pl-52 min-w-0 flex flex-col transition-all duration-200">
         <div className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-7xl mx-auto">
           {lifecycle.isInGracePeriod && (
             <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-250 dark:border-amber-900 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in">
@@ -1661,10 +1880,60 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
             </div>
           )}
 
-          {children}
+          {/* Read-Only Notice Banner when Blocked */}
+          {isBlocked && (
+            <div className="mb-5 p-3.5 sm:p-4 bg-amber-500/10 dark:bg-amber-950/30 border border-amber-400/40 dark:border-amber-700/50 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-stone-900 dark:text-stone-100 backdrop-blur-xs shadow-xs animate-in fade-in">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-9 w-9 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+                  <Lock className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs sm:text-sm font-bold text-amber-950 dark:text-amber-200">
+                      Read-Only Document & Data Mode Active
+                    </h4>
+                    <span className="text-[9px] font-mono font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full uppercase">
+                      Viewing Allowed
+                    </span>
+                  </div>
+                  <p className="text-xs text-stone-600 dark:text-stone-300 mt-0.5">
+                    Your records and documents are preserved and viewable below. Complete payment to make edits, export files, or add entries.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setIsPeekMode(false)}
+                className="bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-medium text-xs h-8.5 px-3.5 rounded-lg shrink-0 cursor-pointer shadow-xs flex items-center gap-1.5 self-start sm:self-auto"
+              >
+                <span>Renew Subscription</span>
+              </Button>
+            </div>
+          )}
+
+          {/* Workspace Content with Transparent Protective Layer in front of context */}
+          <div className="relative">
+            {/* The underlying content / documents / tables */}
+            <div className={isBlocked ? "pointer-events-none select-text" : ""}>
+              {children}
+            </div>
+
+            {/* A transparent layer in front of context to allow reading but prevent modification */}
+            {isBlocked && (
+              <div 
+                className="absolute inset-0 z-20 bg-slate-900/[0.04] dark:bg-black/[0.15] backdrop-blur-[0.5px] rounded-xl cursor-default flex flex-col items-center justify-start p-4 pointer-events-auto"
+                onClick={() => {
+                  addToast("Workspace is in read-only mode. All records and documents are preserved. Click 'Renew Subscription' to restore editing access.", "info");
+                }}
+                title="Read-Only Mode: Renew subscription to restore interactive editing and exports"
+              />
+            )}
+          </div>
         </div>
       </main>
-      <GuiderAssistant />
+
+      {/* Glassmorphism Transparent Overlay for Plan Lockout */}
+      {renderBlockedGlassmorphismOverlay()}
 
       {/* Interactive Tooltips-with-Steps Tour */}
       <WorkspaceTour
@@ -1704,6 +1973,10 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         description={`Impacto License Renewal: ${selectedTier}`}
         itemType="subscription"
         itemId={selectedTier.toLowerCase().includes("growth") ? "growth" : selectedTier.toLowerCase().includes("pro") ? "pro" : "starter"}
+        recipientMtnNumber={platformSettings.mtn_payment_number}
+        recipientMerchantCode={platformSettings.momo_merchant_code || platformSettings.mtn_merchant_code}
+        recipientName={platformSettings.payment_name}
+        isPlatformFee={true}
         onSuccess={handleLockoutMoMoSuccess}
       />
     </div>

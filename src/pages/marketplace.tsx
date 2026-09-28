@@ -129,22 +129,22 @@ export const OrganizationMarketplace: React.FC<MarketplaceProps> = ({
   return (
     <div className="space-y-6 md:space-y-8 container mx-auto max-w-7xl px-4 py-6 font-sans select-none" id="marketplace-container">
       {/* Header section */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-gray-200 dark:border-slate-800 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
         <div>
-          <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 tracking-wider uppercase">
+          <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
             {activeOrg?.name} {t("marketplace_listed", "Marketplace")}
           </span>
-          <h1 className="text-2xl md:text-3xl font-extrabold font-display leading-none tracking-tight text-stone-900 dark:text-white mt-1">
+          <h1 className="text-2xl md:text-3xl font-bold leading-tight tracking-tight text-slate-900 dark:text-white mt-1">
             {t("marketplace_title")}
           </h1>
-          <p className="text-xs md:text-sm text-gray-500 dark:text-slate-400 mt-1 font-medium">
+          <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1 font-normal">
             {t("marketplace_sub")}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           {isAdmin && (
-            <Button onClick={() => setShowAddModal(true)} className="flex items-center gap-1.5 font-bold rounded-xl bg-emerald-700 hover:bg-emerald-800" id="btn-add-product">
+            <Button onClick={() => setShowAddModal(true)} className="flex items-center gap-1.5 font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700" id="btn-add-product">
               <Plus className="h-4 w-4" /> {t("marketplace_log_item")}
             </Button>
           )}
@@ -153,10 +153,10 @@ export const OrganizationMarketplace: React.FC<MarketplaceProps> = ({
 
       {/* Admin Leads Notifications Section */}
       {isAdmin && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 rounded-2xl shadow-3xs" id="leads-notification-box">
-          <div className="flex items-center gap-2 mb-3.5 border-b border-gray-200 dark:border-slate-800 pb-3">
-            <Shield className="h-4 w-4 text-[#156c45] dark:text-emerald-400" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl shadow-xs" id="leads-notification-box">
+          <div className="flex items-center gap-2 mb-3.5 border-b border-slate-200 dark:border-slate-800 pb-3">
+            <Shield className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
               {t("marketplace_admin_center", { count: leads?.length || 0 })}
             </h3>
           </div>
@@ -165,29 +165,29 @@ export const OrganizationMarketplace: React.FC<MarketplaceProps> = ({
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b border-gray-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase text-[11px] leading-normal">
+                  <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-semibold text-xs leading-normal">
                     <th className="py-2.5 px-3">{t("marketplace_date")}</th>
                     <th className="py-2.5 px-3">{t("marketplace_interested_member")}</th>
                     <th className="py-2.5 px-3">{t("marketplace_product_title")}</th>
                     <th className="py-2.5 px-3">{t("marketplace_custom_note")}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200/70 dark:divide-slate-800/80 text-stone-800 dark:text-slate-200">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
                   {leads.slice(0, 5).map((l) => (
                     <tr key={l.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                      <td className="py-3 px-3 font-mono text-[10px] text-slate-400">
+                      <td className="py-3 px-3 font-mono text-xs text-slate-400">
                         {new Date(l.created_at).toLocaleDateString()}
                       </td>
                       <td className="py-3 px-3">
                         <div className="flex flex-col">
-                          <span className="font-bold">{l.member_name}</span>
-                          <span className="text-[10px] text-slate-400">{l.member_email}</span>
+                          <span className="font-semibold text-slate-900 dark:text-white">{l.member_name}</span>
+                          <span className="text-xs text-slate-400">{l.member_email}</span>
                         </div>
                       </td>
-                      <td className="py-3 px-3 font-bold text-emerald-800 dark:text-emerald-400">
+                      <td className="py-3 px-3 font-medium text-emerald-700 dark:text-emerald-400">
                         {l.product_title}
                       </td>
-                      <td className="py-3 px-3 font-medium text-slate-600 dark:text-slate-300 leading-snug">
+                      <td className="py-3 px-3 font-normal text-slate-600 dark:text-slate-300 leading-snug">
                         {l.message}
                       </td>
                     </tr>
@@ -196,13 +196,13 @@ export const OrganizationMarketplace: React.FC<MarketplaceProps> = ({
               </table>
             </div>
           ) : (
-            <p className="text-[11px] text-slate-400 italic">{t("marketplace_no_leads")}</p>
+            <p className="text-xs text-slate-400 italic">{t("marketplace_no_leads")}</p>
           )}
         </div>
       )}
 
       {/* Grid Filter */}
-      <div className="flex justify-between items-center bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 rounded-2xl shadow-3xs">
+      <div className="flex justify-between items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl shadow-xs">
         <div className="w-full max-w-sm">
           <Input
             placeholder={t("marketplace_search_items")}
@@ -210,7 +210,7 @@ export const OrganizationMarketplace: React.FC<MarketplaceProps> = ({
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <div className="text-xs text-slate-500 dark:text-slate-400 font-mono font-bold">
+        <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
           {t("marketplace_total", { count: filteredProducts?.length || 0 })}
         </div>
       </div>
@@ -222,7 +222,7 @@ export const OrganizationMarketplace: React.FC<MarketplaceProps> = ({
       ) : filteredProducts && filteredProducts.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="products-grid">
           {filteredProducts.map((p) => (
-            <div key={p.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-3xs hover:shadow-md transition duration-200 flex flex-col justify-between">
+            <div key={p.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition duration-200 flex flex-col justify-between">
               <div>
                 {/* Product image placeholder if missing */}
                 <div className="h-44 w-full bg-slate-100 dark:bg-slate-800/80 flex items-center justify-center overflow-hidden relative">
@@ -237,13 +237,13 @@ export const OrganizationMarketplace: React.FC<MarketplaceProps> = ({
                   ) : (
                     <ShoppingBag className="h-12 w-12 text-slate-300 dark:text-slate-600" />
                   )}
-                  <span className="absolute top-2.5 right-2.5 bg-zinc-900/80 backdrop-blur-xs text-white px-2.5 py-1 text-xs font-extrabold rounded-lg font-mono">
+                  <span className="absolute top-2.5 right-2.5 bg-slate-900/90 text-white px-2.5 py-1 text-xs font-semibold rounded-md font-mono tabular-nums">
                     {p.price.toLocaleString()} RWF
                   </span>
                 </div>
 
                 <div className="p-5 space-y-2">
-                  <h3 className="text-base font-bold text-stone-900 dark:text-white leading-tight font-display">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
                     {p.title}
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-relaxed">
@@ -252,10 +252,10 @@ export const OrganizationMarketplace: React.FC<MarketplaceProps> = ({
                 </div>
               </div>
 
-              <div className="p-5 border-t border-gray-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3">
-                <div className="flex flex-col gap-1 text-[10px] text-slate-400 font-mono leading-tight">
-                  <span className="flex items-center gap-1">
-                    <User className="h-3 w-3" /> {t("marketplace_contacts")} {p.contact_info}
+              <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3">
+                <div className="flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400 leading-tight">
+                  <span className="flex items-center gap-1.5">
+                    <User className="h-3 w-3 text-slate-400" /> {t("marketplace_contacts")} {p.contact_info}
                   </span>
                   <span>{t("marketplace_listed")} {new Date(p.created_at).toLocaleDateString()}</span>
                 </div>
@@ -263,7 +263,7 @@ export const OrganizationMarketplace: React.FC<MarketplaceProps> = ({
                 <div className="pt-1">
                   <Button
                     size="sm"
-                    className="w-full flex items-center justify-center gap-1.5 text-xs font-bold rounded-xl"
+                    className="w-full flex items-center justify-center gap-1.5 text-xs font-medium rounded-lg"
                     onClick={() => setSelectedProduct(p)}
                   >
                     <Star className="h-3.5 w-3.5 shrink-0" /> {t("marketplace_express_interest")}
@@ -274,10 +274,10 @@ export const OrganizationMarketplace: React.FC<MarketplaceProps> = ({
           ))}
         </div>
       ) : (
-        <div className="text-center py-16 border border-slate-200/80 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 shadow-3xs" id="empty-marketplace">
+        <div className="text-center py-16 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs" id="empty-marketplace">
           <ShoppingBag className="h-12 w-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-          <h2 className="text-sm font-bold text-stone-800 dark:text-white">{t("marketplace_no_items")}</h2>
-          <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
+          <h2 className="text-sm font-bold text-slate-800 dark:text-white">{t("marketplace_no_items")}</h2>
+          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
             {t("marketplace_no_items_desc")}
           </p>
         </div>

@@ -291,48 +291,48 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
   const overallRate = totalSlots > 0 ? Math.round((totalPresentCount / totalSlots) * 100) : 0;
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 md:p-6 shadow-3xs space-y-5">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 md:p-6 shadow-xs space-y-5">
       {/* Top Header & Direct Local Excel Export Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white">
               Dynamic Attendance Grid
             </h3>
             {isPaidPlan ? (
-              <span className="text-[10px] font-mono font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 px-2.5 py-0.5 rounded-full">
-                Interactive Grid (Paid Plan)
+              <span className="inline-flex items-center text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/60">
+                Interactive Grid
               </span>
             ) : (
-              <span className="text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                <Lock className="h-3 w-3" /> Free Forever Plan
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800/60">
+                <Lock className="h-3 w-3" /> Free Mode
               </span>
             )}
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Dynamic two-dimensional matrix view with <strong>Events in rows</strong> and <strong>Users in columns</strong>.
+            Two-dimensional matrix with scheduled events in rows and active members in columns.
           </p>
         </div>
 
-        {/* Direct Local Excel Export Button (Highlighted for Free plan & available for all) */}
+        {/* Direct Local Excel Export Button */}
         <div className="flex flex-wrap items-center gap-2.5">
           <Button
             size="sm"
             onClick={handleExportLocalAttendanceExcel}
             icon={<FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
             variant="outline"
-            className="border-emerald-300 dark:border-emerald-700/80 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-xs font-bold shadow-xs cursor-pointer"
+            className="text-xs font-medium"
           >
-            Export Local Attendance (Excel)
+            Export Attendance Spreadsheet
           </Button>
 
           {!isPaidPlan && (
             <Button
               size="sm"
               onClick={() => navigate("/dashboard/settings")}
-              className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium"
             >
-              Upgrade to Unlock Interactive Grid
+              Upgrade for Live Matrix Check-in
             </Button>
           )}
         </div>
@@ -340,16 +340,16 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
 
       {/* Free Plan Information Banner */}
       {!isPaidPlan && (
-        <div className="p-3.5 bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/50 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-200">
+        <div className="p-3.5 bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/50 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-200">
           <div className="flex items-center gap-2.5">
-            <Info className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400 shrink-0" />
-            <p className="text-[11.5px] leading-relaxed">
-              <strong>Free Plan Features:</strong> You have unlimited access to <strong>Direct Local Excel Export</strong> of all attendance records above. Live real-time attendance modification in the interactive matrix requires the <strong>Event & Attendance Package ($4/mo)</strong> or <strong>Starter, Growth, or Pro</strong>.
+            <Info className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <p className="text-xs leading-relaxed font-normal">
+              Direct local spreadsheet export is unlimited. Live interactive check-in in the web matrix is available with the Event Package or upgraded subscriptions.
             </p>
           </div>
-          <Badge color="amber" className="shrink-0 font-bold uppercase text-[10px]">
-            Direct Local Export Enabled
-          </Badge>
+          <span className="shrink-0 text-xs font-medium text-amber-800 dark:text-amber-300">
+            Export Enabled
+          </span>
         </div>
       )}
 
@@ -363,7 +363,7 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
             placeholder="Search events (rows)..."
             value={eventSearch}
             onChange={(e) => setEventSearch(e.target.value)}
-            className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-8 pr-3 py-2 outline-none focus:ring-2 focus:ring-emerald-600 text-slate-900 dark:text-white"
+            className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-8 pr-3 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
           />
         </div>
 
@@ -375,39 +375,39 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
             placeholder="Filter users (columns)..."
             value={memberSearch}
             onChange={(e) => setMemberSearch(e.target.value)}
-            className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-8 pr-3 py-2 outline-none focus:ring-2 focus:ring-emerald-600 text-slate-900 dark:text-white"
+            className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-8 pr-3 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
           />
         </div>
 
         {/* Total Events & Users Stats */}
-        <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 text-xs">
+        <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 text-xs">
           <span className="text-slate-500">Dimensions:</span>
-          <span className="font-bold text-slate-800 dark:text-slate-200 font-mono">
+          <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">
             {filteredEvents.length} Events × {activeMembers.length} Members
           </span>
         </div>
 
         {/* Overall Attendance Rate */}
-        <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40 text-xs">
-          <span className="text-emerald-800 dark:text-emerald-300 font-medium">Presence Rate:</span>
-          <span className="font-bold text-emerald-700 dark:text-emerald-400 font-mono">
+        <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 text-xs">
+          <span className="text-slate-500">Overall Presence:</span>
+          <span className="font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums">
             {overallRate}% ({totalPresentCount}/{totalSlots})
           </span>
         </div>
       </div>
 
       {/* The Dynamic Matrix Grid (Users in Columns, Events in Rows) */}
-      <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-3xs bg-white dark:bg-slate-900">
+      <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs bg-white dark:bg-slate-900">
         <div className="overflow-x-auto max-h-[580px] scrollbar-thin">
           <table className="w-full border-collapse text-left text-xs">
             {/* Table Header: Columns = Users/Members */}
-            <thead className="sticky top-0 z-20 bg-slate-100/95 dark:bg-slate-800/95 backdrop-blur-xs border-b border-slate-200 dark:border-slate-700 select-none">
+            <thead className="sticky top-0 z-20 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 select-none">
               <tr>
                 {/* Sticky Left: Event Title & Details */}
-                <th className="sticky left-0 z-30 bg-slate-100 dark:bg-slate-800 p-3 min-w-[220px] font-bold text-slate-800 dark:text-slate-200 border-r border-slate-200 dark:border-slate-700 shadow-3xs">
+                <th className="sticky left-0 z-30 bg-slate-50 dark:bg-slate-800 p-3 min-w-[220px] font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                    <span>Scheduled Events (Rows)</span>
+                    <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                    <span>Scheduled Events</span>
                   </div>
                 </th>
 
@@ -417,16 +417,16 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
                   return (
                     <th
                       key={m.id}
-                      className="p-2.5 min-w-[120px] max-w-[140px] text-center font-semibold text-slate-700 dark:text-slate-200 border-r border-slate-200/60 dark:border-slate-700/60"
+                      className="p-2.5 min-w-[120px] max-w-[140px] text-center font-medium text-slate-700 dark:text-slate-300 border-r border-slate-200/60 dark:border-slate-700/60"
                     >
-                      <div className="flex flex-col items-center gap-1">
-                        <div className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-[10px] flex items-center justify-center border border-emerald-300 dark:border-emerald-800">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <div className="h-6 w-6 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-[10px] flex items-center justify-center border border-slate-200 dark:border-slate-700">
                           {initial}
                         </div>
-                        <span className="font-bold text-[11px] truncate w-full" title={m.user?.full_name}>
+                        <span className="font-semibold text-xs truncate w-full" title={m.user?.full_name}>
                           {m.user?.full_name || "Member"}
                         </span>
-                        <span className="text-[9px] font-mono text-slate-400">
+                        <span className="text-[10px] text-slate-400 font-mono">
                           #{m.member_number || "ID"}
                         </span>
                       </div>
@@ -435,13 +435,13 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
                 })}
 
                 {/* Right: Summary Columns per Event */}
-                <th className="p-2.5 min-w-[70px] text-center font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20 border-l border-slate-200 dark:border-slate-700">
+                <th className="p-2.5 min-w-[65px] text-center font-semibold text-slate-700 dark:text-slate-300 border-l border-slate-200 dark:border-slate-700">
                   Present
                 </th>
-                <th className="p-2.5 min-w-[70px] text-center font-bold text-rose-700 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-950/20">
+                <th className="p-2.5 min-w-[65px] text-center font-semibold text-slate-700 dark:text-slate-300">
                   Absent
                 </th>
-                <th className="p-2.5 min-w-[80px] text-center font-bold text-slate-800 dark:text-slate-200">
+                <th className="p-2.5 min-w-[70px] text-center font-semibold text-slate-700 dark:text-slate-300">
                   Rate %
                 </th>
               </tr>
@@ -467,27 +467,27 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
                   return (
                     <tr
                       key={ev.id}
-                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group"
+                      className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors group"
                     >
                       {/* Sticky Left Event Info Column */}
-                      <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 p-3 border-r border-slate-200 dark:border-slate-700 shadow-3xs">
+                      <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 p-3 border-r border-slate-200 dark:border-slate-700">
                         <div className="space-y-1">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-mono font-bold text-slate-400">
+                            <span className="text-[10px] font-mono text-slate-400">
                               #{idx + 1}
                             </span>
-                            <span className="font-bold text-slate-900 dark:text-white text-xs line-clamp-1" title={ev.title}>
+                            <span className="font-semibold text-slate-900 dark:text-white text-xs line-clamp-1" title={ev.title}>
                               {ev.title}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+                          <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
                             <span>{new Date(ev.date_time).toLocaleDateString()}</span>
                             <span>•</span>
                             <span className="truncate max-w-[110px]" title={ev.location}>{ev.location}</span>
                           </div>
                           <div>
                             <span
-                              className={`text-[9px] font-mono uppercase px-1.5 py-0.2 rounded font-bold ${
+                              className={`text-[10px] font-medium px-1.5 py-0.5 rounded capitalize ${
                                 isPassed
                                   ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
                                   : "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
@@ -514,23 +514,23 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
                               type="button"
                               disabled={!isPaidPlan || isUpdating}
                               onClick={() => handleToggleCell(ev.id, m.id, m.user?.full_name || "Member", ev.title)}
-                              className={`w-full py-1.5 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all ${
+                              className={`w-full py-1.5 px-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors ${
                                 !isPaidPlan
                                   ? isPresent
-                                    ? "bg-emerald-100/70 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 cursor-not-allowed opacity-90"
+                                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 cursor-not-allowed"
                                     : "bg-slate-100 text-slate-400 dark:bg-slate-800/60 dark:text-slate-500 cursor-not-allowed"
                                   : isPresent
-                                  ? "bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 dark:text-emerald-300 cursor-pointer shadow-3xs"
-                                  : "bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-400 cursor-pointer"
+                                  ? "bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 dark:text-emerald-300 cursor-pointer"
+                                  : "bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 cursor-pointer"
                               }`}
                               title={
                                 !isPaidPlan
-                                  ? `${m.user?.full_name} is ${isPresent ? "Present" : "Absent"}. Marking attendance requires Paid Plan.`
+                                  ? `${m.user?.full_name} is ${isPresent ? "Present" : "Absent"}.`
                                   : `Click to mark ${m.user?.full_name} as ${isPresent ? "Absent" : "Present"}`
                               }
                             >
                               {isUpdating ? (
-                                <span className="text-[10px] animate-pulse font-mono">Saving...</span>
+                                <span className="text-[10px] animate-pulse">Saving...</span>
                               ) : isPresent ? (
                                 <>
                                   <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
@@ -548,13 +548,13 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
                       })}
 
                       {/* Event Row Summaries */}
-                      <td className="p-2 text-center font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/10 border-l border-slate-100 dark:border-slate-800">
+                      <td className="p-2 text-center font-medium text-emerald-700 dark:text-emerald-400 border-l border-slate-100 dark:border-slate-800">
                         {rowPresentCount}
                       </td>
-                      <td className="p-2 text-center font-bold text-rose-700 dark:text-rose-400 bg-rose-50/30 dark:bg-rose-950/10">
+                      <td className="p-2 text-center font-medium text-rose-600 dark:text-rose-400">
                         {rowAbsentCount}
                       </td>
-                      <td className="p-2 text-center font-bold text-slate-800 dark:text-slate-200">
+                      <td className="p-2 text-center font-medium text-slate-700 dark:text-slate-300">
                         {rowRate}%
                       </td>
                     </tr>

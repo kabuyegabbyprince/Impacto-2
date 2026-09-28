@@ -206,31 +206,29 @@ export const AssetTracker: React.FC<AssetTrackerProps> = ({ members = [] }) => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
-              <Box className="h-5 w-5" />
-            </span>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white font-display">
-              Asset & Equipment Inventory Tracker
+            <Box className="h-5 w-5 text-slate-700 dark:text-slate-300" />
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+              Asset and Equipment Inventory Register
             </h2>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Track machinery, field electronics, IT equipment, assigned caretakers, and QR asset barcode tags.
+          <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">
+            Track machinery, field equipment, electronics, assigned caretakers, and QR asset barcode tags.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportExcel}
-            className="px-3.5 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
+            className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-medium flex items-center gap-1.5 transition"
           >
-            <Download className="h-4 w-4" /> Export to Excel
+            <Download className="h-4 w-4" /> Export CSV
           </button>
           <button
             onClick={openAddModal}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium transition flex items-center gap-2 shadow-xs"
           >
             <Plus className="h-4 w-4" /> Register New Asset
           </button>
@@ -239,43 +237,43 @@ export const AssetTracker: React.FC<AssetTrackerProps> = ({ members = [] }) => {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800">
-          <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Total Assets</span>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{filteredAssets.length}</p>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Assets</span>
+          <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1 tabular-nums">{filteredAssets.length}</p>
         </div>
-        <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800">
-          <span className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">Operational</span>
-          <p className="text-2xl font-bold text-emerald-600 mt-1">{operationalCount}</p>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Operational</span>
+          <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1 tabular-nums">{operationalCount}</p>
         </div>
-        <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800">
-          <span className="text-[11px] font-semibold text-amber-600 uppercase tracking-wider">In Maintenance</span>
-          <p className="text-2xl font-bold text-amber-600 mt-1">{maintenanceCount}</p>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">In Maintenance</span>
+          <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1 tabular-nums">{maintenanceCount}</p>
         </div>
-        <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800">
-          <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Total Valuation</span>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-            {totalValue.toLocaleString()} <span className="text-xs font-normal text-gray-500">RWF</span>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Valuation</span>
+          <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1 tabular-nums">
+            {totalValue.toLocaleString()} <span className="text-xs font-normal text-slate-500">RWF</span>
           </p>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-3 bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800">
+      <div className="flex flex-col sm:flex-row gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
         <div className="relative flex-1">
-          <Search className="h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search className="h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Search by asset name, serial number, caretaker, or location..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-xs text-gray-900 dark:text-white"
+            className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-600"
           />
         </div>
         <div className="flex gap-2">
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300"
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-600"
           >
             <option value="all">All Categories</option>
             <option value="Field Equipment">Field Equipment</option>
@@ -288,7 +286,7 @@ export const AssetTracker: React.FC<AssetTrackerProps> = ({ members = [] }) => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300"
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-600"
           >
             <option value="all">All Statuses</option>
             <option value="operational">Operational</option>
@@ -300,110 +298,110 @@ export const AssetTracker: React.FC<AssetTrackerProps> = ({ members = [] }) => {
       </div>
 
       {/* Asset Table */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-gray-50 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider border-b border-gray-200 dark:border-gray-800">
+            <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800">
               <tr>
-                <th className="p-4">Asset Details</th>
-                <th className="p-4">Category</th>
-                <th className="p-4">Serial Number</th>
-                <th className="p-4">Condition</th>
-                <th className="p-4">Assigned Caretaker</th>
-                <th className="p-4">Location</th>
-                <th className="p-4">Valuation</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 text-right">Actions</th>
+                <th className="p-3.5">Asset Details</th>
+                <th className="p-3.5">Category</th>
+                <th className="p-3.5">Serial Number</th>
+                <th className="p-3.5">Condition</th>
+                <th className="p-3.5">Assigned Caretaker</th>
+                <th className="p-3.5">Location</th>
+                <th className="p-3.5">Valuation</th>
+                <th className="p-3.5">Status</th>
+                <th className="p-3.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredAssets.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-gray-400">
-                    <Box className="h-10 w-10 mx-auto mb-2 opacity-40" />
-                    <p className="text-sm font-semibold">No assets found</p>
-                    <p className="text-xs mt-0.5">Click "Register New Asset" to add equipment.</p>
+                  <td colSpan={9} className="text-center py-12 text-slate-400">
+                    <Box className="h-10 w-10 mx-auto mb-2 opacity-40 text-slate-400" />
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">No assets found</p>
+                    <p className="text-xs mt-0.5 text-slate-500">Click "Register New Asset" to add equipment.</p>
                   </td>
                 </tr>
               ) : (
                 filteredAssets.map((asset) => (
-                  <tr key={asset.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition">
-                    <td className="p-4">
-                      <span className="font-bold text-gray-900 dark:text-white block">{asset.name}</span>
-                      {asset.notes && <span className="text-[11px] text-gray-500 line-clamp-1">{asset.notes}</span>}
+                  <tr key={asset.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                    <td className="p-3.5">
+                      <span className="font-medium text-slate-900 dark:text-white block">{asset.name}</span>
+                      {asset.notes && <span className="text-[11px] text-slate-400 line-clamp-1">{asset.notes}</span>}
                     </td>
-                    <td className="p-4 text-gray-600 dark:text-gray-300 font-medium">{asset.category}</td>
-                    <td className="p-4 font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                    <td className="p-3.5 text-slate-600 dark:text-slate-300 font-normal">{asset.category}</td>
+                    <td className="p-3.5 font-mono text-slate-700 dark:text-slate-300 text-xs">
                       {asset.serial_number}
                     </td>
-                    <td className="p-4">
+                    <td className="p-3.5">
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                        className={`px-2 py-0.5 rounded-md text-xs font-medium capitalize ${
                           asset.condition === "new" || asset.condition === "good"
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
                             : asset.condition === "fair"
-                            ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                            : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                            ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                            : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
                         }`}
                       >
                         {asset.condition.replace("_", " ")}
                       </span>
                     </td>
-                    <td className="p-4 text-gray-700 dark:text-gray-300">
+                    <td className="p-3.5 text-slate-700 dark:text-slate-300">
                       {asset.assigned_to_name ? (
                         <span className="flex items-center gap-1 font-medium">
-                          <User className="h-3.5 w-3.5 text-gray-400" />
+                          <User className="h-3.5 w-3.5 text-slate-400" />
                           {asset.assigned_to_name}
                         </span>
                       ) : (
-                        <span className="text-gray-400 italic">Unassigned</span>
+                        <span className="text-slate-400 italic">Unassigned</span>
                       )}
                     </td>
-                    <td className="p-4 text-gray-600 dark:text-gray-400">
+                    <td className="p-3.5 text-slate-600 dark:text-slate-400">
                       {asset.location ? (
                         <span className="flex items-center gap-1">
-                          <MapPin className="h-3.5 w-3.5 text-gray-400" /> {asset.location}
+                          <MapPin className="h-3.5 w-3.5 text-slate-400" /> {asset.location}
                         </span>
                       ) : (
                         "—"
                       )}
                     </td>
-                    <td className="p-4 font-mono font-bold text-gray-900 dark:text-white">
+                    <td className="p-3.5 font-semibold text-slate-900 dark:text-white tabular-nums">
                       {(asset.purchase_cost || 0).toLocaleString()} {asset.currency || "RWF"}
                     </td>
-                    <td className="p-4">
+                    <td className="p-3.5">
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                        className={`px-2 py-0.5 rounded-md text-xs font-medium capitalize ${
                           asset.status === "operational"
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
                             : asset.status === "maintenance"
-                            ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                            : "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                            ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                            : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                         }`}
                       >
                         {asset.status.replace("_", " ")}
                       </span>
                     </td>
-                    <td className="p-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                    <td className="p-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => setShowQrModal(asset)}
                           title="Generate QR Tag"
-                          className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+                          className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
                         >
                           <QrCode className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => openEditModal(asset)}
                           title="Edit Asset"
-                          className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-emerald-600"
+                          className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white"
                         >
                           <Edit3 className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteAsset(asset.id)}
                           title="Delete Asset"
-                          className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-600"
+                          className="p-1.5 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/30 text-slate-400 hover:text-rose-600"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -419,15 +417,15 @@ export const AssetTracker: React.FC<AssetTrackerProps> = ({ members = [] }) => {
 
       {/* ADD / EDIT ASSET MODAL */}
       {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl max-w-xl w-full border border-gray-200 dark:border-gray-800 shadow-2xl p-6 overflow-hidden flex flex-col max-h-[92vh]">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-800">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl max-w-xl w-full border border-slate-200 dark:border-slate-800 shadow-xl p-6 overflow-hidden flex flex-col max-h-[92vh]">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-2xl bg-emerald-600 text-white">
+                <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
                   <Box className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-gray-900 dark:text-white">
+                  <h3 className="font-semibold text-base text-slate-900 dark:text-white">
                     {editingAsset ? "Edit Asset Record" : "Register New Equipment / Asset"}
                   </h3>
                   <p className="text-xs text-gray-500">Record serial numbers, valuation, and physical location.</p>

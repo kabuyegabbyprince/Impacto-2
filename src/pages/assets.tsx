@@ -321,50 +321,45 @@ export const AssetManagementPage: React.FC = () => {
   const getConditionBadge = (condition: Asset["condition"]) => {
     switch (condition) {
       case "new":
-        return <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">Brand New</span>;
+        return <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Brand New</span>;
       case "good":
-        return <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300">Good</span>;
+        return <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Good</span>;
       case "fair":
-        return <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">Fair / Aging</span>;
+        return <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Fair / Aging</span>;
       case "needs_repair":
-        return <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300">Needs Repair</span>;
+        return <span className="text-xs font-medium text-rose-600 dark:text-rose-400">Needs Repair</span>;
       case "damaged":
-        return <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">Damaged</span>;
+        return <span className="text-xs font-medium text-rose-700 dark:text-rose-400">Damaged</span>;
       default:
-        return <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-gray-100 text-gray-700">Standard</span>;
+        return <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Standard</span>;
     }
   };
 
   const getStatusBadge = (status: Asset["status"]) => {
     switch (status) {
       case "operational":
-        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>Operational</span>;
+        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Operational</span>;
       case "maintenance":
-        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40"><Clock className="w-3 h-3" />Maintenance</span>;
+        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400"><Clock className="w-3.5 h-3.5" />Maintenance</span>;
       case "in_storage":
-        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700"><Boxes className="w-3 h-3" />In Storage / Stock</span>;
+        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400"><Boxes className="w-3.5 h-3.5" />In Storage</span>;
       case "decommissioned":
-        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300 border border-stone-200">Decommissioned</span>;
+        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500">Decommissioned</span>;
       case "disposed":
-        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-200">Disposed</span>;
+        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-600">Disposed</span>;
       default:
-        return <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-700">{status}</span>;
+        return <span className="text-xs font-medium text-slate-600">{status}</span>;
     }
   };
 
   return (
     <div className="space-y-6 pb-16">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200/80 dark:border-slate-800 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl md:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-              Asset & Stock Management
-            </h1>
-            <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-[#156c45]/10 text-[#156c45] dark:bg-emerald-950/50 dark:text-emerald-400 uppercase">
-              Management Module
-            </span>
-          </div>
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Asset and Inventory Management
+          </h1>
           <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
             Keep clear records of organizational equipment, inventory quantities, quality grades, market values, custody accountability, and maintenance notes.
           </p>
@@ -387,69 +382,61 @@ export const AssetManagementPage: React.FC = () => {
               onClick={handleOpenCreate}
               icon={<Plus className="h-4 w-4" />}
             >
-              Record New Asset / Stock
+              Record New Asset
             </Button>
           )}
         </div>
       </div>
 
       {/* KPI Metric Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-gray-200/80 dark:border-slate-800 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Book Value</span>
-            <div className="p-2 rounded-lg bg-emerald-50 text-[#156c45] dark:bg-emerald-950/50 dark:text-emerald-400">
-              <Boxes className="h-4 w-4" />
-            </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span>Total Book Value</span>
+            <Boxes className="h-4 w-4 text-slate-400" />
           </div>
-          <div className="text-lg md:text-xl font-black text-slate-900 dark:text-white mt-2">
+          <div className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-2 tabular-nums">
             {formatAmount(metrics.totalValue)}
           </div>
-          <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Recorded asset acquisition value</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal">Recorded acquisition value</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-gray-200/80 dark:border-slate-800 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Units / Stock Quantity</span>
-            <div className="p-2 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400">
-              <Layers className="h-4 w-4" />
-            </div>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span>Stock Units</span>
+            <Layers className="h-4 w-4 text-slate-400" />
           </div>
-          <div className="text-lg md:text-xl font-black text-slate-900 dark:text-white mt-2">
-            {metrics.totalItems} <span className="text-xs font-normal text-slate-400">({metrics.totalRecords} entries)</span>
+          <div className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-2 tabular-nums">
+            {metrics.totalItems} <span className="text-xs font-normal text-slate-500">({metrics.totalRecords} entries)</span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Cumulative inventory & equipment</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal">Cumulative inventory</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-gray-200/80 dark:border-slate-800 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Assigned In Custody</span>
-            <div className="p-2 rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400">
-              <User className="h-4 w-4" />
-            </div>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span>Assigned in Custody</span>
+            <User className="h-4 w-4 text-slate-400" />
           </div>
-          <div className="text-lg md:text-xl font-black text-slate-900 dark:text-white mt-2">
-            {metrics.inCustodyCount} <span className="text-xs font-normal text-slate-400">/ {metrics.totalRecords}</span>
+          <div className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-2 tabular-nums">
+            {metrics.inCustodyCount} <span className="text-xs font-normal text-slate-500">/ {metrics.totalRecords}</span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Under active member custody</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal">Under member custody</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-gray-200/80 dark:border-slate-800 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Operational Rate</span>
-            <div className="p-2 rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
-              <CheckCircle2 className="h-4 w-4" />
-            </div>
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span>Operational Rate</span>
+            <CheckCircle2 className="h-4 w-4 text-slate-400" />
           </div>
-          <div className="text-lg md:text-xl font-black text-slate-900 dark:text-white mt-2">
+          <div className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-2 tabular-nums">
             {metrics.totalRecords > 0 ? Math.round((metrics.operationalCount / metrics.totalRecords) * 100) : 100}%
           </div>
-          <p className="text-[11px] text-slate-400 mt-0.5 font-medium">{metrics.operationalCount} ready for active service</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal">{metrics.operationalCount} ready for active service</p>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-gray-200/80 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-3 shadow-2xs">
+      <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-3 shadow-xs">
         <div className="relative w-full md:w-80">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
@@ -457,7 +444,7 @@ export const AssetManagementPage: React.FC = () => {
             placeholder="Search name, identifier, custodian, notes..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-[#156c45]"
+            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs md:text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-600"
           />
           {searchTerm && (
             <button
@@ -474,7 +461,7 @@ export const AssetManagementPage: React.FC = () => {
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-2.5 py-1.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-[#156c45]"
+            className="px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-600"
           >
             <option value="all">All Categories</option>
             {categories.filter((c) => c !== "all").map((cat) => (
@@ -488,7 +475,7 @@ export const AssetManagementPage: React.FC = () => {
           <select
             value={selectedCondition}
             onChange={(e) => setSelectedCondition(e.target.value)}
-            className="px-2.5 py-1.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-[#156c45]"
+            className="px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-600"
           >
             <option value="all">All Conditions</option>
             <option value="new">Brand New</option>
@@ -502,7 +489,7 @@ export const AssetManagementPage: React.FC = () => {
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="px-2.5 py-1.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-[#156c45]"
+            className="px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-600"
           >
             <option value="all">All Operational States</option>
             <option value="operational">Operational</option>
@@ -515,23 +502,23 @@ export const AssetManagementPage: React.FC = () => {
       </div>
 
       {/* Asset Table Registry */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200/80 dark:border-slate-800 overflow-hidden shadow-2xs">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs md:text-sm">
-            <thead className="bg-gray-50 dark:bg-slate-800/80 border-b border-gray-200/80 dark:border-slate-800 text-[11px] font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400">
               <tr>
-                <th className="py-3 px-4 font-bold">Asset / Stock Item</th>
-                <th className="py-3 px-3 font-bold">Category & ID</th>
-                <th className="py-3 px-3 font-bold text-center">Qty</th>
-                <th className="py-3 px-3 font-bold">Quality Grade</th>
-                <th className="py-3 px-3 font-bold">Acquisition Value</th>
-                <th className="py-3 px-3 font-bold">Condition & State</th>
-                <th className="py-3 px-3 font-bold">Custody (Who has it)</th>
-                <th className="py-3 px-3 font-bold">Notes / Log</th>
-                <th className="py-3 px-4 font-bold text-right">Actions</th>
+                <th className="py-3 px-4">Asset / Stock Item</th>
+                <th className="py-3 px-3">Category & ID</th>
+                <th className="py-3 px-3 text-center">Qty</th>
+                <th className="py-3 px-3">Quality Grade</th>
+                <th className="py-3 px-3">Acquisition Value</th>
+                <th className="py-3 px-3">Condition & State</th>
+                <th className="py-3 px-3">Custody</th>
+                <th className="py-3 px-3">Notes</th>
+                <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredAssets.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-12 text-center text-slate-400">
@@ -563,11 +550,11 @@ export const AssetManagementPage: React.FC = () => {
                   return (
                     <tr
                       key={asset.id}
-                      className="hover:bg-gray-50/60 dark:hover:bg-slate-800/40 transition-colors"
+                      className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
                     >
                       {/* Name & Location */}
                       <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-white">
-                        <div className="font-bold">{asset.name}</div>
+                        <div className="font-medium text-slate-900 dark:text-white">{asset.name}</div>
                         {asset.location && (
                           <div className="flex items-center gap-1 text-[11px] text-slate-400 font-normal mt-0.5">
                             <MapPin className="h-3 w-3 shrink-0 text-slate-400" />
@@ -578,15 +565,15 @@ export const AssetManagementPage: React.FC = () => {
 
                       {/* Category & Identifier */}
                       <td className="py-3.5 px-3">
-                        <span className="inline-block text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                        <span className="inline-block text-xs font-medium text-slate-600 dark:text-slate-300">
                           {asset.category || "General"}
                         </span>
                         {asset.identifier ? (
-                          <div className="text-[10px] font-mono text-slate-400 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded w-fit mt-0.5">
+                          <div className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded w-fit mt-0.5">
                             {asset.identifier}
                           </div>
                         ) : asset.serial_number ? (
-                          <div className="text-[10px] font-mono text-slate-400 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded w-fit mt-0.5">
+                          <div className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded w-fit mt-0.5">
                             {asset.serial_number}
                           </div>
                         ) : (
@@ -596,7 +583,7 @@ export const AssetManagementPage: React.FC = () => {
 
                       {/* Quantity */}
                       <td className="py-3.5 px-3 text-center">
-                        <span className="inline-flex items-center justify-center font-bold px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs">
+                        <span className="inline-flex items-center justify-center font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs tabular-nums">
                           {asset.quantity ?? 1}
                         </span>
                       </td>
@@ -604,21 +591,21 @@ export const AssetManagementPage: React.FC = () => {
                       {/* Quality */}
                       <td className="py-3.5 px-3 text-slate-700 dark:text-slate-300">
                         {asset.quality ? (
-                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                          <span className="text-xs font-normal text-slate-700 dark:text-slate-300">
                             {asset.quality}
                           </span>
                         ) : (
-                          <span className="text-xs text-slate-400 italic">Not specified</span>
+                          <span className="text-xs text-slate-400 italic">Standard</span>
                         )}
                       </td>
 
                       {/* Acquisition Value */}
                       <td className="py-3.5 px-3">
-                        <div className="font-bold text-slate-900 dark:text-white">
+                        <div className="font-semibold text-slate-900 dark:text-white tabular-nums">
                           {formatAmount((Number(asset.purchase_cost) || 0) * (asset.quantity ?? 1))}
                         </div>
                         {(asset.quantity ?? 1) > 1 ? (
-                          <span className="text-[10px] text-slate-400 block mt-0.5">
+                          <span className="text-[10px] text-slate-400 block mt-0.5 tabular-nums">
                             {formatAmount(asset.purchase_cost || 0)}/unit
                           </span>
                         ) : asset.purchase_date ? (
@@ -638,21 +625,18 @@ export const AssetManagementPage: React.FC = () => {
                       <td className="py-3.5 px-3">
                         {asset.assigned_to_member_id || asset.assigned_to_name ? (
                           <div className="flex items-center gap-1.5">
-                            <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 flex items-center justify-center text-[10px] font-bold shrink-0">
+                            <div className="w-5 h-5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 flex items-center justify-center text-[10px] font-medium shrink-0">
                               <User className="h-3 w-3" />
                             </div>
                             <div className="truncate max-w-[150px]">
-                              <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs block truncate">
+                              <span className="font-medium text-slate-800 dark:text-slate-200 text-xs block truncate">
                                 {displayCustodian}
-                              </span>
-                              <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">
-                                Active Custodian
                               </span>
                             </div>
                           </div>
                         ) : (
                           <span className="text-xs text-slate-400 italic">
-                            In Storage / Unassigned
+                            In Storage
                           </span>
                         )}
                       </td>
@@ -665,13 +649,13 @@ export const AssetManagementPage: React.FC = () => {
                             className="cursor-pointer group flex items-start gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                             title="Click to view and edit notes"
                           >
-                            <FileText className="h-3.5 w-3.5 shrink-0 text-slate-400 group-hover:text-[#156c45] mt-0.5" />
+                            <FileText className="h-3.5 w-3.5 shrink-0 text-slate-400 group-hover:text-emerald-600 mt-0.5" />
                             <span className="truncate">{asset.notes}</span>
                           </div>
                         ) : (
                           <button
                             onClick={() => handleOpenNotes(asset)}
-                            className="text-[11px] text-slate-400 hover:text-[#156c45] underline flex items-center gap-1"
+                            className="text-xs text-slate-400 hover:text-emerald-600 flex items-center gap-1"
                           >
                             <Plus className="h-3 w-3" /> Add notes
                           </button>
@@ -680,10 +664,10 @@ export const AssetManagementPage: React.FC = () => {
 
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => handleOpenNotes(asset)}
-                            className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition"
+                            className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                             title="View/Edit notes"
                           >
                             <FileText className="h-3.5 w-3.5" />
@@ -693,15 +677,15 @@ export const AssetManagementPage: React.FC = () => {
                             <>
                               <button
                                 onClick={() => handleOpenEdit(asset)}
-                                className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 transition"
-                                title="Edit Asset / Change Custody"
+                                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                title="Edit Asset"
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                               </button>
 
                               <button
                                 onClick={() => setDeleteConfirmAsset(asset)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                                className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
                                 title="Remove Asset"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />

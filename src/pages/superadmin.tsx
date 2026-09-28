@@ -360,6 +360,7 @@ export const SuperadminDashboard: React.FC = () => {
   const [kesRate, setKesRate] = useState<number>(settings.kes_to_rwf_rate || 10);
   const [mtnNum, setMtnNum] = useState<string>(settings.mtn_payment_number || "0788100100");
   const [airtelNum, setAirtelNum] = useState<string>(settings.airtel_payment_number || "0733100100");
+  const [momoMerchantCode, setMomoMerchantCode] = useState<string>(settings.momo_merchant_code || settings.mtn_merchant_code || "880099");
   const [mName, setMName] = useState<string>(settings.payment_name || "VIRELLIX INC");
 
   const [activeChatId, setActiveChatId] = useState<string>("");
@@ -382,6 +383,8 @@ export const SuperadminDashboard: React.FC = () => {
         kes_to_rwf_rate: kesRate,
         mtn_payment_number: mtnNum,
         airtel_payment_number: airtelNum,
+        momo_merchant_code: momoMerchantCode,
+        mtn_merchant_code: momoMerchantCode,
         payment_name: mName
       });
       setSuccessMsg("Platform operator billing parameters saved successfully!");
@@ -2286,9 +2289,17 @@ export const SuperadminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="font-bold text-slate-700 dark:text-slate-300">Merchant Registered Legal Entity Name</label>
-                <Input type="text" value={mName} onChange={(e) => setMName(e.target.value)} placeholder="VIRELLIX INC" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">MTN MoMo Pay Merchant Code (*182*8*1*code#)</label>
+                  <Input type="text" value={momoMerchantCode} onChange={(e) => setMomoMerchantCode(e.target.value)} placeholder="880099" />
+                  <span className="text-[10px] text-slate-400">Merchant settlement code used for auto-generating *182*8*1*&#123;&#123;code&#125;&#125;#</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Merchant Registered Legal Entity Name</label>
+                  <Input type="text" value={mName} onChange={(e) => setMName(e.target.value)} placeholder="VIRELLIX INC" />
+                  <span className="text-[10px] text-slate-400">Official business name displayed on payment prompts</span>
+                </div>
               </div>
 
               <div className="pt-2 flex justify-end">

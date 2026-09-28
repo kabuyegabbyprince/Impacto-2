@@ -861,28 +861,24 @@ export const DashboardHome: React.FC = () => {
       )}
 
       {/* ========================================== */}
-      {/* 0. PRIMARY WORKSPACE METRICS ROW (IMAGE 5) */}
+      {/* 0. PRIMARY WORKSPACE METRICS ROW */}
       {/* ========================================== */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Metric 1: Active Members */}
         <div
           onClick={() => navigate("/dashboard/members")}
-          className="card card-glow bg-white dark:bg-slate-850 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 border-t-[3px] border-t-[#156c45] shadow-3xs cursor-pointer flex flex-col justify-between"
+          className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4a6357] dark:text-slate-400">
-              Active Members
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center shrink-0">
-              <Users className="h-4.5 w-4.5" />
-            </div>
+          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span>Active Members</span>
+            <Users className="h-4 w-4 text-slate-400 dark:text-slate-500" />
           </div>
-          <div className="mt-2">
-            <span className="text-3xl font-display font-bold text-[#111c16] dark:text-white">
+          <div className="mt-3">
+            <span className="text-2xl sm:text-3xl font-bold font-display text-slate-900 dark:text-white tabular-nums">
               {members?.length || 0}
             </span>
-            <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
-              of {(activeOrg as any)?.member_limit || 100} member cap
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-1">
+              of {(activeOrg as any)?.member_limit || 100} member capacity
             </p>
           </div>
         </div>
@@ -890,22 +886,18 @@ export const DashboardHome: React.FC = () => {
         {/* Metric 2: Strategic Goals */}
         <div
           onClick={() => navigate("/dashboard/goals")}
-          className="card card-glow bg-white dark:bg-slate-850 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 border-t-[3px] border-t-[#156c45] shadow-3xs cursor-pointer flex flex-col justify-between"
+          className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4a6357] dark:text-slate-400">
-              Strategic Goals
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center shrink-0">
-              <Target className="h-4.5 w-4.5" />
-            </div>
+          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span>Strategic Goals</span>
+            <Target className="h-4 w-4 text-slate-400 dark:text-slate-500" />
           </div>
-          <div className="mt-2">
-            <span className="text-3xl font-display font-bold text-[#111c16] dark:text-white">
+          <div className="mt-3">
+            <span className="text-2xl sm:text-3xl font-bold font-display text-slate-900 dark:text-white tabular-nums">
               {goals?.length || 0}
             </span>
-            <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
-              {goals?.filter(g => g.status !== 'completed').length || 0} active this quarter
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-1">
+              {goals?.filter(g => g.status !== 'completed').length || 0} active this cycle
             </p>
           </div>
         </div>
@@ -913,40 +905,36 @@ export const DashboardHome: React.FC = () => {
         {/* Metric 3: MoMo Collected */}
         <div
           onClick={() => navigate("/dashboard/fees")}
-          className="card card-glow bg-white dark:bg-slate-850 p-5 rounded-2xl border border-gray-200/80 dark:border-slate-800 border-t-[3px] border-t-[#156c45] shadow-3xs cursor-pointer flex flex-col justify-between"
+          className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#4a6357] dark:text-slate-400">
-              MoMo Collected
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-[#e8f5ee] dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 flex items-center justify-center shrink-0">
-              <Coins className="h-4.5 w-4.5" />
-            </div>
+          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span>MoMo Contributions</span>
+            <Coins className="h-4 w-4 text-slate-400 dark:text-slate-500" />
           </div>
-          <div className="mt-2">
-            <span className="text-3xl font-display font-bold text-[#111c16] dark:text-white">
-              {(financialStats.totalPaid || myFeeStats.myPaidTotal || 0).toLocaleString()}
+          <div className="mt-3">
+            <span className="text-2xl sm:text-3xl font-bold font-display text-slate-900 dark:text-white tabular-nums">
+              {(financialStats.totalPaid || myFeeStats.myPaidTotal || 0).toLocaleString()} <span className="text-xs font-mono font-normal text-slate-500">RWF</span>
             </span>
-            <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
-              RWF this cycle
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-1">
+              recorded collections
             </p>
           </div>
         </div>
       </div>
 
       {/* ========================================== */}
-      {/* 1. FINANCIAL STANDING & DUES HEALTH (COOPERATIVE COLLECTION METER OR MEMBER PERSONAL STANDING) */}
+      {/* 1. FINANCIAL STANDING & DUES HEALTH */}
       {/* ========================================== */}
-      <div className="bg-white dark:bg-slate-850 border border-gray-200 dark:border-slate-800 rounded-2xl p-5 shadow-3xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-800 pb-4 mb-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4 mb-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center shrink-0">
-              <Wallet className="h-5 w-5" />
+            <div className="h-9 w-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
+              <Wallet className="h-4.5 w-4.5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                  {isAccountant || isAdmin ? "Cooperative Dues Health & Collection Meter" : "Personal Dues Standing & Compliance"}
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                  {isAccountant || isAdmin ? "Cooperative Dues Health and Collection" : "Personal Dues Standing and Compliance"}
                 </h3>
                 {isAccountant || isAdmin ? (
                   <Badge color={financialStats.collectionRate >= 80 ? "green" : "amber"}>
@@ -958,17 +946,17 @@ export const DashboardHome: React.FC = () => {
                   <Badge color="amber">Action Needed</Badge>
                 )}
               </div>
-              <p className="text-xs text-gray-450 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {isAccountant || isAdmin
                   ? "Real-time aggregation of invoiced periodic contributions across all registered accounts."
-                  : "Transparent account balance and settlement status for your membership account."}
+                  : "Account balance and settlement status for your membership account."}
               </p>
             </div>
           </div>
 
           <Link
             to="/dashboard/fees"
-            className="self-start md:self-auto inline-flex items-center gap-1.5 text-xs font-bold text-[var(--org-primary)] hover:underline"
+            className="self-start md:self-auto inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
           >
             {isAccountant || isAdmin ? "Manage Fee Ledger" : "View Statement"} <ArrowRight className="h-3.5 w-3.5" />
           </Link>
@@ -4300,27 +4288,27 @@ export const MeetingsMinutes: React.FC = () => {
       <Modal open={!!qrModalMeet} onClose={() => setQrModalMeet(null)} title="On-Site Attendance QR Code Ticket">
         {qrModalMeet && (
           <div className="flex flex-col items-center justify-center p-6 text-center">
-            <span className="font-extrabold text-[10px] uppercase tracking-widest text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full mb-4">
-              📍 PHYSICAL SIGN-IN ACTIVE
+            <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-md mb-4 border border-emerald-200 dark:border-emerald-800">
+              Physical Sign-In Active
             </span>
-            <p className="text-sm font-extrabold text-stone-900 mb-2 font-display">
+            <p className="text-sm font-bold text-slate-900 dark:text-white mb-2 font-display">
               "{qrModalMeet.title}"
             </p>
-            <p className="text-xs text-stone-500 mb-6 font-semibold font-sans">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 font-normal font-sans">
               Scan this dynamic ticket with any mobile smartphone or tablet camera to access the Geo-Fenced attendance verification portal.
             </p>
             
-            <div className="p-4 bg-white border-2 border-dashed border-gray-200 rounded-3xl shadow-sm mb-6 flex justify-center items-center">
+            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs mb-6 flex justify-center items-center">
               <img 
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(window.location.origin + "/@" + activeOrg?.slug + "/checkin?meetId=" + qrModalMeet.id)}`}
                 alt="Attendance Check-In QR Code"
-                className="h-52 w-52 rounded-2xl"
+                className="h-48 w-48 rounded-lg"
                 referrerPolicy="no-referrer"
               />
             </div>
 
-            <div className="bg-gray-50 border p-3.5 rounded-2xl w-full text-left font-mono text-[10px] text-gray-600 mb-3 select-all cursor-pointer">
-              <p className="font-bold text-gray-400 uppercase tracking-wide text-[8px] mb-1 font-sans">SECURE ACCESS ROUTE LINK:</p>
+            <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-lg w-full text-left font-mono text-xs text-slate-600 dark:text-slate-300 mb-3 select-all cursor-pointer">
+              <p className="font-semibold text-slate-500 dark:text-slate-400 text-xs mb-1 font-sans">Access Route Link:</p>
               {window.location.origin + "/@" + activeOrg?.slug + "/checkin?meetId=" + qrModalMeet.id}
             </div>
 
@@ -5972,19 +5960,19 @@ export const EventsCalendar: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-6 select-none font-sans w-full">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
         <div>
-          <h2 className="text-xl md:text-2xl font-bold font-display text-gray-901">{t("dashboard_labels.events_board_title")}</h2>
-          <p className="text-xs text-gray-500 font-medium">{t("dashboard_labels.events_board_subtitle")}</p>
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{t("dashboard_labels.events_board_title")}</h2>
+          <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-0.5">{t("dashboard_labels.events_board_subtitle")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Direct Local Excel Export: direct, prominent, and unblocked for Free plan users */}
+          {/* Direct Local Excel Export */}
           <Button
             size="sm"
             variant="outline"
             icon={<FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
             onClick={exportAttendanceMatrixExcel}
-            className="border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 font-bold text-xs shadow-xs cursor-pointer"
+            className="text-xs font-medium"
             title="Export full attendance matrix to local Excel file"
           >
             {isPaidPlan ? "Export Master Matrix (Excel)" : "Export Local Attendance (Excel)"}
@@ -5998,25 +5986,25 @@ export const EventsCalendar: React.FC = () => {
       </div>
 
       {/* View Mode Switcher */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/40 p-2 rounded-2xl border border-slate-200/70 dark:border-slate-800">
-        <div className="flex items-center gap-1.5 p-1 bg-slate-200/60 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
           <button
             type="button"
             onClick={() => setViewMode("grid")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition cursor-pointer ${
               viewMode === "grid"
-                ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs"
+                ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs font-semibold"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
             <LayoutGrid className="h-3.5 w-3.5" />
-            <span>Dynamic Matrix Grid (Users in Columns, Events in Rows)</span>
+            <span>Attendance Grid Matrix</span>
             {isPaidPlan ? (
-              <span className="text-[9px] font-mono bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded font-bold">
-                Paid Live
+              <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded font-medium">
+                Live
               </span>
             ) : (
-              <span className="text-[9px] font-mono bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 px-1.5 py-0.2 rounded font-bold">
+              <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.2 rounded font-medium">
                 Free Mode
               </span>
             )}
@@ -6024,21 +6012,21 @@ export const EventsCalendar: React.FC = () => {
           <button
             type="button"
             onClick={() => setViewMode("schedule")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition cursor-pointer ${
               viewMode === "schedule"
-                ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs"
+                ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs font-semibold"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
             <CalendarDays className="h-3.5 w-3.5" />
-            <span>Event Schedule & Session Roster</span>
+            <span>Event Schedule and Roster</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-          <span>Events: <strong>{events.length}</strong></span>
+        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium px-2">
+          <span>Events: <strong className="text-slate-700 dark:text-slate-300">{events.length}</strong></span>
           <span>•</span>
-          <span>Active Members: <strong>{orgMembers?.filter(m => m.status === 'active').length || 0}</strong></span>
+          <span>Active Members: <strong className="text-slate-700 dark:text-slate-300">{orgMembers?.filter(m => m.status === 'active').length || 0}</strong></span>
         </div>
       </div>
 
@@ -6068,17 +6056,17 @@ export const EventsCalendar: React.FC = () => {
           addToast={addToast}
         />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Events Schedule list */}
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          <div className="relative w-full max-w-sm mb-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <div className="lg:col-span-2 flex flex-col gap-4">
+          <div className="relative w-full max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
               placeholder={t("Filter events by title or location...")}
               value={eventSearch}
               onChange={(e) => setEventSearch(e.target.value)}
-              className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 pl-9 pr-4 py-2 outline-none focus:ring-1 focus:ring-emerald-600 text-stone-850 dark:text-white transition"
+              className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 pl-9 pr-4 py-2 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white transition"
             />
           </div>
 
@@ -6089,32 +6077,38 @@ export const EventsCalendar: React.FC = () => {
               return (
                 <Card key={ev.id} title={ev.title} action={
                   <div className="flex items-center gap-1.5">
-                    <Badge color={displayEventStatus === "completed" ? "green" : "blue"}>{displayEventStatus.toUpperCase()}</Badge>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-md ${
+                      displayEventStatus === "completed" 
+                        ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                    }`}>
+                      {displayEventStatus}
+                    </span>
                     {isAdmin && (
                       <>
-                        <button onClick={() => handleEditInit(ev)} className="p-1 text-gray-400 hover:text-[var(--org-primary)]">
+                        <button onClick={() => handleEditInit(ev)} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
                           <Edit className="h-3.5 w-3.5" />
                         </button>
-                        <button onClick={() => handleDelete(ev)} className="p-1 text-gray-400 hover:text-red-600">
+                        <button onClick={() => handleDelete(ev)} className="p-1 text-slate-400 hover:text-rose-600">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </>
                     )}
                   </div>
                 }>
-                <p className="text-xs text-gray-500 mb-4 leading-normal">{ev.description}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-normal">{ev.description}</p>
                 
-                <div className="grid grid-cols-2 gap-4 text-xs font-semibold text-gray-550 border-t pt-4 leading-none">
-                  <span>Date: <span className="text-gray-900 font-mono">{new Date(ev.date_time).toLocaleDateString()}</span></span>
-                  <span>Venue: <span className="text-gray-901">{ev.location}</span></span>
+                <div className="grid grid-cols-2 gap-4 text-xs font-medium text-slate-500 border-t border-slate-100 dark:border-slate-800 pt-3">
+                  <span>Date: <span className="text-slate-900 dark:text-white font-mono">{new Date(ev.date_time).toLocaleDateString()}</span></span>
+                  <span>Venue: <span className="text-slate-900 dark:text-white">{ev.location}</span></span>
                 </div>
 
                 {isAdmin && (() => {
                   const attAccess = canAccessFeature(activeOrg, "qr_attendance");
                   return (
-                    <div className="flex justify-between items-center mt-6 pt-4 border-t border-dashed leading-none select-none shrink-0">
-                      <span className="text-[10px] text-emerald-600 font-mono">Click to load checklist</span>
-                      <Button size="sm" variant={selectedEvent?.id === ev.id ? "default" : "outline"} onClick={() => setSelectedEvent(ev)} className="flex items-center gap-1.5">
+                    <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 select-none">
+                      <span className="text-xs text-slate-400">Manage roster</span>
+                      <Button size="sm" variant={selectedEvent?.id === ev.id ? "default" : "outline"} onClick={() => setSelectedEvent(ev)} className="flex items-center gap-1.5 text-xs font-medium">
                         {!attAccess.allowed && <Lock className="h-3 w-3 text-amber-500" />}
                         {attAccess.allowed ? "Mark Attendance" : "View Attendance"}
                       </Button>
@@ -6138,30 +6132,30 @@ export const EventsCalendar: React.FC = () => {
 
               return (
               <div className="space-y-4">
-                <div className="border-b pb-3 space-y-1.5 text-xs">
-                  <span className="text-[10px] uppercase font-black tracking-wider text-emerald-800">Selected Event</span>
-                  <p className="font-bold text-stone-900 dark:text-white leading-tight">{selectedEvent.title}</p>
-                  <div className="flex justify-between items-center pt-2 font-mono text-[10px] text-gray-400 leading-none">
-                    <span>Present: {attendanceList?.length || 0} Members</span>
+                <div className="border-b border-slate-100 dark:border-slate-800 pb-3 space-y-1 text-xs">
+                  <span className="text-xs font-medium text-slate-500">Selected Event</span>
+                  <p className="font-semibold text-slate-900 dark:text-white leading-tight">{selectedEvent.title}</p>
+                  <div className="flex justify-between items-center pt-2 font-mono text-xs text-slate-400">
+                    <span>Present: {attendanceList?.length || 0}</span>
                     <span>Total: {orgMembers?.filter((m) => m.status === "active").length || 0} active</span>
                   </div>
                 </div>
 
                 {!isAllowed && (
-                  <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-start gap-2.5">
+                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-start gap-2.5">
                     <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                     <div className="text-xs">
-                      <p className="font-bold text-amber-900 dark:text-amber-200">Attendance Marking Locked on Free Plan</p>
-                      <p className="text-amber-700 dark:text-amber-300 mt-1 leading-relaxed text-[11px]">
-                        Marking attendance is disabled on the Free Forever plan. Activate the <strong>Event & Attendance Package ($4/mo / 5,000 RWF)</strong> or upgrade your plan to mark attendance.
+                      <p className="font-medium text-amber-900 dark:text-amber-200">Attendance Marking Restricted</p>
+                      <p className="text-amber-700 dark:text-amber-300 mt-1 leading-relaxed text-xs">
+                        Marking attendance requires the Event Package or an active subscription tier.
                       </p>
                       <div className="mt-2.5">
                         <Button
                           size="sm"
-                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] py-1 px-2.5 rounded-lg cursor-pointer"
+                          className="bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs py-1 px-2.5 rounded-lg cursor-pointer"
                           onClick={() => navigate("/dashboard/settings")}
                         >
-                          Activate Event Package ($4/mo) / Upgrade
+                          Upgrade Plan
                         </Button>
                       </div>
                     </div>
@@ -6177,7 +6171,7 @@ export const EventsCalendar: React.FC = () => {
                 />
 
                 {/* Members checklist roster */}
-                <div className="max-h-80 overflow-y-auto divide-y border rounded-xl p-2 select-none space-y-1 bg-gray-50/50 dark:bg-slate-950/20">
+                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl p-1 select-none space-y-0.5 bg-slate-50/50 dark:bg-slate-950/20">
                   {orgMembers && orgMembers.filter((m) => m.status === "active").length > 0 ? (
                     orgMembers
                       .filter((m) => m.status === "active")
@@ -6187,17 +6181,17 @@ export const EventsCalendar: React.FC = () => {
                         return (
                           <label
                             key={m.id}
-                            className={`flex items-center justify-between p-2.5 rounded-lg transition-colors ${
+                            className={`flex items-center justify-between p-2 rounded-lg transition-colors ${
                               !isAllowed
                                 ? "cursor-not-allowed opacity-75"
                                 : isPresent
-                                ? "bg-emerald-50/70 hover:bg-emerald-100/60 dark:bg-emerald-990/40 cursor-pointer"
+                                ? "bg-emerald-50 dark:bg-emerald-950/40 cursor-pointer"
                                 : "hover:bg-white dark:hover:bg-slate-900 cursor-pointer"
                             }`}
                           >
                             <div className="flex flex-col leading-snug">
-                              <span className="text-xs font-bold text-stone-910 dark:text-white">{m.user?.full_name}</span>
-                              <span className="text-[10px] text-gray-400 font-mono">#{m.member_number || "A-Z"}</span>
+                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">{m.user?.full_name}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">#{m.member_number || "A-Z"}</span>
                             </div>
 
                             <input
@@ -6229,7 +6223,7 @@ export const EventsCalendar: React.FC = () => {
                                   addToast(err.message || "Attendance modification failed", "error");
                                 }
                               }}
-                              className={`h-4 w-4 text-emerald-600 focus:ring-emerald-500 rounded border-gray-300 transition ${
+                              className={`h-4 w-4 text-emerald-600 focus:ring-emerald-500 rounded border-slate-300 transition ${
                                 !isAllowed ? "cursor-not-allowed opacity-50" : "cursor-pointer"
                               }`}
                             />
@@ -6237,25 +6231,19 @@ export const EventsCalendar: React.FC = () => {
                         );
                       })
                   ) : (
-                    <p className="text-[10px] text-center text-gray-400 py-4 italic">No active members found.</p>
+                    <p className="text-xs text-center text-slate-400 py-4 italic">No active members found.</p>
                   )}
                 </div>
 
-                <div className="text-[10px] text-gray-400 italic leading-relaxed text-center">
-                  {isAllowed 
-                    ? "Checkboxes verify member presence immediately in local files and active cloud schemas. Left unchecked, members are set to Absent."
-                    : "Attendance modifications are read-only on the Free plan."}
-                </div>
-
                 <Button
-                  className="w-full mt-2 py-2 text-xs flex items-center justify-center gap-2 font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                  className="w-full mt-2 py-2 text-xs flex items-center justify-center gap-2 font-medium bg-emerald-600 hover:bg-emerald-700 text-white"
                   icon={<FileSpreadsheet className="h-4 w-4" />}
                   onClick={() => {
                     addToast(`Attendance finalized for "${selectedEvent.title}". Downloading Excel Matrix...`, "success");
                     exportAttendanceMatrixExcel();
                   }}
                 >
-                  Submit & Export Attendance (Excel)
+                  Export Attendance Matrix (Excel)
                 </Button>
               </div>
               );

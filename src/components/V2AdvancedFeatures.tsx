@@ -37,8 +37,9 @@ import {
   Plus
 } from "lucide-react";
 import { useOrgStore } from "../store/orgStore";
-import { useMembers, useEvents, useAllEventAttendance, useCheckIn, useAuditLogs } from "../hooks/useImpactoData";
+import { useMembers, useEvents, useAllEventAttendance, useCheckIn, useAuditLogs, usePlatformAdminData } from "../hooks/useImpactoData";
 import { useToast } from "./Toast";
+import { UssdPaymentHelper } from "./UssdPaymentHelper";
 import { AssetTracker } from "./AssetTracker";
 import { CertificateGenerator } from "./CertificateGenerator";
 import { DigitalSignaturePad } from "./DigitalSignaturePad";
@@ -65,6 +66,8 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
   const { data: events = [] } = useEvents(activeOrg?.id);
   const { data: allAttendance = [] } = useAllEventAttendance(activeOrg?.id);
   const { data: auditLogs = [] } = useAuditLogs(activeOrg?.id);
+  const { data: platformData } = usePlatformAdminData();
+  const platformSettings = platformData?.settings || MockDB.getPlatformSettings();
   const checkInMutation = useCheckIn();
 
   const [activeTab, setActiveTab] = useState<
@@ -1539,6 +1542,19 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
               <strong className="text-emerald-600 font-bold">{selectedPackage ? selectedPackage.price.toLocaleString() : "45,000"} RWF</strong>
             </p>
 
+            {/* Platform USSD Payment Helper */}
+            <div className="mb-4">
+              <UssdPaymentHelper
+                targetType="platform"
+                mtnNumber={platformSettings?.mtn_payment_number}
+                merchantCode={platformSettings?.momo_merchant_code || platformSettings?.mtn_merchant_code}
+                airtelNumber={platformSettings?.airtel_payment_number}
+                recipientName={platformSettings?.payment_name}
+                amountRwf={selectedPackage ? selectedPackage.price : 45000}
+                itemName={selectedPackage ? `Tool Package: ${selectedPackage.name}` : "Pro Tier Upgrade"}
+              />
+            </div>
+
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Mobile Money Number</label>
@@ -1546,7 +1562,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                   type="text"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="078XXXXXXX or 079XXXXXXX"
+                  placeholder="078XXXXXXX or 079..."
                   className="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs font-mono text-gray-900 dark:text-white"
                 />
               </div>

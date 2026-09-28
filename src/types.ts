@@ -352,6 +352,8 @@ export interface PlatformSettings {
   mtn_payment_number: string;
   airtel_payment_number: string;
   payment_name: string;
+  momo_merchant_code?: string;
+  mtn_merchant_code?: string;
 }
 
 export type SubscriptionTier = "trial" | "starter" | "growth" | "enterprise" | "free" | "pro";

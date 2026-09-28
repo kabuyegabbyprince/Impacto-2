@@ -58,6 +58,7 @@ import { useToast } from "../components/Toast";
 import { Button, Input, Card, Badge, Modal, Avatar, ImageUploadInput, getLucideIcon } from "../components/ui";
 import { ResolvedImage } from "../components/ResolvedMedia";
 import { V2AdvancedFeatures } from "../components/V2AdvancedFeatures";
+import { UssdPaymentHelper } from "../components/UssdPaymentHelper";
 import { SubscriptionPaymentDashboard } from "../components/SubscriptionPaymentDashboard";
 import { 
   ADDON_PACKAGES, 
@@ -2398,23 +2399,23 @@ export const OrganizationSettingsPage: React.FC = () => {
             <p className="text-[10px] text-emerald-650 mt-1 font-mono font-bold leading-none">{t("lbl_local_rate_label", "Local Rate:")} 1 USD = {platformSettings.usd_to_rwf_rate} RWF</p>
           </div>
 
-          <div className="bg-amber-50 border border-amber-250 p-4 rounded-xl flex flex-col gap-2 text-amber-950 select-none">
-            <span className="text-[10px] uppercase font-mono tracking-widest text-amber-800 leading-none font-bold">{t("lbl_payment_instructions", "Payment Instructions")}</span>
-            <span className="text-xs leading-5">
-              {t("lbl_payment_steps_1", "1. Pay with Mobile Money on:")}<br />
-              • MTN Account: <span className="font-extrabold text-stone-900">{platformSettings.mtn_payment_number}</span> ({t("lbl_name", "Name:")} <span className="font-extrabold text-stone-900">{platformSettings.payment_name}</span>)<br />
-              • Airtel Account: <span className="font-extrabold text-stone-900">{platformSettings.airtel_payment_number}</span> ({t("lbl_name", "Name:")} <span className="font-extrabold text-stone-900">{platformSettings.payment_name}</span>)<br />
-              {t("lbl_payment_steps_2", "2. Keep MTN or Airtel SMS receipt text confirmation.")}
-            </span>
-          </div>
+          <UssdPaymentHelper
+            targetType="platform"
+            mtnNumber={platformSettings.mtn_payment_number}
+            merchantCode={platformSettings.momo_merchant_code || platformSettings.mtn_merchant_code}
+            airtelNumber={platformSettings.airtel_payment_number}
+            recipientName={platformSettings.payment_name}
+            amountRwf={parseFloat(subPlan.split("$")[1] || "25") * (platformSettings.usd_to_rwf_rate || 1350)}
+            itemName={`Platform Plan: ${subPlan}`}
+          />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div className="flex flex-col gap-1">
               <Input
-                label={t("lbl_payer_momo_phone", "Your MTN MoMo Phone Number (078.. / 079..)")}
+                label={t("lbl_payer_momo_phone", "MTN MoMo Phone (078 / 079)")}
                 value={payerPhone}
                 onChange={(e) => setPayerPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                placeholder="078XXXXXXX or 079XXXXXXX"
+                placeholder="078XXXXXXX or 079..."
               />
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="text-[10px] text-stone-400 font-mono">Quick prefix:</span>
@@ -2434,24 +2435,25 @@ export const OrganizationSettingsPage: React.FC = () => {
                 </button>
               </div>
             </div>
-            <Input label={t("lbl_momo_trans_ref", "MoMo Transaction Reference ID")} value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} placeholder="e.g. TXN2468135" />
+            <Input label={t("lbl_momo_trans_ref", "MoMo Transaction Ref ID")} value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} placeholder="e.g. TXN2468135" />
           </div>
 
           <div className="flex flex-col gap-1.5 w-full">
-            <label className="text-xs font-bold text-gray-700">{t("lbl_momo_sms_proof", "MTN or Airtel Money confirmation SMS text proof")}</label>
+            <label className="text-xs font-bold text-gray-700 dark:text-slate-300">{t("lbl_momo_sms_proof", "MTN or Airtel Money confirmation SMS text proof")}</label>
             <textarea
-              className="w-full text-xs rounded-lg border bg-white border-gray-300 p-3 h-20 focus:ring-2 focus:ring-[var(--org-primary)] focus:outline-none focus:border-transparent font-medium"
+              className="w-full text-xs rounded-xl border bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700 p-2.5 focus:ring-2 focus:ring-[var(--org-primary)] focus:outline-none font-mono"
               value={momoSmsProof}
               onChange={(e) => setMomoSmsProof(e.target.value)}
               placeholder="Paste raw SMS text transaction copy, e.g. TxId: 4810294. Yello! You have sent 30,000 RWF to VIRELLIX INC..."
+              rows={3}
             />
           </div>
 
-          <div className="flex gap-4 border-t pt-4">
+          <div className="flex items-center gap-3 border-t border-slate-200 dark:border-slate-800 pt-3">
             <Button type="button" variant="outline" className="w-1/2" onClick={() => setOpenSubModal(false)}>
               {t("btn_back", "Back")}
             </Button>
-            <Button type="submit" loading={submittingPayment} className="w-1/2">
+            <Button type="submit" loading={submittingPayment} className="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
               {t("btn_submit_receipt", "Submit Payment Receipt Proof")}
             </Button>
           </div>

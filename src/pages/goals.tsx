@@ -440,11 +440,11 @@ export const GoalsPage: React.FC = () => {
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-8 space-y-8 select-none font-sans">
       {/* Top Banner & Title Header - Clean Modern Design */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 md:p-8 shadow-3xs relative overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 md:p-8 shadow-xs relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-[#156c45] dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40 text-xs font-bold">
-              <Target className="h-3.5 w-3.5 text-[#156c45] dark:text-emerald-400" />
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 text-xs font-medium">
+              <Target className="h-3.5 w-3.5" />
               <span>{t("goals_badge")}</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
@@ -457,23 +457,23 @@ export const GoalsPage: React.FC = () => {
 
           {/* Org Performance Summary Cards */}
           <div className="flex flex-wrap sm:flex-nowrap md:flex-col gap-3 shrink-0">
-            <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/70 rounded-xl px-5 py-3.5 flex items-center gap-3.5 shadow-3xs min-w-[200px]">
-              <div className="h-10 w-10 rounded-xl bg-emerald-100/70 dark:bg-emerald-950/50 flex items-center justify-center shrink-0">
-                <Award className="h-5 w-5 text-[#156c45] dark:text-emerald-400" />
+            <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 flex items-center gap-3.5 min-w-[200px]">
+              <div className="h-9 w-9 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 flex items-center justify-center shrink-0">
+                <Award className="h-4.5 w-4.5 text-emerald-700 dark:text-emerald-400" />
               </div>
               <div>
-                <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-400">{t("goals_overall_avg")}</p>
-                <p className="text-xl font-extrabold text-slate-900 dark:text-white font-mono">{overallAvgAchievement}%</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{t("goals_overall_avg")}</p>
+                <p className="text-xl font-bold text-slate-900 dark:text-white font-mono tabular-nums">{overallAvgAchievement}%</p>
               </div>
             </div>
 
-            <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/70 rounded-xl px-5 py-3.5 flex items-center gap-3.5 shadow-3xs min-w-[200px]">
-              <div className="h-10 w-10 rounded-xl bg-teal-100/70 dark:bg-teal-950/50 flex items-center justify-center shrink-0">
-                <CheckCircle2 className="h-5 w-5 text-teal-700 dark:text-teal-400" />
+            <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 flex items-center gap-3.5 min-w-[200px]">
+              <div className="h-9 w-9 rounded-lg bg-teal-100 dark:bg-teal-950/60 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="h-4.5 w-4.5 text-teal-700 dark:text-teal-400" />
               </div>
               <div>
-                <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-400">{t("goals_completed_goals")}</p>
-                <p className="text-xl font-extrabold text-slate-900 dark:text-white font-mono">{completedGoalsCount} / {totalGoals}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{t("goals_completed_goals")}</p>
+                <p className="text-xl font-bold text-slate-900 dark:text-white font-mono tabular-nums">{completedGoalsCount} / {totalGoals}</p>
               </div>
             </div>
           </div>
@@ -481,14 +481,14 @@ export const GoalsPage: React.FC = () => {
       </div>
 
       {/* Control Bar: Tabs, Filter, Search, Create Period */}
-      <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-3xs">
-        {/* Period Type Tabs - Clean Segmented Pill */}
-        <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-1 shrink-0 overflow-x-auto scrollbar-none shadow-3xs">
+      <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl shadow-xs">
+        {/* Period Type Tabs */}
+        <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1 shrink-0 overflow-x-auto scrollbar-none">
           <button
             onClick={() => setActiveTab("all")}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
               activeTab === "all"
-                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs font-semibold"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
             }`}
           >
@@ -496,9 +496,9 @@ export const GoalsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab("yearly")}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
               activeTab === "yearly"
-                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs font-semibold"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
             }`}
           >
@@ -506,9 +506,9 @@ export const GoalsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab("monthly")}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
               activeTab === "monthly"
-                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs font-semibold"
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
             }`}
           >
@@ -526,7 +526,7 @@ export const GoalsPage: React.FC = () => {
               placeholder={t("goals_search_placeholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-8 pr-3 py-2 outline-none focus:ring-2 focus:ring-[#156c45] text-slate-800 dark:text-slate-100 shadow-3xs"
+              className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-8 pr-3 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
             />
           </div>
 
@@ -536,7 +536,7 @@ export const GoalsPage: React.FC = () => {
               <select
                 value={selectedPeriodFilter}
                 onChange={(e) => setSelectedPeriodFilter(e.target.value)}
-                className="text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-3 py-2 outline-none focus:ring-2 focus:ring-[#156c45] shadow-3xs cursor-pointer"
+                className="text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-3 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 cursor-pointer"
               >
                 <option value="all">{t("goals_filter_all_label")}</option>
                 {periodOptions.map((opt, i) => (
@@ -556,17 +556,17 @@ export const GoalsPage: React.FC = () => {
                 size="sm"
                 icon={<FileDown className="h-4 w-4 text-emerald-600" />}
                 onClick={exportGoalsPDF}
-                className="text-xs font-bold shrink-0 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 cursor-pointer"
+                className="text-xs font-medium shrink-0 cursor-pointer"
               >
                 Download PDF
               </Button>
             ) : (
               <div 
                 title="Download PDF is restricted to Growth and Pro plan users"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 text-xs font-medium cursor-not-allowed select-none"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 text-xs font-medium cursor-not-allowed select-none"
               >
                 <Lock className="h-3.5 w-3.5 text-slate-400" />
-                <span>Download PDF (Growth & Pro)</span>
+                <span>PDF (Growth & Pro)</span>
               </div>
             )}
 
@@ -576,7 +576,7 @@ export const GoalsPage: React.FC = () => {
                   variant="outline"
                   size="sm"
                   onClick={() => setIsAddPeriodOpen(true)}
-                  className="text-xs font-bold shrink-0"
+                  className="text-xs font-medium shrink-0"
                 >
                   {t("goals_btn_create_period")}
                 </Button>
@@ -661,44 +661,48 @@ export const GoalsPage: React.FC = () => {
             return (
               <div
                 key={`${periodGroup.type}_${periodGroup.label}`}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5 transition"
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs space-y-5 transition"
               >
                 {/* Period Card Header with Average Stats */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-2xl ${
+                    <div className={`p-2.5 rounded-lg ${
                       isYearly 
-                        ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300" 
-                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
+                        ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" 
+                        : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
                     }`}>
                       <Calendar className="h-5 w-5" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white capitalize">
-                          {periodGroup.label} {periodGroup.type} {t("goals_tab_yearly")}
+                        <h2 className="text-lg font-bold text-slate-900 dark:text-white capitalize">
+                          {periodGroup.label} {periodGroup.type} Goals
                         </h2>
-                        <Badge color={isYearly ? "amber" : "green"}>
-                          {periodGroup.type.toUpperCase()}
-                        </Badge>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-md ${
+                          isYearly 
+                            ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" 
+                            : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                        }`}>
+                          {periodGroup.type}
+                        </span>
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-0.5">
                         {pCompleted} of {pTotal} {t("goals_items_completed")}
                       </p>
                     </div>
                   </div>
 
                   {/* Period Average Score Card & Progress Bar */}
-                  <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-700/60">
+                  <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
                     <div className="text-right">
-                      <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400">
-                        {t("goals_avg_period_achievement")}
+                      <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        Period Average
                       </div>
-                      <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">
-                        {pAvgAchievement}% {t("goals_score")}
+                      <div className="text-base font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">
+                        {pAvgAchievement}%
                       </div>
                     </div>
-                    <div className="w-24 bg-slate-200 dark:bg-slate-700 h-3.5 rounded-full overflow-hidden shrink-0">
+                    <div className="w-24 bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden shrink-0">
                       <div
                         className={`h-full transition-all duration-500 ${
                           pAvgAchievement >= 75
@@ -715,7 +719,7 @@ export const GoalsPage: React.FC = () => {
                         size="sm"
                         variant="outline"
                         onClick={() => openAddGoalModalForPeriod(periodGroup.type, periodGroup.label)}
-                        className="text-xs font-bold ml-1 shrink-0"
+                        className="text-xs font-medium ml-1 shrink-0"
                       >
                         {t("goals_btn_add_item")}
                       </Button>
@@ -732,10 +736,10 @@ export const GoalsPage: React.FC = () => {
                     return (
                       <div
                         key={goal.id}
-                        className={`group p-4 rounded-2xl border transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                        className={`group p-4 rounded-xl border transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
                           isCompleted
                             ? "bg-slate-50/70 dark:bg-slate-800/30 border-slate-200 dark:border-slate-800/60 opacity-90"
-                            : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-500/50 shadow-xs"
+                            : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-xs"
                         }`}
                       >
                         {/* Left: Checkbox & Goal Title/Details */}

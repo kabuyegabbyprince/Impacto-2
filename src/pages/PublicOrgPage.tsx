@@ -42,7 +42,9 @@ import {
   Smartphone,
   Send,
   Loader2,
-  Receipt
+  Receipt,
+  PhoneCall,
+  Store
 } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { MockDB } from "../lib/mockData";
@@ -51,6 +53,7 @@ import { useToast } from "../components/Toast";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
 import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "../components/MoMoPushPaymentModal";
+import { cleanMerchantCode, cleanPhoneNumber } from "../components/UssdPaymentHelper";
 import { useCreateDonation } from "../hooks/useImpactoData";
 import { resolveFileUrl } from "../lib/storageService";
 import jsPDF from "jspdf";
@@ -369,12 +372,13 @@ export const PublicOrgPage: React.FC = () => {
   // Gallery URLs list
   const rawGallery = org?.gallery_urls && org.gallery_urls.length > 0 ? org.gallery_urls : [];
 
-  // Admin / Merchant code configured by organization (Single source of truth)
-  const adminMomoCode =
-    org?.momo_merchant_code ||
-    org?.donation_mtn_number ||
-    org?.dues_mtn_number ||
-    "";
+  // Payment credentials configured by organization
+  const donationMCode = cleanMerchantCode(org?.momo_merchant_code || "");
+  const donationPhone = cleanPhoneNumber(org?.donation_mtn_number || org?.dues_mtn_number || "");
+  const codeUssd = donationMCode ? `*182*8*1*${donationMCode}#` : "";
+  const phoneUssd = donationPhone ? `*182*1*1*${donationPhone}#` : "";
+
+  const adminMomoCode = org?.momo_merchant_code || donationMCode;
 
   if (loading) {
     return (
@@ -1096,33 +1100,121 @@ export const PublicOrgPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Card 2: Fuel the Workspace (MTN MoMo Push-to-Pay Interface) */}
-              <div className="bg-gradient-to-br from-amber-500 via-orange-500 to-orange-600 text-white rounded-2xl p-6 sm:p-7 shadow-md flex flex-col items-center text-center gap-3">
-                <div className="h-12 w-12 rounded-full bg-white/20 backdrop-blur-xs flex items-center justify-center shadow-inner">
-                  <Heart className="h-6 w-6 fill-white text-white" />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <h3 className="text-base sm:text-lg font-black font-display text-white">
-                    Fuel the Workspace
-                  </h3>
-                  <p className="text-xs text-amber-100">
-                    MTN Push-to-Pay donations & dues active for {org.name}.
-                  </p>
-                  <div className="inline-flex items-center justify-center gap-1 mt-1 px-2.5 py-1 rounded-full bg-white/20 text-[10px] font-mono font-bold">
-                    <span>Admin Code:</span>
-                    <strong className="text-white underline">{adminMomoCode}</strong>
+              {/* Card 2: Community Support & Donations */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col gap-4 text-slate-900 dark:text-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                    <Heart className="h-4.5 w-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold font-display text-slate-900 dark:text-white">
+                      Community Support and Contributions
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      Voluntary Mobile Money contributions for {org.name}. Give any amount to support cooperative initiatives.
+                    </p>
                   </div>
                 </div>
+
+                {/* Direct USSD Payment Code and Phone to Pay */}
+                {(codeUssd || phoneUssd) && (
+                  <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+                    {/* Option 1: MoMo Pay Merchant Code */}
+                    {codeUssd ? (
+                      <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-col justify-between gap-2.5">
+                        <div>
+                          <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
+                            <span className="flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-200">
+                              <Store className="h-3.5 w-3.5 text-slate-500" /> Merchant Code
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(donationMCode, "Merchant Code")}
+                              className="font-mono text-xs text-slate-700 dark:text-slate-300 hover:text-emerald-600 cursor-pointer"
+                              title="Click to copy code"
+                            >
+                              {copiedField === "Merchant Code" ? "Copied" : donationMCode}
+                            </button>
+                          </div>
+                          <div className="font-mono text-xs text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 select-all">
+                            <span>{codeUssd}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(codeUssd, "Merchant USSD Code")}
+                            className="flex-1 py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            {copiedField === "Merchant USSD Code" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                            <span>{copiedField === "Merchant USSD Code" ? "Copied" : "Copy USSD"}</span>
+                          </button>
+                          <a
+                            href={`tel:${encodeURIComponent(codeUssd)}`}
+                            className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <Smartphone className="h-3.5 w-3.5" />
+                            <span>Dial</span>
+                          </a>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Option 2: Pay to Phone Number */}
+                    {phoneUssd ? (
+                      <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-col justify-between gap-2.5">
+                        <div>
+                          <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
+                            <span className="flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-200">
+                              <PhoneCall className="h-3.5 w-3.5 text-slate-500" /> Phone Number
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(donationPhone, "Phone Number")}
+                              className="font-mono text-xs text-slate-700 dark:text-slate-300 hover:text-emerald-600 cursor-pointer"
+                              title="Click to copy phone number"
+                            >
+                              {copiedField === "Phone Number" ? "Copied" : donationPhone}
+                            </button>
+                          </div>
+                          <div className="font-mono text-xs text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 select-all">
+                            <span>{phoneUssd}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(phoneUssd, "Phone USSD Code")}
+                            className="flex-1 py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            {copiedField === "Phone USSD Code" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                            <span>{copiedField === "Phone USSD Code" ? "Copied" : "Copy USSD"}</span>
+                          </button>
+                          <a
+                            href={`tel:${encodeURIComponent(phoneUssd)}`}
+                            className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <Smartphone className="h-3.5 w-3.5" />
+                            <span>Dial</span>
+                          </a>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Voluntary contribution: Dial either code and enter your chosen contribution amount when prompted by MTN Mobile Money.
+                </p>
 
                 <button
                   onClick={() => {
                     setMomoModalOpen(true);
                   }}
-                  className="w-full mt-2 py-3 px-4 rounded-xl bg-white hover:bg-amber-50 text-orange-600 font-black text-xs shadow-sm transition active:scale-[0.98] flex items-center justify-center gap-2"
+                  className="w-full py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-medium text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-xs"
                 >
-                  <Smartphone className="h-4 w-4 text-orange-600" />
-                  <span>Support with MTN Push to Pay</span>
+                  <Smartphone className="h-4 w-4" />
+                  <span>Send Direct SIM Payment Prompt</span>
                 </button>
               </div>
             </div>
@@ -1201,9 +1293,9 @@ export const PublicOrgPage: React.FC = () => {
         itemType="donation"
         itemName={`Donation to ${org.name}`}
         recipientName={org.donation_account_name || org.name}
-        recipientMerchantCode={adminMomoCode}
-        recipientMtnNumber={org.donation_mtn_number || ""}
-        recipientAirtelNumber={org.donation_airtel_number || ""}
+        recipientMerchantCode={donationMCode}
+        recipientMtnNumber={donationPhone}
+        recipientAirtelNumber={org.donation_airtel_number || org.dues_airtel_number || ""}
         onSuccess={async (data: MoMoPaymentSuccessData) => {
           try {
             await createDonationMutation.mutateAsync({

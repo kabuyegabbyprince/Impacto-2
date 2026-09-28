@@ -5,7 +5,6 @@ import {
   AlertCircle,
   Clock,
   ShieldCheck,
-  Zap,
   ArrowRight,
   RefreshCw,
   Copy,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 import { Button, Input } from "./ui";
 import { useCurrencyStore } from "../store/currencyStore";
+import { UssdPaymentHelper } from "./UssdPaymentHelper";
 
 export interface MoMoPaymentSuccessData {
   depositId: string;
@@ -116,10 +116,10 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
     ? isPlatformFee 
     : (itemType === "subscription" || itemType === "package");
 
-  const finalRecipientName = recipientName || (isPlatformTarget ? "VIRELLIX INC (Impacto SaaS Platform)" : "Organization Treasury");
-  const finalMtnNumber = recipientMtnNumber || (isPlatformTarget ? "0788100100" : "");
-  const finalAirtelNumber = recipientAirtelNumber || (isPlatformTarget ? "0733100100" : "");
-  const finalMerchantCode = recipientMerchantCode || (isPlatformTarget ? "*182*8*1*880099#" : undefined);
+  const finalRecipientName = recipientName || (isPlatformTarget ? "Impacto Platform Administration" : "Organization Treasury");
+  const finalMtnNumber = recipientMtnNumber || "";
+  const finalAirtelNumber = recipientAirtelNumber || "";
+  const finalMerchantCode = recipientMerchantCode || undefined;
 
   // Push Lifecycle States: 'idle' | 'initiating' | 'awaiting_pin' | 'verifying' | 'success' | 'failed'
   const [pushStatus, setPushStatus] = useState<"idle" | "initiating" | "awaiting_pin" | "verifying" | "success" | "failed">("idle");
@@ -407,26 +407,26 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                 setTab("instant_push");
                 setPushStatus("idle");
               }}
-              className={`py-2 px-2.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-2 px-2.5 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                 tab === "instant_push"
-                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-xs"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-semibold"
                   : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
               }`}
             >
-              <Zap className="h-3.5 w-3.5" />
-              <span className="truncate">Instant MoMo Push</span>
+              <Smartphone className="h-3.5 w-3.5" />
+              <span className="truncate">Direct SIM Prompt</span>
             </button>
             <button
               type="button"
               onClick={() => setTab("manual_sms")}
-              className={`py-2 px-2.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-2 px-2.5 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                 tab === "manual_sms"
-                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-xs"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-semibold"
                   : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
               }`}
             >
               <FileText className="h-3.5 w-3.5" />
-              <span className="truncate">Manual Transfer / SMS</span>
+              <span className="truncate">Manual Transfer</span>
             </button>
           </div>
         </div>
@@ -434,22 +434,33 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
         {/* Modal Body */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs">
           {/* Amount and Beneficiary Header Card */}
-          <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-3">
+          <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <span className="text-[10px] uppercase font-mono font-bold text-slate-500 dark:text-slate-400 block tracking-wider">
-                  Total Payable Amount
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block">
+                  {itemType === "donation" ? "Voluntary Contribution" : "Payable Amount"}
                 </span>
-                <span className="text-2xl sm:text-3xl font-black font-display text-slate-900 dark:text-white">
-                  {amountRwf.toLocaleString()} <span className="text-xs font-mono font-bold text-[#156c45] dark:text-emerald-400">RWF</span>
-                </span>
+                {itemType === "donation" ? (
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xl sm:text-2xl font-bold font-display text-slate-900 dark:text-white">
+                      Open Donation
+                    </span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      · Any amount
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-2xl sm:text-3xl font-bold font-display text-slate-900 dark:text-white">
+                    {amountRwf.toLocaleString()} <span className="text-xs font-mono font-medium text-slate-600 dark:text-slate-400">RWF</span>
+                  </span>
+                )}
               </div>
               <div className="sm:text-right">
-                <span className="text-[10px] uppercase font-mono font-semibold text-slate-400 block">
-                  {isPlatformTarget ? "Platform License Receiver" : "Beneficiary Treasury"}
+                <span className="text-xs text-slate-400 block">
+                  {isPlatformTarget ? "Platform License Treasury" : "Beneficiary Treasury"}
                 </span>
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center sm:justify-end gap-1 mt-0.5">
-                  <ShieldCheck className="h-3.5 w-3.5 text-[#156c45] dark:text-emerald-400 shrink-0" />
+                <span className="text-xs font-medium text-slate-800 dark:text-slate-200 flex items-center sm:justify-end gap-1 mt-0.5">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span className="truncate max-w-[200px]">{finalRecipientName}</span>
                 </span>
               </div>
@@ -490,6 +501,19 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
 
           {tab === "instant_push" ? (
             <div>
+              <div className="mb-4">
+                <UssdPaymentHelper
+                  targetType={isPlatformTarget ? "platform" : "organization"}
+                  mtnNumber={finalMtnNumber}
+                  merchantCode={finalMerchantCode}
+                  airtelNumber={finalAirtelNumber}
+                  recipientName={finalRecipientName}
+                  amountRwf={itemType === "donation" ? undefined : amountRwf}
+                  isDonation={itemType === "donation"}
+                  itemName={itemName}
+                />
+              </div>
+
               {pushStatus === "idle" && (
                 <form onSubmit={handleInitiatePush} className="space-y-4">
                   <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed">
@@ -499,7 +523,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                   <div className="space-y-3">
                     <Input
                       label="Payer Full Name"
-                      placeholder="e.g. Jean Pierre Nsanzimana"
+                      placeholder="e.g. Jean Pierre N."
                       value={payerName}
                       onChange={(e) => setPayerName(e.target.value)}
                       required
@@ -527,7 +551,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                               ? "border-rose-400 bg-rose-50/30 dark:bg-rose-950/20 focus:ring-2 focus:ring-rose-500"
                               : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-[#156c45]"
                           }`}
-                          placeholder="078XXXXXXX or 079XXXXXXX"
+                          placeholder="078XXXXXXX or 079..."
                           value={phoneNumber}
                           onChange={(e) => {
                             const val = e.target.value;
@@ -638,14 +662,14 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                   <button
                     type="submit"
                     disabled={!isCompleteMtn}
-                    className={`w-full py-3 sm:py-3.5 px-4 font-bold text-xs sm:text-sm rounded-xl shadow-xs flex items-center justify-center gap-2 transition ${
+                    className={`w-full py-3 px-4 font-medium text-xs sm:text-sm rounded-lg shadow-xs flex items-center justify-center gap-2 transition ${
                       isCompleteMtn
-                        ? "bg-[#156c45] hover:bg-[#125939] active:scale-[0.99] text-white"
+                        ? "bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white cursor-pointer"
                         : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed"
                     }`}
                   >
-                    <Zap className="h-4 w-4" />
-                    <span>Pay {amountRwf.toLocaleString()} RWF via MTN SIM Prompt (078/079)</span>
+                    <Smartphone className="h-4 w-4" />
+                    <span>{itemType === "donation" ? "Authorize MoMo Contribution" : `Pay ${amountRwf.toLocaleString()} RWF via MoMo Prompt`}</span>
                   </button>
                 </form>
               )}
@@ -816,66 +840,20 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                 If you made a manual Mobile Money transfer via dial code or bank agent, paste the SMS confirmation or reference ID below for the accountant to reconcile.
               </p>
 
-              <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3.5 text-xs space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[10px] font-mono">
-                    Authorized Settlement Numbers:
-                  </span>
-                  <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 truncate max-w-[150px]">
-                    {finalRecipientName}
-                  </span>
-                </div>
-                {finalMtnNumber && (
-                  <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-mono bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                    <span>MTN MoMo: <strong>{finalMtnNumber}</strong></span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyCode(finalMtnNumber, "mtn")}
-                      className="text-[#156c45] dark:text-emerald-400 hover:opacity-80 p-1 flex items-center gap-1 text-[10px] font-bold"
-                    >
-                      {copiedCode === "mtn" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                      <span className="font-sans">Copy</span>
-                    </button>
-                  </div>
-                )}
-                {finalAirtelNumber && (
-                  <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-mono bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                    <span>Airtel Money: <strong>{finalAirtelNumber}</strong></span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyCode(finalAirtelNumber, "airtel")}
-                      className="text-[#156c45] dark:text-emerald-400 hover:opacity-80 p-1 flex items-center gap-1 text-[10px] font-bold"
-                    >
-                      {copiedCode === "airtel" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                      <span className="font-sans">Copy</span>
-                    </button>
-                  </div>
-                )}
-                <div className="text-[10px] text-slate-500 bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200/50 dark:border-slate-800">
-                  <div className="flex flex-wrap items-center justify-between font-mono text-slate-700 dark:text-slate-300 gap-1">
-                    <span>Airtel Dial: <strong>*500#</strong> or <strong>*182#</strong></span>
-                    <span>MTN Dial: <strong>*182*1*1#</strong></span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1">Send {amountRwf.toLocaleString()} RWF to the number above, then copy the confirmation SMS received.</p>
-                </div>
-                {finalMerchantCode && (
-                  <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-mono pt-1.5 border-t border-slate-200 dark:border-slate-800">
-                    <span>Merchant Pay Code: <strong>{finalMerchantCode}</strong></span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyCode(finalMerchantCode, "code")}
-                      className="text-[#156c45] dark:text-emerald-400 hover:opacity-80 p-1 flex items-center gap-1 text-[10px] font-bold"
-                    >
-                      {copiedCode === "code" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                      <span className="font-sans">Copy</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+              <UssdPaymentHelper
+                targetType={isPlatformTarget ? "platform" : "organization"}
+                mtnNumber={finalMtnNumber}
+                merchantCode={finalMerchantCode}
+                airtelNumber={finalAirtelNumber}
+                recipientName={finalRecipientName}
+                amountRwf={itemType === "donation" ? undefined : amountRwf}
+                isDonation={itemType === "donation"}
+                itemName={itemName}
+              />
 
               <Input
                 label="Payer Full Name"
-                placeholder="e.g. Jean Pierre Nsanzimana"
+                placeholder="e.g. Jean Pierre N."
                 value={payerName}
                 onChange={(e) => setPayerName(e.target.value)}
                 required
@@ -883,7 +861,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
 
               <Input
                 label="Payer Phone Number"
-                placeholder="078XXXXXXX"
+                placeholder="078XXXXXXX or 079..."
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
                 required
