@@ -33,8 +33,8 @@ export const APP_CONFIG = {
   supportEmail: getEnv("VITE_SUPPORT_EMAIL", "support@impacto.org"),
   
   // Public Deployment Domains & URLs
-  landingUrl: getEnv("VITE_LANDING_URL", "https://impacto-landing.vercel.app/"),
-  homeUrl: getEnv("VITE_HOME_URL", "https://impacto-landing.vercel.app/"),
+  landingUrl: getEnv("VITE_LANDING_URL", "/"),
+  homeUrl: getEnv("VITE_HOME_URL", "/"),
   
   // Supabase Backend Database Credentials
   supabase: {
@@ -52,9 +52,9 @@ export const APP_CONFIG = {
 
   // Navigation Links
   links: {
-    privacyPolicy: getEnv("VITE_PRIVACY_URL", "https://impacto-landing.vercel.app/privacy"),
-    termsOfService: getEnv("VITE_TERMS_URL", "https://impacto-landing.vercel.app/terms"),
-    documentation: getEnv("VITE_DOCS_URL", "https://impacto-landing.vercel.app/docs"),
+    privacyPolicy: getEnv("VITE_PRIVACY_URL", "/privacy"),
+    termsOfService: getEnv("VITE_TERMS_URL", "/terms"),
+    documentation: getEnv("VITE_DOCS_URL", "/docs"),
   }
 };
 

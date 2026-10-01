@@ -203,3 +203,22 @@ html[data-a11y-contrast="high"] textarea {
   animation: green-glow-pulse 2s infinite ease-in-out;
 }
 
+/* ========================================================
+   MOBILE KEYBOARD & VIEWPORT ADAPTIVE STYLES
+   Prevents virtual keyboard from occluding inputs & stops iOS layout zoom
+   ======================================================== */
+@media screen and (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important; /* Critical: prevents iOS Safari from automatically zooming into inputs, which causes keyboards to float awkwardly over form fields */
+  }
+
+  /* Ensure modal and bottom dialog contents can scroll completely above the keyboard */
+  .modal-scroll-area {
+    padding-bottom: max(2rem, env(safe-area-inset-bottom)) !important;
+    overscroll-behavior-y: contain;
+  }
+}
+
+

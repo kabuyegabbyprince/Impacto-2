@@ -4075,7 +4075,7 @@ export const MeetingsMinutes: React.FC = () => {
                         className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-1.5 px-3 rounded-xl cursor-pointer"
                         onClick={() => {
                           setAttendanceMeeting(null);
-                          navigate("/dashboard/settings");
+                          navigate("/dashboard/settings?tab=subscription");
                         }}
                       >
                         Activate Event Package ($4/mo) / Upgrade
@@ -6153,7 +6153,7 @@ export const EventsCalendar: React.FC = () => {
                         <Button
                           size="sm"
                           className="bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs py-1 px-2.5 rounded-lg cursor-pointer"
-                          onClick={() => navigate("/dashboard/settings")}
+                          onClick={() => navigate("/dashboard/settings?tab=subscription")}
                         >
                           Upgrade Plan
                         </Button>

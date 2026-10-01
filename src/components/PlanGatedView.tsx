@@ -103,7 +103,7 @@ export const PlanGatedView: React.FC<PlanGatedViewProps> = ({
         package_id: selectedPackage,
         item_type: "package",
         amount_usd: pkgDef.priceUsd,
-        amount_local: pkgDef.priceUsd * 1350,
+        amount_local: pkgDef.priceUsd * 1400,
         method: momoNumber.startsWith("078") || momoNumber.startsWith("079") ? "mtn" : "airtel",
         phone: momoNumber,
         reference: paymentRef,

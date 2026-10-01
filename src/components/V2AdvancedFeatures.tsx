@@ -37,7 +37,7 @@ import {
   Plus
 } from "lucide-react";
 import { useOrgStore } from "../store/orgStore";
-import { useMembers, useEvents, useAllEventAttendance, useCheckIn, useAuditLogs, usePlatformAdminData } from "../hooks/useImpactoData";
+import { useMembers, useEvents, useAllEventAttendance, useCheckIn, useAuditLogs, usePlatformAdminData, usePlatformSettings, useSubmitSubscriptionPayment } from "../hooks/useImpactoData";
 import { useToast } from "./Toast";
 import { UssdPaymentHelper } from "./UssdPaymentHelper";
 import { AssetTracker } from "./AssetTracker";
@@ -66,9 +66,11 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
   const { data: events = [] } = useEvents(activeOrg?.id);
   const { data: allAttendance = [] } = useAllEventAttendance(activeOrg?.id);
   const { data: auditLogs = [] } = useAuditLogs(activeOrg?.id);
+  const { data: globalPlatformSettings } = usePlatformSettings();
   const { data: platformData } = usePlatformAdminData();
-  const platformSettings = platformData?.settings || MockDB.getPlatformSettings();
+  const platformSettings = globalPlatformSettings || platformData?.settings || MockDB.getPlatformSettings();
   const checkInMutation = useCheckIn();
+  const submitPaymentMutation = useSubmitSubscriptionPayment();
 
   const [activeTab, setActiveTab] = useState<
     "qr_attendance" | "certificates" | "assets" | "signatures" | "audit_trail" | "offline_sync" | "subscription" | "marketplace" | "ai"
@@ -335,9 +337,10 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
     }
   };
 
-  const handleActivatePackage = (pkg: any) => {
-    if (!activeOrg) return;
-    const currentActive = activeOrg.active_packages || [];
+  const handleActivatePackage = (pkg: any, customPhone?: string, customMethod?: string) => {
+    const targetOrg = activeOrg || (orgId ? MockDB.getOrgs().find((o) => o.id === orgId) : null);
+    if (!targetOrg) return;
+    const currentActive = targetOrg.active_packages || [];
     const isAlreadyActive = currentActive.includes(pkg.id);
     
     let updatedPackages: string[];
@@ -347,13 +350,32 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
     } else {
       updatedPackages = [...currentActive, pkg.id];
       addToast(`${pkg.name} successfully activated on your organization!`, "success");
+
+      const phoneToUse = customPhone || targetOrg.dues_mtn_number || targetOrg.donation_mtn_number || "";
+      const methodToUse = customMethod || (phoneToUse.startsWith("078") || phoneToUse.startsWith("079") ? "mtn" : "airtel");
+
+      if (phoneToUse) {
+        // Auto-submit payment record so superadmin dashboard displays it in MoMo approval queue when phone is configured
+        submitPaymentMutation.mutateAsync({
+          org_id: targetOrg.id,
+          plan: `Package: ${pkg.name} (${pkg.id})`,
+          package_id: pkg.id,
+          item_type: "package",
+          amount_usd: 4,
+          amount_local: 4 * (platformSettings?.usd_to_rwf_rate || 1400),
+          method: methodToUse,
+          phone: phoneToUse,
+          reference: `PKG-${Date.now().toString().slice(-6)}`,
+          proof_url: `Package activation request for ${pkg.name} by ${targetOrg.name} (${phoneToUse})`
+        }).catch((e) => console.warn("Background sub payment sync notice:", e));
+      }
     }
 
     const updatedOrg = {
-      ...activeOrg,
+      ...targetOrg,
       active_packages: updatedPackages,
       packages_data: {
-        ...(activeOrg.packages_data || {}),
+        ...(targetOrg.packages_data || {}),
         [pkg.id]: {
           purchased_at: new Date().toISOString(),
           expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -361,7 +383,8 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       }
     };
     setActiveOrg(updatedOrg, activeMember);
-    localStorage.setItem(`impacto_org_${activeOrg.id}`, JSON.stringify(updatedOrg));
+    localStorage.setItem(`impacto_org_${targetOrg.id}`, JSON.stringify(updatedOrg));
+    localStorage.setItem(`impacto_org_packages_${targetOrg.id}`, JSON.stringify(updatedPackages));
   };
 
   const handlePawaPayCheckout = async () => {
@@ -381,24 +404,26 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
         })
       });
       const data = await res.json();
+      const methodToUse = provider === "AIRTEL_RWA" ? "airtel" : "mtn";
       if (data.success) {
         setCheckoutSuccess(`Payment prompt transmitted! Deposit ID: ${data.depositId}. Please approve the MoMo PIN prompt on ${phoneNumber}.`);
         addToast("Mobile money payment request sent to your handset!", "success");
         if (selectedPackage) {
-          handleActivatePackage(selectedPackage);
+          handleActivatePackage(selectedPackage, phoneNumber, methodToUse);
         }
       } else {
         const depositRef = `DEP-${Date.now().toString().slice(-6)}`;
         setCheckoutSuccess(`Mobile Money request submitted (Ref: ${depositRef}). Package privileges assigned.`);
         if (selectedPackage) {
-          handleActivatePackage(selectedPackage);
+          handleActivatePackage(selectedPackage, phoneNumber, methodToUse);
         }
       }
     } catch (err: any) {
       const depositRef = `DEP-${Date.now().toString().slice(-6)}`;
       setCheckoutSuccess(`Mobile Money request queued (Ref: ${depositRef}). Package privileges assigned.`);
       if (selectedPackage) {
-        handleActivatePackage(selectedPackage);
+        const methodToUse = provider === "AIRTEL_RWA" ? "airtel" : "mtn";
+        handleActivatePackage(selectedPackage, phoneNumber, methodToUse);
       }
     } finally {
       setCheckoutLoading(false);

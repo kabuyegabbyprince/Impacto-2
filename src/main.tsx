@@ -4,6 +4,58 @@ import App from './App.tsx';
 import './index.css';
 import './lib/i18n';
 
+// ==========================================
+// SESSION SECURITY & RELOAD DESTRUCTION
+// Ensures every browser reload destroys active sessions and returns user to /
+// ==========================================
+try {
+  localStorage.removeItem("impacto_user");
+  localStorage.removeItem("impacto_session");
+  localStorage.removeItem("impacto_active_org");
+  localStorage.removeItem("impacto_active_member");
+  sessionStorage.clear();
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (key && (key.startsWith("sb-") || key.includes("supabase.auth.token"))) {
+      localStorage.removeItem(key);
+    }
+  }
+} catch (e) {}
+
+if (typeof window !== "undefined") {
+  // If the browser reloads on a protected dashboard or admin path, redirect back to root '/'
+  const currentPath = window.location.pathname;
+  if (
+    currentPath.startsWith("/dashboard") ||
+    currentPath.startsWith("/platform") ||
+    currentPath.startsWith("/auditor") ||
+    currentPath === "/org-picker"
+  ) {
+    window.history.replaceState(null, "", "/");
+  }
+
+  // Ensure sessions are destroyed whenever the window unloads or reloads
+  window.addEventListener("beforeunload", () => {
+    try {
+      localStorage.removeItem("impacto_user");
+      localStorage.removeItem("impacto_session");
+      localStorage.removeItem("impacto_active_org");
+      localStorage.removeItem("impacto_active_member");
+      sessionStorage.clear();
+    } catch (e) {}
+  });
+
+  window.addEventListener("pagehide", () => {
+    try {
+      localStorage.removeItem("impacto_user");
+      localStorage.removeItem("impacto_session");
+      localStorage.removeItem("impacto_active_org");
+      localStorage.removeItem("impacto_active_member");
+      sessionStorage.clear();
+    } catch (e) {}
+  });
+}
+
 // Guard against third-party browser extensions (such as MetaMask or Web3 injectors)
 // and transient network fetch errors when operating in iframe/preview environments.
 if (typeof window !== "undefined") {

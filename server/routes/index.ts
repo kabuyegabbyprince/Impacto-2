@@ -5,6 +5,7 @@ import authRouter from "./auth";
 import feesRouter from "./fees";
 import auditRouter from "./audit";
 import storageRouter from "./storage";
+import platformSettingsRouter from "./platformSettings";
 import { cleanValue } from "../services/supabaseAdmin";
 import { recordPawaPayWebhookEvent } from "../services/pawapayService";
 
@@ -22,6 +23,7 @@ apiRouter.use("/api/auth", authRouter);
 apiRouter.use("/api/member-fees", feesRouter);
 apiRouter.use("/api/audit-logs", auditRouter);
 apiRouter.use("/api/storage", storageRouter);
+apiRouter.use("/api/platform-settings", platformSettingsRouter);
 
 // pawaPay Webhook endpoints (handles Checkouts, Deposits, Payouts, Refunds)
 const handlePawaPayCallback = (req: Request, res: Response) => {

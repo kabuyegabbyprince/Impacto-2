@@ -463,22 +463,13 @@ export const Login: React.FC = () => {
           }
           navigate("/dashboard");
         } else {
-          const firstOrg = MockDB.getOrgs()[0];
-          if (firstOrg) {
-            const newMem = {
-              id: `mem-${Date.now()}`,
-              org_id: firstOrg.id,
-              user_id: loginUser.id,
-              role: "member" as const,
-              status: "active" as const,
-              joined_at: new Date().toISOString()
-            };
-            setActiveOrg(firstOrg, newMem);
-            navigate("/dashboard");
-          } else {
-            // FROZEN PHASE: Multi-org / Workplace Hub frozen. Single organization membership mode.
-            navigate("/dashboard");
+          const pendingMem = userMembers.find(m => m.status === "pending" || (m.status as string) === "awaiting_approval");
+          if (pendingMem) {
+            setError("Your membership request is currently awaiting administrator approval.");
+            setLoading(false);
+            return;
           }
+          navigate("/org-picker");
         }
       }
     } catch (err: any) {

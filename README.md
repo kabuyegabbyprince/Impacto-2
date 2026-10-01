@@ -10,10 +10,48 @@ Welcome to the official technical documentation, architecture specification, and
 2. [Technology Stack](#-technology-stack)
 3. [Core Functional Modules](#-core-functional-modules)
 4. [Design System & UI Foundations](#-design-system--ui-foundations)
-5. [Storage Architecture (Supabase Storage)](#-storage-architecture-supabase-storage)
-6. [Database Schema & Security (Supabase PostgreSQL + RLS)](#-database-schema--security-supabase-postgresql--rls)
-7. [Environment Configuration & Deployment](#-environment-configuration--deployment)
-8. [Support & Maintainers](#-support--maintainers)
+5. [Design Report: Themes, Report Styles & Visual Hierarchy](#-design-report-themes-report-styles--visual-hierarchy)
+6. [Package & Subscription Expiration Technical Engine](#-package--subscription-expiration-technical-engine)
+7. [Storage Architecture (Supabase Storage)](#-storage-architecture-supabase-storage)
+8. [Database Schema & Security (Supabase PostgreSQL + RLS)](#-database-schema--security-supabase-postgresql--rls)
+9. [Environment Configuration & Deployment](#-environment-configuration--deployment)
+10. [Support & Maintainers](#-support--maintainers)
+
+---
+
+## 🎨 Design Report: Themes, Report Styles & Visual Hierarchy
+
+For the dedicated whitepaper, see [DESIGN_REPORT.md](./DESIGN_REPORT.md).
+
+### Theme & Aesthetics:
+- **Impacto Emerald Palette**: Primary brand `#15803D` / `#16A34A` representing agricultural growth, dark green `#14532D` for structural accents, and soft mint `#DCFCE7` for status badges.
+- **Rwandan Amber Warning Token**: `#F59E0B` for trial countdowns, grace periods, and pending review alerts.
+- **Typography**: `Plus Jakarta Sans` for display headlines, `DM Sans` / `Inter` for multilingual tables and forms, and `JetBrains Mono` for Mobile Money USSD strings (`*182*8*1*880099#`) and cryptographic hashes (`SIG-VERIFIED`).
+- **Dynamic Tenant Theming**: Every cooperative controls its `--org-primary` and `--org-secondary` CSS variables.
+- **Mobile Virtual Keyboard Protection**: `<meta name="viewport" content="... interactive-widget=resizes-content">`, form input focus scroll-into-view, and `16px` font size enforcement to prevent iOS auto-zoom disruptions.
+
+### Report Designs:
+- **Executive Meeting Resolutions**: Printable official dossiers with letterhead, quorum compliance, and voting outcomes.
+- **MoMo Ledger & Audits**: Real-time status cards, USSD dials, and telecom SMS verification proof logs.
+- **QR Attendance Verification**: Contactless roll call sheets with member tags and one-click Excel export.
+- **Cryptographic Document Signing**: Verification registries with SHA-256 integrity hashes.
+
+---
+
+## ⏱️ Package & Subscription Expiration Technical Engine
+
+### 1. Base Subscription Tier Lifecycle
+- **Active Phase**: While `Date.now() < subscription_ends_at`, full member and storage quotas are active.
+- **3-Day Grace Period**: Triggered when `subscription_ends_at < Date.now() < grace_period_ends_at`. Grants 72 hours for Mobile Money reconciliation with amber status badges.
+- **Safe Read-Only Mode**: Zero data loss. Historical data, ledgers, and documents remain permanently readable; new creation actions are restricted until upgraded.
+
+### 2. Add-On Modular Package Expiration ($4/mo)
+- **Data Model**: Stored in `org.packages_data[pkgId]` with `{ purchased_at, expires_at }`.
+- **Verification Logic**: `getOrgActivePackages()` and `getPackageExpirationStatus()` in `src/lib/subscriptionMatrix.ts` compare `Date.now()` with `expires_at`.
+- **Enforcement**: Once `now > expires_at`, the package is immediately omitted from active capabilities, bonus members (+20 slots) are removed, gated modules prompt for renewal, and a prominent badge displays "Expired on [Date]".
+- **Server Sync**: Purchases from accountants/admins immediately land on `/api/payments/subscription-payments` and display on the Super Admin dashboard review board.
+
+---
 
 ---
 

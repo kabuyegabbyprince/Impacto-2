@@ -75,97 +75,13 @@ export interface OrgState {
   clearOrg: () => void;
 }
 
-const getInitialOrg = (): Organization | null => {
-  const saved = localStorage.getItem("impacto_active_org");
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-};
-
-const getInitialMember = (): OrgMember | null => {
-  const saved = localStorage.getItem("impacto_active_member");
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-};
-
-const pruneLargeValuesForStorage = (org: any): any => {
-  if (!org || typeof org !== "object") return org;
-  const pruned: any = Array.isArray(org) ? [] : {};
-  for (const key of Object.keys(org)) {
-    const val = org[key];
-    if (typeof val === "string") {
-      // Prune strings longer than 15,000 characters (e.g., base64 uploads)
-      if (val.length > 15000) {
-        if (val.startsWith("data:")) {
-          // Keep it as a small SVG fallback or empty/undefined to save space
-          pruned[key] = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23cccccc'/></svg>";
-        } else {
-          pruned[key] = val.slice(0, 1000) + "... (truncated for storage)";
-        }
-      } else {
-        pruned[key] = val;
-      }
-    } else if (Array.isArray(val)) {
-      pruned[key] = val.map((item) => {
-        if (typeof item === "string" && item.length > 15000) {
-          if (item.startsWith("data:")) {
-            return "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23cccccc'/></svg>";
-          }
-          return item.slice(0, 1000) + "... (truncated for storage)";
-        }
-        if (item && typeof item === "object") {
-          return pruneLargeValuesForStorage(item);
-        }
-        return item;
-      });
-    } else if (val && typeof val === "object") {
-      pruned[key] = pruneLargeValuesForStorage(val);
-    } else {
-      pruned[key] = val;
-    }
-  }
-  return pruned;
-};
+const getInitialOrg = (): Organization | null => null;
+const getInitialMember = (): OrgMember | null => null;
 
 export const useOrgStore = create<OrgState>((set) => ({
-  activeOrg: getInitialOrg(),
-  activeMember: getInitialMember(),
+  activeOrg: null,
+  activeMember: null,
   setActiveOrg: (org, member) => {
-    if (org) {
-      try {
-        const pruned = pruneLargeValuesForStorage(org);
-        localStorage.setItem("impacto_active_org", JSON.stringify(pruned));
-      } catch (err) {
-        console.warn("Failed to save active organization to localStorage (quota exceeded or storage disabled):", err);
-      }
-    } else {
-      try {
-        localStorage.removeItem("impacto_active_org");
-      } catch {}
-    }
-    if (member) {
-      try {
-        const prunedMember = pruneLargeValuesForStorage(member);
-        localStorage.setItem("impacto_active_member", JSON.stringify(prunedMember));
-      } catch (err) {
-        console.warn("Failed to save active member to localStorage:", err);
-      }
-    } else {
-      try {
-        localStorage.removeItem("impacto_active_member");
-      } catch {}
-    }
     set({ activeOrg: org, activeMember: member });
     try {
       window.dispatchEvent(new CustomEvent("impacto_org_updated", { detail: { org, member } }));

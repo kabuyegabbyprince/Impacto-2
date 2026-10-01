@@ -5,6 +5,7 @@ import { uploadFile, dataUrlToUint8Array } from "../lib/supabaseStorage";
 import { MockDB } from "../lib/mockData";
 import { notifyCrossTabChange, notifyPlanOrPackageGranted } from "../lib/crossTabSync";
 import { useOrgStore } from "../store/orgStore";
+import { useCurrencyStore } from "../store/currencyStore";
 import {
   Organization,
   OrgMember,
@@ -3256,7 +3257,60 @@ export function usePlatformAdminData() {
   return useQuery({
     queryKey: ["platform_admin_data"],
     queryFn: async () => {
+      let defaultSettings = MockDB.getPlatformSettings();
+      let settingsData: PlatformSettings | null = null;
+
+      // 0. Fetch authoritative platform settings from server
+      try {
+        const sRes = await fetch("/api/platform-settings");
+        if (sRes.ok) {
+          const sJson = await sRes.json();
+          if (sJson?.data) {
+            settingsData = sJson.data as PlatformSettings;
+            MockDB.savePlatformSettings(settingsData);
+            useCurrencyStore.getState().setRates({
+              USD_to_RWF: Number(settingsData.usd_to_rwf_rate) || 1400,
+              EUR_to_RWF: Number(settingsData.eur_to_rwf_rate) || 1450,
+              KES_to_RWF: Number(settingsData.kes_to_rwf_rate) || 10,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("[PlatformAdminData] Server platform-settings fetch note:", e);
+      }
+
+      // 0.1 Fetch authoritative server-side payments ledger
+      let serverPaymentsList: any[] = [];
+      try {
+        const pRes = await fetch("/api/payments/subscription-payments");
+        if (pRes.ok) {
+          const pJson = await pRes.json();
+          if (Array.isArray(pJson?.data)) {
+            serverPaymentsList = pJson.data;
+          }
+        }
+      } catch (e) {
+        console.warn("[PlatformAdminData] Server subscription-payments fetch note:", e);
+      }
+
       if (isSupabaseConfigured) {
+        // 1. Always safely fetch platform_settings independently so admin tables RLS cannot break global billing config
+        if (!settingsData) {
+          try {
+            const { data, error } = await supabase
+              .from("platform_settings")
+              .select("*")
+              .eq("id", "global")
+              .maybeSingle();
+            if (data && !error) {
+              settingsData = data as PlatformSettings;
+              MockDB.savePlatformSettings(settingsData);
+            }
+          } catch (e) {
+            console.warn("[PlatformAdminData] platform_settings fetch note:", e);
+          }
+        }
+
         try {
           const { data: orgs } = await supabase.from("organizations").select("*");
           const { data: payments } = await supabase
@@ -3269,24 +3323,45 @@ export function usePlatformAdminData() {
             .select("*")
             .order("created_at", { ascending: false })
             .limit(100);
-          const { data: settingsData } = await supabase
-            .from("platform_settings")
-            .select("*")
-            .eq("id", "global")
-            .maybeSingle();
           const { data: staffData } = await supabase.from("platform_staff").select("*");
           const { data: auditLogsData } = await supabase.from("platform_audit_logs").select("*").order("created_at", { ascending: false }).limit(200);
           const { count: usersCount } = await supabase.from("users").select("*", { count: "exact", head: true });
           const { count: membersCount } = await supabase.from("org_members").select("*", { count: "exact", head: true });
 
-          const defaultSettings = MockDB.getPlatformSettings();
           const enrichedOrgs = ((orgs && orgs.length > 0) ? orgs : MockDB.getOrgs()).map((org: any) => {
             return {
               ...org,
               subscription_tier: org.subscription_tier || "trial",
             };
           });
-          const enrichedPayments = ((payments && payments.length > 0) ? payments : MockDB.getSubPayments()).map((p: any) => {
+
+          const mockPayments = MockDB.getSubPayments();
+          const paymentsMap = new Map<string, any>();
+          // 1. Load mock payments first
+          mockPayments.forEach((p: any) => {
+            if (p && p.id) paymentsMap.set(p.id, p);
+          });
+          // 2. Merge server-side ledger payments (accountant / admin purchases)
+          serverPaymentsList.forEach((p: any) => {
+            if (p && p.id) {
+              const existing = paymentsMap.get(p.id);
+              paymentsMap.set(p.id, { ...existing, ...p });
+            }
+          });
+          // 3. Merge with Supabase payments
+          (payments || []).forEach((p: any) => {
+            if (p && p.id) {
+              const existing = paymentsMap.get(p.id);
+              paymentsMap.set(p.id, { ...existing, ...p });
+            }
+          });
+          const combinedPaymentsList = Array.from(paymentsMap.values()).sort((a, b) => {
+            const timeA = new Date(a.submitted_at || a.created_at || 0).getTime();
+            const timeB = new Date(b.submitted_at || b.created_at || 0).getTime();
+            return timeB - timeA;
+          });
+
+          const enrichedPayments = combinedPaymentsList.map((p: any) => {
             return {
               ...p,
               validated_at: p.validated_at || null,
@@ -3313,17 +3388,29 @@ export function usePlatformAdminData() {
         }
       }
       await delay();
+
+      // Combine local & server payments
+      const fallbackPaymentsMap = new Map<string, any>();
+      MockDB.getSubPayments().forEach((p) => { if (p && p.id) fallbackPaymentsMap.set(p.id, p); });
+      serverPaymentsList.forEach((p) => { if (p && p.id) fallbackPaymentsMap.set(p.id, { ...fallbackPaymentsMap.get(p.id), ...p }); });
+      const finalPayments = Array.from(fallbackPaymentsMap.values()).sort((a, b) => {
+        const timeA = new Date(a.submitted_at || a.created_at || 0).getTime();
+        const timeB = new Date(b.submitted_at || b.created_at || 0).getTime();
+        return timeB - timeA;
+      });
+
       return {
         orgs: MockDB.getOrgs(),
-        payments: MockDB.getSubPayments(),
+        payments: finalPayments,
         errors: MockDB.getErrors(),
-        settings: MockDB.getPlatformSettings(),
+        settings: settingsData || defaultSettings,
         staff: MockDB.getPlatformStaff(),
         auditLogs: MockDB.getPlatformAuditLogs(),
         totalUsers: MockDB.getUsers().length,
         totalMembers: MockDB.getMembers().length,
       };
     },
+    refetchInterval: 4000,
   });
 }
 
@@ -3354,6 +3441,23 @@ export function useApproveSubscription() {
       const validatedAt = new Date().toISOString();
       const auditorName = auditedByName || "Platform Administrator";
       const auditorId = auditedBy || "admin-lead";
+
+      // Sync status with server ledger
+      try {
+        await fetch(`/api/payments/subscription-payments/${paymentId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status,
+            audited_by: auditorId,
+            audited_by_name: auditorName,
+            audit_notes: auditNotes || null,
+            validated_at: validatedAt,
+          }),
+        });
+      } catch (e) {
+        console.warn("[ApproveSubscription] Server sync note:", e);
+      }
 
       if (isSupabaseConfigured) {
         let resData: any;
@@ -3581,38 +3685,176 @@ export function useSubmitSubscriptionPayment() {
     mutationFn: async (
       payload: Omit<SubscriptionPayment, "id" | "status" | "submitted_at">,
     ) => {
-      if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("subscription_payments")
-          .insert({
-            ...payload,
-            status: "awaiting_approval",
-            submitted_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
-        if (error) throw error;
-        return data as SubscriptionPayment;
-      }
-      await delay();
-      const pays = MockDB.getSubPayments();
-      const newPay: SubscriptionPayment = {
+      // 1. Immediately create local record with unique ID
+      const newId = "sub-pay-" + Date.now().toString(36) + "-" + Math.random().toString(36).substr(2, 6);
+      let localPayment: SubscriptionPayment = {
         ...payload,
-        id: "sub-pay-" + Math.random().toString(36).substr(2, 9),
+        id: newId,
         status: "awaiting_approval",
         submitted_at: new Date().toISOString(),
       };
-      pays.push(newPay);
-      MockDB.saveSubPayments(pays);
-      return newPay;
+
+      // 2. Always persist to MockDB first so it is instantly available across tabs & sessions
+      const existingPays = MockDB.getSubPayments();
+      const updatedPays = [localPayment, ...existingPays.filter((p) => p.id !== newId)];
+      MockDB.saveSubPayments(updatedPays);
+
+      // 3. Post to server-side shared ledger
+      try {
+        const sRes = await fetch("/api/payments/subscription-payments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(localPayment),
+        });
+        if (sRes.ok) {
+          const sJson = await sRes.json();
+          if (sJson?.data) {
+            localPayment = sJson.data as SubscriptionPayment;
+          }
+        }
+      } catch (err) {
+        console.warn("[SubscriptionPayment] Server ledger post note:", err);
+      }
+
+      // 4. If Supabase is configured, sync to cloud database
+      if (isSupabaseConfigured) {
+        try {
+          // Verify org_id is valid UUID or map to valid Supabase org
+          let safeOrgId = payload.org_id;
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(safeOrgId);
+          if (!isUuid) {
+            try {
+              const { data: realOrg } = await supabase.from("organizations").select("id").limit(1).maybeSingle();
+              if (realOrg?.id) safeOrgId = realOrg.id;
+            } catch (_) {}
+          }
+
+          const insertPayload: any = {
+            org_id: safeOrgId,
+            plan: payload.plan,
+            amount_usd: payload.amount_usd,
+            amount_local: payload.amount_local,
+            method: payload.method,
+            phone: payload.phone,
+            reference: payload.reference,
+            proof_url: payload.proof_url || null,
+            status: "awaiting_approval",
+            submitted_at: localPayment.submitted_at,
+          };
+          if ((payload as any).package_id) insertPayload.package_id = (payload as any).package_id;
+          if ((payload as any).item_type) insertPayload.item_type = (payload as any).item_type;
+
+          const { data, error } = await supabase
+            .from("subscription_payments")
+            .insert(insertPayload)
+            .select()
+            .single();
+
+          if (!error && data) {
+            // Re-sync with Supabase ID
+            const freshPays = MockDB.getSubPayments();
+            const index = freshPays.findIndex((p) => p.id === newId || p.reference === payload.reference);
+            if (index !== -1) {
+              freshPays[index] = data as SubscriptionPayment;
+            } else {
+              freshPays.unshift(data as SubscriptionPayment);
+            }
+            MockDB.saveSubPayments(freshPays);
+            localPayment = data as SubscriptionPayment;
+          } else if (error) {
+            console.warn("Supabase sub payment insert note:", error);
+          }
+        } catch (err) {
+          console.warn("[SubscriptionPayment] Cloud sync note (local payment preserved):", err);
+        }
+      }
+
+      await delay(50);
+      return localPayment;
     },
     onSuccess: (data) => {
+      queryClient.setQueryData(["subscription_payments"], (old: any) => {
+        const arr = Array.isArray(old) ? old : [];
+        return [data, ...arr.filter((p: any) => p && p.id !== data.id)];
+      });
       queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+      queryClient.invalidateQueries({ queryKey: ["superadmin_stats"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription_payments"] });
       if (data?.org_id) {
         queryClient.invalidateQueries({ queryKey: ["subscription_payments", data.org_id] });
       }
-      queryClient.invalidateQueries({ queryKey: ["subscription_payments"] });
+      
+      // Real-time cross tab and window notification
+      try {
+        notifyCrossTabChange("platform_admin_data", data?.org_id);
+        notifyCrossTabChange("subscription_payments", data?.org_id);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("impacto_sub_payment_created", { detail: data }));
+          localStorage.setItem("impacto_last_sub_payment", JSON.stringify({ id: data?.id, org_id: data?.org_id, time: Date.now() }));
+        }
+      } catch (e) {}
     },
+  });
+}
+
+export function usePlatformSettings() {
+  return useQuery({
+    queryKey: ["platform_settings"],
+    queryFn: async (): Promise<PlatformSettings> => {
+      let local = MockDB.getPlatformSettings();
+
+      // 0. Primary: Fetch authoritative configuration from server
+      try {
+        const sRes = await fetch("/api/platform-settings");
+        if (sRes.ok) {
+          const sJson = await sRes.json();
+          if (sJson?.data) {
+            const serverSettings = sJson.data as PlatformSettings;
+            MockDB.savePlatformSettings(serverSettings);
+            useCurrencyStore.getState().setRates({
+              USD_to_RWF: Number(serverSettings.usd_to_rwf_rate) || 1400,
+              EUR_to_RWF: Number(serverSettings.eur_to_rwf_rate) || 1450,
+              KES_to_RWF: Number(serverSettings.kes_to_rwf_rate) || 10,
+            });
+            return serverSettings;
+          }
+        }
+      } catch (err) {
+        console.warn("[PlatformSettings] Server fetch fallback:", err);
+      }
+
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("platform_settings")
+            .select("*")
+            .eq("id", "global")
+            .maybeSingle();
+          if (data && !error) {
+            MockDB.savePlatformSettings(data as PlatformSettings);
+            useCurrencyStore.getState().setRates({
+              USD_to_RWF: Number(data.usd_to_rwf_rate) || 1400,
+              EUR_to_RWF: Number(data.eur_to_rwf_rate) || 1450,
+              KES_to_RWF: Number(data.kes_to_rwf_rate) || 10,
+            });
+            return data as PlatformSettings;
+          }
+        } catch (err) {
+          console.warn("[PlatformSettings] Falling back to local settings:", err);
+        }
+      }
+      if (local) {
+        useCurrencyStore.getState().setRates({
+          USD_to_RWF: Number(local.usd_to_rwf_rate) || 1400,
+          EUR_to_RWF: Number(local.eur_to_rwf_rate) || 1450,
+          KES_to_RWF: Number(local.kes_to_rwf_rate) || 10,
+        });
+      }
+      return local;
+    },
+    staleTime: 1000 * 3, // 3 seconds fresh cache
+    refetchInterval: 3000, // Poll every 3 seconds to keep tabs in sync
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -3620,21 +3862,60 @@ export function useUpdatePlatformSettings() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: PlatformSettings) => {
-      if (isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("platform_settings")
-          .upsert({ id: "global", ...payload })
-          .select()
-          .single();
-        if (error) throw error;
-        return data as PlatformSettings;
-      }
-      await delay();
+      // 1. Always update local storage & MockDB immediately for instant client availability
       MockDB.savePlatformSettings(payload);
+      useCurrencyStore.getState().setRates({
+        USD_to_RWF: Number(payload.usd_to_rwf_rate) || 1400,
+        EUR_to_RWF: Number(payload.eur_to_rwf_rate) || 1450,
+        KES_to_RWF: Number(payload.kes_to_rwf_rate) || 10,
+      });
+
+      // 2. Post to server-side platform-settings endpoint
+      try {
+        await fetch("/api/platform-settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } catch (err) {
+        console.warn("[PlatformSettings] Server sync notice:", err);
+      }
+
+      // 3. Persist to Supabase if configured
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("platform_settings")
+            .upsert({ id: "global", ...payload })
+            .select()
+            .single();
+          if (error) {
+            console.warn("Supabase platform_settings upsert error, saved to MockDB:", error);
+          } else if (data) {
+            MockDB.savePlatformSettings(data as PlatformSettings);
+            return data as PlatformSettings;
+          }
+        } catch (err) {
+          console.warn("Supabase connection issue while saving platform settings:", err);
+        }
+      }
+      await delay(50);
       return payload;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data) {
+        queryClient.setQueryData(["platform_settings"], data);
+      }
+      queryClient.invalidateQueries({ queryKey: ["platform_settings"] });
       queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+      queryClient.invalidateQueries({ queryKey: ["superadmin_stats"] });
+      try {
+        notifyCrossTabChange("platform_settings");
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("impacto_platform_settings_updated", { detail: data }));
+          localStorage.setItem("impacto_platform_settings_time", Date.now().toString());
+        }
+      } catch (e) {}
     },
   });
 }

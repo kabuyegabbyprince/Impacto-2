@@ -294,6 +294,7 @@ export interface OrgLifecycleStatus {
 
 /**
  * Retrieves list of active add-on package IDs for an organization
+ * Filters out any expired packages whose 30-day window has elapsed
  */
 export function getOrgActivePackages(org: Partial<Organization> | undefined | null): AddOnPackageId[] {
   if (!org) return [];
@@ -310,8 +311,70 @@ export function getOrgActivePackages(org: Partial<Organization> | undefined | nu
     }
   } catch {}
 
+  // Filter out any packages whose expiration date in packages_data has passed
+  const now = Date.now();
+  const packagesData = (org as any)?.packages_data || {};
+  packages = packages.filter((pkgId) => {
+    const pData = packagesData[pkgId];
+    if (pData && pData.expires_at) {
+      const expiresAt = new Date(pData.expires_at).getTime();
+      if (!isNaN(expiresAt) && now > expiresAt) {
+        return false; // Package has expired
+      }
+    }
+    return true;
+  });
+
   const validIds: AddOnPackageId[] = ["event_pack", "finance_pack", "document_pack", "pro_pack"];
   return packages.filter((p): p is AddOnPackageId => validIds.includes(p as AddOnPackageId));
+}
+
+/**
+ * Checks detailed expiration status for a specific add-on package
+ */
+export function getPackageExpirationStatus(
+  org: Partial<Organization> | undefined | null,
+  pkgId: AddOnPackageId
+): {
+  isPurchased: boolean;
+  isActive: boolean;
+  isExpired: boolean;
+  expiresAt: string | null;
+  daysRemaining: number;
+} {
+  if (!org) {
+    return { isPurchased: false, isActive: false, isExpired: false, expiresAt: null, daysRemaining: 0 };
+  }
+
+  const activePkgs = getOrgActivePackages(org);
+  const isActive = activePkgs.includes(pkgId);
+  const packagesData = (org as any)?.packages_data || {};
+  const pData = packagesData[pkgId];
+  const expiresAt = pData?.expires_at || null;
+
+  if (expiresAt) {
+    const expTime = new Date(expiresAt).getTime();
+    const now = Date.now();
+    const diffMs = expTime - now;
+    const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    const isExpired = now > expTime;
+
+    return {
+      isPurchased: true,
+      isActive: isActive && !isExpired,
+      isExpired,
+      expiresAt,
+      daysRemaining,
+    };
+  }
+
+  return {
+    isPurchased: isActive,
+    isActive,
+    isExpired: false,
+    expiresAt: null,
+    daysRemaining: isActive ? 30 : 0,
+  };
 }
 
 /**

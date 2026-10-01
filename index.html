@@ -64,7 +64,45 @@
         };
       })();
     </script>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <script>
+      // Global mobile virtual keyboard scroll-into-view & visual viewport adjustment
+      (function() {
+        if (typeof window === "undefined") return;
+        
+        function scrollActiveIntoView() {
+          var el = document.activeElement;
+          if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")) {
+            setTimeout(function() {
+              try {
+                el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+              } catch (e) {
+                el.scrollIntoView();
+              }
+            }, 250);
+          }
+        }
+
+        window.addEventListener("focusin", function(e) {
+          if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT")) {
+            setTimeout(function() {
+              try {
+                e.target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+              } catch (err) {
+                e.target.scrollIntoView();
+              }
+            }, 300);
+          }
+        }, true);
+
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener("resize", function() {
+            // Virtual keyboard opened or resized
+            scrollActiveIntoView();
+          });
+        }
+      })();
+    </script>
     <title>Impacto — Organization Management System with Free Forever Plan</title>
     <meta name="description" content="A complete organization management system with a free forever plan for cooperatives, NGOs, and community associations to coordinate members, audit Mobile Money dues, and publish official documents." />
     <meta name="keywords" content="free forever organization management system, free plan cooperative software, NGO management system, association management software, mobile money dues collection, member roster management, democratic voting system, QR attendance tracker, non-profit software, community organization platform, Rwanda cooperative management" />
@@ -164,27 +202,19 @@
     <script>
       (function() {
         try {
-          var raw = localStorage.getItem("impacto_active_org");
-          var cached = raw ? JSON.parse(raw) : null;
-          var primary = (cached && cached.primary_color) || "#15803D";
-          var secondary = (cached && cached.secondary_color) || "#F59E0B";
-          var theme = (cached && cached.dashboard_theme) || localStorage.getItem("theme") || "light";
+          localStorage.removeItem("impacto_user");
+          localStorage.removeItem("impacto_session");
+          localStorage.removeItem("impacto_active_org");
+          localStorage.removeItem("impacto_active_member");
+          sessionStorage.clear();
+          var primary = "#15803D";
+          var secondary = "#F59E0B";
+          var theme = localStorage.getItem("theme") || "light";
           var root = document.documentElement;
-          var cleanHex = primary.replace("#", "").trim();
-          var r = 21, g = 128, b = 61;
-          if (cleanHex.length === 6) {
-            r = parseInt(cleanHex.substring(0, 2), 16) || 21;
-            g = parseInt(cleanHex.substring(2, 4), 16) || 128;
-            b = parseInt(cleanHex.substring(4, 6), 16) || 61;
-          } else if (cleanHex.length === 3) {
-            r = parseInt(cleanHex[0] + cleanHex[0], 16) || 21;
-            g = parseInt(cleanHex[1] + cleanHex[1], 16) || 128;
-            b = parseInt(cleanHex[2] + cleanHex[2], 16) || 61;
-          }
           root.style.setProperty("--org-primary", primary);
-          root.style.setProperty("--org-primary-rgb", r + ", " + g + ", " + b);
-          root.style.setProperty("--org-primary-l", "rgba(" + r + ", " + g + ", " + b + ", 0.12)");
-          root.style.setProperty("--org-primary-d", "rgb(" + Math.max(0, r - 35) + ", " + Math.max(0, g - 35) + ", " + Math.max(0, b - 35) + ")");
+          root.style.setProperty("--org-primary-rgb", "21, 128, 61");
+          root.style.setProperty("--org-primary-l", "rgba(21, 128, 61, 0.12)");
+          root.style.setProperty("--org-primary-d", "rgb(0, 93, 26)");
           root.style.setProperty("--org-secondary", secondary);
           if (theme === "dark") {
             root.setAttribute("data-theme", "dark");

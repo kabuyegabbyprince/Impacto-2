@@ -18,7 +18,7 @@ export const supabase = createClient(
   supabaseAnonKey || "placeholder-anon-key-placeholder-anon-key-placeholder-anon-key",
   {
     auth: {
-      persistSession: true,
+      persistSession: false, // Prevents persistent session tokens across reloads
       autoRefreshToken: false, // Prevents uncaught background network rejections on invalid/mock tokens
       detectSessionInUrl: false,
     },

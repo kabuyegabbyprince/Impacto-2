@@ -101,39 +101,30 @@ const PublicSlugRouter: React.FC = () => {
   return <Navigate to="/" replace />;
 };
 
-// External landing redirect
+// Portal landing redirect: Send user directly to root portal entrance (sign-in)
 const LandingExternalRedirect: React.FC = () => {
-  React.useEffect(() => {
-    window.location.href = "https://impacto-landing.vercel.app/";
-  }, []);
-  return null;
+  return <Navigate to="/" replace />;
 };
 
 // Portal entrance: Direct unauthenticated users straight to Login form
 const RootPortalEntrance: React.FC = () => {
   const { user } = useAuthStore();
-  const { activeOrg, setActiveOrg } = useOrgStore();
+  const { activeOrg } = useOrgStore();
 
   if (!user) {
     return <Login />;
   }
 
+  if (user.is_superadmin) {
+    return <Navigate to="/platform/admin" replace />;
+  }
+
+  if (user.platform_role === "auditor" || user.email?.includes("auditor")) {
+    return <Navigate to="/auditor" replace />;
+  }
+
   if (!activeOrg) {
-    const orgs = MockDB.getOrgs();
-    const members = MockDB.getMembers().filter(m => m.user_id === user.id && m.status === "active");
-    const primaryId = user.primary_org_id || user.joined_org_ids?.[0] || members[0]?.org_id || orgs[0]?.id;
-    const targetOrg = orgs.find(o => o.id === primaryId) || orgs[0];
-    const targetMember = members.find(m => m.org_id === targetOrg?.id) || members[0] || {
-      id: `mem-${Date.now()}`,
-      org_id: targetOrg?.id || "org-1",
-      user_id: user.id,
-      role: "member" as const,
-      status: "active" as const,
-      joined_at: new Date().toISOString()
-    };
-    if (targetOrg) {
-      setActiveOrg(targetOrg, targetMember);
-    }
+    return <Navigate to="/org-picker" replace />;
   }
 
   return <Navigate to="/dashboard" replace />;

@@ -267,7 +267,7 @@ export const CertificateVerifyPage: React.FC = () => {
       <header className="border-b border-gray-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md sticky top-0 z-40 transition-colors shadow-2xs">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           {/* Logo & Registry Label */}
-          <a href="https://impacto-landing.vercel.app/" className="flex items-center gap-3 group focus:outline-none">
+          <Link to="/" className="flex items-center gap-3 group focus:outline-none">
             {/* Impacto 3-circle Knot Brand Icon */}
             <div className="relative flex items-center justify-center">
               <svg className="h-8 w-8 text-emerald-600 dark:text-emerald-500 transition-transform group-hover:scale-105" viewBox="0 0 100 100" fill="none">
@@ -285,7 +285,7 @@ export const CertificateVerifyPage: React.FC = () => {
                 Verification Registry
               </span>
             </div>
-          </a>
+          </Link>
 
           {/* Action Buttons: Sign In & Sign Up */}
           <div className="flex items-center gap-2 sm:gap-2.5">

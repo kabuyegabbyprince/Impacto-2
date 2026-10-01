@@ -39,41 +39,12 @@ const applyAccessibilitySettings = (user?: User | null) => {
   }
 };
 
-// Check local storage for persistent demo/mock session
-const getInitialUser = (): User | null => {
-  const saved = localStorage.getItem("impacto_user");
-  const session = localStorage.getItem("impacto_session");
-  if (saved && session) {
-    try {
-      const parsed: User = JSON.parse(saved);
-      if (!parsed || !parsed.id) {
-        localStorage.removeItem("impacto_user");
-        localStorage.removeItem("impacto_session");
-        return null;
-      }
-      // If user had a personal language saved, ensure it takes priority
-      const userLang = localStorage.getItem("impacto_user_lang_" + parsed.id) as ("en" | "fr" | "rw") || parsed.preferred_language;
-      if (userLang) {
-        parsed.preferred_language = userLang;
-        try {
-          i18n.changeLanguage(userLang);
-          localStorage.setItem("i18nextLng", userLang);
-        } catch {}
-      }
-      applyAccessibilitySettings(parsed);
-      return parsed;
-    } catch {
-      localStorage.removeItem("impacto_user");
-      localStorage.removeItem("impacto_session");
-      return null;
-    }
-  }
-  return null;
-};
+// Strictly in-memory session: sessions are always destroyed on page reload/startup
+const getInitialUser = (): User | null => null;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user: getInitialUser(),
-  session: localStorage.getItem("impacto_session") ? {} : null,
+  user: null,
+  session: null,
   isLoading: false,
   setUser: (user) => {
     if (user) {
@@ -88,16 +59,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         } catch {}
       }
       applyAccessibilitySettings(user);
-
-      try {
-        localStorage.setItem("impacto_user", JSON.stringify(user));
-      } catch (err) {
-        console.warn("Failed to save user to localStorage:", err);
-      }
     } else {
-      try {
-        localStorage.removeItem("impacto_user");
-      } catch {}
       applyAccessibilitySettings(null);
     }
     set({ user });
@@ -170,17 +132,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user: updatedUser });
   },
   setSession: (session) => {
-    if (session) {
-      try {
-        localStorage.setItem("impacto_session", "true");
-      } catch (err) {
-        console.warn("Failed to save session to localStorage:", err);
-      }
-    } else {
-      try {
-        localStorage.removeItem("impacto_session");
-      } catch {}
-    }
     set({ session });
   },
   setLoading: (isLoading) => set({ isLoading }),

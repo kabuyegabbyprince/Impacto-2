@@ -79,19 +79,25 @@ export class MockDB {
   static getErrors(): ErrorReport[] { return getLocal("impacto_mock_errors", []); }
   static saveErrors(data: ErrorReport[]) { saveLocal("impacto_mock_errors", data); }
 
-  static getSubPayments(): SubscriptionPayment[] { return getLocal("impacto_mock_subpayments", []); }
+  static getSubPayments(): SubscriptionPayment[] {
+    const raw = getLocal("impacto_mock_subpayments", []);
+    return (raw || []).filter((p: any) => {
+      const ref = (p.reference || p.transaction_reference || "").toUpperCase();
+      return !ref.includes("TEST");
+    });
+  }
   static saveSubPayments(data: SubscriptionPayment[]) { saveLocal("impacto_mock_subpayments", data); }
 
   // Shared Helper
   static getPlatformSettings(): PlatformSettings {
     return getLocal("impacto_mock_platform_settings", {
-      usd_to_rwf_rate: 1300,
-      eur_to_rwf_rate: 1400,
+      usd_to_rwf_rate: 1400,
+      eur_to_rwf_rate: 1450,
       kes_to_rwf_rate: 10,
-      mtn_payment_number: "0788100100",
-      airtel_payment_number: "0733100100",
+      mtn_payment_number: "",
+      airtel_payment_number: "",
       payment_name: "VIRELLIX INC",
-      momo_merchant_code: "880099"
+      momo_merchant_code: ""
     });
   }
 

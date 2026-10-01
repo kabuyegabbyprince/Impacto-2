@@ -435,13 +435,13 @@ export const PublicOrgPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2 mt-3">
-              <a
-                href="https://impacto-landing.vercel.app/"
+              <Link
+                to="/"
                 className="py-2.5 px-3.5 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-300 font-bold text-xs rounded-xl text-center flex items-center justify-center gap-1.5 transition"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Home
-              </a>
+              </Link>
               <Link
                 to="/login"
                 className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs text-center"
@@ -474,13 +474,13 @@ export const PublicOrgPage: React.FC = () => {
         <div className="relative w-full h-64 sm:h-80 md:h-96 overflow-hidden bg-slate-900 select-none">
           {/* Top Left Floating Home Button */}
           <div className="absolute top-4 left-4 sm:top-6 sm:left-8 z-30">
-            <a
-              href="https://impacto-landing.vercel.app/"
+            <Link
+              to="/"
               className="px-3.5 py-1.5 rounded-full bg-white/30 hover:bg-white/40 dark:bg-black/40 dark:hover:bg-black/60 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1.5 border border-white/30 shadow-xs transition"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               <span>Home</span>
-            </a>
+            </Link>
           </div>
 
           {/* Render Cover: Either Image or Smooth Atmospheric Gradient */}
@@ -1231,9 +1231,9 @@ export const PublicOrgPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-4 text-xs font-bold text-gray-500">
-              <a href="https://impacto-landing.vercel.app/" className="hover:text-emerald-600 transition">
+              <Link to="/" className="hover:text-emerald-600 transition">
                 Home
-              </a>
+              </Link>
               <Link to={`/verify?code=${org.registration_number || "CERT-2026-" + org.slug}`} className="hover:text-emerald-600 flex items-center gap-1">
                 <ShieldCheck className="h-3.5 w-3.5" /> Verify Badges
               </Link>
@@ -1243,7 +1243,7 @@ export const PublicOrgPage: React.FC = () => {
             </div>
 
             <p className="text-[11px] font-mono">
-              Powered by <a href="https://impacto-landing.vercel.app/" className="hover:underline text-emerald-600 dark:text-emerald-400">Impacto Cooperative Platform</a>
+              Powered by <Link to="/" className="hover:underline text-emerald-600 dark:text-emerald-400">Impacto Cooperative Platform</Link>
             </p>
           </div>
         </footer>

@@ -53,6 +53,7 @@ import {
 } from "../lib/subscriptionMatrix";
 import {
   usePlatformAdminData,
+  usePlatformSettings,
   useUpdateOrganization,
   useResolveErrorReport,
   useApproveSubscription,
@@ -68,6 +69,7 @@ import { useAuthStore } from "../store/authStore";
 import { Button, Input, Card, Badge, Table, Modal, EmptyState, Avatar, getLucideIcon } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { notifyPlanOrPackageGranted } from "../lib/crossTabSync";
+import { MockDB } from "../lib/mockData";
 
 const formatDuration = (startStr: string, endStr?: string) => {
   if (!endStr) return "N/A";
@@ -346,52 +348,97 @@ export const SuperadminDashboard: React.FC = () => {
     }
   }, [platformData, payments, errors, orgs, addToast]);
 
-  const settings = platformData?.settings || {
-    usd_to_rwf_rate: 1350,
-    eur_to_rwf_rate: 1450,
-    kes_to_rwf_rate: 10,
-    mtn_payment_number: "0788100100",
-    airtel_payment_number: "0733100100",
-    payment_name: "VIRELLIX INC"
-  };
+  useEffect(() => {
+    const handleSubPaymentCreated = () => {
+      refetch();
+    };
+    window.addEventListener("impacto_sub_payment_created", handleSubPaymentCreated);
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "impacto_last_sub_payment" || e.key === "impacto_mock_subpayments") {
+        refetch();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("impacto_sub_payment_created", handleSubPaymentCreated);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [refetch]);
 
-  const [usdRate, setUsdRate] = useState<number>(settings.usd_to_rwf_rate || 1350);
+  const { data: globalPlatformSettings } = usePlatformSettings();
+  const settings = globalPlatformSettings || platformData?.settings || MockDB.getPlatformSettings();
+
+  const [usdRate, setUsdRate] = useState<number>(settings.usd_to_rwf_rate || 1400);
   const [eurRate, setEurRate] = useState<number>(settings.eur_to_rwf_rate || 1450);
   const [kesRate, setKesRate] = useState<number>(settings.kes_to_rwf_rate || 10);
-  const [mtnNum, setMtnNum] = useState<string>(settings.mtn_payment_number || "0788100100");
-  const [airtelNum, setAirtelNum] = useState<string>(settings.airtel_payment_number || "0733100100");
-  const [momoMerchantCode, setMomoMerchantCode] = useState<string>(settings.momo_merchant_code || settings.mtn_merchant_code || "880099");
+  const [mtnNum, setMtnNum] = useState<string>(settings.mtn_payment_number ?? "");
+  const [airtelNum, setAirtelNum] = useState<string>(settings.airtel_payment_number ?? "");
+  const [momoMerchantCode, setMomoMerchantCode] = useState<string>(settings.momo_merchant_code || settings.mtn_merchant_code || "");
   const [mName, setMName] = useState<string>(settings.payment_name || "VIRELLIX INC");
+
+  useEffect(() => {
+    const s = globalPlatformSettings || platformData?.settings || MockDB.getPlatformSettings();
+    if (s) {
+      if (s.usd_to_rwf_rate !== undefined) setUsdRate(s.usd_to_rwf_rate);
+      if (s.eur_to_rwf_rate !== undefined) setEurRate(s.eur_to_rwf_rate);
+      if (s.kes_to_rwf_rate !== undefined) setKesRate(s.kes_to_rwf_rate);
+      setMtnNum(s.mtn_payment_number ?? "");
+      setAirtelNum(s.airtel_payment_number ?? "");
+      setMomoMerchantCode(s.momo_merchant_code || s.mtn_merchant_code || "");
+      if (s.payment_name) setMName(s.payment_name);
+    }
+  }, [globalPlatformSettings, platformData?.settings]);
 
   const [activeChatId, setActiveChatId] = useState<string>("");
   const [tempReply, setTempReply] = useState<string>("");
 
   const handleSavePlatformSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!/^07\d{8}$/.test(mtnNum)) {
-      addToast("Error: MTN collection number must be 10 digits starting with 07", "error");
+    const sanitizePhone = (val: string) => {
+      let cleaned = (val || "").replace(/\D/g, "");
+      if (cleaned.startsWith("250") && cleaned.length === 12) {
+        cleaned = "0" + cleaned.slice(3);
+      }
+      return cleaned;
+    };
+    const cleanMtn = sanitizePhone(mtnNum);
+    const cleanAirtel = sanitizePhone(airtelNum);
+    const cleanCode = momoMerchantCode.trim();
+
+    // Ensure at least one payment method is configured:
+    if (!cleanMtn && !cleanAirtel && !cleanCode) {
+      addToast("Please configure at least one payment method: MoMo Pay code, MTN number, or Airtel number.", "error");
       return;
     }
-    if (!/^07\d{8}$/.test(airtelNum)) {
-      addToast("Error: Airtel collection number must be 10 digits starting with 07", "error");
+
+    // Optional phone validation: only validate format if a number was actually entered
+    if (cleanMtn && !/^07\d{8}$/.test(cleanMtn)) {
+      addToast("MTN collection number must be 10 digits starting with 07 (or leave blank if using merchant code only)", "error");
       return;
     }
+    if (cleanAirtel && !/^07\d{8}$/.test(cleanAirtel)) {
+      addToast("Airtel collection number must be 10 digits starting with 07 (or leave blank if using merchant code only)", "error");
+      return;
+    }
+
     try {
       await updateSettingsMutation.mutateAsync({
-        usd_to_rwf_rate: usdRate,
-        eur_to_rwf_rate: eurRate,
-        kes_to_rwf_rate: kesRate,
-        mtn_payment_number: mtnNum,
-        airtel_payment_number: airtelNum,
-        momo_merchant_code: momoMerchantCode,
-        mtn_merchant_code: momoMerchantCode,
-        payment_name: mName
+        usd_to_rwf_rate: usdRate || 1400,
+        eur_to_rwf_rate: eurRate || 1450,
+        kes_to_rwf_rate: kesRate || 10,
+        mtn_payment_number: cleanMtn,
+        airtel_payment_number: cleanAirtel,
+        momo_merchant_code: cleanCode,
+        mtn_merchant_code: cleanCode,
+        payment_name: mName.trim() || "VIRELLIX INC"
       });
-      setSuccessMsg("Platform operator billing parameters saved successfully!");
+      setSuccessMsg("Platform operator billing parameters saved and applied system-wide!");
+      addToast("Global billing configuration updated successfully across all organizations!", "success");
       refetch();
-      setTimeout(() => setSuccessMsg(""), 3000);
+      setTimeout(() => setSuccessMsg(""), 3500);
     } catch (err) {
       console.error(err);
+      addToast("Failed to save billing parameters. Check connection.", "error");
     }
   };
 
@@ -888,7 +935,50 @@ export const SuperadminDashboard: React.FC = () => {
         {/* 1. STATS TAB */}
         {activeTab === "stats" && (
           <div className="flex flex-col gap-6 w-full">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {awaitingPayments > 0 && (
+              <div className="p-4 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border-2 border-amber-500/50 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs animate-in slide-in-from-top-2">
+                <div className="flex items-center gap-3">
+                  <div className="h-11 w-11 rounded-xl bg-amber-500 text-slate-950 font-black flex items-center justify-center shrink-0 shadow-xs">
+                    <Smartphone className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base">
+                        {awaitingPayments === 1 ? "1 Payment Proof Awaiting Verification" : `${awaitingPayments} Payment Proofs Awaiting Verification`}
+                      </span>
+                      <span className="px-2 py-0.5 text-[10px] font-black bg-amber-500 text-slate-950 rounded-full font-mono uppercase">
+                        Action Required
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                      New mobile money subscription or add-on package payment proof submitted by workspace administrators. Approve or audit to unlock licenses.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => setActiveTab("payments")}
+                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs px-4 py-2.5 rounded-xl shrink-0 shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>Review Approvals Queue ({awaitingPayments}) →</span>
+                </Button>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+              <div 
+                onClick={() => setActiveTab("payments")}
+                className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl flex items-center justify-between shadow-xs cursor-pointer hover:border-amber-400 transition"
+              >
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">MoMo Queue</span>
+                  <span className="text-2xl font-black font-display text-amber-500 mt-1 block">{awaitingPayments}</span>
+                  <span className="text-[10px] text-slate-500 mt-1 font-medium block">Awaiting review</span>
+                </div>
+                <div className="h-11 w-11 bg-amber-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-amber-500 shadow-xs">
+                  <Smartphone className="h-5 w-5" />
+                </div>
+              </div>
               <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl flex items-center justify-between shadow-xs">
                 <div>
                   <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">System Users</span>
@@ -1600,7 +1690,7 @@ export const SuperadminDashboard: React.FC = () => {
                         rows={3}
                         value={customRejectReason}
                         onChange={(e) => setCustomRejectReason(e.target.value)}
-                        placeholder="e.g. Please verify that transfer was sent to 0788100100 and resubmit with full MTN confirmation SMS..."
+                        placeholder="e.g. Please verify transfer reference and resubmit with full MTN confirmation SMS..."
                         className="w-full p-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                       />
                     </div>
@@ -1661,7 +1751,7 @@ export const SuperadminDashboard: React.FC = () => {
                       <div className="flex justify-between">
                         <span className="text-slate-400">Amount:</span>
                         <span className="font-bold text-emerald-600">
-                          {(selectedHistoryItem.amount_local || (selectedHistoryItem.amount_usd ? selectedHistoryItem.amount_usd * 1350 : 33750)).toLocaleString()} RWF {selectedHistoryItem.amount_usd ? `($${selectedHistoryItem.amount_usd})` : ""}
+                          {(selectedHistoryItem.amount_local || (selectedHistoryItem.amount_usd ? selectedHistoryItem.amount_usd * usdRate : 35000)).toLocaleString()} RWF {selectedHistoryItem.amount_usd ? `($${selectedHistoryItem.amount_usd})` : ""}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -2278,21 +2368,30 @@ export const SuperadminDashboard: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">MTN MoMo Collection Number</label>
-                  <Input type="text" value={mtnNum} onChange={(e) => setMtnNum(e.target.value)} placeholder="0788100100" />
-                  <span className="text-[10px] text-slate-400">Must be 10 digits starting with 07</span>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                    <span>MTN MoMo Collection Number</span>
+                    <span className="text-[10px] font-normal text-slate-400">Optional</span>
+                  </label>
+                  <Input type="text" value={mtnNum} onChange={(e) => setMtnNum(e.target.value)} placeholder="e.g. 078XXXXXXXX (or leave blank)" />
+                  <span className="text-[10px] text-slate-400">10 digits starting with 07, or leave blank if using merchant code only</span>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">Airtel Money Collection Number</label>
-                  <Input type="text" value={airtelNum} onChange={(e) => setAirtelNum(e.target.value)} placeholder="0733100100" />
-                  <span className="text-[10px] text-slate-400">Must be 10 digits starting with 07</span>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                    <span>Airtel Money Collection Number</span>
+                    <span className="text-[10px] font-normal text-slate-400">Optional</span>
+                  </label>
+                  <Input type="text" value={airtelNum} onChange={(e) => setAirtelNum(e.target.value)} placeholder="e.g. 073XXXXXXXX (or leave blank)" />
+                  <span className="text-[10px] text-slate-400">10 digits starting with 07, or leave blank if using merchant code only</span>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-slate-700 dark:text-slate-300">MTN MoMo Pay Merchant Code (*182*8*1*code#)</label>
-                  <Input type="text" value={momoMerchantCode} onChange={(e) => setMomoMerchantCode(e.target.value)} placeholder="880099" />
+                  <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                    <span>MTN MoMo Pay Merchant Code (*182*8*1*code#)</span>
+                    <span className="text-[10px] font-normal text-slate-400">Recommended</span>
+                  </label>
+                  <Input type="text" value={momoMerchantCode} onChange={(e) => setMomoMerchantCode(e.target.value)} placeholder="e.g. 880099 (or leave blank)" />
                   <span className="text-[10px] text-slate-400">Merchant settlement code used for auto-generating *182*8*1*&#123;&#123;code&#125;&#125;#</span>
                 </div>
                 <div className="flex flex-col gap-1.5">

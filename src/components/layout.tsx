@@ -67,6 +67,7 @@ import {
   useSubmitSubscriptionPayment,
   useSubmitErrorReport,
   usePlatformAdminData,
+  usePlatformSettings,
   useNews,
   useMeetings,
   useOrganizations,
@@ -77,8 +78,8 @@ import {
   useOrgSubscriptionPayments,
   useUpdateOrganization
 } from "../hooks/useImpactoData";
-import { useToast } from "./Toast";
 import { MockDB } from "../lib/mockData";
+import { useToast } from "./Toast";
 import { resolveFileUrl } from "../lib/storageService";
 
 // ==========================================
@@ -182,6 +183,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
 
   const { activeCurrency, setActiveCurrency, setRates } = useCurrencyStore();
   const { addToast } = useToast();
+  const { data: globalPlatformSettings } = usePlatformSettings();
   const { data: platformData } = usePlatformAdminData();
 
   const { data: news } = useNews(activeOrg?.id);
@@ -273,14 +275,15 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
     new Date(announcementsList[0].time).getTime() > new Date(lastNotificationTimestamp).getTime();
 
   useEffect(() => {
-    if (platformData?.settings) {
+    const s = globalPlatformSettings || platformData?.settings;
+    if (s) {
       setRates({
-        USD_to_RWF: Number(platformData.settings.usd_to_rwf_rate) || 1300,
-        EUR_to_RWF: Number(platformData.settings.eur_to_rwf_rate) || 1400,
-        KES_to_RWF: Number(platformData.settings.kes_to_rwf_rate) || 10,
+        USD_to_RWF: Number(s.usd_to_rwf_rate) || 1350,
+        EUR_to_RWF: Number(s.eur_to_rwf_rate) || 1450,
+        KES_to_RWF: Number(s.kes_to_rwf_rate) || 10,
       });
     }
-  }, [platformData, setRates]);
+  }, [globalPlatformSettings, platformData?.settings, setRates]);
 
   const toggleTheme = () => {
     const next = !dark;
@@ -996,6 +999,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
   const { activeCurrency, formatAmount, convertToRWF } = useCurrencyStore();
   const { addToast } = useToast();
 
+  const { data: globalPlatformSettings } = usePlatformSettings();
   const { data: platformData, refetch: refetchSaas } = usePlatformAdminData();
 
   // Synchronize active organization status in real-time
@@ -1098,12 +1102,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
   const [isPeekMode, setIsPeekMode] = useState(true);
   const [glassTransparency, setGlassTransparency] = useState<"crystal" | "frosted" | "balanced">("crystal");
 
-  const platformSettings = platformData?.settings || {
-    usd_to_rwf_rate: 1350,
-    mtn_payment_number: "",
-    airtel_payment_number: "",
-    payment_name: "Impacto Platform"
-  };
+  const platformSettings = globalPlatformSettings || platformData?.settings || MockDB.getPlatformSettings();
 
   const updateOrgMutation = useUpdateOrganization();
   const { data: orgMembersData } = useMembers(activeOrg?.id);
@@ -1348,45 +1347,52 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           </div>
 
           {/* Quick USSD Dial Codes & Action Buttons on Dock */}
-          <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end flex-wrap">
-            {merchantUssdPrimary ? (
-              <div className="flex items-center gap-1.5 bg-white/10 dark:bg-white/5 border border-white/10 rounded-lg px-2.5 py-1 text-xs font-mono font-medium">
-                <span className="text-slate-300">MoMo:</span>
-                <span className="text-white select-all">{merchantUssdPrimary}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(merchantUssdPrimary);
-                    addToast(`USSD Code copied: ${merchantUssdPrimary}`, "success");
-                  }}
-                  className="hover:text-amber-300 p-0.5 ml-1 text-slate-300 cursor-pointer"
-                  title="Copy USSD"
-                >
-                  <Copy className="h-3 w-3" />
-                </button>
+          {(() => {
+            const activeDockUssd = merchantUssdPrimary || p2pUssdPrimary;
+            const activeDockLabel = merchantUssdPrimary ? "MoMo" : "Phone";
+
+            return (
+              <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end flex-wrap">
+                {activeDockUssd ? (
+                  <div className="flex items-center gap-1.5 bg-white/10 dark:bg-white/5 border border-white/10 rounded-lg px-2.5 py-1 text-xs font-mono font-medium">
+                    <span className="text-slate-300">{activeDockLabel}:</span>
+                    <span className="text-white select-all">{activeDockUssd}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(activeDockUssd);
+                        addToast(`USSD Code copied: ${activeDockUssd}`, "success");
+                      }}
+                      className="hover:text-amber-300 p-0.5 ml-1 text-slate-300 cursor-pointer"
+                      title="Copy USSD"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {activeDockUssd ? (
+                    <a
+                      href={`tel:${encodeURIComponent(activeDockUssd)}`}
+                      className="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center gap-1 transition shadow-xs cursor-pointer"
+                    >
+                      <Smartphone className="h-3.5 w-3.5" />
+                      <span>Dial</span>
+                    </a>
+                  ) : null}
+
+                  <Button
+                    size="sm"
+                    onClick={() => setIsPeekMode(false)}
+                    className="h-8 bg-white hover:bg-slate-100 text-slate-900 font-medium text-xs px-3.5 rounded-lg flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
+                  >
+                    <span>Restore Full Access</span>
+                  </Button>
+                </div>
               </div>
-            ) : null}
-
-            <div className="flex items-center gap-2 shrink-0">
-              {merchantUssdPrimary ? (
-                <a
-                  href={`tel:${encodeURIComponent(merchantUssdPrimary)}`}
-                  className="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center gap-1 transition shadow-xs cursor-pointer"
-                >
-                  <Smartphone className="h-3.5 w-3.5" />
-                  <span>Dial</span>
-                </a>
-              ) : null}
-
-              <Button
-                size="sm"
-                onClick={() => setIsPeekMode(false)}
-                className="h-8 bg-white hover:bg-slate-100 text-slate-900 font-medium text-xs px-3.5 rounded-lg flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
-              >
-                <span>Restore Full Access</span>
-              </Button>
-            </div>
-          </div>
+            );
+          })()}
         </aside>
       );
     }

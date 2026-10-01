@@ -251,6 +251,20 @@ export const Input: React.FC<InputProps> = ({
           } ${suffixIcon || isPassword ? "pr-10" : ""} ${
             error ? "border-red-500 focus:ring-red-500" : ""
           } ${className}`}
+          onFocus={(e) => {
+            if (props.onFocus) {
+              props.onFocus(e);
+            }
+            if (typeof window !== "undefined" && window.innerWidth < 768) {
+              setTimeout(() => {
+                try {
+                  e.target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+                } catch (err) {
+                  e.target.scrollIntoView();
+                }
+              }, 250);
+            }
+          }}
           onKeyDown={(e) => {
             if (actualType === "number") {
               if (/^[a-zA-Z]$/.test(e.key) && !e.ctrlKey && !e.metaKey) {
@@ -355,11 +369,11 @@ export const Modal: React.FC<ModalProps> = ({
     md: "max-w-lg",
     lg: "max-w-2xl",
     xl: "max-w-5xl",
-    full: "max-w-[96vw] w-[96vw] h-[92vh] max-h-[92vh]"
+    full: "max-w-[96vw] w-[96vw] h-[92dvh] max-h-[92dvh]"
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-contain">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300"
@@ -368,7 +382,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Content wrapper */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`relative bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-full ${sizes[size]} shadow-2xl flex flex-col overflow-hidden max-h-[90vh] animate-in fade-in zoom-in-[0.98] duration-200 border border-gray-200 dark:border-slate-800`}
+        className={`relative bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-full ${sizes[size]} shadow-2xl flex flex-col overflow-hidden max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh] my-auto animate-in fade-in zoom-in-[0.98] duration-200 border border-gray-200 dark:border-slate-800`}
       >
         <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-gray-100 dark:border-slate-800 shrink-0">
           <h3 className="font-display font-bold text-base sm:text-lg text-gray-900 dark:text-slate-100">
@@ -381,7 +395,7 @@ export const Modal: React.FC<ModalProps> = ({
             &#x2715;
           </button>
         </div>
-        <div className="p-4 sm:p-6 overflow-y-auto w-full flex-1 flex flex-col">{children}</div>
+        <div className="p-4 sm:p-6 overflow-y-auto w-full flex-1 flex flex-col modal-scroll-area overscroll-contain">{children}</div>
       </div>
     </div>
   );

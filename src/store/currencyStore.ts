@@ -19,9 +19,24 @@ export interface CurrencyState {
 }
 
 const DEFAULT_RATES: CurrencyRates = {
-  USD_to_RWF: 1300,
-  EUR_to_RWF: 1400,
+  USD_to_RWF: 1400,
+  EUR_to_RWF: 1450,
   KES_to_RWF: 10,
+};
+
+const getInitialRates = (): CurrencyRates => {
+  try {
+    const saved = localStorage.getItem("impacto_mock_platform_settings");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        USD_to_RWF: Number(parsed.usd_to_rwf_rate) || 1400,
+        EUR_to_RWF: Number(parsed.eur_to_rwf_rate) || 1450,
+        KES_to_RWF: Number(parsed.kes_to_rwf_rate) || 10,
+      };
+    }
+  } catch (e) {}
+  return DEFAULT_RATES;
 };
 
 const getSavedCurrency = (): CurrencyCode => {
@@ -34,7 +49,7 @@ const getSavedCurrency = (): CurrencyCode => {
 
 export const useCurrencyStore = create<CurrencyState>((set, get) => ({
   activeCurrency: getSavedCurrency(),
-  rates: DEFAULT_RATES,
+  rates: getInitialRates(),
   setActiveCurrency: (currency) => {
     localStorage.setItem("impacto_active_currency", currency);
     set({ activeCurrency: currency });

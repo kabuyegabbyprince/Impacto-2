@@ -67,6 +67,7 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
 
   const cleanNum = cleanPhoneNumber(mtnNumber);
   const cleanMCode = cleanMerchantCode(merchantCode);
+  const cleanAirtel = cleanPhoneNumber(airtelNumber);
   // For donations, contributions are random so no fixed amount is attached to the USSD dial code
   const formattedAmount = isDonation ? null : (amountRwf && amountRwf > 0 ? Math.round(amountRwf) : null);
 
@@ -85,7 +86,12 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
   const merchantUssdBase = cleanMCode ? `*182*8*1*${cleanMCode}#` : "";
   const merchantUssdPrimary = merchantUssdWithAmount || merchantUssdBase;
 
-  const hasAnyMtnPayment = Boolean(cleanNum || cleanMCode);
+  // 3. Airtel Money USSD:
+  const airtelUssdWithAmount = cleanAirtel && formattedAmount ? `*182*1*1*${cleanAirtel}*${formattedAmount}#` : "";
+  const airtelUssdBase = cleanAirtel ? `*182*1*1*${cleanAirtel}#` : "";
+  const airtelUssdPrimary = airtelUssdWithAmount || airtelUssdBase;
+
+  const hasAnyPayment = Boolean(cleanNum || cleanMCode || cleanAirtel);
 
   const copyToClipboard = async (text: string, key: string, label: string) => {
     try {
@@ -132,32 +138,97 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
     }
   };
 
+  // Determine active columns count for clean responsive grid
+  const activeCount = (cleanNum ? 1 : 0) + (cleanMCode ? 1 : 0) + (cleanAirtel ? 1 : 0);
+
   return (
     <div className={`space-y-3 ${className}`}>
-      {hasAnyMtnPayment ? (
+      {hasAnyPayment ? (
         <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3 bg-slate-50/50 dark:bg-slate-900/50">
           <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
             <span className="font-semibold text-slate-800 dark:text-slate-200">
-              MTN USSD Payment
+              Mobile Money USSD Payment Gateway
             </span>
             {recipientName && (
               <span>Account: <strong className="text-slate-700 dark:text-slate-300 font-medium">{recipientName}</strong></span>
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* 1. Pay on MTN Phone Number */}
+          <div className={`grid grid-cols-1 ${activeCount > 1 ? "sm:grid-cols-2" : ""} gap-3`}>
+            {/* 1. MoMo Pay Merchant Code (Primary when code is set) */}
+            {cleanMCode && (
+              <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-3 flex flex-col justify-between gap-2.5">
+                <div>
+                  <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
+                    <span className="font-medium text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                      <Store className="h-3.5 w-3.5 text-amber-500" /> MTN MoMo Pay Code
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(cleanMCode, "code_raw", "Merchant code")}
+                      className="font-mono text-slate-700 dark:text-slate-300 hover:text-emerald-600 cursor-pointer text-xs"
+                      title="Copy merchant code"
+                    >
+                      {copiedKey === "code_raw" ? "Copied" : cleanMCode}
+                    </button>
+                  </div>
+
+                  {/* Primary USSD */}
+                  <div className="font-mono text-xs text-slate-900 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-800 break-all select-all flex items-center justify-between gap-1">
+                    <span>{merchantUssdPrimary}</span>
+                    {formattedAmount ? (
+                      <span className="text-xs font-mono text-slate-600 dark:text-slate-400 shrink-0">
+                        {formattedAmount.toLocaleString()} RWF
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {merchantUssdWithAmount && (
+                    <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center justify-between">
+                      <span className="truncate">Base: <span className="select-all text-slate-700 dark:text-slate-300">{merchantUssdBase}</span></span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(merchantUssdBase, "merchant_base", "Base merchant code")}
+                        className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-[11px] ml-1 cursor-pointer"
+                      >
+                        {copiedKey === "merchant_base" ? "Copied" : "Copy"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(merchantUssdPrimary, "merchant", "USSD code")}
+                    className="flex-1 py-1.5 px-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium rounded transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    {copiedKey === "merchant" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                    <span>{copiedKey === "merchant" ? "Copied" : "Copy code"}</span>
+                  </button>
+                  <a
+                    href={`tel:${encodeURIComponent(merchantUssdPrimary)}`}
+                    className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Smartphone className="h-3.5 w-3.5" />
+                    <span>Dial</span>
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* 2. Pay on MTN Phone Number */}
             {cleanNum && (
               <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-3 flex flex-col justify-between gap-2.5">
                 <div>
                   <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
-                    <span className="font-medium text-slate-800 dark:text-slate-200">
-                      Phone number
+                    <span className="font-medium text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                      <PhoneCall className="h-3.5 w-3.5 text-yellow-500" /> MTN Number
                     </span>
                     <button
                       type="button"
                       onClick={() => copyToClipboard(cleanNum, "phone_raw", "Phone number")}
-                      className="font-mono text-slate-700 dark:text-slate-300 hover:text-emerald-600 cursor-pointer"
+                      className="font-mono text-slate-700 dark:text-slate-300 hover:text-emerald-600 cursor-pointer text-xs"
                       title="Copy phone number"
                     >
                       {copiedKey === "phone_raw" ? "Copied" : cleanNum}
@@ -168,19 +239,19 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
                   <div className="font-mono text-xs text-slate-900 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-800 break-all select-all flex items-center justify-between gap-1">
                     <span>{p2pUssdPrimary}</span>
                     {formattedAmount ? (
-                      <span className="text-xs font-mono text-slate-600 dark:text-slate-400">
+                      <span className="text-xs font-mono text-slate-600 dark:text-slate-400 shrink-0">
                         {formattedAmount.toLocaleString()} RWF
                       </span>
                     ) : null}
                   </div>
 
                   {p2pUssdWithAmount && (
-                    <div className="text-xs text-slate-500 font-mono mt-1 flex items-center justify-between">
-                      <span className="truncate">Base code: <span className="select-all text-slate-700 dark:text-slate-300">{p2pUssdBase}</span></span>
+                    <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center justify-between">
+                      <span className="truncate">Base: <span className="select-all text-slate-700 dark:text-slate-300">{p2pUssdBase}</span></span>
                       <button
                         type="button"
                         onClick={() => copyToClipboard(p2pUssdBase, "p2p_base", "Base phone code")}
-                        className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-xs ml-1 cursor-pointer"
+                        className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-[11px] ml-1 cursor-pointer"
                       >
                         {copiedKey === "p2p_base" ? "Copied" : "Copy"}
                       </button>
@@ -208,43 +279,43 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
               </div>
             )}
 
-            {/* 2. Pay to MoMo Pay Merchant Code */}
-            {cleanMCode && (
+            {/* 3. Pay on Airtel Money Phone Number */}
+            {cleanAirtel && (
               <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-3 flex flex-col justify-between gap-2.5">
                 <div>
                   <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
-                    <span className="font-medium text-slate-800 dark:text-slate-200">
-                      Merchant code
+                    <span className="font-medium text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                      <PhoneCall className="h-3.5 w-3.5 text-rose-500" /> Airtel Money Number
                     </span>
                     <button
                       type="button"
-                      onClick={() => copyToClipboard(cleanMCode, "code_raw", "Merchant code")}
-                      className="font-mono text-slate-700 dark:text-slate-300 hover:text-emerald-600 cursor-pointer"
-                      title="Copy merchant code"
+                      onClick={() => copyToClipboard(cleanAirtel, "airtel_raw", "Airtel number")}
+                      className="font-mono text-slate-700 dark:text-slate-300 hover:text-emerald-600 cursor-pointer text-xs"
+                      title="Copy Airtel number"
                     >
-                      {copiedKey === "code_raw" ? "Copied" : cleanMCode}
+                      {copiedKey === "airtel_raw" ? "Copied" : cleanAirtel}
                     </button>
                   </div>
-
+                  
                   {/* Primary USSD */}
                   <div className="font-mono text-xs text-slate-900 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-800 break-all select-all flex items-center justify-between gap-1">
-                    <span>{merchantUssdPrimary}</span>
+                    <span>{airtelUssdPrimary}</span>
                     {formattedAmount ? (
-                      <span className="text-xs font-mono text-slate-600 dark:text-slate-400">
+                      <span className="text-xs font-mono text-slate-600 dark:text-slate-400 shrink-0">
                         {formattedAmount.toLocaleString()} RWF
                       </span>
                     ) : null}
                   </div>
 
-                  {merchantUssdWithAmount && (
-                    <div className="text-xs text-slate-500 font-mono mt-1 flex items-center justify-between">
-                      <span className="truncate">Base code: <span className="select-all text-slate-700 dark:text-slate-300">{merchantUssdBase}</span></span>
+                  {airtelUssdWithAmount && (
+                    <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center justify-between">
+                      <span className="truncate">Base: <span className="select-all text-slate-700 dark:text-slate-300">{airtelUssdBase}</span></span>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard(merchantUssdBase, "merchant_base", "Base merchant code")}
-                        className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-xs ml-1 cursor-pointer"
+                        onClick={() => copyToClipboard(airtelUssdBase, "airtel_base", "Base Airtel code")}
+                        className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-[11px] ml-1 cursor-pointer"
                       >
-                        {copiedKey === "merchant_base" ? "Copied" : "Copy"}
+                        {copiedKey === "airtel_base" ? "Copied" : "Copy"}
                       </button>
                     </div>
                   )}
@@ -253,15 +324,15 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
                 <div className="flex items-center gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => copyToClipboard(merchantUssdPrimary, "merchant", "USSD code")}
+                    onClick={() => copyToClipboard(airtelUssdPrimary, "airtel", "USSD code")}
                     className="flex-1 py-1.5 px-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium rounded transition flex items-center justify-center gap-1 cursor-pointer"
                   >
-                    {copiedKey === "merchant" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                    <span>{copiedKey === "merchant" ? "Copied" : "Copy code"}</span>
+                    {copiedKey === "airtel" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                    <span>{copiedKey === "airtel" ? "Copied" : "Copy code"}</span>
                   </button>
                   <a
-                    href={`tel:${encodeURIComponent(merchantUssdPrimary)}`}
-                    className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded transition flex items-center justify-center gap-1 cursor-pointer"
+                    href={`tel:${encodeURIComponent(airtelUssdPrimary)}`}
+                    className="py-1.5 px-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded transition flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <Smartphone className="h-3.5 w-3.5" />
                     <span>Dial</span>
@@ -272,7 +343,7 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
           </div>
 
           <p className="text-xs text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200 dark:border-slate-800">
-            Dial from an MTN phone and approve the payment with your PIN.
+            Dial the USSD string from your mobile phone and approve payment with your secret MoMo / Airtel PIN.
           </p>
         </div>
       ) : (

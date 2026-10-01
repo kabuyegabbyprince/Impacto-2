@@ -51,12 +51,17 @@ export class OfflineSyncService {
   }
 
   static enqueue(operation: "CREATE" | "UPDATE" | "DELETE", entity: OfflineSyncQueueItem["entity"], payload: any): OfflineSyncQueueItem {
+    const now = new Date().toISOString();
     const item: OfflineSyncQueueItem = {
       id: "sync-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
-      timestamp: new Date().toISOString(),
+      timestamp: now,
+      updated_at: now,
       operation,
       entity,
-      payload,
+      payload: {
+        ...payload,
+        updated_at: payload.updated_at || now
+      },
       status: "pending",
       retry_count: 0
     };
