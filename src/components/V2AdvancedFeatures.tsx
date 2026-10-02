@@ -639,7 +639,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
             }`}
           >
-            <QrCode className="h-3.5 w-3.5" /> QR Attendance
+            <QrCode className="h-3.5 w-3.5" /> Attendance
           </button>
           <button
             onClick={() => setActiveTab("certificates")}
@@ -783,7 +783,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: QR ATTENDANCE & EXCEL EXPORT */}
+      {/* TAB 1: ATTENDANCE & EXCEL EXPORT */}
       {/* ========================================================================= */}
       {activeTab === "qr_attendance" && (() => {
         const qrAccess = canAccessFeature(activeOrg, "qr_attendance");
@@ -795,9 +795,9 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
             <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-start gap-3">
               <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div className="text-xs">
-                <p className="font-bold text-amber-900 dark:text-amber-200">QR Attendance Check-in is Locked</p>
+                <p className="font-bold text-amber-900 dark:text-amber-200">Attendance Check-in is Locked</p>
                 <p className="text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">
-                  Marking attendance and live QR check-ins are disabled on the Free Forever tier. Activate the <strong>Event & Attendance Package ($4/mo / 5,000 RWF)</strong> or upgrade to <strong>Starter, Growth, or Pro</strong> to scan badges and record attendances.
+                  Marking attendance and live check-ins are disabled on the Free Forever tier. Activate the <strong>Event & Attendance Package ($4/mo / 5,000 RWF)</strong> or upgrade to <strong>Starter, Growth, or Pro</strong> to record attendances.
                 </p>
                 <div className="mt-3">
                   <button
@@ -878,7 +878,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                     <button
                       onClick={() => {
                         if (!isQrAllowed) {
-                          addToast("QR Attendance check-in is disabled on Free plan. Upgrade or activate the Event Package.", "error");
+                          addToast("Attendance check-in is disabled on Free plan. Upgrade or activate the Event Package.", "error");
                           return;
                         }
                         const m = members.find((mem) => mem.id === qrScanInput || mem.member_number === qrScanInput || mem.user?.email === qrScanInput) || members[0];
@@ -1219,7 +1219,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 Active 30-Day Trial
               </span>
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Growth Plan Trial</h3>
-              <p className="text-xs text-gray-500 mt-1">Default 30-day trial with full access to QR attendance, asset tracker, certificates, and dues.</p>
+              <p className="text-xs text-gray-500 mt-1">Default 30-day trial with full access to attendance, asset tracker, certificates, and dues.</p>
               <div className="mt-4 text-2xl font-extrabold text-emerald-700 dark:text-emerald-400">24 Days Remaining</div>
               <p className="text-[11px] text-emerald-600 mt-1 font-medium">+ 3-Day Grace Period Upon Expiry</p>
               <button
@@ -1285,10 +1285,11 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
             </div>
           </div>
 
-          {/* Package visibility gating: Only visible for Free and Starter plans (or trial) */}
+          {/* Package visibility gating: Only visible for Free and Starter plans without active paid subscriptions */}
           {(() => {
-            const plan = activeOrg?.subscription_tier || (activeOrg as any)?.subscription_plan || "free";
-            const shouldShow = plan === "free" || plan === "starter" || activeOrg?.subscription_status === "trial";
+            const plan = (activeOrg?.subscription_tier || (activeOrg as any)?.subscription_plan || "free").toLowerCase();
+            const isPaidPlan = ["growth", "pro", "enterprise"].includes(plan) || activeOrg?.subscription_status === "active";
+            const shouldShow = (plan === "free" || plan === "starter") && !isPaidPlan;
             if (!shouldShow) {
               return (
                 <div className="p-8 rounded-3xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 flex flex-col md:flex-row items-center justify-between gap-6">

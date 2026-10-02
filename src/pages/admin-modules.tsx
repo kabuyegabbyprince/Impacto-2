@@ -782,7 +782,7 @@ export const MembersManagement: React.FC = () => {
       )}
 
       {activeTab === "verifications" && (
-        <PlanGatedView requiredTier="enterprise" featureName="Identity Document Verification Hub">
+        <PlanGatedView requiredTier="pro" featureName="Identity Document Verification Hub">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card title={t("verif_pending_title")}>
               <div className="flex flex-col gap-4">
@@ -3481,7 +3481,7 @@ export const AnnualReports: React.FC = () => {
   };
 
   return (
-    <PlanGatedView requiredTier="enterprise" featureName="Annual Report PDF Compiler & Audit Tools">
+    <PlanGatedView requiredTier="pro" featureName="Annual Report PDF Compiler & Audit Tools">
       <div className="flex flex-col gap-6 select-none font-sans w-full animate-in">
       
       {/* Header Block with Sub-tabs */}

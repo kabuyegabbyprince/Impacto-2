@@ -746,6 +746,7 @@ export interface DocumentSignature {
 export interface OfflineSyncQueueItem {
   id: string;
   timestamp: string;
+  updated_at?: string;
   operation: "CREATE" | "UPDATE" | "DELETE";
   entity: "event_attendance" | "assets" | "ledger_entries" | "documents" | "signatures" | "member_fees" | "audit_logs";
   payload: any;

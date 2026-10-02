@@ -1853,7 +1853,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                     3-Day Grace Period Active — {lifecycle.graceDaysRemaining} day{lifecycle.graceDaysRemaining === 1 ? "" : "s"} remaining
                   </h4>
                   <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-                    Your 30-day Growth Plan trial has concluded. Upgrade now to preserve full Growth capabilities (up to 250 members, DocumentOffice, QR attendance) before Free Forever limits take effect.
+                    Your 30-day Growth Plan trial has concluded. Upgrade now to preserve full Growth capabilities (up to 250 members, DocumentOffice, attendance) before Free Forever limits take effect.
                   </p>
                 </div>
               </div>

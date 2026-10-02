@@ -60,9 +60,24 @@ export const PlanGatedView: React.FC<PlanGatedViewProps> = ({
   const submitPaymentMutation = useSubmitSubscriptionPayment();
 
   // Evaluate feature access
+  const tierRank: Record<string, number> = {
+    free: 1,
+    starter: 2,
+    growth: 3,
+    pro: 4,
+    enterprise: 4
+  };
+  const currentOrgTier = (activeOrg?.subscription_tier || "free").toLowerCase();
+  const currentRank = tierRank[currentOrgTier] || 1;
+  const targetReqTier = (requiredTier || "growth").toLowerCase();
+  const targetReqRank = tierRank[targetReqTier] || 3;
+
   const accessResult: FeatureAccessResult = featureKey 
     ? canAccessFeature(activeOrg, featureKey)
-    : { allowed: false, requiredTier: (requiredTier || "growth") as SubscriptionTier };
+    : { 
+        allowed: currentRank >= targetReqRank, 
+        requiredTier: (requiredTier || "growth") as SubscriptionTier 
+      };
 
   if (accessResult.allowed) {
     return <>{children}</>;
@@ -71,7 +86,11 @@ export const PlanGatedView: React.FC<PlanGatedViewProps> = ({
   const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
   const targetTier = accessResult.requiredTier || requiredTier;
   const tierDetails = getTierDefinition(targetTier as string);
-  const recommendedPackage = accessResult.packageDef || (accessResult.recommendedPackage ? ADDON_PACKAGES[accessResult.recommendedPackage] : undefined);
+  const orgTier = (activeOrg?.subscription_tier || "free").toLowerCase();
+  const isPaidTier = ["growth", "pro", "enterprise"].includes(orgTier) || activeOrg?.subscription_status === "active";
+  const recommendedPackage = isPaidTier
+    ? undefined
+    : (accessResult.packageDef || (accessResult.recommendedPackage ? ADDON_PACKAGES[accessResult.recommendedPackage] : undefined));
 
   const handleOpenPackageCheckout = (pkgId: AddOnPackageId) => {
     setSelectedPackage(pkgId);

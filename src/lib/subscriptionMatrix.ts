@@ -93,7 +93,7 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierDefinition> = {
     coreFeatures: [
       "Up to 500 active members (30-Day Free Trial included)",
       "5 GB high-speed cloud storage",
-      "QR Code Event Attendance & Check-in",
+      "Event Attendance & Check-in",
       "Excel Attendance & Dues Data Export",
       "Meeting Minutes Recorder & Action Items",
       "Interactive Polls in Chat Channels",
@@ -174,15 +174,15 @@ export const ADDON_PACKAGES: Record<AddOnPackageId, AddOnPackageDefinition> = {
     priceRwfApprox: 5400,
     bonusMembers: 20,
     badgeColor: "emerald",
-    tagline: "Run proper events with QR check-in, Excel exports & minutes",
+    tagline: "Run proper events with attendee check-in, Excel exports & minutes",
     features: [
-      "QR code event check-in & scanner",
+      "Event attendance tracking & check-in",
       "Excel attendance & attendee exports",
       "Meeting minutes recorder & action items",
       "+20 bonus active member slots"
     ],
-    description: "Run organized events with proof-of-attendance, QR check-in, Excel data exports, and official meeting minutes.",
-    onExpiryNote: "When package expires: QR check-in, exports, and minutes enter read-only mode. Event listings & RSVPs remain active.",
+    description: "Run organized events with proof-of-attendance, attendee check-in, Excel data exports, and official meeting minutes.",
+    onExpiryNote: "When package expires: Attendance recording, exports, and minutes enter read-only mode. Event listings & RSVPs remain active.",
     gatedFeatureKeys: ["qr_attendance", "excel_export", "meeting_minutes"]
   },
   finance_pack: {

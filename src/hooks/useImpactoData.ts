@@ -3336,24 +3336,34 @@ export function usePlatformAdminData() {
           });
 
           const mockPayments = MockDB.getSubPayments();
+          // Deduplicate across mock, server-side ledger, and Supabase by both ID and (org_id + reference)
+          const allRawPayments = [...(payments || []), ...serverPaymentsList, ...mockPayments];
           const paymentsMap = new Map<string, any>();
-          // 1. Load mock payments first
-          mockPayments.forEach((p: any) => {
-            if (p && p.id) paymentsMap.set(p.id, p);
-          });
-          // 2. Merge server-side ledger payments (accountant / admin purchases)
-          serverPaymentsList.forEach((p: any) => {
-            if (p && p.id) {
-              const existing = paymentsMap.get(p.id);
-              paymentsMap.set(p.id, { ...existing, ...p });
+          const seenRefs = new Map<string, string>(); // refKey -> paymentId
+
+          allRawPayments.forEach((p: any) => {
+            if (!p || !p.id) return;
+            const refKey = p.reference ? `${p.org_id || ""}_${String(p.reference).trim().toLowerCase()}` : "";
+            
+            // If we have already seen this transaction reference for this workspace, collapse duplicates
+            if (refKey && seenRefs.has(refKey)) {
+              const existingId = seenRefs.get(refKey)!;
+              const existing = paymentsMap.get(existingId);
+              // Prefer authoritative UUID over temporary sub-pay- id
+              const isNewUuid = /^[0-9a-f-]{36}$/i.test(p.id);
+              if (isNewUuid && existingId !== p.id) {
+                paymentsMap.delete(existingId);
+                seenRefs.set(refKey, p.id);
+                paymentsMap.set(p.id, { ...existing, ...p });
+              } else {
+                paymentsMap.set(existingId, { ...p, ...existing });
+              }
+              return;
             }
-          });
-          // 3. Merge with Supabase payments
-          (payments || []).forEach((p: any) => {
-            if (p && p.id) {
-              const existing = paymentsMap.get(p.id);
-              paymentsMap.set(p.id, { ...existing, ...p });
-            }
+
+            const existing = paymentsMap.get(p.id);
+            paymentsMap.set(p.id, { ...existing, ...p });
+            if (refKey) seenRefs.set(refKey, p.id);
           });
           const combinedPaymentsList = Array.from(paymentsMap.values()).sort((a, b) => {
             const timeA = new Date(a.submitted_at || a.created_at || 0).getTime();
@@ -3389,10 +3399,21 @@ export function usePlatformAdminData() {
       }
       await delay();
 
-      // Combine local & server payments
+      // Combine local & server payments (deduplicating by ID and org_id + reference)
       const fallbackPaymentsMap = new Map<string, any>();
-      MockDB.getSubPayments().forEach((p) => { if (p && p.id) fallbackPaymentsMap.set(p.id, p); });
-      serverPaymentsList.forEach((p) => { if (p && p.id) fallbackPaymentsMap.set(p.id, { ...fallbackPaymentsMap.get(p.id), ...p }); });
+      const fallbackSeenRefs = new Map<string, string>();
+      const allFallbackPays = [...serverPaymentsList, ...MockDB.getSubPayments()];
+      allFallbackPays.forEach((p) => {
+        if (!p || !p.id) return;
+        const refKey = p.reference ? `${p.org_id || ""}_${String(p.reference).trim().toLowerCase()}` : "";
+        if (refKey && fallbackSeenRefs.has(refKey)) {
+          const existingId = fallbackSeenRefs.get(refKey)!;
+          fallbackPaymentsMap.set(existingId, { ...fallbackPaymentsMap.get(existingId), ...p });
+          return;
+        }
+        fallbackPaymentsMap.set(p.id, { ...fallbackPaymentsMap.get(p.id), ...p });
+        if (refKey) fallbackSeenRefs.set(refKey, p.id);
+      });
       const finalPayments = Array.from(fallbackPaymentsMap.values()).sort((a, b) => {
         const timeA = new Date(a.submitted_at || a.created_at || 0).getTime();
         const timeB = new Date(b.submitted_at || b.created_at || 0).getTime();
@@ -3544,17 +3565,26 @@ export function useApproveSubscription() {
       let targetPaymentRef = "TXN-REF";
 
       if (idx !== -1) {
-        pays[idx].status = status;
-        pays[idx].validated_at = validatedAt;
-        pays[idx].audited_by = auditorId;
-        pays[idx].audited_by_name = auditorName;
-        pays[idx].audit_notes = auditNotes || (status === "approved" ? "Verified mobile money transaction proof" : "Payment proof rejected during audit");
-        pays[idx].audited_at = validatedAt;
         targetPaymentAmount = pays[idx].amount_local || 33750;
         targetPaymentRef = pays[idx].reference || "TXN-REF";
-        MockDB.saveSubPayments(pays);
+      }
 
-        if (status === "approved") {
+      // Update both exact ID and any duplicate local records with matching reference
+      pays.forEach((p) => {
+        const matchesId = p.id === paymentId;
+        const matchesRef = targetPaymentRef !== "TXN-REF" && p.org_id === orgId && (p.reference || "").trim().toLowerCase() === targetPaymentRef.trim().toLowerCase();
+        if (matchesId || matchesRef) {
+          p.status = status;
+          p.validated_at = validatedAt;
+          p.audited_by = auditorId;
+          p.audited_by_name = auditorName;
+          p.audit_notes = auditNotes || (status === "approved" ? "Verified mobile money transaction proof" : "Payment proof rejected during audit");
+          p.audited_at = validatedAt;
+        }
+      });
+      MockDB.saveSubPayments(pays);
+
+      if (status === "approved") {
           const orgs = MockDB.getOrgs();
           const oIdx = orgs.findIndex((o) => o.id === orgId);
           if (oIdx !== -1) {
@@ -3577,7 +3607,6 @@ export function useApproveSubscription() {
             MockDB.saveOrgs(orgs);
           }
         }
-      }
 
       // Record in Platform Audit Logs
       const auditLogs = MockDB.getPlatformAuditLogs();

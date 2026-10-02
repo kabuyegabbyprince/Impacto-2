@@ -132,7 +132,7 @@ router.post("/subscription-payments", (req, res) => {
       amount_usd: payload.amount_usd !== undefined ? Number(payload.amount_usd) : 25,
       amount_local: payload.amount_local !== undefined ? Number(payload.amount_local) : 33750,
       method: payload.method || "mtn",
-      phone: payload.phone || "0788100100",
+      phone: payload.phone || "",
       reference: payload.reference || `REF-${Date.now().toString().slice(-6)}`,
       proof_url: payload.proof_url || null,
       status: payload.status || "awaiting_approval",
@@ -141,8 +141,18 @@ router.post("/subscription-payments", (req, res) => {
       item_type: payload.item_type || (payload.package_id ? "package" : "subscription"),
     };
 
-    // Prepend to server ledger (deduplicating by id)
-    serverSubPayments = [newPayment, ...serverSubPayments.filter((p) => p.id !== newId)];
+    // Prepend to server ledger (deduplicating by id AND org_id + reference)
+    const cleanRef = (newPayment.reference || "").trim().toLowerCase();
+    serverSubPayments = [
+      newPayment,
+      ...serverSubPayments.filter((p) => {
+        if (p.id === newId) return false;
+        if (cleanRef && p.org_id === newPayment.org_id && (p.reference || "").trim().toLowerCase() === cleanRef) {
+          return false;
+        }
+        return true;
+      })
+    ];
     console.log("[Subscription Payment Logged on Server]:", newPayment.id, newPayment.plan, newPayment.org_id);
 
     res.json({
@@ -170,7 +180,7 @@ router.patch("/subscription-payments/:id", (req, res) => {
         plan: updates.plan || "Growth Plan",
         amount_local: updates.amount_local || 33750,
         method: updates.method || "mtn",
-        phone: updates.phone || "0788100100",
+        phone: updates.phone || "",
         reference: updates.reference || "AUDITED",
         status: updates.status || "approved",
         submitted_at: new Date().toISOString(),

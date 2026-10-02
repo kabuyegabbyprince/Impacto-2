@@ -103,7 +103,7 @@ export const MOBILE_TOUR_STEPS: TourStep[] = [
       rw: "Menu Rusange kuri Telefone",
     },
     description: {
-      en: "Tap this menu button at any time to open your full tool suite: Members, Accounting Ledgers, Stock Inventory, QR Attendance, and Reports.",
+      en: "Tap this menu button at any time to open your full tool suite: Members, Accounting Ledgers, Stock Inventory, Attendance, and Reports.",
       fr: "Appuyez sur ce bouton pour ouvrir l'ensemble des modules : Membres, Grand Livre Comptable, Stocks, Présences QR et Rapports.",
       rw: "Kanda kuri iyi menu ufungure ibikoresho byose: Urutonde rw'abanyamuryango, Igitabo cy'imari, Ububiko, n'Ibyegeranyo.",
     },
@@ -256,7 +256,7 @@ export const TABLET_TOUR_STEPS: TourStep[] = [
       rw: "Ibikoresho by'Ubufatanye bw'Umuryango",
     },
     description: {
-      en: "Access real-time member announcements, interactive chat channels, event QR attendance, strategic goals, and cloud document vaults.",
+      en: "Access real-time member announcements, interactive chat channels, event attendance, strategic goals, and cloud document vaults.",
       fr: "Accédez aux annonces en temps réel, aux canaux de discussion, aux présences QR code, aux objectifs et documents sécurisés.",
       rw: "Reba amatangazo agezweho, ibiganiro by'abanyamuryango, kwandika abitabiriye inama na QR code, n'ububiko bw'inyandiko.",
     },
@@ -388,7 +388,7 @@ export const DESKTOP_TOUR_STEPS: TourStep[] = [
       rw: "Ibikoresho by'Ubufatanye bw'Umuryango",
     },
     description: {
-      en: "Access real-time member announcements, interactive chat channels, event QR attendance, strategic goals, and cloud document vaults.",
+      en: "Access real-time member announcements, interactive chat channels, event attendance, strategic goals, and cloud document vaults.",
       fr: "Accédez aux annonces en temps réel, aux canaux de discussion, aux présences QR code, aux objectifs et documents sécurisés.",
       rw: "Reba amatangazo agezweho, ibiganiro by'abanyamuryango, kwandika abitabiriye inama na QR code, n'ububiko bw'inyandiko.",
     },

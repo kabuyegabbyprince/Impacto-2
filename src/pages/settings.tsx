@@ -1785,106 +1785,137 @@ export const OrganizationSettingsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Add-On Feature Packages */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-                  <div>
-                    <h3 className="font-bold text-base text-slate-900 dark:text-white font-display flex items-center gap-2">
-                      <Package className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                      Add-On Feature Packages
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Unlock specific high-productivity capabilities for your workspace at a flat $4/mo (5,000 RWF).
-                    </p>
-                  </div>
-                  <Badge color="purple">Modular Add-ons</Badge>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {[
-                    {
-                      id: "event_pack",
-                      name: "Event & Attendance QR Pack",
-                      desc: "Instant QR check-ins, attendee rosters, and physical presence logging.",
-                      planLabel: "Package: Event & Attendance QR Pack - $4/month",
-                      icon: QrCode
-                    },
-                    {
-                      id: "finance_pack",
-                      name: "Financial Accounting Pack",
-                      desc: "Complete financial ledger, dues collection meter, and exportable reports.",
-                      planLabel: "Package: Financial Accounting Ledger Pack - $4/month",
-                      icon: Coins
-                    },
-                    {
-                      id: "document_pack",
-                      name: "Document Verification Pack",
-                      desc: "Digital certificate issuance, QR validation, and encrypted vault.",
-                      planLabel: "Package: Document Signing & Verification Pack - $4/month",
-                      icon: FileCheck
-                    },
-                    {
-                      id: "asset_pack",
-                      name: "Equipment & Asset Pack",
-                      desc: "Equipment inventory tracking, maintenance schedules, and custodian logs.",
-                      planLabel: "Package: Equipment & Asset Management Pack - $4/month",
-                      icon: Layers
-                    }
-                  ].map((pkg) => {
-                    const isPurchased = (activeOrg?.active_packages || []).includes(pkg.id);
-                    const IconComp = pkg.icon;
-                    return (
-                      <div
-                        key={pkg.id}
-                        className={`p-4 rounded-xl border flex flex-col justify-between transition ${
-                          isPurchased
-                            ? "bg-purple-50/50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-800"
-                            : "bg-slate-50/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 hover:border-purple-200"
-                        }`}
-                      >
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="h-8 w-8 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-purple-600 dark:text-purple-400">
-                              <IconComp className="h-4 w-4" />
-                            </div>
-                            {isPurchased ? (
-                              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full font-mono">
-                                Active
-                              </span>
-                            ) : (
-                              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 font-mono">
-                                $4 <span className="text-[10px] font-normal text-slate-400">/ mo</span>
-                              </span>
-                            )}
+              {/* Add-On Feature Packages: Gated only for Free and Starter workspaces */}
+              {(() => {
+                const orgTier = (activeOrg?.subscription_tier || "free").toLowerCase();
+                const isPaidTier = ["growth", "pro", "enterprise"].includes(orgTier) || activeOrg?.subscription_status === "active";
+                if (isPaidTier) {
+                  return (
+                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-5 shadow-xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3.5">
+                          <div className="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                            <ShieldCheck className="h-5 w-5" />
                           </div>
-                          <h4 className="font-bold text-xs text-slate-900 dark:text-white leading-tight mb-1">
-                            {pkg.name}
-                          </h4>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
-                            {pkg.desc}
-                          </p>
+                          <div>
+                            <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white font-display flex items-center gap-2">
+                              All Feature Packages Active & Included in your {orgTier.toUpperCase()} Plan
+                            </h3>
+                            <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                              Your cooperative subscription includes unrestricted access to Attendance & Check-In, Financial Ledgers, Document Verification, and Equipment Asset Management. No individual add-on packages are required.
+                            </p>
+                          </div>
                         </div>
-                        <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800">
-                          {isPurchased ? (
-                            <div className="text-center py-1.5 text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-100/70 dark:bg-purple-950/50 rounded-lg">
-                              ✓ Package Enabled
-                            </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full text-xs font-bold py-1.5 border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40"
-                              onClick={() => handleOpenSubscriptionCheckout(pkg.planLabel)}
-                            >
-                              Activate Package ($4)
-                            </Button>
-                          )}
-                        </div>
+                        <span className="self-start sm:self-auto px-3.5 py-1.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-xs font-bold rounded-full font-mono whitespace-nowrap">
+                          ✓ All Features Included
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                      <div>
+                        <h3 className="font-bold text-base text-slate-900 dark:text-white font-display flex items-center gap-2">
+                          <Package className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                          Add-On Feature Packages
+                        </h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          Unlock specific high-productivity capabilities for your workspace at a flat $4/mo (5,000 RWF).
+                        </p>
+                      </div>
+                      <Badge color="purple">Modular Add-ons</Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {[
+                        {
+                          id: "event_pack",
+                          name: "Event & Attendance Pack",
+                          desc: "Instant attendee rosters, physical presence logging, and check-ins.",
+                          planLabel: "Package: Event & Attendance Pack - $4/month",
+                          icon: QrCode
+                        },
+                        {
+                          id: "finance_pack",
+                          name: "Financial Accounting Pack",
+                          desc: "Complete financial ledger, dues collection meter, and exportable reports.",
+                          planLabel: "Package: Financial Accounting Ledger Pack - $4/month",
+                          icon: Coins
+                        },
+                        {
+                          id: "document_pack",
+                          name: "Document Verification Pack",
+                          desc: "Digital certificate issuance, QR validation, and encrypted vault.",
+                          planLabel: "Package: Document Signing & Verification Pack - $4/month",
+                          icon: FileCheck
+                        },
+                        {
+                          id: "asset_pack",
+                          name: "Equipment & Asset Pack",
+                          desc: "Equipment inventory tracking, maintenance schedules, and custodian logs.",
+                          planLabel: "Package: Equipment & Asset Management Pack - $4/month",
+                          icon: Layers
+                        }
+                      ].map((pkg) => {
+                        const isPurchased = (activeOrg?.active_packages || []).includes(pkg.id);
+                        const IconComp = pkg.icon;
+                        return (
+                          <div
+                            key={pkg.id}
+                            className={`p-4 rounded-xl border flex flex-col justify-between transition ${
+                              isPurchased
+                                ? "bg-purple-50/50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-800"
+                                : "bg-slate-50/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 hover:border-purple-200"
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="h-8 w-8 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                                  <IconComp className="h-4 w-4" />
+                                </div>
+                                {isPurchased ? (
+                                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full font-mono">
+                                    Active
+                                  </span>
+                                ) : (
+                                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 font-mono">
+                                    $4 <span className="text-[10px] font-normal text-slate-400">/ mo</span>
+                                  </span>
+                                )}
+                              </div>
+                              <h4 className="font-bold text-xs text-slate-900 dark:text-white leading-tight mb-1">
+                                {pkg.name}
+                              </h4>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
+                                {pkg.desc}
+                              </p>
+                            </div>
+                            <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800">
+                              {isPurchased ? (
+                                <div className="text-center py-1.5 text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-100/70 dark:bg-purple-950/50 rounded-lg">
+                                  ✓ Package Enabled
+                                </div>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="w-full text-xs font-bold py-1.5 border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+                                  onClick={() => handleOpenSubscriptionCheckout(pkg.planLabel)}
+                                >
+                                  Activate Package ($4)
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Billing & Invoices Ledger */}
               <div className="mt-2">

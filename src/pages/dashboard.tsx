@@ -3714,7 +3714,7 @@ export const MeetingsMinutes: React.FC = () => {
   }) || [];
 
   return (
-    <PlanGatedView requiredTier="enterprise" featureName="Governance Quorum Meetings Validation & Audit Tracker">
+    <PlanGatedView requiredTier="pro" featureName="Governance Quorum Meetings Validation & Audit Tracker">
       <div className="flex flex-col gap-6 select-none font-sans w-full">
         <div className="flex items-center justify-between border-b pb-4">
           <div>
