@@ -20,6 +20,9 @@ export interface User {
   status_badge?: "active" | "remote" | "field" | "away";
   primary_org_id?: string;
   joined_org_ids?: string[];
+  referral_code?: string;
+  referred_by_code?: string;
+  referred_by_user_id?: string;
 }
 
 export interface Organization {
@@ -53,6 +56,15 @@ export interface Organization {
   packages_data?: Record<string, { expires_at: string; purchased_at: string }>;
   org_category: string;
   created_at: string;
+  // Authenticity & Verification
+  verification_status?: "unverified" | "pending_review" | "verified" | "rejected";
+  verified_at?: string;
+  verified_by?: string;
+  verification_rejection_reason?: string;
+  verification_submitted_at?: string;
+  // Referral & Attribution
+  referred_by_code?: string;
+  referred_by_user_id?: string;
   // Custom public portal settings
   location_name?: string;
   contact_us?: string;
@@ -108,9 +120,15 @@ export interface OrgMember {
   joined_at: string;
   is_volunteer?: boolean;
   user?: User; // joined relation
-  verification_status?: "not_required" | "pending" | "verified" | "rejected" | "flagged";
+  phone_number?: string;
+  verification_status?: "not_required" | "unsubmitted" | "pending" | "verified" | "rejected" | "flagged";
   verified_at?: string;
   verified_by?: string;
+  passport_photo_url?: string;
+  id_document_url?: string;
+  id_document_type?: "national_id" | "passport";
+  id_document_number?: string;
+  id_submitted_at?: string;
   permissions?: {
     manage_members: boolean;
     manage_content: boolean;
@@ -120,6 +138,34 @@ export interface OrgMember {
     manage_documents: boolean;
     manage_chat: boolean;
   };
+}
+
+export interface Referral {
+  id: string;
+  referrer_user_id: string;
+  referrer_name: string;
+  referred_user_id: string;
+  referred_user_name: string;
+  referred_org_id?: string;
+  referred_org_name?: string;
+  referral_code: string;
+  level: 1 | 2;
+  parent_referrer_id?: string;
+  created_at: string;
+  status: "registered" | "org_created" | "verified";
+}
+
+export interface Promoter {
+  id: string;
+  name: string;
+  code: string;
+  email?: string;
+  phone?: string;
+  status: "active" | "inactive";
+  notes?: string;
+  commission_rate?: number;
+  created_at: string;
+  created_by?: string;
 }
 
 export interface MemberTier {

@@ -622,6 +622,105 @@ export const Register: React.FC = () => {
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
 
+  // Referral / Promoter Attribution Tracking
+  const refFromParam = searchParams.get("ref") || searchParams.get("referral");
+  const [referralCode, setReferralCode] = useState(() => {
+    return (
+      refFromParam ||
+      sessionStorage.getItem("impacto_referral_code") ||
+      localStorage.getItem("impacto_referral_code") ||
+      ""
+    ).toUpperCase();
+  });
+  const [partReferralCode, setPartReferralCode] = useState(() => {
+    return (
+      refFromParam ||
+      sessionStorage.getItem("impacto_referral_code") ||
+      localStorage.getItem("impacto_referral_code") ||
+      ""
+    ).toUpperCase();
+  });
+
+  useEffect(() => {
+    if (refFromParam) {
+      sessionStorage.setItem("impacto_referral_code", refFromParam.trim().toUpperCase());
+      localStorage.setItem("impacto_referral_code", refFromParam.trim().toUpperCase());
+      setReferralCode(refFromParam.trim().toUpperCase());
+      setPartReferralCode(refFromParam.trim().toUpperCase());
+    }
+  }, [refFromParam]);
+
+  const recordReferralAttribution = (
+    code: string,
+    newUserId: string,
+    newUserName: string,
+    orgId?: string,
+    orgName?: string
+  ) => {
+    if (!code || !code.trim()) return;
+    const cleanCode = code.trim().toUpperCase();
+    const users = MockDB.getUsers();
+    const promoters = MockDB.getPromoters();
+    
+    // Check registered promoters first
+    const prom = promoters.find(
+      (p) =>
+        (p.code || "").toUpperCase() === cleanCode ||
+        p.id === cleanCode ||
+        p.name.toLowerCase() === cleanCode.toLowerCase()
+    );
+
+    const refUser = users.find(
+      (u) =>
+        (u.referral_code || "").toUpperCase() === cleanCode ||
+        u.id === cleanCode ||
+        u.email.toLowerCase() === cleanCode.toLowerCase()
+    );
+
+    const referrerUserId = prom ? prom.id : refUser ? refUser.id : `promoter-${cleanCode}`;
+    const referrerName = prom ? prom.name : refUser ? refUser.full_name : `Promoter (${cleanCode})`;
+    const officialCode = prom ? prom.code : refUser?.referral_code || cleanCode;
+
+    const refs = MockDB.getReferrals();
+    const newRef = {
+      id: "ref-" + Date.now() + "-" + Math.random().toString(36).substr(2, 6),
+      referrer_user_id: referrerUserId,
+      referrer_name: referrerName,
+      referred_user_id: newUserId,
+      referred_user_name: newUserName,
+      referred_org_id: orgId,
+      referred_org_name: orgName,
+      referral_code: officialCode,
+      level: 1 as const,
+      parent_referrer_id: refUser?.referred_by_user_id,
+      created_at: new Date().toISOString(),
+      status: orgId ? ("org_created" as const) : ("registered" as const),
+    };
+    refs.unshift(newRef);
+
+    // Multi-tier tracking: if referee was referred by someone who was also referred
+    if (refUser?.referred_by_user_id) {
+      const parentUser = users.find((u) => u.id === refUser.referred_by_user_id);
+      const chainRef = {
+        id: "ref-" + Date.now() + "-l2-" + Math.random().toString(36).substr(2, 6),
+        referrer_user_id: refUser.referred_by_user_id,
+        referrer_name: parentUser ? parentUser.full_name : "Senior Ambassador",
+        referred_user_id: newUserId,
+        referred_user_name: newUserName,
+        referred_org_id: orgId,
+        referred_org_name: orgName,
+        referral_code: parentUser?.referral_code || cleanCode,
+        level: 2 as const,
+        parent_referrer_id: refUser.id,
+        created_at: new Date().toISOString(),
+        status: orgId ? ("org_created" as const) : ("registered" as const),
+      };
+      refs.unshift(chainRef);
+    }
+
+    MockDB.saveReferrals(refs);
+  };
+
   // Helper to generate slug in real-time
   const generateSlug = (name: string): string => {
     return name
@@ -744,6 +843,8 @@ export const Register: React.FC = () => {
         sessionStorage.setItem("impacto_just_registered", "true");
         setUser(dbUser);
 
+        recordReferralAttribution(partReferralCode, authUser.id, partName, partSelectedOrg, orgRecord?.name);
+
         if (partSelectedOrg && orgRecord && memberRecord) {
           setActiveOrg(orgRecord, memberRecord);
         }
@@ -766,6 +867,8 @@ export const Register: React.FC = () => {
           is_superadmin: false,
           primary_org_id: partSelectedOrg,
           joined_org_ids: partSelectedOrg ? [partSelectedOrg] : [],
+          referral_code: `REF-${partName.substring(0, 4).toUpperCase().replace(/[^A-Z]/g, "")}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+          referred_by_code: partReferralCode.trim() || undefined,
           created_at: new Date().toISOString()
         };
         users.push(newUser);
@@ -801,6 +904,8 @@ export const Register: React.FC = () => {
           map[partEmail.trim().toLowerCase()] = partPassword;
           localStorage.setItem("impacto_user_passwords", JSON.stringify(map));
         } catch (e) {}
+
+        recordReferralAttribution(partReferralCode, newUser.id, newUser.full_name, partSelectedOrg, targetOrg?.name);
 
         // Automatically log them in and navigate directly to their registered organization's dashboard
         sessionStorage.setItem("impacto_just_registered", "true");
@@ -906,7 +1011,9 @@ export const Register: React.FC = () => {
           auto_confirm_members: !isPrivateOrg && autoConfirmMembers,
           is_public_directory: !isPrivateOrg,
           allow_public_joining: !isPrivateOrg && autoConfirmMembers,
-          public_page_enabled: !isPrivateOrg
+          public_page_enabled: !isPrivateOrg,
+          verification_status: "unverified",
+          referred_by_code: referralCode.trim() || undefined
         }).select().maybeSingle();
 
         if (orgInsertErr) console.warn("[Register NGO] Org insert notice:", orgInsertErr.message);
@@ -931,8 +1038,16 @@ export const Register: React.FC = () => {
             is_public_directory: !isPrivateOrg,
             allow_public_joining: !isPrivateOrg && autoConfirmMembers,
             public_page_enabled: !isPrivateOrg,
+            verification_status: "unverified",
+            referred_by_code: referralCode.trim() || undefined,
             created_at: new Date().toISOString()
           };
+        }
+
+        localStorage.setItem(`impacto_org_verification_status_${finalOrg.id}`, "unverified");
+        if (referralCode.trim()) {
+          localStorage.setItem(`impacto_org_referred_by_code_${finalOrg.id}`, referralCode.trim().toUpperCase());
+          recordReferralAttribution(referralCode, authUser.id, adminName, finalOrg.id, finalOrg.name);
         }
 
         // Update user primary_org_id and joined_org_ids in Supabase
@@ -1027,6 +1142,8 @@ export const Register: React.FC = () => {
           subscription_tier: "trial" as const,
           subscription_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 day trial
           org_category: orgCategory,
+          verification_status: "unverified" as const,
+          referred_by_code: referralCode.trim() || undefined,
           created_at: new Date().toISOString()
         };
 
@@ -1037,6 +1154,8 @@ export const Register: React.FC = () => {
           is_superadmin: false,
           primary_org_id: newOrg.id,
           joined_org_ids: [newOrg.id],
+          referral_code: `REF-${adminName.substring(0, 4).toUpperCase().replace(/[^A-Z]/g, "")}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+          referred_by_code: referralCode.trim() || undefined,
           created_at: new Date().toISOString()
         };
 
@@ -1058,6 +1177,12 @@ export const Register: React.FC = () => {
         MockDB.saveOrgs(orgsList);
         MockDB.saveUsers(users);
         MockDB.saveMembers(membersList);
+
+        localStorage.setItem(`impacto_org_verification_status_${newOrg.id}`, "unverified");
+        if (referralCode.trim()) {
+          localStorage.setItem(`impacto_org_referred_by_code_${newOrg.id}`, referralCode.trim().toUpperCase());
+          recordReferralAttribution(referralCode, newUser.id, newUser.full_name, newOrg.id, newOrg.name);
+        }
 
         try {
           const raw = localStorage.getItem("impacto_user_passwords") || "{}";
@@ -1373,6 +1498,15 @@ export const Register: React.FC = () => {
                     </div>
                   )}
 
+                  <Input
+                    type="text"
+                    label="Referral / Promoter Code (Optional)"
+                    value={partReferralCode}
+                    onChange={(e) => setPartReferralCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. REF-ERIC-2026"
+                    prefixIcon={<HeartHandshake className="h-4 w-4 text-emerald-500" />}
+                  />
+
                   <Button type="submit" loading={loading} className="w-full mt-2 py-2.5 bg-emerald-700 hover:bg-emerald-850">
                     Register Participant File
                   </Button>
@@ -1434,6 +1568,20 @@ export const Register: React.FC = () => {
                         onChange={(e) => setOrgTagline(e.target.value)}
                         placeholder="e.g. Enhancing biodiversity in Kayonza hills"
                         required
+                      />
+
+                      <Input
+                        type="text"
+                        label="Referral / Promoter Reference (Optional)"
+                        value={referralCode}
+                        onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                        placeholder="e.g. REF-ERIC-2026"
+                        prefixIcon={<HeartHandshake className="h-4 w-4 text-emerald-500" />}
+                        helperText={
+                          refFromParam
+                            ? "✓ Linked automatically from promoter invitation URL"
+                            : "If this organization was invited by a promoter, ambassador, or partner, enter their code here."
+                        }
                       />
 
                       {/* Organization Privacy Checkbox */}

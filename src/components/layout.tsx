@@ -53,9 +53,13 @@ import {
   Copy,
   Smartphone,
   PhoneCall,
-  Store
+  Store,
+  CheckCircle2,
+  HeartHandshake
 } from "lucide-react";
 import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "./MoMoPushPaymentModal";
+import { OrganizationVerificationModal } from "./OrganizationVerificationModal";
+import { ReferralCenterModal } from "./ReferralCenterModal";
 import { UssdPaymentHelper, cleanMerchantCode, cleanPhoneNumber } from "./UssdPaymentHelper";
 import { getOrgSubscriptionLifecycle } from "../lib/subscriptionMatrix";
 import { useAuthStore } from "../store/authStore";
@@ -171,6 +175,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
     const currentTheme = localStorage.getItem("theme") || "light";
     return currentTheme === "dark";
   });
+  const [openVerificationModal, setOpenVerificationModal] = useState(false);
+  const [openReferralModal, setOpenReferralModal] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
@@ -191,6 +197,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
   const { data: notificationSends } = useNotificationSends(activeOrg?.id);
   const { data: memberFees } = useMemberFees(activeOrg?.id);
   const { data: orgSubPayments } = useOrgSubscriptionPayments(activeOrg?.id);
+  const { data: members = [] } = useMembers(activeOrg?.id);
 
   const rawLogo = activeOrg?.logo_url || (activeOrg?.dashboard_logo && !activeOrg.dashboard_logo.startsWith("icon:") ? activeOrg.dashboard_logo : "");
   const [resolvedHeaderLogo, setResolvedHeaderLogo] = useState<string>("");
@@ -387,11 +394,40 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
               className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5 font-sans select-none"
             >
               <span className="truncate max-w-[140px]">{activeOrg?.name || "Workspace"}</span>
+              {activeOrg?.verification_status === "verified" && (
+                <span title="Verified Authentic Organization" className="inline-flex items-center text-emerald-500">
+                  <CheckCircle2 className="h-3.5 w-3.5 fill-emerald-100 dark:fill-emerald-950 text-emerald-600 dark:text-emerald-400" />
+                </span>
+              )}
             </div>
 
-            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full select-none font-mono bg-emerald-50 text-[#156c45] border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/50">
-              {activeOrg.subscription_status === "active" ? "MASTER WORKSPACE" : activeOrg.subscription_status === "expired" ? "RENEWAL DUE" : "FREE PLAN"}
-            </span>
+            {/* Authenticity Verification Badge */}
+            {activeOrg?.verification_status === "verified" ? (
+              <span
+                className="text-[9px] font-bold px-2 py-0.5 rounded-full select-none font-mono bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-700 flex items-center gap-1 cursor-default"
+                title="Verified Authentic Organization"
+              >
+                <CheckCircle2 className="h-2.5 w-2.5" /> VERIFIED
+              </span>
+            ) : activeMember?.role !== "member" ? (
+              <button
+                type="button"
+                onClick={() => setOpenVerificationModal(true)}
+                className="text-[9px] font-bold px-2 py-0.5 rounded-full select-none font-mono bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700/80 flex items-center gap-1 transition cursor-pointer"
+                title="Organization unverified. Click to submit key-role verification dossier."
+              >
+                <AlertTriangle className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400" />
+                {activeOrg?.verification_status === "pending_review" ? "IN REVIEW" : "UNVERIFIED"}
+              </button>
+            ) : (
+              <span
+                className="text-[9px] font-bold px-2 py-0.5 rounded-full select-none font-mono bg-amber-50 text-amber-800 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700/80 flex items-center gap-1 cursor-default"
+                title={activeOrg?.verification_status === "pending_review" ? "Verification In Review" : "Organization Unverified"}
+              >
+                <AlertTriangle className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400" />
+                {activeOrg?.verification_status === "pending_review" ? "IN REVIEW" : "UNVERIFIED"}
+              </span>
+            )}
 
             {/* FROZEN PHASE: Multi-organization switcher dropdown menu disabled.
             {orgSwitcherOpen && userMemberships.length > 1 && (
@@ -703,6 +739,30 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                     {t("nav.my_profile", "My Profile")}
                   </Link>
 
+                  <button
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      setOpenReferralModal(true);
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 flex items-center gap-2 text-xs font-semibold"
+                  >
+                    <HeartHandshake className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    Referral & Promoter Hub
+                  </button>
+
+                  {activeOrg && (
+                    <button
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        setOpenVerificationModal(true);
+                      }}
+                      className="w-full text-left px-4 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 text-gray-700 dark:text-slate-300 flex items-center gap-2 text-xs font-semibold"
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                      Organization Authenticity
+                    </button>
+                  )}
+
                   {user.is_superadmin && (
                     <button
                       onClick={() => {
@@ -758,7 +818,21 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
         )}
       </div>
 
-      <></>
+      {/* Organization Authenticity Verification Modal */}
+      {activeOrg && (
+        <OrganizationVerificationModal
+          open={openVerificationModal}
+          onClose={() => setOpenVerificationModal(false)}
+          org={activeOrg}
+          members={members || []}
+        />
+      )}
+
+      {/* Promoter & Referral Attribution Hub Modal */}
+      <ReferralCenterModal
+        open={openReferralModal}
+        onClose={() => setOpenReferralModal(false)}
+      />
     </header>
   );
 };

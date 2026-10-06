@@ -27,6 +27,7 @@ import {
   Search,
   MessageSquare,
   AlertCircle,
+  AlertTriangle,
   QrCode,
   Copy,
   Check,
@@ -548,9 +549,28 @@ export const PublicOrgPage: React.FC = () => {
 
               {/* Name & Tagline Pill Card */}
               <div className="bg-white dark:bg-slate-900 border border-gray-200/80 dark:border-slate-800 rounded-2xl sm:rounded-3xl px-5 sm:px-6 py-3.5 sm:py-4 shadow-sm min-w-[200px] flex flex-col justify-center">
-                <h1 className="text-xl sm:text-2xl font-black font-display text-gray-950 dark:text-white tracking-tight leading-tight">
-                  {org.name}
-                </h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-xl sm:text-2xl font-black font-display text-gray-950 dark:text-white tracking-tight leading-tight">
+                    {org.name}
+                  </h1>
+                  {org.verification_status === "verified" ? (
+                    <span
+                      title="Verified Authentic Organization"
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 fill-emerald-500 text-white dark:fill-emerald-400 dark:text-slate-900" />
+                      <span>Verified</span>
+                    </span>
+                  ) : (
+                    <span
+                      title="Unverified Organization"
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60"
+                    >
+                      <AlertTriangle className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                      <span>{org.verification_status === "pending_review" ? "In Review" : "Unverified"}</span>
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 font-medium mt-0.5 max-w-md">
                   {org.tagline || org.description || "Civic organization & cooperative workspace"}
                 </p>

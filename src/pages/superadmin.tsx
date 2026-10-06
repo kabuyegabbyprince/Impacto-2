@@ -42,7 +42,18 @@ import {
   X,
   History,
   Database,
-  Package
+  Package,
+  CheckCircle2,
+  HeartHandshake,
+  AlertTriangle,
+  Camera,
+  FileText,
+  Upload,
+  Info,
+  Sparkles,
+  Phone,
+  Copy,
+  Plus
 } from "lucide-react";
 import {
   SUBSCRIPTION_TIERS,
@@ -63,8 +74,16 @@ import {
   useCreatePlatformStaff,
   useUpdatePlatformStaffStatus,
   useDeletePlatformStaff,
-  usePlatformAuditLogs
+  usePlatformAuditLogs,
+  useReviewOrgVerification,
+  useReferrals,
+  usePromoters,
+  useCreatePromoter,
+  useUpdatePromoter,
+  useDeletePromoter,
+  useMembers
 } from "../hooks/useImpactoData";
+import { Promoter } from "../types";
 import { useAuthStore } from "../store/authStore";
 import { Button, Input, Card, Badge, Table, Modal, EmptyState, Avatar, getLucideIcon } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -287,7 +306,31 @@ export const SuperadminDashboard: React.FC = () => {
     }
   };
 
-  const [activeTab, setActiveTab] = useState<"stats" | "orgs" | "payments" | "errors" | "staff" | "billing_setup">("stats");
+  const [activeTab, setActiveTab] = useState<"stats" | "orgs" | "payments" | "verifications" | "referrals" | "errors" | "staff" | "billing_setup" | "db_status">("stats");
+  const [verificationFilter, setVerificationFilter] = useState<"all" | "pending_review" | "verified" | "unverified" | "rejected">("all");
+  const [reviewingOrg, setReviewingOrg] = useState<any>(null);
+  const [reviewRejectReason, setReviewRejectReason] = useState("");
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [fullDocPreviewUrl, setFullDocPreviewUrl] = useState<string | null>(null);
+
+  const reviewOrgVerificationMutation = useReviewOrgVerification();
+  const { data: allReferrals = [] } = useReferrals();
+  const { data: promoters = [] } = usePromoters();
+  const createPromoterMutation = useCreatePromoter();
+  const updatePromoterMutation = useUpdatePromoter();
+  const deletePromoterMutation = useDeletePromoter();
+
+  const [isCreatePromoterOpen, setIsCreatePromoterOpen] = useState(false);
+  const [promoterName, setPromoterName] = useState("");
+  const [promoterCode, setPromoterCode] = useState("");
+  const [promoterPhone, setPromoterPhone] = useState("");
+  const [promoterEmail, setPromoterEmail] = useState("");
+  const [promoterNotes, setPromoterNotes] = useState("");
+  const [promoterCommission, setPromoterCommission] = useState(10);
+  const [copiedCodeMap, setCopiedCodeMap] = useState<Record<string, boolean>>({});
+  const [promoterFilter, setPromoterFilter] = useState<"all" | "active" | "inactive">("all");
+  const [promoterSearchQuery, setPromoterSearchQuery] = useState("");
+
   const [search, setSearch] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -642,7 +685,14 @@ export const SuperadminDashboard: React.FC = () => {
             {row.name ? row.name.substring(0, 2).toUpperCase() : "CO"}
           </div>
           <div className="flex flex-col text-xs leading-tight">
-            <span className="font-extrabold text-slate-950 dark:text-white text-sm">{row.name}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-slate-950 dark:text-white text-sm">{row.name}</span>
+              {row.verification_status === "verified" && (
+                <span title="Verified Authentic Organization" className="inline-flex items-center text-emerald-500">
+                  <CheckCircle2 className="h-3.5 w-3.5 fill-emerald-100 dark:fill-emerald-950 text-emerald-600 dark:text-emerald-400" />
+                </span>
+              )}
+            </div>
             <span className="text-[10px] font-mono text-emerald-600 mt-0.5 uppercase tracking-wide font-semibold">@{row.slug}</span>
           </div>
         </div>
@@ -652,6 +702,39 @@ export const SuperadminDashboard: React.FC = () => {
       header: "Category",
       accessor: "org_category",
       cell: (row: any) => <span className="text-xs text-slate-600 dark:text-slate-300 font-bold bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">{row.org_category || "General"}</span>
+    },
+    {
+      header: "Authenticity",
+      accessor: "verification_status",
+      cell: (row: any) => {
+        const isVer = row.verification_status === "verified";
+        const isPending = row.verification_status === "pending_review";
+        return (
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 font-mono ${
+              isVer
+                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300"
+                : isPending
+                ? "bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300"
+                : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300"
+            }`}>
+              {isVer ? <CheckCircle2 className="h-3 w-3" /> : isPending ? <Clock className="h-3 w-3" /> : null}
+              {isVer ? "VERIFIED" : isPending ? "IN REVIEW" : "UNVERIFIED"}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setReviewingOrg(row);
+                setShowRejectForm(false);
+                setReviewRejectReason("");
+              }}
+              className="text-[11px] text-emerald-600 font-bold hover:underline"
+            >
+              Review
+            </button>
+          </div>
+        );
+      }
     },
     {
       header: "Lifecycle & Quotas",
@@ -877,6 +960,31 @@ export const SuperadminDashboard: React.FC = () => {
                 {awaitingPayments}
               </span>
             )}
+          </button>
+          <button
+            onClick={() => setActiveTab("verifications")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === "verifications"
+                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+            }`}
+          >
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Authenticity & Verifications
+            {orgs.filter((o: any) => o.verification_status === "pending_review").length > 0 && (
+              <span className="px-1.5 py-0.5 text-[10px] bg-amber-500 text-slate-950 rounded-full font-mono font-black">
+                {orgs.filter((o: any) => o.verification_status === "pending_review").length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("referrals")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === "referrals"
+                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+            }`}
+          >
+            <HeartHandshake className="h-3.5 w-3.5 text-teal-600" /> Promoters & Referrals ({allReferrals.length})
           </button>
           <button
             onClick={() => setActiveTab("staff")}
@@ -1793,6 +1901,1658 @@ export const SuperadminDashboard: React.FC = () => {
                       Close Details
                     </Button>
                   </div>
+                </Modal>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* 3B. ORGANIZATION AUTHENTICITY & VERIFICATIONS AUDIT TAB */}
+        {activeTab === "verifications" && (() => {
+          const allMembers = MockDB.getMembers();
+          const allUsers = MockDB.getUsers();
+
+          // Calculate stats
+          const totalOrgs = orgs.length;
+          const verifiedOrgs = orgs.filter((o: any) => o.verification_status === "verified");
+          const pendingOrgs = orgs.filter((o: any) => o.verification_status === "pending_review");
+          const unverifiedOrgs = orgs.filter((o: any) => !o.verification_status || o.verification_status === "unverified");
+          const rejectedOrgs = orgs.filter((o: any) => o.verification_status === "rejected");
+
+          // Filter list
+          const filteredOrgs = orgs.filter((org: any) => {
+            const status = org.verification_status || "unverified";
+            if (verificationFilter !== "all" && status !== verificationFilter) return false;
+            if (search.trim()) {
+              const query = search.toLowerCase();
+              const matchName = org.name?.toLowerCase().includes(query);
+              const matchSlug = org.slug?.toLowerCase().includes(query);
+              const matchCategory = org.org_category?.toLowerCase().includes(query);
+              const matchRef = org.referred_by_code?.toLowerCase().includes(query);
+              return matchName || matchSlug || matchCategory || matchRef;
+            }
+            return true;
+          });
+
+          // Members for the currently selected org to review
+          const reviewingMembers = reviewingOrg ? allMembers.filter((m) => m.org_id === reviewingOrg.id) : [];
+          const reviewingAdmin = reviewingMembers.find((m) => m.role === "org_admin" || m.role === "superadmin") || reviewingMembers[0];
+          const reviewingAccountant = reviewingMembers.find((m) => m.role === "accountant");
+          const reviewingAdminUser = reviewingAdmin ? allUsers.find((u) => u.id === reviewingAdmin.user_id) : null;
+          const reviewingAccountantUser = reviewingAccountant ? allUsers.find((u) => u.id === reviewingAccountant.user_id) : null;
+
+          const handleApproveVerification = async (orgId: string, orgName: string) => {
+            try {
+              await reviewOrgVerificationMutation.mutateAsync({
+                org_id: orgId,
+                status: "verified",
+                reviewed_by: user?.full_name || "Platform Auditor",
+              });
+              addToast(`Green Tick granted to ${orgName}! Organization is now authentic verified.`, "success");
+              setReviewingOrg(null);
+              setShowRejectForm(false);
+              refetch();
+            } catch (err: any) {
+              addToast(err?.message || "Failed to grant verification", "error");
+            }
+          };
+
+          const handleRejectVerification = async (orgId: string, orgName: string) => {
+            if (!reviewRejectReason.trim()) {
+              addToast("Please provide a reason for rejecting the verification dossier.", "error");
+              return;
+            }
+            try {
+              await reviewOrgVerificationMutation.mutateAsync({
+                org_id: orgId,
+                status: "rejected",
+                reviewed_by: user?.full_name || "Platform Auditor",
+                rejection_reason: reviewRejectReason.trim(),
+              });
+              addToast(`Verification dossier for ${orgName} rejected. Notification recorded.`, "info");
+              setReviewingOrg(null);
+              setShowRejectForm(false);
+              setReviewRejectReason("");
+              refetch();
+            } catch (err: any) {
+              addToast(err?.message || "Failed to reject verification", "error");
+            }
+          };
+
+          const handleSimulateDossier = (orgItem: any) => {
+            // Quick simulation helper so auditor can test review and approve easily
+            const mems = MockDB.getMembers();
+            let adminM = mems.find((m) => m.org_id === orgItem.id && (m.role === "org_admin" || m.role === "superadmin"));
+            if (!adminM) {
+              adminM = {
+                id: `mem-${Date.now()}-adm`,
+                org_id: orgItem.id,
+                user_id: user?.id || "user-admin",
+                role: "org_admin",
+                status: "active",
+                joined_at: new Date().toISOString()
+              };
+              mems.push(adminM);
+            }
+            adminM.passport_photo_url = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80";
+            adminM.id_document_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80";
+            adminM.id_document_type = "national_id";
+            adminM.id_document_number = "1199080084592011";
+            adminM.verification_status = "pending";
+
+            let accM = mems.find((m) => m.org_id === orgItem.id && m.role === "accountant");
+            if (!accM) {
+              accM = {
+                id: `mem-${Date.now()}-acc`,
+                org_id: orgItem.id,
+                user_id: "user-acc-demo",
+                role: "accountant",
+                status: "active",
+                joined_at: new Date().toISOString()
+              };
+              mems.push(accM);
+            }
+            accM.passport_photo_url = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80";
+            accM.id_document_url = "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80";
+            accM.id_document_type = "passport";
+            accM.id_document_number = "PC992810";
+            accM.verification_status = "pending";
+
+            MockDB.saveMembers(mems);
+
+            const allO = MockDB.getOrgs();
+            const oIdx = allO.findIndex((o) => o.id === orgItem.id);
+            if (oIdx !== -1) {
+              allO[oIdx].verification_status = "pending_review";
+              allO[oIdx].verification_submitted_at = new Date().toISOString();
+              MockDB.saveOrgs(allO);
+            }
+            localStorage.setItem(`impacto_org_verification_status_${orgItem.id}`, "pending_review");
+            addToast(`Submitted test Admin & Accountant verification credentials for ${orgItem.name}!`, "success");
+            refetch();
+          };
+
+          return (
+            <div className="flex flex-col gap-6 w-full">
+              {/* Header and Summary */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+                      <ShieldCheck className="h-6 w-6" />
+                    </span>
+                    <h2 className="text-xl font-bold font-display text-gray-900 dark:text-white">
+                      Organization Authenticity & Verification Audit Desk
+                    </h2>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-2 max-w-3xl">
+                    All organizations in the platform start with status <span className="font-semibold text-slate-700 dark:text-slate-300">Unverified</span>. To receive the official <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Green Tick</span>, authenticity verification is required for all key governance roles: <span className="font-bold text-gray-800 dark:text-gray-200">Admin</span> and <span className="font-bold text-gray-800 dark:text-gray-200">Accountant</span> must both submit their passport photo and National ID or Passport. Normal members do not require verification.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    onClick={() => {
+                      const firstUnverified = orgs.find((o: any) => !o.verification_status || o.verification_status === "unverified");
+                      if (firstUnverified) {
+                        handleSimulateDossier(firstUnverified);
+                      } else if (orgs.length > 0) {
+                        handleSimulateDossier(orgs[0]);
+                      } else {
+                        addToast("No organization found to simulate.", "info");
+                      }
+                    }}
+                    variant="outline"
+                    className="text-xs font-bold py-2 border-emerald-600 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                  >
+                    <Upload className="h-3.5 w-3.5 mr-1.5" /> Simulate Verification Dossier
+                  </Button>
+                </div>
+              </div>
+
+              {/* Stats KPIs */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+                <div className="p-4 rounded-xl border bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 flex flex-col justify-between">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Total Organizations
+                  </span>
+                  <div className="flex items-baseline justify-between mt-2">
+                    <span className="text-2xl font-black text-slate-900 dark:text-white">{totalOrgs}</span>
+                    <Building2 className="h-4 w-4 text-slate-400" />
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
+                      Verified Authentic
+                    </span>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 fill-emerald-500 text-white" />
+                  </div>
+                  <div className="flex items-baseline justify-between mt-2">
+                    <span className="text-2xl font-black text-emerald-700 dark:text-emerald-300">{verifiedOrgs.length}</span>
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900 px-1.5 py-0.5 rounded">
+                      Green Tick
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider">
+                      Pending Audit Review
+                    </span>
+                    <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="flex items-baseline justify-between mt-2">
+                    <span className="text-2xl font-black text-amber-700 dark:text-amber-300">{pendingOrgs.length}</span>
+                    {pendingOrgs.length > 0 && (
+                      <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900 px-1.5 py-0.5 rounded animate-pulse">
+                        Action Required
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 flex flex-col justify-between">
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Unverified Initial
+                  </span>
+                  <div className="flex items-baseline justify-between mt-2">
+                    <span className="text-2xl font-black text-slate-700 dark:text-slate-300">{unverifiedOrgs.length}</span>
+                    <span className="text-[10px] text-slate-400">Needs KYC</span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/60 flex flex-col justify-between">
+                  <span className="text-[11px] font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wider">
+                    Rejected / Flagged
+                  </span>
+                  <div className="flex items-baseline justify-between mt-2">
+                    <span className="text-2xl font-black text-rose-700 dark:text-rose-300">{rejectedOrgs.length}</span>
+                    <span className="text-[10px] text-rose-500">Re-upload</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filters and Search Bar */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                  {(["all", "pending_review", "unverified", "verified", "rejected"] as const).map((filterKey) => (
+                    <button
+                      key={filterKey}
+                      onClick={() => setVerificationFilter(filterKey)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${
+                        verificationFilter === filterKey
+                          ? "bg-slate-900 dark:bg-emerald-600 text-white shadow-xs"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
+                      }`}
+                    >
+                      {filterKey === "all" && "All Statuses"}
+                      {filterKey === "pending_review" && `Pending Review (${pendingOrgs.length})`}
+                      {filterKey === "unverified" && `Unverified (${unverifiedOrgs.length})`}
+                      {filterKey === "verified" && `Verified Authentic (${verifiedOrgs.length})`}
+                      {filterKey === "rejected" && `Rejected (${rejectedOrgs.length})`}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative min-w-[240px]">
+                  <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search organization or promoter..."
+                    className="w-full pl-9 pr-4 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                  {search && (
+                    <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Organizations Verification Sections List */}
+              <div className="flex flex-col gap-6">
+                {filteredOrgs.length === 0 ? (
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-12 text-center text-slate-400 shadow-xs">
+                    <ShieldCheck className="h-10 w-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+                    <p className="font-bold text-sm text-slate-700 dark:text-slate-300">No organizations found</p>
+                    <p className="text-xs text-slate-400 mt-1">No organizations match the selected authenticity filter.</p>
+                  </div>
+                ) : (
+                  filteredOrgs.map((orgItem: any) => {
+                    const status = orgItem.verification_status || "unverified";
+                    const orgOfficers = allMembers.filter((m) => m.org_id === orgItem.id && m.role !== "member");
+                    const adminM = orgOfficers.find((m) => m.role === "org_admin" || m.role === "superadmin") || orgOfficers[0];
+                    const accM = orgOfficers.find((m) => m.role === "accountant");
+                    const submittedCount = orgOfficers.filter((m) => !!m.passport_photo_url && !!m.id_document_url).length;
+                    const requiredTotal = Math.max(orgOfficers.length, 2);
+                    const progress = Math.min(100, Math.round((submittedCount / requiredTotal) * 100));
+
+                    return (
+                      <div
+                        key={orgItem.id}
+                        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs flex flex-col gap-5 transition hover:border-slate-300 dark:hover:border-slate-700"
+                      >
+                        {/* Section Header */}
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b pb-4 dark:border-slate-800">
+                          <div className="flex items-center gap-3.5">
+                            <div className="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/60 dark:border-emerald-800 flex items-center justify-center font-bold text-emerald-800 dark:text-emerald-300 text-sm shrink-0">
+                              {orgItem.logo_url ? (
+                                <img src={orgItem.logo_url} alt="" className="h-full w-full object-cover rounded-2xl" />
+                              ) : (
+                                orgItem.name?.substring(0, 2).toUpperCase() || "OR"
+                              )}
+                            </div>
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="text-base font-bold text-slate-900 dark:text-white font-display">
+                                  {orgItem.name}
+                                </h3>
+                                <span className="font-mono text-xs text-slate-400">
+                                  /{orgItem.slug}
+                                </span>
+                                {status === "verified" ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                                    <CheckCircle2 className="h-3 w-3" /> VERIFIED GREEN TICK
+                                  </span>
+                                ) : status === "pending_review" ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse">
+                                    <Clock className="h-3 w-3" /> AWAITING SYSTEM AUDIT
+                                  </span>
+                                ) : status === "rejected" ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+                                    <XCircle className="h-3 w-3" /> REJECTED
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                    <ShieldAlert className="h-3 w-3" /> UNVERIFIED
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2.5 text-xs text-slate-500 mt-1">
+                                <span>Category: <strong>{orgItem.org_category || "General NGO"}</strong></span>
+                                <span>•</span>
+                                <span>Created: {new Date(orgItem.created_at || Date.now()).toLocaleDateString()}</span>
+                                {orgItem.referred_by_code && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="font-mono text-teal-600 dark:text-teal-400 font-bold">
+                                      Promoter: {orgItem.referred_by_code}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            {status === "pending_review" && (
+                              <Button
+                                onClick={() => handleApproveVerification(orgItem.id, orgItem.name)}
+                                size="sm"
+                                className="text-xs font-bold py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 cursor-pointer shadow-xs"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Grant Green Tick
+                              </Button>
+                            )}
+
+                            <Button
+                              onClick={() => {
+                                setReviewingOrg(orgItem);
+                                setShowRejectForm(false);
+                                setReviewRejectReason(orgItem.verification_rejection_reason || "");
+                              }}
+                              size="sm"
+                              variant="outline"
+                              className="text-xs font-bold py-2 px-3.5 flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Eye className="h-3.5 w-3.5" /> Inspect Dossier
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar of Officers Required to Submit */}
+                        <div className="bg-slate-50/80 dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col gap-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                              <Users className="h-3.5 w-3.5 text-emerald-600" /> Officer Document Submission Progress:
+                            </span>
+                            <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                              {submittedCount} / {requiredTotal} Required Officers ({progress}%)
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                            <div
+                              className="bg-emerald-500 h-full transition-all duration-500 rounded-full"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Officer Roster Cards (All Non-Member Roles) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                          {/* 1. Administrator */}
+                          <div className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between gap-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 uppercase tracking-wider">
+                                Role: Admin (Mandatory)
+                              </span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                adminM?.verification_status === "verified"
+                                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                                  : adminM?.passport_photo_url && adminM?.id_document_url
+                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                              }`}>
+                                {adminM?.verification_status === "verified" ? "Verified" : adminM?.passport_photo_url ? "Submitted" : "Missing"}
+                              </span>
+                            </div>
+
+                            <div>
+                              <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                                {allUsers.find((u) => u.id === adminM?.user_id)?.full_name || "Administrator"}
+                              </span>
+                              <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                <Phone className="h-3 w-3 text-emerald-600" />
+                                {adminM?.phone_number || allUsers.find((u) => u.id === adminM?.user_id)?.phone_number || "No telephone number"}
+                              </span>
+                              <span className="font-mono text-[10px] text-slate-400 block mt-0.5">
+                                {adminM?.id_document_type || "national_id"}: {adminM?.id_document_number || "No ID #"}
+                              </span>
+                            </div>
+
+                            {/* Image Thumbnails */}
+                            <div className="flex items-center gap-2 pt-1 border-t dark:border-slate-800">
+                              {adminM?.passport_photo_url ? (
+                                <div
+                                  onClick={() => setFullDocPreviewUrl(adminM.passport_photo_url!)}
+                                  className="h-14 w-14 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group shrink-0"
+                                >
+                                  <img src={adminM.passport_photo_url} alt="Photo" className="w-full h-full object-cover" />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-[9px] font-bold">
+                                    Zoom
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="h-14 w-14 rounded-lg border border-dashed flex flex-col items-center justify-center text-slate-400 text-[9px]">
+                                  No Photo
+                                </div>
+                              )}
+
+                              {adminM?.id_document_url ? (
+                                <div
+                                  onClick={() => setFullDocPreviewUrl(adminM.id_document_url!)}
+                                  className="h-14 flex-1 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group"
+                                >
+                                  <img src={adminM.id_document_url} alt="ID" className="w-full h-full object-cover" />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-[9px] font-bold">
+                                    Zoom ID
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="h-14 flex-1 rounded-lg border border-dashed flex items-center justify-center text-slate-400 text-[10px]">
+                                  No ID Scan
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 2. Accountant */}
+                          <div className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between gap-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 uppercase tracking-wider">
+                                Role: Accountant (Mandatory)
+                              </span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                accM?.verification_status === "verified"
+                                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                                  : accM?.passport_photo_url && accM?.id_document_url
+                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                                  : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                              }`}>
+                                {accM?.verification_status === "verified" ? "Verified" : accM?.passport_photo_url ? "Submitted" : "Missing"}
+                              </span>
+                            </div>
+
+                            {accM ? (
+                              <>
+                                <div>
+                                  <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                                    {allUsers.find((u) => u.id === accM.user_id)?.full_name || "Accountant"}
+                                  </span>
+                                  <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                    <Phone className="h-3 w-3 text-emerald-600" />
+                                    {accM.phone_number || allUsers.find((u) => u.id === accM.user_id)?.phone_number || "No telephone number"}
+                                  </span>
+                                  <span className="font-mono text-[10px] text-slate-400 block mt-0.5">
+                                    {accM.id_document_type || "passport"}: {accM.id_document_number || "No ID #"}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-2 pt-1 border-t dark:border-slate-800">
+                                  {accM.passport_photo_url ? (
+                                    <div
+                                      onClick={() => setFullDocPreviewUrl(accM.passport_photo_url!)}
+                                      className="h-14 w-14 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group shrink-0"
+                                    >
+                                      <img src={accM.passport_photo_url} alt="Photo" className="w-full h-full object-cover" />
+                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-[9px] font-bold">
+                                        Zoom
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="h-14 w-14 rounded-lg border border-dashed flex flex-col items-center justify-center text-slate-400 text-[9px]">
+                                      No Photo
+                                    </div>
+                                  )}
+
+                                  {accM.id_document_url ? (
+                                    <div
+                                      onClick={() => setFullDocPreviewUrl(accM.id_document_url!)}
+                                      className="h-14 flex-1 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group"
+                                    >
+                                      <img src={accM.id_document_url} alt="ID" className="w-full h-full object-cover" />
+                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-[9px] font-bold">
+                                        Zoom ID
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="h-14 flex-1 rounded-lg border border-dashed flex items-center justify-center text-slate-400 text-[10px]">
+                                      No ID Scan
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            ) : (
+                              <div className="p-3 text-center text-amber-600 dark:text-amber-400 text-xs font-bold flex flex-col items-center justify-center">
+                                <AlertTriangle className="h-4 w-4 mb-1" />
+                                Accountant Not Appointed
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 3. Additional Governance Officers (e.g. Managers) */}
+                          {orgOfficers
+                            .filter((m) => m.role !== "org_admin" && m.role !== "superadmin" && m.role !== "accountant")
+                            .map((officer) => (
+                              <div key={officer.id} className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between gap-2.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                                    Role: {officer.role}
+                                  </span>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    officer.verification_status === "verified"
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : officer.passport_photo_url
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-slate-100 text-slate-600"
+                                  }`}>
+                                    {officer.verification_status === "verified" ? "Verified" : officer.passport_photo_url ? "Submitted" : "Missing"}
+                                  </span>
+                                </div>
+
+                                <div>
+                                  <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                                    {allUsers.find((u) => u.id === officer.user_id)?.full_name || "Governance Officer"}
+                                  </span>
+                                  <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                    <Phone className="h-3 w-3 text-emerald-600" />
+                                    {officer.phone_number || "No telephone"}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-2 pt-1 border-t dark:border-slate-800">
+                                  {officer.passport_photo_url ? (
+                                    <div
+                                      onClick={() => setFullDocPreviewUrl(officer.passport_photo_url!)}
+                                      className="h-14 w-14 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group shrink-0"
+                                    >
+                                      <img src={officer.passport_photo_url} alt="Photo" className="w-full h-full object-cover" />
+                                    </div>
+                                  ) : (
+                                    <div className="h-14 w-14 rounded-lg border border-dashed flex items-center justify-center text-slate-400 text-[9px]">
+                                      No Photo
+                                    </div>
+                                  )}
+
+                                  {officer.id_document_url ? (
+                                    <div
+                                      onClick={() => setFullDocPreviewUrl(officer.id_document_url!)}
+                                      className="h-14 flex-1 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group"
+                                    >
+                                      <img src={officer.id_document_url} alt="ID" className="w-full h-full object-cover" />
+                                    </div>
+                                  ) : (
+                                    <div className="h-14 flex-1 rounded-lg border border-dashed flex items-center justify-center text-slate-400 text-[10px]">
+                                      No ID Scan
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* REVIEW DOSSIER MODAL */}
+              {reviewingOrg && (
+                <Modal
+                  open={!!reviewingOrg}
+                  onClose={() => {
+                    setReviewingOrg(null);
+                    setShowRejectForm(false);
+                  }}
+                  title=""
+                  maxWidth="max-w-4xl"
+                >
+                  <div className="flex flex-col gap-6 pt-1">
+                    {/* Header */}
+                    <div className="flex items-start justify-between border-b pb-4 dark:border-slate-800">
+                      <div className="flex items-center gap-3">
+                        <div className="h-12 w-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                          <ShieldCheck className="h-7 w-7" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                              Authenticity Dossier: {reviewingOrg.name}
+                            </h2>
+                            <span className="font-mono text-xs text-slate-400">({reviewingOrg.slug})</span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Status: <span className="font-bold uppercase text-emerald-600">{reviewingOrg.verification_status || "Unverified"}</span>
+                            {reviewingOrg.referred_by_code && (
+                              <span className="ml-2 font-mono text-[11px] text-teal-600">
+                                • Referred by promoter: {reviewingOrg.referred_by_code}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setReviewingOrg(null)}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    {/* Notice */}
+                    <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                      <Info className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span>
+                        Rule: Verification requires both <strong className="text-slate-900 dark:text-white">Admin</strong> and <strong className="text-slate-900 dark:text-white">Accountant</strong> roles to upload their passport photograph and government-issued National ID or Passport. Normal members do not need verification.
+                      </span>
+                    </div>
+
+                    {/* Side-by-Side Review Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      {/* 1. ADMIN GOVERNANCE CARD */}
+                      <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col gap-3">
+                        <div className="flex items-center justify-between border-b pb-2.5 dark:border-slate-800">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 uppercase">
+                              Role: Admin (Mandatory)
+                            </span>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            reviewingAdmin?.verification_status === "verified"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                              : reviewingAdmin?.passport_photo_url
+                              ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                              : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                          }`}>
+                            {reviewingAdmin?.verification_status === "verified" ? "Verified" : reviewingAdmin?.passport_photo_url ? "Submitted" : "Missing"}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[11px] text-slate-400 block">Name & Email:</span>
+                          <span className="text-xs font-bold text-slate-900 dark:text-white">
+                            {reviewingAdminUser?.full_name || "Administrator"} ({reviewingAdminUser?.email || "admin@org.org"})
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[11px] text-slate-400 block">Document Identification:</span>
+                          <span className="font-mono text-xs font-bold text-slate-900 dark:text-white uppercase">
+                            {reviewingAdmin?.id_document_type || "national_id"}: {reviewingAdmin?.id_document_number || "Not specified"}
+                          </span>
+                        </div>
+
+                        {/* Images Preview */}
+                        <div className="grid grid-cols-2 gap-2 mt-1">
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Passport Photo</span>
+                            {reviewingAdmin?.passport_photo_url ? (
+                              <div
+                                onClick={() => setFullDocPreviewUrl(reviewingAdmin.passport_photo_url!)}
+                                className="h-36 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 cursor-pointer relative group"
+                              >
+                                <img
+                                  src={reviewingAdmin.passport_photo_url}
+                                  alt="Admin Passport"
+                                  className="w-full h-full object-cover group-hover:scale-105 transition"
+                                />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1">
+                                  <Eye className="h-3.5 w-3.5" /> Enlarge
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="h-36 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center text-slate-400 text-xs">
+                                <Camera className="h-6 w-6 mb-1 text-slate-300" />
+                                No Photo
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">National ID / Passport</span>
+                            {reviewingAdmin?.id_document_url ? (
+                              <div
+                                onClick={() => setFullDocPreviewUrl(reviewingAdmin.id_document_url!)}
+                                className="h-36 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 cursor-pointer relative group"
+                              >
+                                <img
+                                  src={reviewingAdmin.id_document_url}
+                                  alt="Admin ID Document"
+                                  className="w-full h-full object-cover group-hover:scale-105 transition"
+                                />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1">
+                                  <Eye className="h-3.5 w-3.5" /> Enlarge
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="h-36 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center text-slate-400 text-xs">
+                                <FileText className="h-6 w-6 mb-1 text-slate-300" />
+                                No Document
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 2. ACCOUNTANT GOVERNANCE CARD */}
+                      <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col gap-3">
+                        <div className="flex items-center justify-between border-b pb-2.5 dark:border-slate-800">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 uppercase">
+                              Role: Accountant (Mandatory)
+                            </span>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            reviewingAccountant?.verification_status === "verified"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                              : reviewingAccountant?.passport_photo_url
+                              ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                              : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                          }`}>
+                            {reviewingAccountant?.verification_status === "verified" ? "Verified" : reviewingAccountant?.passport_photo_url ? "Submitted" : "Missing"}
+                          </span>
+                        </div>
+
+                        {reviewingAccountant ? (
+                          <>
+                            <div>
+                              <span className="text-[11px] text-slate-400 block">Name & Email:</span>
+                              <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                {reviewingAccountantUser?.full_name || "Chief Accountant"} ({reviewingAccountantUser?.email || "finance@org.org"})
+                              </span>
+                            </div>
+
+                            <div>
+                              <span className="text-[11px] text-slate-400 block">Document Identification:</span>
+                              <span className="font-mono text-xs font-bold text-slate-900 dark:text-white uppercase">
+                                {reviewingAccountant?.id_document_type || "passport"}: {reviewingAccountant?.id_document_number || "Not specified"}
+                              </span>
+                            </div>
+
+                            {/* Images Preview */}
+                            <div className="grid grid-cols-2 gap-2 mt-1">
+                              <div>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Passport Photo</span>
+                                {reviewingAccountant?.passport_photo_url ? (
+                                  <div
+                                    onClick={() => setFullDocPreviewUrl(reviewingAccountant.passport_photo_url!)}
+                                    className="h-36 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 cursor-pointer relative group"
+                                  >
+                                    <img
+                                      src={reviewingAccountant.passport_photo_url}
+                                      alt="Accountant Passport"
+                                      className="w-full h-full object-cover group-hover:scale-105 transition"
+                                    />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1">
+                                      <Eye className="h-3.5 w-3.5" /> Enlarge
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="h-36 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center text-slate-400 text-xs">
+                                    <Camera className="h-6 w-6 mb-1 text-slate-300" />
+                                    No Photo
+                                  </div>
+                                )}
+                              </div>
+
+                              <div>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">National ID / Passport</span>
+                                {reviewingAccountant?.id_document_url ? (
+                                  <div
+                                    onClick={() => setFullDocPreviewUrl(reviewingAccountant.id_document_url!)}
+                                    className="h-36 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 cursor-pointer relative group"
+                                  >
+                                    <img
+                                      src={reviewingAccountant.id_document_url}
+                                      alt="Accountant ID Document"
+                                      className="w-full h-full object-cover group-hover:scale-105 transition"
+                                    />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1">
+                                      <Eye className="h-3.5 w-3.5" /> Enlarge
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="h-36 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center text-slate-400 text-xs">
+                                    <FileText className="h-6 w-6 mb-1 text-slate-300" />
+                                    No Document
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="p-8 text-center flex flex-col items-center justify-center text-amber-600 dark:text-amber-400">
+                            <AlertTriangle className="h-8 w-8 mb-2" />
+                            <p className="font-bold text-xs">Accountant Member Not Appointed</p>
+                            <p className="text-[11px] text-slate-500 mt-1 max-w-xs">
+                              Authenticity verification cannot be approved until the organization adds an Accountant member with ID and passport photo.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Rejection Form Drawer */}
+                    {showRejectForm && (
+                      <div className="p-4 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 flex flex-col gap-3">
+                        <span className="text-xs font-bold text-rose-800 dark:text-rose-300">
+                          Provide Rejection Feedback & Correction Instructions:
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            "Accountant ID photograph is blurred or illegible",
+                            "Passport photo does not match identity document",
+                            "Missing Accountant role nomination",
+                            "Expired government identification document",
+                          ].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => setReviewRejectReason(preset)}
+                              className="text-[11px] px-2.5 py-1 rounded bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 text-slate-700 dark:text-slate-300 hover:bg-rose-100 text-left"
+                            >
+                              + {preset}
+                            </button>
+                          ))}
+                        </div>
+                        <textarea
+                          rows={3}
+                          value={reviewRejectReason}
+                          onChange={(e) => setReviewRejectReason(e.target.value)}
+                          placeholder="Explain what the organization administrator needs to correct..."
+                          className="w-full text-xs p-2.5 rounded-lg border border-rose-300 dark:border-rose-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowRejectForm(false)}
+                            className="text-xs font-bold"
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleRejectVerification(reviewingOrg.id, reviewingOrg.name)}
+                            className="text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white"
+                          >
+                            Confirm Rejection
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Footer Actions */}
+                    <div className="flex items-center justify-between border-t pt-4 dark:border-slate-800">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setReviewingOrg(null);
+                          setShowRejectForm(false);
+                        }}
+                        className="text-xs font-bold"
+                      >
+                        Close
+                      </Button>
+
+                      <div className="flex items-center gap-2">
+                        {!showRejectForm && (
+                          <Button
+                            variant="outline"
+                            onClick={() => setShowRejectForm(true)}
+                            className="text-xs font-bold text-rose-600 border-rose-300 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950/30"
+                          >
+                            Reject Dossier
+                          </Button>
+                        )}
+                        <Button
+                          onClick={() => handleApproveVerification(reviewingOrg.id, reviewingOrg.name)}
+                          className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5"
+                        >
+                          <CheckCircle2 className="h-4 w-4" /> Grant Green Tick Verification
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </Modal>
+              )}
+
+              {/* Full Screen Document Zoom Modal */}
+              {fullDocPreviewUrl && (
+                <Modal
+                  open={!!fullDocPreviewUrl}
+                  onClose={() => setFullDocPreviewUrl(null)}
+                  title="Document High-Resolution Inspection"
+                  maxWidth="max-w-3xl"
+                >
+                  <div className="flex flex-col gap-4 items-center">
+                    <div className="max-h-[70vh] overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-950 p-2">
+                      <img
+                        src={fullDocPreviewUrl}
+                        alt="Document High Res"
+                        className="max-h-[65vh] w-auto object-contain mx-auto rounded-lg shadow-lg"
+                      />
+                    </div>
+                    <Button
+                      onClick={() => setFullDocPreviewUrl(null)}
+                      className="w-full bg-slate-900 dark:bg-emerald-600 text-white font-bold h-10 rounded-xl"
+                    >
+                      Close Inspection Preview
+                    </Button>
+                  </div>
+                </Modal>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* 3C. PROMOTERS & REFERRALS ATTRIBUTION HUB TAB */}
+        {activeTab === "referrals" && (() => {
+          // Calculate stats
+          const totalReferrals = allReferrals.length;
+          const orgReferrals = allReferrals.filter((r) => r.referred_org_id || r.status === "org_created");
+          const l1Referrals = allReferrals.filter((r) => r.level === 1);
+          const l2Referrals = allReferrals.filter((r) => r.level === 2);
+          const verifiedReferrals = allReferrals.filter((r) => r.status === "verified");
+
+          // Code generator helper
+          const generateCodeFromName = (nameInput: string) => {
+            const raw = nameInput.trim();
+            if (!raw) {
+              return `REF-PROM-${Math.floor(100 + Math.random() * 900)}-${new Date().getFullYear()}`;
+            }
+            const clean = raw
+              .replace(/[^a-zA-Z0-9]/g, "")
+              .toUpperCase()
+              .substring(0, 7);
+            const suffix = Math.floor(10 + Math.random() * 90);
+            return `REF-${clean}-${suffix}`;
+          };
+
+          const handleCopyCode = (code: string) => {
+            navigator.clipboard.writeText(code);
+            setCopiedCodeMap((prev) => ({ ...prev, [`code_${code}`]: true }));
+            addToast(`Referral code "${code}" copied to clipboard!`, "success");
+            setTimeout(() => {
+              setCopiedCodeMap((prev) => ({ ...prev, [`code_${code}`]: false }));
+            }, 2500);
+          };
+
+          const handleCopyInviteLink = (code: string) => {
+            const host = typeof window !== "undefined" ? window.location.origin : "";
+            const url = `${host}/register?ref=${encodeURIComponent(code)}`;
+            navigator.clipboard.writeText(url);
+            setCopiedCodeMap((prev) => ({ ...prev, [`link_${code}`]: true }));
+            addToast(`Promoter invitation link copied: ${url}`, "success");
+            setTimeout(() => {
+              setCopiedCodeMap((prev) => ({ ...prev, [`link_${code}`]: false }));
+            }, 2500);
+          };
+
+          const handleCreateNewPromoter = async (e: React.FormEvent) => {
+            e.preventDefault();
+            if (!promoterName.trim()) {
+              addToast("Please enter the promoter's full name.", "error");
+              return;
+            }
+            let finalCode = promoterCode.trim().toUpperCase();
+            if (!finalCode) {
+              finalCode = generateCodeFromName(promoterName);
+            }
+
+            try {
+              await createPromoterMutation.mutateAsync({
+                name: promoterName.trim(),
+                code: finalCode,
+                email: promoterEmail.trim() || undefined,
+                phone: promoterPhone.trim() || undefined,
+                notes: promoterNotes.trim() || undefined,
+                commission_rate: Number(promoterCommission) || 10,
+                created_by: user?.full_name || "Superadmin",
+              });
+              addToast(`Promoter "${promoterName}" registered successfully with referral code ${finalCode}!`, "success");
+              setIsCreatePromoterOpen(false);
+              setPromoterName("");
+              setPromoterCode("");
+              setPromoterPhone("");
+              setPromoterEmail("");
+              setPromoterNotes("");
+              setPromoterCommission(10);
+            } catch (err: any) {
+              addToast(err?.message || "Failed to register promoter", "error");
+            }
+          };
+
+          const handleTogglePromoterStatus = async (promoter: Promoter) => {
+            const newStatus = promoter.status === "active" ? "inactive" : "active";
+            try {
+              await updatePromoterMutation.mutateAsync({
+                id: promoter.id,
+                status: newStatus,
+              });
+              addToast(`Promoter ${promoter.name} is now ${newStatus}.`, "info");
+            } catch (err: any) {
+              addToast(err?.message || "Failed to update promoter status", "error");
+            }
+          };
+
+          const handleDeletePromoter = async (promoter: Promoter) => {
+            if (window.confirm(`Are you sure you want to remove promoter "${promoter.name}" (${promoter.code})?`)) {
+              try {
+                await deletePromoterMutation.mutateAsync(promoter.id);
+                addToast(`Promoter ${promoter.name} removed.`, "info");
+              } catch (err: any) {
+                addToast(err?.message || "Failed to delete promoter", "error");
+              }
+            }
+          };
+
+          // Filter promoters list
+          const filteredPromoters = promoters.filter((p) => {
+            if (promoterFilter !== "all" && p.status !== promoterFilter) return false;
+            if (promoterSearchQuery.trim()) {
+              const q = promoterSearchQuery.toLowerCase();
+              return (
+                p.name.toLowerCase().includes(q) ||
+                p.code.toLowerCase().includes(q) ||
+                p.phone?.toLowerCase().includes(q) ||
+                p.email?.toLowerCase().includes(q) ||
+                p.notes?.toLowerCase().includes(q)
+              );
+            }
+            return true;
+          });
+
+          // Filter referrals log
+          const filteredReferrals = allReferrals.filter((r) => {
+            if (!search.trim()) return true;
+            const q = search.toLowerCase();
+            return (
+              r.referral_code?.toLowerCase().includes(q) ||
+              r.referrer_name?.toLowerCase().includes(q) ||
+              r.referred_user_name?.toLowerCase().includes(q) ||
+              r.referred_org_name?.toLowerCase().includes(q)
+            );
+          });
+
+          return (
+            <div className="flex flex-col gap-6 w-full">
+              {/* Header Hero */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 rounded-xl bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400">
+                      <HeartHandshake className="h-6 w-6" />
+                    </span>
+                    <h2 className="text-xl font-bold font-display text-gray-900 dark:text-white">
+                      Promoter & Referral Attribution Hub
+                    </h2>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-2 max-w-3xl leading-relaxed">
+                    Create and manage official field promoters, influencers, and community ambassadors. Generate unique codes for them. When a new user or organization registers using a promoter's code, their attribution, conversion status, and organizations are tracked automatically in real time.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <Button
+                    onClick={() => {
+                      setIsCreatePromoterOpen(true);
+                      setPromoterCode(generateCodeFromName(""));
+                    }}
+                    className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <Plus className="h-4 w-4" /> Register New Promoter
+                  </Button>
+                </div>
+              </div>
+
+              {/* Stats KPIs */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+                <div className="p-4 rounded-xl border bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 flex flex-col justify-between shadow-3xs">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Registered Promoters
+                  </span>
+                  <div className="flex items-baseline justify-between mt-2">
+                    <span className="text-2xl font-black text-slate-900 dark:text-white">{promoters.length}</span>
+                    <Users className="h-4 w-4 text-teal-600" />
+                  </div>
+                  <span className="text-[10px] text-teal-600 font-bold mt-1">
+                    {promoters.filter((p) => p.status === "active").length} Active in Field
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-xl border bg-teal-50/50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800/60 flex flex-col justify-between shadow-3xs">
+                  <span className="text-[11px] font-bold text-teal-800 dark:text-teal-300 uppercase tracking-wider">
+                    Orgs via Referral
+                  </span>
+                  <div className="flex items-baseline justify-between mt-2">
+                    <span className="text-2xl font-black text-teal-700 dark:text-teal-300">{orgReferrals.length}</span>
+                    <Building2 className="h-4 w-4 text-teal-500" />
+                  </div>
+                  <span className="text-[10px] text-teal-700 dark:text-teal-300 font-semibold mt-1">
+                    Directly Created
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-xl border bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 flex flex-col justify-between shadow-3xs">
+                  <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
+                    Verified Authentic Orgs
+                  </span>
+                  <div className="flex items-baseline justify-between mt-2">
+                    <span className="text-2xl font-black text-emerald-700 dark:text-emerald-300">{verifiedReferrals.length}</span>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 fill-emerald-500 text-white" />
+                  </div>
+                  <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold mt-1">
+                    Green Tick Active
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-xl border bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 flex flex-col justify-between shadow-3xs">
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Total Conversions
+                  </span>
+                  <div className="flex items-baseline justify-between mt-2">
+                    <span className="text-2xl font-black text-slate-700 dark:text-slate-300">{totalReferrals}</span>
+                    <TrendingUp className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <span className="text-[10px] text-slate-500 mt-1">
+                    {l1Referrals.length} Direct • {l2Referrals.length} L2
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-xl border bg-purple-50/50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800/60 flex flex-col justify-between shadow-3xs">
+                  <span className="text-[11px] font-bold text-purple-800 dark:text-purple-300 uppercase tracking-wider">
+                    Multi-Tier Network
+                  </span>
+                  <div className="flex items-baseline justify-between mt-2">
+                    <span className="text-2xl font-black text-purple-700 dark:text-purple-300">{l2Referrals.length}</span>
+                    <Sparkles className="h-4 w-4 text-purple-500" />
+                  </div>
+                  <span className="text-[10px] text-purple-600 font-bold mt-1">
+                    Sub-Promoter Level
+                  </span>
+                </div>
+              </div>
+
+              {/* 1. REGISTERED PROMOTERS DIRECTORY TABLE */}
+              <div className="p-5 sm:p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs flex flex-col gap-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4 dark:border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-9 w-9 rounded-xl bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-400 flex items-center justify-center font-bold shrink-0">
+                      <Users className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                        Official Field Promoters & Ambassadors ({promoters.length})
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Promoters created by Super Admin with assigned referral codes and attributed organizations.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Filters & Search */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+                      {(["all", "active", "inactive"] as const).map((filter) => (
+                        <button
+                          key={filter}
+                          type="button"
+                          onClick={() => setPromoterFilter(filter)}
+                          className={`px-2.5 py-1 rounded-md font-bold capitalize transition cursor-pointer ${
+                            promoterFilter === filter
+                              ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-3xs"
+                              : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-200"
+                          }`}
+                        >
+                          {filter}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="relative min-w-[200px]">
+                      <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={promoterSearchQuery}
+                        onChange={(e) => setPromoterSearchQuery(e.target.value)}
+                        placeholder="Search promoter or code..."
+                        className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Promoters Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        <th className="py-3 px-3">Promoter Details</th>
+                        <th className="py-3 px-3">Referral Code & Link</th>
+                        <th className="py-3 px-3">Telephone & Email</th>
+                        <th className="py-3 px-3 text-center">Attributed Orgs</th>
+                        <th className="py-3 px-3 text-center">Total Signups</th>
+                        <th className="py-3 px-3 text-center">Commission</th>
+                        <th className="py-3 px-3 text-center">Status</th>
+                        <th className="py-3 px-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {filteredPromoters.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="py-8 text-center text-slate-400">
+                            No promoters found matching your criteria. Click "+ Register New Promoter" to add one.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredPromoters.map((p) => {
+                          // Calculate this promoter's attributed signups
+                          const attributedRefs = allReferrals.filter(
+                            (r) =>
+                              r.referral_code?.toUpperCase() === p.code.toUpperCase() ||
+                              r.referrer_user_id === p.id ||
+                              r.referrer_name?.toLowerCase() === p.name.toLowerCase()
+                          );
+                          const attributedOrgs = attributedRefs.filter((r) => r.referred_org_id || r.status === "org_created");
+                          const verifiedOrgsCount = attributedRefs.filter((r) => r.status === "verified").length;
+
+                          return (
+                            <tr key={p.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                              {/* Promoter Info */}
+                              <td className="py-3 px-3">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="h-9 w-9 rounded-full bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 flex items-center justify-center font-bold text-xs shrink-0">
+                                    {p.name.substring(0, 2).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <span className="font-bold text-slate-900 dark:text-white block">
+                                      {p.name}
+                                    </span>
+                                    {p.notes ? (
+                                      <span className="text-[11px] text-slate-500 block truncate max-w-[180px]">
+                                        {p.notes}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-400">
+                                        Added {new Date(p.created_at).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Code & Copy Buttons */}
+                              <td className="py-3 px-3">
+                                <div className="flex flex-col gap-1.5 self-start">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono text-xs font-black px-2 py-0.5 rounded bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                                      {p.code}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyCode(p.code)}
+                                      title="Copy Code"
+                                      className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition cursor-pointer"
+                                    >
+                                      {copiedCodeMap[`code_${p.code}`] ? (
+                                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                      ) : (
+                                        <Copy className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyInviteLink(p.code)}
+                                    className="text-[10px] font-bold text-teal-600 hover:text-teal-700 dark:text-teal-400 flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                    {copiedCodeMap[`link_${p.code}`] ? "URL Copied!" : "Copy Signup Link"}
+                                  </button>
+                                </div>
+                              </td>
+
+                              {/* Contact */}
+                              <td className="py-3 px-3">
+                                <div className="flex flex-col gap-0.5">
+                                  {p.phone ? (
+                                    <span className="text-slate-900 dark:text-white font-medium flex items-center gap-1">
+                                      <Phone className="h-3 w-3 text-teal-600" /> {p.phone}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400 text-[11px]">No phone</span>
+                                  )}
+                                  {p.email && (
+                                    <span className="text-[11px] text-slate-500 truncate max-w-[150px]">
+                                      {p.email}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Orgs Created */}
+                              <td className="py-3 px-3 text-center">
+                                <div className="flex flex-col items-center">
+                                  <span className="font-bold text-slate-900 dark:text-white text-sm">
+                                    {attributedOrgs.length}
+                                  </span>
+                                  {verifiedOrgsCount > 0 && (
+                                    <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5 mt-0.5">
+                                      <CheckCircle2 className="h-2.5 w-2.5" /> {verifiedOrgsCount} Verified
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Total Signups */}
+                              <td className="py-3 px-3 text-center">
+                                <span className="font-bold font-mono text-slate-800 dark:text-slate-200">
+                                  {attributedRefs.length}
+                                </span>
+                              </td>
+
+                              {/* Commission */}
+                              <td className="py-3 px-3 text-center">
+                                <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                                  {p.commission_rate ?? 10}%
+                                </span>
+                              </td>
+
+                              {/* Status */}
+                              <td className="py-3 px-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleTogglePromoterStatus(p)}
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full cursor-pointer transition ${
+                                    p.status === "active"
+                                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                                      : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                                  }`}
+                                >
+                                  {p.status === "active" ? "Active" : "Inactive"}
+                                </button>
+                              </td>
+
+                              {/* Actions */}
+                              <td className="py-3 px-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePromoter(p)}
+                                  title="Delete Promoter"
+                                  className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 transition cursor-pointer"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 2. REFERRALS ATTRIBUTIONS STREAM & LOG */}
+              <div className="p-5 sm:p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-lg bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold">
+                      <HeartHandshake className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                        Live Signups & Attribution Log ({filteredReferrals.length})
+                      </h3>
+                      <p className="text-[11px] text-slate-400">
+                        When someone joins or creates an organization using a promoter code, it appears here immediately.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="relative min-w-[220px]">
+                    <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search attribution event..."
+                      className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        <th className="py-2.5 px-3">Promoter / Ambassador</th>
+                        <th className="py-2.5 px-3">Referral Code Used</th>
+                        <th className="py-2.5 px-3">Referred Entity (Org / User)</th>
+                        <th className="py-2.5 px-3 text-center">Attribution Tier</th>
+                        <th className="py-2.5 px-3 text-center">Attribution Status</th>
+                        <th className="py-2.5 px-3 text-right">Registration Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {filteredReferrals.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-400">
+                            No referral conversions logged yet. Referrals are recorded automatically when users or organizations register with a promoter's code.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredReferrals.map((ref) => (
+                          <tr key={ref.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
+                            <td className="py-2.5 px-3">
+                              <span className="font-bold text-slate-900 dark:text-white block">
+                                {ref.referrer_name || "Ambassador"}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                                {ref.referral_code}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              {ref.referred_org_name ? (
+                                <div>
+                                  <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                                    🏢 {ref.referred_org_name}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400">
+                                    Creator: {ref.referred_user_name || "Admin"}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-700 dark:text-slate-300 font-medium">
+                                  👤 {ref.referred_user_name || "Participant Member"}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              {ref.level === 1 ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                  Level 1 Direct
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                                  Level 2 Network
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              {ref.status === "verified" ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded-full">
+                                  <CheckCircle2 className="h-3 w-3" /> Org Verified
+                                </span>
+                              ) : ref.status === "org_created" ? (
+                                <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950 px-2 py-0.5 rounded-full">
+                                  Org Created
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                                  Registered
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-400 text-[10px] text-right">
+                              {new Date(ref.created_at).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* CREATE PROMOTER MODAL */}
+              {isCreatePromoterOpen && (
+                <Modal
+                  open={isCreatePromoterOpen}
+                  onClose={() => setIsCreatePromoterOpen(false)}
+                  title="Register New Field Promoter & Ambassador"
+                >
+                  <form onSubmit={handleCreateNewPromoter} className="flex flex-col gap-4 text-xs font-medium pt-1">
+                    <p className="text-slate-500 text-xs">
+                      Register an official field promoter, ambassador, or marketing partner and assign them a tracked referral code.
+                    </p>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-bold text-slate-900 dark:text-white">
+                        Promoter Full Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={promoterName}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPromoterName(val);
+                          if (!promoterCode || promoterCode.startsWith("REF-PROM-")) {
+                            setPromoterCode(generateCodeFromName(val));
+                          }
+                        }}
+                        placeholder="e.g. Aimé Patrick Mugisha"
+                        className="w-full text-xs rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 px-3.5 py-2 text-slate-900 dark:text-white"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-900 dark:text-white">
+                          Assigned Referral Code *
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setPromoterCode(generateCodeFromName(promoterName))}
+                          className="text-[11px] font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Sparkles className="h-3 w-3" /> Auto-Generate Code
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        value={promoterCode}
+                        onChange={(e) => setPromoterCode(e.target.value.toUpperCase())}
+                        placeholder="e.g. REF-AIME-2026"
+                        className="w-full font-mono font-bold text-xs rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 px-3.5 py-2 text-teal-700 dark:text-teal-300 uppercase"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          Telephone / WhatsApp Number
+                        </label>
+                        <input
+                          type="text"
+                          value={promoterPhone}
+                          onChange={(e) => setPromoterPhone(e.target.value)}
+                          placeholder="+250 788 000 000"
+                          className="w-full text-xs rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 px-3.5 py-2 text-slate-900 dark:text-white"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          Email Address (Optional)
+                        </label>
+                        <input
+                          type="email"
+                          value={promoterEmail}
+                          onChange={(e) => setPromoterEmail(e.target.value)}
+                          placeholder="promoter@email.com"
+                          className="w-full text-xs rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 px-3.5 py-2 text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          Assigned Region / Campaign Notes
+                        </label>
+                        <input
+                          type="text"
+                          value={promoterNotes}
+                          onChange={(e) => setPromoterNotes(e.target.value)}
+                          placeholder="e.g. Northern Province Cooperatives"
+                          className="w-full text-xs rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 px-3.5 py-2 text-slate-900 dark:text-white"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          Commission / Incentive Rate (%)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={promoterCommission}
+                          onChange={(e) => setPromoterCommission(Number(e.target.value))}
+                          placeholder="10"
+                          className="w-full text-xs rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 px-3.5 py-2 text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Live Invite Link Preview */}
+                    <div className="p-3 bg-teal-50/70 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800/60 rounded-xl flex flex-col gap-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300">
+                        Generated Shareable Signup Link:
+                      </span>
+                      <span className="font-mono text-xs text-teal-900 dark:text-teal-200 select-all break-all">
+                        {typeof window !== "undefined" ? window.location.origin : ""}/register?ref={promoterCode || "CODE"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t dark:border-slate-800">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsCreatePromoterOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        className="bg-teal-600 hover:bg-teal-700 text-white font-bold"
+                      >
+                        Create & Activate Promoter
+                      </Button>
+                    </div>
+                  </form>
                 </Modal>
               )}
             </div>

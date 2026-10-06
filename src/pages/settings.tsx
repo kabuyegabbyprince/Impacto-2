@@ -38,7 +38,9 @@ import {
   ArrowDown,
   Edit3,
   ShieldCheck,
-  Zap
+  Zap,
+  HeartHandshake,
+  Copy
 } from "lucide-react";
 import { useOrgStore } from "../store/orgStore";
 import { useCurrencyStore } from "../store/currencyStore";
@@ -52,7 +54,8 @@ import {
   useErrorReports,
   useDeleteOrganization,
   useUpdateUserProfile,
-  useMembers
+  useMembers,
+  useReferrals
 } from "../hooks/useImpactoData";
 import { MockDB } from "../lib/mockData";
 import { isSupabaseConfigured } from "../lib/supabase";
@@ -62,6 +65,8 @@ import { ResolvedImage } from "../components/ResolvedMedia";
 import { V2AdvancedFeatures } from "../components/V2AdvancedFeatures";
 import { UssdPaymentHelper } from "../components/UssdPaymentHelper";
 import { SubscriptionPaymentDashboard } from "../components/SubscriptionPaymentDashboard";
+import { OrganizationVerificationModal } from "../components/OrganizationVerificationModal";
+import { ReferralCenterModal } from "../components/ReferralCenterModal";
 import { 
   ADDON_PACKAGES, 
   AddOnPackageId, 
@@ -98,6 +103,9 @@ export const OrganizationSettingsPage: React.FC = () => {
   const { data: platformData } = usePlatformAdminData();
   const { data: supportChats, refetch: refetchSupport } = useErrorReports(activeOrg?.id);
   const { data: members } = useMembers(activeOrg?.id);
+  const [openVerificationModal, setOpenVerificationModal] = useState(false);
+  const [openReferralModal, setOpenReferralModal] = useState(false);
+  const { data: userReferrals = [] } = useReferrals(user?.id);
 
   const canAccessMomo = activeMember?.role === "org_admin" || activeMember?.role === "accountant";
   const canAccessSupport = activeMember?.role === "org_admin";
@@ -942,6 +950,67 @@ export const OrganizationSettingsPage: React.FC = () => {
         {/* General workspace properties */}
         {activeTab === "general" && (
           <div className="flex flex-col gap-6 pb-8">
+            {/* Organization Authenticity Verification Card */}
+            {activeOrg && (
+              <div className={`p-4.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                activeOrg.verification_status === "verified"
+                  ? "bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800"
+                  : activeOrg.verification_status === "pending_review"
+                  ? "bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800"
+                  : "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+              }`}>
+                <div className="flex items-start gap-3.5">
+                  <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${
+                    activeOrg.verification_status === "verified"
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300"
+                      : activeOrg.verification_status === "pending_review"
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300"
+                      : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                  }`}>
+                    {activeOrg.verification_status === "verified" ? (
+                      <CheckCircle2 className="h-6 w-6 fill-emerald-500 text-white dark:fill-emerald-400 dark:text-slate-900" />
+                    ) : activeOrg.verification_status === "pending_review" ? (
+                      <Clock className="h-6 w-6" />
+                    ) : (
+                      <ShieldCheck className="h-6 w-6" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                        Organization Authenticity:{" "}
+                        <span className={activeOrg.verification_status === "verified" ? "text-emerald-600 dark:text-emerald-400" : activeOrg.verification_status === "pending_review" ? "text-amber-600 dark:text-amber-400" : "text-gray-500 dark:text-slate-400"}>
+                          {activeOrg.verification_status === "verified" ? "Verified Authentic Entity" : activeOrg.verification_status === "pending_review" ? "Dossier In Review" : "Unverified"}
+                        </span>
+                      </h3>
+                      {activeOrg.verification_status === "verified" && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          Green Tick Active
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 max-w-xl">
+                      {activeOrg.verification_status === "verified"
+                        ? `Official Green Tick is published on your public portal and dashboard header. Verified by ${activeOrg.verified_by || "Platform Auditor"}.`
+                        : activeOrg.verification_status === "pending_review"
+                        ? "Administrator and Accountant identity credentials are submitted and pending platform audit approval."
+                        : "All organizations start unverified. Submit Administrator and Accountant passport photo + National ID / Passport to verify authenticity."}
+                    </p>
+                  </div>
+                </div>
+
+                {activeMember?.role !== "member" && (
+                  <Button
+                    type="button"
+                    onClick={() => setOpenVerificationModal(true)}
+                    className="text-xs py-2 px-4 font-bold bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
+                  >
+                    {activeOrg.verification_status === "verified" ? "View Dossier" : activeOrg.verification_status === "pending_review" ? "Check Status" : "Verify Organization"}
+                  </Button>
+                )}
+              </div>
+            )}
+
             <Card title={t("settings_branding_title")}>
             <form onSubmit={handleSaveGeneral} className="flex flex-col gap-6 text-xs md:text-sm font-medium">
 
@@ -2263,6 +2332,68 @@ export const OrganizationSettingsPage: React.FC = () => {
             </form>
           </Card>
 
+          {/* Promoter & Referral Attribution Hub Card */}
+          <Card title="Promoter & Referral Attribution Hub">
+            <div className="flex flex-col gap-4 text-xs font-medium">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-200">
+                    Your Personal Referral Link & Promoter Code
+                  </h4>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                    Share this link with cooperatives and partners. Anyone who joins or creates an organization using your link will be credited to you.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => setOpenReferralModal(true)}
+                  className="text-xs py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shrink-0 flex items-center gap-1.5"
+                >
+                  <HeartHandshake className="h-3.5 w-3.5" />
+                  View Referral Network ({userReferrals.length})
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5 p-3 rounded-xl border bg-slate-50 dark:bg-slate-900 dark:border-slate-800">
+                  <span className="text-[10px] font-bold uppercase text-gray-400">Promoter Code</span>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-sm text-gray-900 dark:text-white">
+                      {user?.referral_code || `REF-${(user?.full_name || "USER").substring(0, 4).toUpperCase().replace(/[^A-Z]/g, "")}-${(user?.id || "101").slice(-4).toUpperCase()}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const code = user?.referral_code || `REF-${(user?.full_name || "USER").substring(0, 4).toUpperCase().replace(/[^A-Z]/g, "")}-${(user?.id || "101").slice(-4).toUpperCase()}`;
+                        navigator.clipboard.writeText(code);
+                        addToast("Referral code copied!", "success");
+                      }}
+                      className="text-xs text-emerald-600 hover:underline font-bold flex items-center gap-1"
+                    >
+                      <Copy className="h-3 w-3" /> Copy
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5 p-3 rounded-xl border bg-slate-50 dark:bg-slate-900 dark:border-slate-800">
+                  <span className="text-[10px] font-bold uppercase text-gray-400">Total People & Orgs Credited</span>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-sm text-gray-900 dark:text-white">
+                      {userReferrals.length} Referees ({userReferrals.filter(r => r.referred_org_id).length} Orgs)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setOpenReferralModal(true)}
+                      className="text-xs text-emerald-600 hover:underline font-bold"
+                    >
+                      Open Hub →
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+
           {/* Change Password / Account Security */}
           <Card title={t("Account Security & Password")}>
             <form onSubmit={handleUpdateAccountPassword} className="flex flex-col gap-5 text-xs md:text-sm font-medium">
@@ -2454,6 +2585,22 @@ export const OrganizationSettingsPage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Organization Authenticity Verification Modal */}
+      {activeOrg && (
+        <OrganizationVerificationModal
+          open={openVerificationModal}
+          onClose={() => setOpenVerificationModal(false)}
+          org={activeOrg}
+          members={members || []}
+        />
+      )}
+
+      {/* Promoter & Referral Attribution Hub Modal */}
+      <ReferralCenterModal
+        open={openReferralModal}
+        onClose={() => setOpenReferralModal(false)}
+      />
     </div>
   );
 };

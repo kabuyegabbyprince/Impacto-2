@@ -15,7 +15,9 @@ import {
   ErrorReport,
   SubscriptionPayment,
   MemberTier,
-  PlatformSettings
+  PlatformSettings,
+  Referral,
+  Promoter
 } from "../types";
 
 function getLocal<T>(key: string, defaultValue: T): T {
@@ -40,8 +42,62 @@ export class MockDB {
   static getUsers(): User[] { return getLocal("impacto_mock_users", []); }
   static saveUsers(data: User[]) { saveLocal("impacto_mock_users", data); }
 
-  static getOrgs(): Organization[] { return getLocal("impacto_mock_orgs", []); }
+  static getOrgs(): Organization[] {
+    const list = getLocal("impacto_mock_orgs", []);
+    return list.map((org: any) => ({
+      ...org,
+      verification_status: org.verification_status || "unverified"
+    }));
+  }
   static saveOrgs(data: Organization[]) { saveLocal("impacto_mock_orgs", data); }
+
+  static getReferrals(): Referral[] {
+    return getLocal("impacto_mock_referrals", []);
+  }
+  static saveReferrals(data: Referral[]) { saveLocal("impacto_mock_referrals", data); }
+
+  static getPromoters(): Promoter[] {
+    const defaultPromoters: Promoter[] = [
+      {
+        id: "prom-1",
+        name: "Eric Kayonza",
+        code: "REF-ERIC-2026",
+        email: "eric.kayonza@promoters.rw",
+        phone: "+250 788 123 456",
+        status: "active",
+        notes: "Eastern Province Community Promoter",
+        commission_rate: 10,
+        created_at: "2026-01-15T08:00:00.000Z",
+        created_by: "Superadmin",
+      },
+      {
+        id: "prom-2",
+        name: "Sarah Mukamana",
+        code: "PROM-SARAH-94",
+        email: "sarah.m@impactpromoters.org",
+        phone: "+250 788 654 321",
+        status: "active",
+        notes: "Kigali Cooperatives & Youth Ambassador",
+        commission_rate: 12,
+        created_at: "2026-02-01T10:30:00.000Z",
+        created_by: "Superadmin",
+      },
+      {
+        id: "prom-3",
+        name: "Jean Paul Ndayisaba",
+        code: "REF-JP-KIVU",
+        email: "jp.ndayisaba@gmail.com",
+        phone: "+250 788 998 877",
+        status: "active",
+        notes: "Western Province Coffee & Agri Ambassador",
+        commission_rate: 10,
+        created_at: "2026-02-20T14:15:00.000Z",
+        created_by: "Superadmin",
+      },
+    ];
+    return getLocal("impacto_mock_promoters", defaultPromoters);
+  }
+  static savePromoters(data: Promoter[]) { saveLocal("impacto_mock_promoters", data); }
 
   static getMembers(): OrgMember[] { return getLocal("impacto_mock_members", []); }
   static saveMembers(data: OrgMember[]) { saveLocal("impacto_mock_members", data); }

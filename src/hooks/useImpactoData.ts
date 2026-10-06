@@ -43,6 +43,8 @@ import {
   MarketplaceProduct,
   MarketplaceLead,
   Asset,
+  Referral,
+  Promoter,
 } from "../types";
 import { recordSystemAuditEvent } from "../lib/auditLogger";
 
@@ -195,6 +197,22 @@ export function useOrganizations() {
             localSIP !== null
               ? JSON.parse(localSIP)
               : (org.show_impact_publicly ?? true),
+          verification_status:
+            (localStorage.getItem(`impacto_org_verification_status_${org.id}`) as any) ||
+            org.verification_status ||
+            "unverified",
+          verified_at:
+            localStorage.getItem(`impacto_org_verified_at_${org.id}`) ||
+            org.verified_at,
+          verified_by:
+            localStorage.getItem(`impacto_org_verified_by_${org.id}`) ||
+            org.verified_by,
+          verification_rejection_reason:
+            localStorage.getItem(`impacto_org_rejection_reason_${org.id}`) ||
+            org.verification_rejection_reason,
+          referred_by_code:
+            localStorage.getItem(`impacto_org_referred_by_code_${org.id}`) ||
+            org.referred_by_code,
         };
       });
     },
@@ -316,6 +334,22 @@ export function useOrganization(slug: string | undefined) {
             localSIP !== null
               ? JSON.parse(localSIP)
               : (org.show_impact_publicly ?? true),
+          verification_status:
+            (localStorage.getItem(`impacto_org_verification_status_${org.id}`) as any) ||
+            org.verification_status ||
+            "unverified",
+          verified_at:
+            localStorage.getItem(`impacto_org_verified_at_${org.id}`) ||
+            org.verified_at,
+          verified_by:
+            localStorage.getItem(`impacto_org_verified_by_${org.id}`) ||
+            org.verified_by,
+          verification_rejection_reason:
+            localStorage.getItem(`impacto_org_rejection_reason_${org.id}`) ||
+            org.verification_rejection_reason,
+          referred_by_code:
+            localStorage.getItem(`impacto_org_referred_by_code_${org.id}`) ||
+            org.referred_by_code,
         };
       }
       return org;
@@ -931,7 +965,15 @@ export function useUpdateMemberStatus() {
         const idx = members.findIndex((m) => m.id === id);
         if (idx !== -1) {
           if (status) members[idx].status = status;
-          if (role) members[idx].role = role;
+          if (role) {
+            members[idx].role = role;
+            if (role !== "member" && members[idx].verification_status !== "verified") {
+              // Role changed to officer - ask to submit documents without changing system org verification status
+              if (!members[idx].passport_photo_url || !members[idx].id_document_url) {
+                members[idx].verification_status = "unsubmitted";
+              }
+            }
+          }
           if (is_volunteer !== undefined)
             members[idx].is_volunteer = is_volunteer;
           MockDB.saveMembers(members);
@@ -5068,6 +5110,481 @@ export function useReviewIdentityVerification() {
         queryKey: ["identity_verifications", data.org_id],
       });
       queryClient.invalidateQueries({ queryKey: ["members", data.org_id] });
+    },
+  });
+}
+
+// -------------------------------------------------------------
+// Organization Authenticity & Key Role Verification Hooks
+// -------------------------------------------------------------
+export function useSubmitOfficerVerification() {
+  const queryClient = useQueryClient();
+  const auditMutation = useCreateAuditLog();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      member_id: string;
+      org_id: string;
+      user_id: string;
+      phone_number: string;
+      passport_photo_url: string;
+      id_document_url: string;
+      id_document_type: "national_id" | "passport";
+      id_document_number: string;
+    }) => {
+      const now = new Date().toISOString();
+
+      // 1. Update Officer Member record
+      const members = MockDB.getMembers();
+      const mIdx = members.findIndex((m) => m.id === payload.member_id);
+      if (mIdx !== -1) {
+        members[mIdx].phone_number = payload.phone_number;
+        members[mIdx].passport_photo_url = payload.passport_photo_url;
+        members[mIdx].id_document_url = payload.id_document_url;
+        members[mIdx].id_document_type = payload.id_document_type;
+        members[mIdx].id_document_number = payload.id_document_number;
+        members[mIdx].id_submitted_at = now;
+        members[mIdx].verification_status = "pending";
+        MockDB.saveMembers(members);
+      }
+
+      // 2. Persist phone to User profile as well
+      const users = MockDB.getUsers();
+      const uIdx = users.findIndex((u) => u.id === payload.user_id);
+      if (uIdx !== -1) {
+        users[uIdx].phone_number = payload.phone_number;
+        MockDB.saveUsers(users);
+      }
+
+      // 3. Check if all required officers (non-members) in this org have now submitted documents
+      const orgOfficers = members.filter(
+        (m) => m.org_id === payload.org_id && m.role !== "member"
+      );
+      const hasAdmin = orgOfficers.some(
+        (m) =>
+          (m.role === "org_admin" || m.role === "superadmin") &&
+          !!m.passport_photo_url &&
+          !!m.id_document_url
+      );
+      const hasAccountant = orgOfficers.some(
+        (m) =>
+          m.role === "accountant" &&
+          !!m.passport_photo_url &&
+          !!m.id_document_url
+      );
+      const allOfficersSubmitted =
+        orgOfficers.length >= 2 &&
+        hasAdmin &&
+        hasAccountant &&
+        orgOfficers.every(
+          (m) => !!m.passport_photo_url && !!m.id_document_url
+        );
+
+      const orgs = MockDB.getOrgs();
+      const oIdx = orgs.findIndex((o) => o.id === payload.org_id);
+      const isAlreadyVerified =
+        oIdx !== -1 && orgs[oIdx].verification_status === "verified";
+
+      if (allOfficersSubmitted && !isAlreadyVerified && oIdx !== -1) {
+        orgs[oIdx].verification_status = "pending_review";
+        orgs[oIdx].verification_submitted_at = now;
+        delete orgs[oIdx].verification_rejection_reason;
+        MockDB.saveOrgs(orgs);
+        localStorage.setItem(
+          `impacto_org_verification_status_${payload.org_id}`,
+          "pending_review"
+        );
+        localStorage.removeItem(
+          `impacto_org_rejection_reason_${payload.org_id}`
+        );
+      }
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase
+            .from("org_members")
+            .update({
+              passport_photo_url: payload.passport_photo_url,
+              id_document_url: payload.id_document_url,
+              id_document_type: payload.id_document_type,
+              id_document_number: payload.id_document_number,
+              phone_number: payload.phone_number,
+              verification_status: "pending",
+            })
+            .eq("id", payload.member_id);
+
+          if (allOfficersSubmitted && !isAlreadyVerified) {
+            await supabase
+              .from("organizations")
+              .update({
+                verification_status: "pending_review",
+                verification_submitted_at: now,
+              })
+              .eq("id", payload.org_id);
+          }
+        } catch (dbErr) {
+          console.warn("Supabase officer verification notice:", dbErr);
+        }
+      }
+
+      await auditMutation.mutateAsync({
+        org_id: payload.org_id,
+        performed_by: payload.user_id,
+        action: "submit_officer_verification",
+        action_label: `Officer submitted verification credentials (${payload.id_document_type.toUpperCase()} & Passport photo, Phone: ${payload.phone_number})`,
+        target_table: "org_members",
+        target_id: payload.member_id,
+      });
+
+      return { success: true, allOfficersSubmitted };
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      queryClient.invalidateQueries({ queryKey: ["members", vars.org_id] });
+    },
+  });
+}
+
+export function useSubmitOrgVerification() {
+  const queryClient = useQueryClient();
+  const auditMutation = useCreateAuditLog();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      org_id: string;
+      admin_member_id: string;
+      admin_phone_number?: string;
+      admin_passport_photo_url: string;
+      admin_id_document_url: string;
+      admin_id_document_type: "national_id" | "passport";
+      admin_id_document_number: string;
+      accountant_member_id: string;
+      accountant_phone_number?: string;
+      accountant_passport_photo_url: string;
+      accountant_id_document_url: string;
+      accountant_id_document_type: "national_id" | "passport";
+      accountant_id_document_number: string;
+      submitted_by_user_id: string;
+    }) => {
+      const now = new Date().toISOString();
+
+      // 1. Update Organization state
+      const orgs = MockDB.getOrgs();
+      const oIdx = orgs.findIndex((o) => o.id === payload.org_id);
+      if (oIdx !== -1) {
+        orgs[oIdx].verification_status = "pending_review";
+        orgs[oIdx].verification_submitted_at = now;
+        delete orgs[oIdx].verification_rejection_reason;
+        MockDB.saveOrgs(orgs);
+      }
+      localStorage.setItem(`impacto_org_verification_status_${payload.org_id}`, "pending_review");
+      localStorage.removeItem(`impacto_org_rejection_reason_${payload.org_id}`);
+
+      // 2. Update Admin Member Documents
+      const members = MockDB.getMembers();
+      const adminIdx = members.findIndex((m) => m.id === payload.admin_member_id);
+      if (adminIdx !== -1) {
+        if (payload.admin_phone_number) members[adminIdx].phone_number = payload.admin_phone_number;
+        members[adminIdx].passport_photo_url = payload.admin_passport_photo_url;
+        members[adminIdx].id_document_url = payload.admin_id_document_url;
+        members[adminIdx].id_document_type = payload.admin_id_document_type;
+        members[adminIdx].id_document_number = payload.admin_id_document_number;
+        members[adminIdx].id_submitted_at = now;
+        members[adminIdx].verification_status = "pending";
+      }
+
+      // 3. Update Accountant Member Documents
+      const accountantIdx = members.findIndex((m) => m.id === payload.accountant_member_id);
+      if (accountantIdx !== -1) {
+        if (payload.accountant_phone_number) members[accountantIdx].phone_number = payload.accountant_phone_number;
+        members[accountantIdx].passport_photo_url = payload.accountant_passport_photo_url;
+        members[accountantIdx].id_document_url = payload.accountant_id_document_url;
+        members[accountantIdx].id_document_type = payload.accountant_id_document_type;
+        members[accountantIdx].id_document_number = payload.accountant_id_document_number;
+        members[accountantIdx].id_submitted_at = now;
+        members[accountantIdx].verification_status = "pending";
+      }
+      MockDB.saveMembers(members);
+
+      // Supabase synchronization if configured
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("organizations").update({
+            verification_status: "pending_review",
+            verification_submitted_at: now,
+          }).eq("id", payload.org_id);
+
+          await supabase.from("org_members").update({
+            passport_photo_url: payload.admin_passport_photo_url,
+            id_document_url: payload.admin_id_document_url,
+            id_document_type: payload.admin_id_document_type,
+            id_document_number: payload.admin_id_document_number,
+            phone_number: payload.admin_phone_number,
+            verification_status: "pending",
+          }).eq("id", payload.admin_member_id);
+
+          await supabase.from("org_members").update({
+            passport_photo_url: payload.accountant_passport_photo_url,
+            id_document_url: payload.accountant_id_document_url,
+            id_document_type: payload.accountant_id_document_type,
+            id_document_number: payload.accountant_id_document_number,
+            phone_number: payload.accountant_phone_number,
+            verification_status: "pending",
+          }).eq("id", payload.accountant_member_id);
+        } catch (dbErr) {
+          console.warn("Supabase org verification update notice:", dbErr);
+        }
+      }
+
+      await auditMutation.mutateAsync({
+        org_id: payload.org_id,
+        performed_by: payload.submitted_by_user_id,
+        action: "submit_org_verification",
+        action_label: "Submitted Organization Authenticity dossier (Admin & Accountant ID verifications & Telephone numbers)",
+        target_table: "organizations",
+        target_id: payload.org_id,
+      });
+
+      return { success: true, org_id: payload.org_id };
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      queryClient.invalidateQueries({ queryKey: ["members", vars.org_id] });
+    },
+  });
+}
+
+export function useReviewOrgVerification() {
+  const queryClient = useQueryClient();
+  const auditMutation = useCreateAuditLog();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      org_id: string;
+      status: "verified" | "rejected";
+      reviewed_by: string;
+      rejection_reason?: string;
+    }) => {
+      const now = new Date().toISOString();
+
+      // 1. Update Organization
+      const orgs = MockDB.getOrgs();
+      const oIdx = orgs.findIndex((o) => o.id === payload.org_id);
+      if (oIdx !== -1) {
+        orgs[oIdx].verification_status = payload.status;
+        if (payload.status === "verified") {
+          orgs[oIdx].verified_at = now;
+          orgs[oIdx].verified_by = payload.reviewed_by;
+          delete orgs[oIdx].verification_rejection_reason;
+        } else {
+          orgs[oIdx].verification_rejection_reason = payload.rejection_reason || "Verification requirements not met.";
+        }
+        MockDB.saveOrgs(orgs);
+      }
+
+      localStorage.setItem(`impacto_org_verification_status_${payload.org_id}`, payload.status);
+      if (payload.status === "verified") {
+        localStorage.setItem(`impacto_org_verified_at_${payload.org_id}`, now);
+        localStorage.setItem(`impacto_org_verified_by_${payload.org_id}`, payload.reviewed_by);
+        localStorage.removeItem(`impacto_org_rejection_reason_${payload.org_id}`);
+      } else {
+        localStorage.setItem(`impacto_org_rejection_reason_${payload.org_id}`, payload.rejection_reason || "Verification rejected.");
+      }
+
+      // 2. Update Key Governance Members (Admin & Accountant)
+      const members = MockDB.getMembers();
+      members.forEach((m) => {
+        if (m.org_id === payload.org_id && (m.role === "org_admin" || m.role === "accountant" || m.role === "superadmin")) {
+          m.verification_status = payload.status === "verified" ? "verified" : "rejected";
+          if (payload.status === "verified") {
+            m.verified_at = now;
+            m.verified_by = payload.reviewed_by;
+          }
+        }
+      });
+      MockDB.saveMembers(members);
+
+      // 3. Mark Referral converted as verified if applicable
+      if (payload.status === "verified") {
+        const refs = MockDB.getReferrals();
+        let changed = false;
+        refs.forEach((r) => {
+          if (r.referred_org_id === payload.org_id) {
+            r.status = "verified";
+            changed = true;
+          }
+        });
+        if (changed) MockDB.saveReferrals(refs);
+      }
+
+      // Supabase synchronization
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from("organizations").update({
+            verification_status: payload.status,
+            verified_at: payload.status === "verified" ? now : null,
+            verified_by: payload.status === "verified" ? payload.reviewed_by : null,
+            verification_rejection_reason: payload.status === "rejected" ? payload.rejection_reason : null,
+          }).eq("id", payload.org_id);
+        } catch (dbErr) {
+          console.warn("Supabase review notice:", dbErr);
+        }
+      }
+
+      await auditMutation.mutateAsync({
+        org_id: payload.org_id,
+        performed_by: payload.reviewed_by,
+        action: "review_org_verification",
+        action_label: `Organization authenticity ${payload.status.toUpperCase()} by platform reviewer`,
+        target_table: "organizations",
+        target_id: payload.org_id,
+      });
+
+      return { success: true, org_id: payload.org_id, status: payload.status };
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      queryClient.invalidateQueries({ queryKey: ["members", vars.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["referrals"] });
+    },
+  });
+}
+
+// -------------------------------------------------------------
+// Referral & Promoter Tracking Hooks
+// -------------------------------------------------------------
+export function useReferrals(referrerUserId?: string) {
+  return useQuery({
+    queryKey: ["referrals", referrerUserId || "all"],
+    queryFn: async () => {
+      await delay(100);
+      const list = MockDB.getReferrals();
+      if (referrerUserId) {
+        return list.filter((r) => r.referrer_user_id === referrerUserId || r.parent_referrer_id === referrerUserId);
+      }
+      return list;
+    },
+  });
+}
+
+export function useCreateReferral() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Omit<Referral, "id" | "created_at">) => {
+      await delay(150);
+      const list = MockDB.getReferrals();
+      const newRef: Referral = {
+        id: "ref-" + Date.now() + "-" + Math.random().toString(36).substr(2, 6),
+        ...payload,
+        created_at: new Date().toISOString(),
+      };
+      list.unshift(newRef);
+      MockDB.saveReferrals(list);
+      return newRef;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["referrals"] });
+    },
+  });
+}
+
+export function usePromoters() {
+  return useQuery({
+    queryKey: ["promoters"],
+    queryFn: async () => {
+      await delay(100);
+      return MockDB.getPromoters();
+    },
+  });
+}
+
+export function useCreatePromoter() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      name: string;
+      code: string;
+      email?: string;
+      phone?: string;
+      notes?: string;
+      commission_rate?: number;
+      created_by?: string;
+    }) => {
+      await delay(150);
+      const list = MockDB.getPromoters();
+      const cleanCode = payload.code.trim().toUpperCase();
+
+      // Check for code uniqueness
+      const existing = list.find((p) => p.code.toUpperCase() === cleanCode);
+      if (existing) {
+        throw new Error(`Promoter referral code "${cleanCode}" already exists. Please choose a unique code.`);
+      }
+
+      const newProm: Promoter = {
+        id: "prom-" + Date.now() + "-" + Math.random().toString(36).substr(2, 6),
+        name: payload.name.trim(),
+        code: cleanCode,
+        email: payload.email?.trim() || undefined,
+        phone: payload.phone?.trim() || undefined,
+        status: "active",
+        notes: payload.notes?.trim() || undefined,
+        commission_rate: payload.commission_rate ?? 10,
+        created_at: new Date().toISOString(),
+        created_by: payload.created_by || "Superadmin",
+      };
+
+      list.unshift(newProm);
+      MockDB.savePromoters(list);
+      return newProm;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["promoters"] });
+      queryClient.invalidateQueries({ queryKey: ["referrals"] });
+    },
+  });
+}
+
+export function useUpdatePromoter() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...updates
+    }: Partial<Promoter> & { id: string }) => {
+      await delay(150);
+      const list = MockDB.getPromoters();
+      const idx = list.findIndex((p) => p.id === id);
+      if (idx === -1) throw new Error("Promoter not found.");
+
+      if (updates.code) {
+        const cleanCode = updates.code.trim().toUpperCase();
+        const existing = list.find((p) => p.id !== id && p.code.toUpperCase() === cleanCode);
+        if (existing) throw new Error(`Code "${cleanCode}" is already in use by another promoter.`);
+        updates.code = cleanCode;
+      }
+
+      list[idx] = { ...list[idx], ...updates };
+      MockDB.savePromoters(list);
+      return list[idx];
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["promoters"] });
+    },
+  });
+}
+
+export function useDeletePromoter() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await delay(150);
+      const list = MockDB.getPromoters();
+      const filtered = list.filter((p) => p.id !== id);
+      MockDB.savePromoters(filtered);
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["promoters"] });
     },
   });
 }

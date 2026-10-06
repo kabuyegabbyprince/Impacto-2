@@ -1,72 +1,7 @@
 import { create } from "zustand";
+import { Organization, OrgMember } from "../types";
 
-export interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  tagline: string;
-  description: string;
-  mission?: string;
-  vision?: string;
-  logo_url?: string;
-  cover_url?: string;
-  primary_color: string;
-  secondary_color: string;
-  language: "en" | "fr" | "rw";
-  auto_confirm_members: boolean;
-  donations_enabled: boolean;
-  donation_mtn_number?: string;
-  donation_airtel_number?: string;
-  donation_account_name?: string;
-  donation_description?: string;
-  dues_mtn_number?: string;
-  dues_airtel_number?: string;
-  dues_account_name?: string;
-  momo_merchant_code?: string;
-  subscription_status: "trial" | "active" | "expired";
-  subscription_ends_at?: string;
-  subscription_tier?: "free" | "starter" | "growth" | "pro" | "enterprise" | "trial";
-  active_packages?: string[];
-  packages_data?: Record<string, { expires_at: string; purchased_at: string }>;
-  org_category: string;
-  created_at: string;
-  // Custom public portal settings
-  location_name?: string;
-  contact_us?: string;
-  gallery_urls?: string[];
-  // Members dashboard settings
-  dashboard_theme?: "light" | "dark" | "custom";
-  dashboard_logo?: string;
-  is_public_directory?: boolean;
-  allow_public_joining?: boolean;
-  public_page_enabled?: boolean;
-  show_goals_publicly?: boolean;
-  show_impact_publicly?: boolean;
-  fee_notification?: string;
-  marketplace_enabled?: boolean;
-  // Exit Survey & Offboarding settings
-  exit_survey_enabled?: boolean;
-  exit_survey_title?: string;
-  exit_survey_description?: string;
-  exit_survey_questions?: Array<{
-    id: string;
-    question: string;
-    type: "text" | "rating" | "choice" | "boolean";
-    options?: string[];
-    required?: boolean;
-  }>;
-}
-
-export interface OrgMember {
-  id: string;
-  org_id: string;
-  user_id: string;
-  role: "superadmin" | "org_admin" | "manager" | "accountant" | "member";
-  status: "pending" | "active" | "suspended" | "resigned" | "rejected";
-  member_number?: string;
-  tier_id?: string;
-  joined_at: string;
-}
+export type { Organization, OrgMember };
 
 export interface OrgState {
   activeOrg: Organization | null;

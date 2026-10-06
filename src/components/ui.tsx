@@ -69,6 +69,7 @@ export const Button: React.FC<ButtonProps> = ({
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  helperText?: React.ReactNode;
   prefixIcon?: React.ReactNode;
   suffixIcon?: React.ReactNode;
 }
@@ -221,6 +222,7 @@ export const ImageUploadInput: React.FC<{
 export const Input: React.FC<InputProps> = ({
   label,
   error,
+  helperText,
   prefixIcon,
   suffixIcon,
   className = "",
@@ -297,9 +299,11 @@ export const Input: React.FC<InputProps> = ({
           </div>
         ) : null}
       </div>
-      {error && (
+      {error ? (
         <p className="text-xs text-red-500 mt-0.5">{error}</p>
-      )}
+      ) : helperText ? (
+        <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 leading-normal">{helperText}</p>
+      ) : null}
     </div>
   );
 };

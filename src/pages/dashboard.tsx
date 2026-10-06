@@ -74,11 +74,14 @@ import {
   Share2,
   UserPlus,
   ArrowLeft,
-  Eye
+  Eye,
+  Phone,
+  Bell
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
 import { useCurrencyStore } from "../store/currencyStore";
+import { OrganizationVerificationModal } from "../components/OrganizationVerificationModal";
 import { Goal, Event as ImpactEvent, NewsPost, Meeting, ChatChannel, Document } from "../types";
 import {
   useEvents,
@@ -351,6 +354,28 @@ export const DashboardHome: React.FC = () => {
   const { data: goals } = useGoals(activeOrg?.id);
   const { data: news } = useNews(activeOrg?.id);
   const { data: members } = useMembers(activeOrg?.id);
+  const [openOrgVerifyModal, setOpenOrgVerifyModal] = useState(false);
+  const [remindedOfficers, setRemindedOfficers] = useState<Record<string, boolean>>({});
+
+  const isRegularMember = activeMember?.role === "member";
+  const isOrgAdmin = activeMember?.role === "org_admin" || activeMember?.role === "superadmin" || user?.is_superadmin;
+
+  const handleRemindOfficer = (officer: any) => {
+    const name = officer.user?.full_name || (officer as any).name || "Officer";
+    const phone = officer.phone_number || officer.user?.phone_number || "on record";
+    setRemindedOfficers((prev) => ({ ...prev, [officer.id]: true }));
+    addToast(`Verification document reminder alert dispatched to ${name} (${phone})!`, "success");
+  };
+
+  const handleRemindAllOfficers = (pendingOfficers: any[]) => {
+    const newMap = { ...remindedOfficers };
+    pendingOfficers.forEach((o) => {
+      newMap[o.id] = true;
+    });
+    setRemindedOfficers(newMap);
+    addToast(`Dispatched batch verification reminders to ${pendingOfficers.length} pending officers!`, "success");
+  };
+
   const { data: fees } = useMemberFees(activeOrg?.id);
   const { data: meetings, refetch: refetchMeetings } = useMeetings(activeOrg?.id);
   const checkInMutation = useCheckIn();
@@ -860,6 +885,213 @@ export const DashboardHome: React.FC = () => {
         </div>
       )}
 
+      {/* Organization Authenticity Status & Verification Card */}
+      {activeOrg && (
+        <div
+          className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs transition ${
+            activeOrg.verification_status === "verified"
+              ? "bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60"
+              : activeOrg.verification_status === "pending_review"
+              ? "bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60"
+              : "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${
+                activeOrg.verification_status === "verified"
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+                  : activeOrg.verification_status === "pending_review"
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+                  : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+              }`}
+            >
+              {activeOrg.verification_status === "verified" ? (
+                <CheckCircle2 className="h-5 w-5 fill-emerald-500 text-white dark:fill-emerald-400 dark:text-slate-900" />
+              ) : activeOrg.verification_status === "pending_review" ? (
+                <Clock className="h-5 w-5 animate-pulse text-amber-600 dark:text-amber-400" />
+              ) : (
+                <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              )}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
+                  Organization Status:
+                </span>
+                {activeOrg.verification_status === "verified" ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 flex items-center gap-1">
+                    <CheckCircle2 className="h-2.5 w-2.5" /> VERIFIED GREEN TICK
+                  </span>
+                ) : activeOrg.verification_status === "pending_review" ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 flex items-center gap-1">
+                    <Clock className="h-2.5 w-2.5" /> AWAITING SYSTEM AUDIT
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300">
+                    UNVERIFIED
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 max-w-2xl">
+                {activeOrg.verification_status === "verified"
+                  ? `Official Green Tick active and published. Authenticity verified by platform audit (${activeOrg.verified_by || "Platform Auditor"}).`
+                  : activeOrg.verification_status === "pending_review"
+                  ? "All required leadership documents submitted. Awaiting system verification by Super Admin."
+                  : isRegularMember
+                  ? "This organization is currently unverified. Only organization administrators and governance officers are required to submit verification documents."
+                  : "Action Required: As a leadership officer, please independently submit your passport photo, National ID/Passport, and telephone number to obtain the Green Tick."}
+              </p>
+            </div>
+          </div>
+
+          {/* Regular members only see the status card with no pop-up button. Officers & Admins get the modal action */}
+          {!isRegularMember && (
+            <Button
+              size="sm"
+              onClick={() => setOpenOrgVerifyModal(true)}
+              className={`text-xs font-bold py-2 px-3.5 shrink-0 self-start sm:self-center ${
+                activeOrg.verification_status === "verified"
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : activeOrg.verification_status === "pending_review"
+                  ? "bg-amber-600 hover:bg-amber-700 text-white"
+                  : "bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white"
+              }`}
+            >
+              {activeOrg.verification_status === "verified"
+                ? "View Verification Dossier"
+                : activeOrg.verification_status === "pending_review"
+                ? "Check Audit Status"
+                : isOrgAdmin
+                ? "Manage Verification & Dossier →"
+                : "Submit My Verification Documents →"}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Admin Exclusive: Leadership Officers Verification Progress & Reminders Checklist */}
+      {isOrgAdmin && activeOrg && activeOrg.verification_status !== "verified" && (() => {
+        const officerMembers = (members || []).filter((m) => m.role !== "member");
+        const missingOfficers = officerMembers.filter((m) => !m.passport_photo_url || !m.id_document_url);
+        const submittedOfficers = officerMembers.filter((m) => !!m.passport_photo_url && !!m.id_document_url);
+        const requiredTotal = Math.max(officerMembers.length, 2);
+        const progressPercent = Math.min(100, Math.round((submittedOfficers.length / requiredTotal) * 100));
+
+        return (
+          <div className="p-4 sm:p-5 rounded-2xl border bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-800/60 shadow-xs flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3.5 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Bell className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    Leadership Verification Roster & Reminders
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-bold">
+                      Admin Exclusive View
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Missing documents from any leadership officer prevent the organization from getting verified. Remind pending officers below.
+                  </p>
+                </div>
+              </div>
+
+              {missingOfficers.length > 0 && (
+                <Button
+                  size="sm"
+                  onClick={() => handleRemindAllOfficers(missingOfficers)}
+                  className="text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 flex items-center gap-1.5 shrink-0 self-start sm:self-center"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Remind All ({missingOfficers.length} Pending)
+                </Button>
+              )}
+            </div>
+
+            {/* Progress Bar */}
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 flex flex-col gap-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5 text-emerald-600" /> Required Officers Submission Progress:
+                </span>
+                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                  {submittedOfficers.length} / {requiredTotal} Officers Completed ({progressPercent}%)
+                </span>
+              </div>
+              <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-emerald-500 h-full transition-all duration-500 rounded-full"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </div>
+
+            {/* List of Officers */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {officerMembers.map((officer) => {
+                const hasDocs = !!officer.passport_photo_url && !!officer.id_document_url;
+                const isReminded = remindedOfficers[officer.id];
+                return (
+                  <div
+                    key={officer.id}
+                    className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
+                      hasDocs
+                        ? "bg-emerald-50/40 dark:bg-emerald-950/10 border-emerald-200/60 dark:border-emerald-800/40"
+                        : "bg-amber-50/40 dark:bg-amber-950/10 border-amber-200/70 dark:border-amber-800/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                          hasDocs
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
+                            : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                        }`}
+                      >
+                        {officer.role.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                            {officer.user?.full_name || (officer as any).name || "Leadership Officer"}
+                          </span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 uppercase">
+                            {officer.role}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                          <Phone className="h-3 w-3 text-emerald-600 shrink-0" />
+                          {officer.phone_number || officer.user?.phone_number || "No telephone number"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 flex items-center gap-2">
+                      {hasDocs ? (
+                        <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1 bg-emerald-100/70 dark:bg-emerald-950 px-2 py-0.5 rounded-full">
+                          <CheckCircle2 className="h-3 w-3" /> Submitted
+                        </span>
+                      ) : (
+                        <Button
+                          size="xs"
+                          onClick={() => handleRemindOfficer(officer)}
+                          className="text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 flex items-center gap-1 py-1 px-2.5 shadow-xs cursor-pointer"
+                        >
+                          <Send className="h-3 w-3" />
+                          {isReminded ? "Reminded ✓" : "Remind"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ========================================== */}
       {/* 0. PRIMARY WORKSPACE METRICS ROW */}
       {/* ========================================== */}
@@ -1360,6 +1592,16 @@ export const DashboardHome: React.FC = () => {
           </Button>
         </form>
       </Modal>
+
+      {/* Organization Authenticity Verification Modal */}
+      {activeOrg && (
+        <OrganizationVerificationModal
+          open={openOrgVerifyModal}
+          onClose={() => setOpenOrgVerifyModal(false)}
+          org={activeOrg}
+          members={members || []}
+        />
+      )}
     </div>
   );
 };
