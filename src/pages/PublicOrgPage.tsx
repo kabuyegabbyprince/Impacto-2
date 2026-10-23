@@ -16,6 +16,10 @@ import {
   FileText,
   CheckCircle2,
   ChevronRight,
+  ChevronLeft,
+  Plus,
+  Trash2,
+  Edit2,
   ExternalLink,
   Download,
   Share2,
@@ -168,13 +172,117 @@ export const PublicOrgPage: React.FC = () => {
 
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"about" | "goals" | "impact" | "news" | "marketplace">("about");
+  const [activeTab, setActiveTab] = useState<"about" | "goals" | "impact" | "news" | "marketplace" | "calendar">("about");
 
   // Related data
   const [goals, setGoals] = useState<Goal[]>([]);
   const [news, setNews] = useState<NewsPost[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [membersCount, setMembersCount] = useState<number>(0);
+
+  // Facilities & Calendar state
+  const [spaces, setSpaces] = useState<any[]>([]);
+  const [spaceRequests, setSpaceRequests] = useState<any[]>([]);
+  const [openReserveModal, setOpenReserveModal] = useState(false);
+  const [reserveSpaceTarget, setReserveSpaceTarget] = useState<any>(null);
+  const [resTitle, setResTitle] = useState("");
+  const [resDate, setResDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [resStartTime, setResStartTime] = useState("09:00");
+  const [resEndTime, setResEndTime] = useState("13:00");
+  const [resOrganizer, setResOrganizer] = useState("");
+  const [resPhone, setResPhone] = useState("");
+  const [resAttendees, setResAttendees] = useState("20");
+  const [resNotes, setResNotes] = useState("");
+
+  // Interactive Calendar Month Navigation State
+  const [calMonthDate, setCalMonthDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+
+  const handlePrevCalMonth = () => {
+    setCalMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+
+  const handleNextCalMonth = () => {
+    setCalMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
+  const handleTodayCalMonth = () => {
+    const now = new Date();
+    setCalMonthDate(new Date(now.getFullYear(), now.getMonth(), 1));
+  };
+
+  // Admin Room Management Modal State
+  const [openManageRoomsModal, setOpenManageRoomsModal] = useState(false);
+  const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
+  const [roomName, setRoomName] = useState("");
+  const [roomType, setRoomType] = useState("Hall / Auditorium");
+  const [roomCapacity, setRoomCapacity] = useState("100");
+  const [roomSizeSqm, setRoomSizeSqm] = useState("150");
+  const [roomRate, setRoomRate] = useState("10000");
+  const [roomAmenities, setRoomAmenities] = useState("WiFi, HD Projector, Sound System, AC");
+
+  const isUserOrgAdmin = user?.is_superadmin || (org && user && (org as any).created_by === user.id);
+
+  const handleSaveRoom = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!roomName.trim()) {
+      addToast("Room name is required.", "error");
+      return;
+    }
+
+    const amenitiesList = roomAmenities.split(",").map(s => s.trim()).filter(Boolean);
+    let updatedSpaces = [...spaces];
+
+    if (editingRoomId) {
+      updatedSpaces = updatedSpaces.map(s =>
+        s.id === editingRoomId
+          ? {
+              ...s,
+              name: roomName.trim(),
+              type: roomType.trim(),
+              capacity: Number(roomCapacity) || 50,
+              size_sqm: Number(roomSizeSqm) || 100,
+              hourly_rate: Number(roomRate) || 0,
+              amenities: amenitiesList
+            }
+          : s
+      );
+      addToast("Facility room details updated!", "success");
+    } else {
+      const newRoom = {
+        id: `space-${Date.now()}`,
+        org_id: org?.id,
+        name: roomName.trim(),
+        type: roomType.trim(),
+        capacity: Number(roomCapacity) || 50,
+        size_sqm: Number(roomSizeSqm) || 100,
+        hourly_rate: Number(roomRate) || 0,
+        amenities: amenitiesList
+      };
+      updatedSpaces.push(newRoom);
+      addToast("New facility room registered!", "success");
+    }
+
+    setSpaces(updatedSpaces);
+    if (org?.id) {
+      localStorage.setItem(`org_spaces_${org.id}`, JSON.stringify(updatedSpaces));
+    }
+
+    setRoomName("");
+    setEditingRoomId(null);
+    setOpenManageRoomsModal(false);
+  };
+
+  const handleDeleteRoom = (roomId: string) => {
+    const updated = spaces.filter(s => s.id !== roomId);
+    setSpaces(updated);
+    if (org?.id) {
+      localStorage.setItem(`org_spaces_${org.id}`, JSON.stringify(updated));
+    }
+    addToast("Facility room deleted.", "info");
+  };
 
   // Gallery Lightbox Modal
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -194,6 +302,42 @@ export const PublicOrgPage: React.FC = () => {
   const [inquiryMsg, setInquiryMsg] = useState("");
   const [inquirySubmitting, setInquirySubmitting] = useState(false);
   const [inquirySuccess, setInquirySuccess] = useState(false);
+
+  const handleSpaceReservationSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reserveSpaceTarget || !resTitle.trim() || !resOrganizer.trim() || !resPhone.trim()) {
+      addToast("Please fill in all required fields for your space reservation request.", "error");
+      return;
+    }
+
+    const newReq = {
+      id: `req-${Date.now()}`,
+      space_id: reserveSpaceTarget.id,
+      space_name: reserveSpaceTarget.name,
+      title: resTitle.trim(),
+      date: resDate,
+      start_time: resStartTime,
+      end_time: resEndTime,
+      reserved_by: resOrganizer.trim(),
+      contact_phone: resPhone.trim(),
+      attendees_count: Number(resAttendees) || 10,
+      notes: resNotes.trim(),
+      status: "pending",
+      created_at: new Date().toISOString()
+    };
+
+    const updated = [newReq, ...spaceRequests];
+    setSpaceRequests(updated);
+    if (org?.id) {
+      localStorage.setItem(`org_space_requests_${org.id}`, JSON.stringify(updated));
+    }
+    setOpenReserveModal(false);
+    setResTitle("");
+    setResOrganizer("");
+    setResPhone("");
+    setResNotes("");
+    addToast("Space reservation request sent successfully to cooperative administration!", "success");
+  };
 
   const pageDossierRef = useRef<HTMLDivElement>(null);
 
@@ -287,6 +431,21 @@ export const PublicOrgPage: React.FC = () => {
             const mMembers = MockDB.getMembers().filter((m) => m.org_id === matchedOrg?.id && m.status === "active");
             setMembersCount(mMembers.length || 18);
           }
+
+          try {
+            const rawSpaces = localStorage.getItem(`org_spaces_${matchedOrg.id}`);
+            if (rawSpaces) {
+              setSpaces(JSON.parse(rawSpaces));
+            } else {
+              setSpaces([
+                { id: "space-1", name: "Main Community Conference Hall", type: "Auditorium / Hall", size_sqm: 220, capacity: 180, hourly_rate: 15000, amenities: ["WiFi", "HD Projector", "PA Sound System", "Air Conditioning"] },
+                { id: "space-2", name: "Executive Boardroom", type: "Boardroom", size_sqm: 45, capacity: 22, hourly_rate: 8000, amenities: ["Smart TV Screen", "Video Conf Camera", "Whiteboard", "AC"] },
+                { id: "space-3", name: "Digital Training & Coworking Lab", type: "Training Lab", size_sqm: 85, capacity: 40, hourly_rate: 10000, amenities: ["Power Outlets on Desks", "Fast Fiber Internet"] }
+              ]);
+            }
+            const rawReqs = localStorage.getItem(`org_space_requests_${matchedOrg.id}`);
+            if (rawReqs) setSpaceRequests(JSON.parse(rawReqs));
+          } catch (e) {}
         }
       } catch (err) {
         console.error("Failed to load public organization:", err);
@@ -676,6 +835,20 @@ export const PublicOrgPage: React.FC = () => {
                 <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600 rounded-full" />
               )}
             </button>
+
+            <button
+              onClick={() => setActiveTab("calendar")}
+              className={`pb-3 text-sm font-bold transition-all relative ${
+                activeTab === "calendar"
+                  ? "text-emerald-700 dark:text-emerald-400 font-extrabold"
+                  : "text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 font-medium"
+              }`}
+            >
+              Facilities & Calendar
+              {activeTab === "calendar" && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600 rounded-full" />
+              )}
+            </button>
           </div>
         </div>
 
@@ -1042,6 +1215,217 @@ export const PublicOrgPage: React.FC = () => {
                   )}
                 </div>
               )}
+
+              {/* TAB 6: FACILITIES & CALENDAR */}
+              {activeTab === "calendar" && org.show_calendar_publicly !== false && (
+                <div className="bg-white dark:bg-slate-900 border border-gray-200/80 dark:border-slate-800 rounded-2xl p-6 sm:p-7 shadow-xs flex flex-col gap-6">
+                  <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
+                    <div>
+                      <h2 className="text-base sm:text-lg font-extrabold font-display text-gray-950 dark:text-white">
+                        Facility Spaces & 24h Lending Calendar
+                      </h2>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Inspect room dimensions, sizes, estimated capacity, and 24-hour occupied times set by the organization. Click any open date or room to send a reservation request.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* INTERACTIVE MONTH OCCUPANCY CALENDAR */}
+                  <div className="flex flex-col gap-4">
+                    {/* Month Navigation Header */}
+                    {(() => {
+                      const calYear = calMonthDate.getFullYear();
+                      const calMonth = calMonthDate.getMonth();
+                      const monthName = calMonthDate.toLocaleString("en-US", { month: "long", year: "numeric" });
+                      const daysInCalMonth = new Date(calYear, calMonth + 1, 0).getDate();
+                      const firstDayOfWeek = new Date(calYear, calMonth, 1).getDay();
+                      const now = new Date();
+
+                      return (
+                        <>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100 dark:border-slate-800">
+                            <div className="flex items-center gap-3">
+                              <div className="h-9 w-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-3xs">
+                                <Calendar className="h-5 w-5" />
+                              </div>
+                              <div>
+                                <h3 className="text-base font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+                                  <span>{monthName}</span>
+                                </h3>
+                                <p className="text-[11px] text-gray-500 font-mono">
+                                  Click any date cell to select room & request 24h space lending
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Controls Bar */}
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={handleTodayCalMonth}
+                                className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200 text-xs font-bold hover:bg-gray-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-3xs"
+                              >
+                                Today
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handlePrevCalMonth}
+                                className="p-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-3xs"
+                                title="Previous Month"
+                              >
+                                <ChevronLeft className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleNextCalMonth}
+                                className="p-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-3xs"
+                                title="Next Month"
+                              >
+                                <ChevronRight className="h-4 w-4" />
+                              </button>
+
+                              {isUserOrgAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingRoomId(null);
+                                    setRoomName("");
+                                    setRoomType("Conference Hall");
+                                    setRoomCapacity("100");
+                                    setRoomSizeSqm("150");
+                                    setRoomRate("10000");
+                                    setRoomAmenities("WiFi, HD Projector, Sound System, AC");
+                                    setOpenManageRoomsModal(true);
+                                  }}
+                                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition cursor-pointer shadow-xs flex items-center gap-1.5 ml-1"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                  <span>Manage Rooms</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Month Grid */}
+                          <div className="p-4 rounded-2xl bg-gray-50 dark:bg-slate-800/40 border border-gray-200/60 dark:border-slate-700/80">
+                            <div className="grid grid-cols-7 gap-1 text-center font-bold text-[10px] uppercase text-gray-400 mb-2 select-none">
+                              <span className="text-rose-500">Sun</span>
+                              <span>Mon</span>
+                              <span>Tue</span>
+                              <span>Wed</span>
+                              <span>Thu</span>
+                              <span>Fri</span>
+                              <span className="text-emerald-600">Sat</span>
+                            </div>
+
+                            <div className="grid grid-cols-7 gap-1.5 select-none">
+                              {/* Empty leading cells */}
+                              {Array.from({ length: firstDayOfWeek }).map((_, idx) => (
+                                <div
+                                  key={`blank-${idx}`}
+                                  className="min-h-[64px] p-2 rounded-xl bg-gray-100/40 dark:bg-slate-800/20 border border-transparent opacity-30"
+                                />
+                              ))}
+
+                              {/* Days in Month */}
+                              {Array.from({ length: daysInCalMonth }).map((_, i) => {
+                                const dayNum = i + 1;
+                                const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+                                const isToday = now.getFullYear() === calYear && now.getMonth() === calMonth && now.getDate() === dayNum;
+
+                                const hasConfirmedBooking = spaceRequests.some(r => r.date === dateStr && (r.status === "confirmed" || r.status === "approved"));
+                                const hasPendingRequest = spaceRequests.some(r => r.date === dateStr && r.status === "pending");
+
+                                return (
+                                  <div
+                                    key={dayNum}
+                                    onClick={() => {
+                                      setResDate(dateStr);
+                                      if (spaces.length > 0) setReserveSpaceTarget(spaces[0]);
+                                      setOpenReserveModal(true);
+                                    }}
+                                    className={`min-h-[68px] p-2 rounded-xl border transition-all cursor-pointer flex flex-col justify-between hover:scale-[1.02] ${
+                                      isToday
+                                        ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs"
+                                        : hasConfirmedBooking
+                                        ? "bg-amber-50/80 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800"
+                                        : "bg-white dark:bg-slate-900 border-gray-200/80 dark:border-slate-800 hover:border-emerald-400"
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className={`text-xs font-bold ${isToday ? "text-emerald-700 dark:text-emerald-300 font-extrabold" : "text-gray-800 dark:text-white"}`}>
+                                        {dayNum}
+                                      </span>
+                                      {isToday && (
+                                        <span className="text-[9px] font-mono px-1 rounded bg-emerald-600 text-white font-bold">
+                                          Today
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="flex flex-col gap-0.5 mt-1">
+                                      {hasConfirmedBooking && (
+                                        <span className="text-[9px] font-mono font-bold bg-amber-100 text-amber-900 px-1 py-0.2 rounded truncate">
+                                          Occupied
+                                        </span>
+                                      )}
+                                      {hasPendingRequest && (
+                                        <span className="text-[9px] font-mono font-bold bg-sky-100 text-sky-900 px-1 py-0.2 rounded truncate">
+                                          Requested
+                                        </span>
+                                      )}
+                                      {!hasConfirmedBooking && !hasPendingRequest && (
+                                        <span className="text-[9px] text-gray-400 group-hover:text-emerald-600 font-mono">
+                                          Available
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* SUBMITTED RESERVATION REQUESTS RECORD */}
+                  {spaceRequests.length > 0 && (
+                    <div className="mt-4 pt-5 border-t border-gray-100 dark:border-slate-800">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono mb-3">
+                        Submitted Space Reservation Requests ({spaceRequests.length}):
+                      </h3>
+                      <div className="flex flex-col gap-2.5">
+                        {spaceRequests.map((req) => (
+                          <div key={req.id} className="p-4 bg-slate-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                            <div className="flex flex-col gap-1 min-w-0">
+                              <span className="font-extrabold text-gray-900 dark:text-white text-sm truncate">
+                                {req.title} <span className="text-emerald-600 font-normal">({req.space_name})</span>
+                              </span>
+                              <div className="flex flex-wrap items-center gap-3 text-gray-500 font-mono text-[11px]">
+                                <span>📅 {req.date} ({req.start_time} - {req.end_time})</span>
+                                <span>👤 Org: {req.reserved_by}</span>
+                                <span>📞 {req.contact_phone}</span>
+                                {req.attendees_count ? <span>👥 {req.attendees_count} Attendees</span> : null}
+                              </div>
+                            </div>
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-mono font-black uppercase shrink-0 ${
+                              req.status === "confirmed" || req.status === "approved"
+                                ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                                : req.status === "rejected"
+                                ? "bg-rose-100 text-rose-900 border border-rose-300"
+                                : "bg-amber-100 text-amber-900 border border-amber-300"
+                            }`}>
+                              {req.status === "pending" ? "Pending Approval" : req.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* ==========================================
@@ -1080,7 +1464,7 @@ export const PublicOrgPage: React.FC = () => {
                       className="font-mono text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
                       title="Click to copy public portal link"
                     >
-                      impact-o.app/@{org.slug}
+                      impacto.rw/@{org.slug}
                     </span>
                   </div>
                 </div>
@@ -1437,6 +1821,322 @@ export const PublicOrgPage: React.FC = () => {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* SPACE RESERVATION REQUEST MODAL */}
+      {openReserveModal && reserveSpaceTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl w-full max-w-lg p-6 sm:p-7 shadow-2xl flex flex-col gap-4 text-gray-900 dark:text-white max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-slate-800">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                    {reserveSpaceTarget.type || "Facility Space"}
+                  </span>
+                  <span className="text-[11px] font-mono font-bold text-gray-500">
+                    {reserveSpaceTarget.capacity ? `${reserveSpaceTarget.capacity} Persons` : ""} {reserveSpaceTarget.size_sqm ? `• ${reserveSpaceTarget.size_sqm} m²` : ""}
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-extrabold font-display truncate">
+                  Request Reservation: {reserveSpaceTarget.name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpenReserveModal(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-white transition shrink-0 ml-2"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSpaceReservationSubmit} className="flex flex-col gap-3.5 text-xs">
+              {/* Select Target Room */}
+              {spaces.length > 0 && (
+                <div>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Target Facility Room *</label>
+                  <select
+                    value={reserveSpaceTarget.id}
+                    onChange={(e) => {
+                      const sp = spaces.find(s => s.id === e.target.value);
+                      if (sp) setReserveSpaceTarget(sp);
+                    }}
+                    className="w-full text-xs rounded-xl border bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3 py-2.5 outline-none font-medium"
+                  >
+                    {spaces.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.capacity} Persons capacity, {s.size_sqm || "Standard"} m²)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Event / Meeting Purpose Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={resTitle}
+                  onChange={(e) => setResTitle(e.target.value)}
+                  placeholder="e.g. Cooperative General Assembly / Training Workshop"
+                  className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Reservation Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={resDate}
+                    onChange={(e) => setResDate(e.target.value)}
+                    className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Start Time (24h) *</label>
+                  <input
+                    type="time"
+                    required
+                    value={resStartTime}
+                    onChange={(e) => setResStartTime(e.target.value)}
+                    className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">End Time (24h) *</label>
+                  <input
+                    type="time"
+                    required
+                    value={resEndTime}
+                    onChange={(e) => setResEndTime(e.target.value)}
+                    className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Organizer / Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={resOrganizer}
+                    onChange={(e) => setResOrganizer(e.target.value)}
+                    placeholder="e.g. Jean Pierre Nshimiyimana"
+                    className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Contact Telephone *</label>
+                  <input
+                    type="text"
+                    required
+                    value={resPhone}
+                    onChange={(e) => setResPhone(e.target.value)}
+                    placeholder="0788 123 456"
+                    className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Estimated Attendees Count</label>
+                  <input
+                    type="number"
+                    value={resAttendees}
+                    onChange={(e) => setResAttendees(e.target.value)}
+                    placeholder="25"
+                    className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                  />
+                </div>
+                <div className="flex items-center text-xs text-gray-500 pt-5">
+                  <span>Max Room Capacity: <strong>{reserveSpaceTarget.capacity || "N/A"} Persons</strong></span>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Additional Notes / Setup Requirements</label>
+                <textarea
+                  rows={2}
+                  value={resNotes}
+                  onChange={(e) => setResNotes(e.target.value)}
+                  placeholder="Microphones, HD projector, sound system, coffee break table..."
+                  className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 mt-2 pt-3 border-t border-gray-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setOpenReserveModal(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs transition cursor-pointer"
+                >
+                  Send Reservation Request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: MANAGE FACILITY ROOMS (ADMIN) */}
+      {openManageRoomsModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl w-full max-w-lg p-6 shadow-2xl flex flex-col gap-4 text-gray-900 dark:text-white max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-slate-800">
+              <h3 className="text-base font-extrabold font-display">
+                {editingRoomId ? "Edit Facility Room" : "Add Organization Facility Room"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setOpenManageRoomsModal(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-white p-1 rounded-lg"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveRoom} className="flex flex-col gap-3.5 text-xs">
+              <div>
+                <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Room Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={roomName}
+                  onChange={(e) => setRoomName(e.target.value)}
+                  placeholder="e.g. Community Conference Center / Boardroom 1"
+                  className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Room Type</label>
+                  <input
+                    type="text"
+                    value={roomType}
+                    onChange={(e) => setRoomType(e.target.value)}
+                    placeholder="Auditorium, Boardroom, Lab"
+                    className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Capacity (Persons)</label>
+                  <input
+                    type="number"
+                    value={roomCapacity}
+                    onChange={(e) => setRoomCapacity(e.target.value)}
+                    placeholder="100"
+                    className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Size (m²)</label>
+                  <input
+                    type="number"
+                    value={roomSizeSqm}
+                    onChange={(e) => setRoomSizeSqm(e.target.value)}
+                    placeholder="180"
+                    className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Hourly Rate (RWF)</label>
+                  <input
+                    type="number"
+                    value={roomRate}
+                    onChange={(e) => setRoomRate(e.target.value)}
+                    placeholder="15000 (0 for Free)"
+                    className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Amenities (comma-separated)</label>
+                <input
+                  type="text"
+                  value={roomAmenities}
+                  onChange={(e) => setRoomAmenities(e.target.value)}
+                  placeholder="WiFi, Projector, Sound System, Air Conditioning"
+                  className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600"
+                />
+              </div>
+
+              {/* Current spaces list in modal */}
+              {spaces.length > 0 && (
+                <div className="mt-2 pt-3 border-t border-gray-100 dark:border-slate-800">
+                  <span className="text-[11px] font-bold text-gray-400 font-mono uppercase block mb-2">Existing Rooms ({spaces.length}):</span>
+                  <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto">
+                    {spaces.map(s => (
+                      <div key={s.id} className="p-2 bg-gray-50 dark:bg-slate-800 rounded-xl flex items-center justify-between text-xs">
+                        <div className="min-w-0 flex-1 truncate pr-2">
+                          <span className="font-bold text-gray-900 dark:text-white truncate block">{s.name}</span>
+                          <span className="text-[10px] text-gray-500 font-mono">{s.capacity} persons • {s.hourly_rate ? `${s.hourly_rate} RWF/h` : "Free"}</span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingRoomId(s.id);
+                              setRoomName(s.name);
+                              setRoomType(s.type || "");
+                              setRoomCapacity(String(s.capacity || 50));
+                              setRoomSizeSqm(String(s.size_sqm || 100));
+                              setRoomRate(String(s.hourly_rate || 0));
+                              setRoomAmenities((s.amenities || []).join(", "));
+                            }}
+                            className="p-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 rounded"
+                            title="Edit"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteRoom(s.id)}
+                            className="p-1 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 rounded"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 mt-2 pt-3 border-t border-gray-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setOpenManageRoomsModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs cursor-pointer"
+                >
+                  {editingRoomId ? "Update Room" : "Save New Room"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { KeyRound, Mail, User as UserIcon, Building2, ChevronRight, CornerDownRight, Landmark, ArrowLeft, ChevronLeft, Check, Globe, Search, LogOut, Clock, CheckCircle, AlertTriangle, ShieldCheck, RefreshCw, UserMinus, Star, MessageSquare, HelpCircle, X, ShieldAlert, HeartHandshake } from "lucide-react";
+import { KeyRound, Mail, Phone, User as UserIcon, Building2, ChevronRight, CornerDownRight, Landmark, ArrowLeft, ChevronLeft, Check, Globe, Search, LogOut, Clock, CheckCircle, AlertTriangle, ShieldCheck, RefreshCw, UserMinus, Star, MessageSquare, HelpCircle, X, ShieldAlert, HeartHandshake } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
 import { LogoLoader } from "../components/LogoLoader";
@@ -11,6 +11,7 @@ import { Button, Input, Card, Badge, Avatar, Modal } from "../components/ui";
 import { MockDB } from "../lib/mockData";
 import { useToast } from "../components/Toast";
 import { APP_CONFIG } from "../config";
+import { normalizePhoneNumber, isTelephoneInput, getPhoneSyntheticEmail, validateLegalFullName } from "../lib/phoneAuth";
 
 // ==========================================
 // ORG SELECT FIELD COMPONENT WITH RELEVANCE SORTING
@@ -245,7 +246,26 @@ export const Login: React.FC = () => {
     setError("");
 
     try {
-      const cleanEmail = email.trim().toLowerCase();
+      const rawInput = email.trim();
+      const isPhone = isTelephoneInput(rawInput);
+      let cleanEmail = rawInput.toLowerCase();
+      let normalizedPhone = "";
+
+      if (isPhone) {
+        normalizedPhone = normalizePhoneNumber(rawInput);
+        // Look up registered user with this phone number
+        const localUsers = MockDB.getUsers();
+        const phoneMatch = localUsers.find(
+          (u) =>
+            (u.phone_number && normalizePhoneNumber(u.phone_number) === normalizedPhone) ||
+            u.email?.toLowerCase() === getPhoneSyntheticEmail(normalizedPhone).toLowerCase()
+        );
+        if (phoneMatch) {
+          cleanEmail = phoneMatch.email.toLowerCase();
+        } else {
+          cleanEmail = getPhoneSyntheticEmail(normalizedPhone);
+        }
+      }
 
       // Read stored custom passwords (from password resets, overrides, or registration)
       let storedPasswords: Record<string, string> = {};
@@ -254,7 +274,7 @@ export const Login: React.FC = () => {
         if (raw) storedPasswords = JSON.parse(raw);
       } catch (e) {}
 
-      const recordedPassword = storedPasswords[cleanEmail];
+      const recordedPassword = storedPasswords[cleanEmail] || (normalizedPhone ? storedPasswords[normalizedPhone] : undefined);
 
       if (isSupabaseConfigured) {
         // If a new updated password has been recorded for this account, strictly enforce that the user must use it
@@ -408,7 +428,11 @@ export const Login: React.FC = () => {
       } else {
         // DEMO / OFFLINE AUTH
         const users = MockDB.getUsers();
-        const foundDemoUser = users.find(u => u.email?.toLowerCase() === cleanEmail);
+        const foundDemoUser = users.find(u => {
+          if (u.email?.toLowerCase() === cleanEmail) return true;
+          if (normalizedPhone && u.phone_number && normalizePhoneNumber(u.phone_number) === normalizedPhone) return true;
+          return false;
+        });
 
         if (recordedPassword && recordedPassword !== password) {
           setError("Invalid password for this account. Please try again.");
@@ -424,7 +448,8 @@ export const Login: React.FC = () => {
         const loginUser = foundDemoUser || {
           id: `user-${Date.now()}`,
           email: cleanEmail,
-          full_name: cleanEmail.split("@")[0],
+          full_name: isPhone ? (normalizedPhone || "Member") : cleanEmail.split("@")[0],
+          phone_number: normalizedPhone || undefined,
           is_superadmin: cleanEmail.includes("admin"),
           primary_org_id: primaryOrgId,
           joined_org_ids: activeMembers.map(m => m.org_id),
@@ -507,12 +532,18 @@ export const Login: React.FC = () => {
             )}
 
             <Input
-              type="email"
-              label={t("auth.email")}
+              type="text"
+              label={t("auth.email_or_phone", "Email Address or Telephone Number")}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="e.g. admin@impact-o.app"
-              prefixIcon={<Mail className="h-4 w-4 text-gray-400" />}
+              placeholder="e.g. member@coop.rw or +250 788 000 000"
+              prefixIcon={
+                isTelephoneInput(email) ? (
+                  <Phone className="h-4 w-4 text-emerald-600" />
+                ) : (
+                  <Mail className="h-4 w-4 text-gray-400" />
+                )
+              }
               autoFocus
             />
 
@@ -578,6 +609,8 @@ export const Register: React.FC = () => {
   // Participant Account Fields
   const [partName, setPartName] = useState("");
   const [partEmail, setPartEmail] = useState("");
+  const [partPhone, setPartPhone] = useState("");
+  const [partRegMethod, setPartRegMethod] = useState<"phone" | "email">("phone");
   const [partPassword, setPartPassword] = useState("");
   const [partSelectedOrg, setPartSelectedOrg] = useState("");
 
@@ -620,6 +653,7 @@ export const Register: React.FC = () => {
   // Organization Workspace Admin Credentials - Step 2
   const [adminName, setAdminName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
+  const [adminPhone, setAdminPhone] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
 
   // Referral / Promoter Attribution Tracking
@@ -735,22 +769,39 @@ export const Register: React.FC = () => {
 
   const handleParticipantRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!partName || !partEmail || !partPassword || !partSelectedOrg) {
-      setError("Please fill in all core fields and choose an Organization or Cooperative Workspace.");
+    const nameCheck = validateLegalFullName(partName);
+    if (!nameCheck.valid) {
+      setError(nameCheck.message || "Please provide a valid official Full Name.");
       return;
+    }
+
+    if (partRegMethod === "phone") {
+      if (!partPhone.trim() || !partPassword || !partSelectedOrg) {
+        setError("Please enter your Rwandan telephone number, password, and select an organization.");
+        return;
+      }
+    } else {
+      if (!partEmail.trim() || !partPassword || !partSelectedOrg) {
+        setError("Please enter your email address, password, and select an organization.");
+        return;
+      }
     }
 
     setLoading(true);
     setError("");
 
     try {
+      const normalizedPhone = partRegMethod === "phone" ? normalizePhoneNumber(partPhone) : "";
+      const registeredEmail = partRegMethod === "phone" ? getPhoneSyntheticEmail(normalizedPhone) : partEmail.trim().toLowerCase();
+      const cleanPhone = partRegMethod === "phone" ? normalizedPhone : undefined;
+
       if (isSupabaseConfigured) {
         // 1. Sign up user
         const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-          email: partEmail,
+          email: registeredEmail,
           password: partPassword,
           options: {
-            data: { full_name: partName }
+            data: { full_name: partName.trim(), phone_number: cleanPhone }
           }
         });
 
@@ -760,7 +811,7 @@ export const Register: React.FC = () => {
         // 2. Sign in to obtain active JWT session if signUp didn't return session or user already exists
         if (!authSession) {
           const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
-            email: partEmail,
+            email: registeredEmail,
             password: partPassword
           });
           if (signInErr) {
@@ -782,8 +833,9 @@ export const Register: React.FC = () => {
         // 3. Insert/Upsert into public.users table using active session
         const { error: dbError } = await supabase.from("users").upsert({
           id: authUser.id,
-          email: partEmail,
-          full_name: partName,
+          email: registeredEmail,
+          full_name: partName.trim(),
+          phone_number: cleanPhone,
           is_superadmin: false,
           auth_user_id: authUser.id,
           primary_org_id: partSelectedOrg,
@@ -825,8 +877,9 @@ export const Register: React.FC = () => {
 
         const dbUser = {
           id: authUser.id,
-          email: partEmail,
-          full_name: partName,
+          email: registeredEmail,
+          full_name: partName.trim(),
+          phone_number: cleanPhone,
           is_superadmin: false,
           primary_org_id: partSelectedOrg,
           joined_org_ids: partSelectedOrg ? [partSelectedOrg] : [],
@@ -836,14 +889,15 @@ export const Register: React.FC = () => {
         try {
           const raw = localStorage.getItem("impacto_user_passwords") || "{}";
           const map = JSON.parse(raw);
-          map[partEmail.trim().toLowerCase()] = partPassword;
+          map[registeredEmail] = partPassword;
+          if (cleanPhone) map[cleanPhone] = partPassword;
           localStorage.setItem("impacto_user_passwords", JSON.stringify(map));
         } catch (e) {}
 
         sessionStorage.setItem("impacto_just_registered", "true");
         setUser(dbUser);
 
-        recordReferralAttribution(partReferralCode, authUser.id, partName, partSelectedOrg, orgRecord?.name);
+        recordReferralAttribution(partReferralCode, authUser.id, partName.trim(), partSelectedOrg, orgRecord?.name);
 
         if (partSelectedOrg && orgRecord && memberRecord) {
           setActiveOrg(orgRecord, memberRecord);
@@ -854,16 +908,17 @@ export const Register: React.FC = () => {
         await new Promise((res) => setTimeout(res, 800));
         const users = MockDB.getUsers();
         
-        if (users.some((u) => u.email.toLowerCase() === partEmail.toLowerCase())) {
-          setError("Email is already registered on this platform.");
+        if (users.some((u) => u.email.toLowerCase() === registeredEmail.toLowerCase())) {
+          setError("Account with this email or telephone number is already registered on this platform.");
           setLoading(false);
           return;
         }
 
         const newUser = {
           id: "user-" + Math.random().toString(36).substr(2, 9),
-          email: partEmail,
-          full_name: partName,
+          email: registeredEmail,
+          full_name: partName.trim(),
+          phone_number: cleanPhone,
           is_superadmin: false,
           primary_org_id: partSelectedOrg,
           joined_org_ids: partSelectedOrg ? [partSelectedOrg] : [],
@@ -1455,24 +1510,61 @@ export const Register: React.FC = () => {
                 <form onSubmit={handleParticipantRegister} className="flex flex-col gap-4">
                   <Input
                     type="text"
-                    label={t("auth.full_name")}
+                    label="Official Full Name (Required)"
                     value={partName}
                     onChange={(e) => setPartName(e.target.value)}
-                    placeholder="Marie-Louise Mukamana"
-                    prefixIcon={<UserIcon className="h-4 w-4 text-gray-400" />}
+                    placeholder="e.g. Marie-Louise Mukamana"
+                    prefixIcon={<UserIcon className="h-4 w-4 text-emerald-600" />}
                     required
                     autoFocus
                   />
 
-                  <Input
-                    type="email"
-                    label={t("auth.email")}
-                    value={partEmail}
-                    onChange={(e) => setPartEmail(e.target.value)}
-                    placeholder="marie@gmail.com"
-                    prefixIcon={<Mail className="h-4 w-4 text-gray-400" />}
-                    required
-                  />
+                  {/* Registration method selector: Phone vs Email */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-gray-700 dark:text-slate-300">
+                        Sign Up Using
+                      </label>
+                      <div className="flex items-center bg-gray-100 dark:bg-slate-800 p-0.5 rounded-lg text-[11px] font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setPartRegMethod("phone")}
+                          className={`px-2.5 py-1 rounded-md transition ${partRegMethod === "phone" ? "bg-emerald-600 text-white shadow-xs" : "text-gray-600 dark:text-slate-300"}`}
+                        >
+                          Telephone Number
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPartRegMethod("email")}
+                          className={`px-2.5 py-1 rounded-md transition ${partRegMethod === "email" ? "bg-emerald-600 text-white shadow-xs" : "text-gray-600 dark:text-slate-300"}`}
+                        >
+                          Email Address
+                        </button>
+                      </div>
+                    </div>
+
+                    {partRegMethod === "phone" ? (
+                      <Input
+                        type="text"
+                        label="Telephone Number (MTN / Airtel-Tigo)"
+                        value={partPhone}
+                        onChange={(e) => setPartPhone(e.target.value)}
+                        placeholder="0788 000 000 or +250 788 ..."
+                        prefixIcon={<Phone className="h-4 w-4 text-emerald-600" />}
+                        required
+                      />
+                    ) : (
+                      <Input
+                        type="email"
+                        label={t("auth.email")}
+                        value={partEmail}
+                        onChange={(e) => setPartEmail(e.target.value)}
+                        placeholder="marie@gmail.com"
+                        prefixIcon={<Mail className="h-4 w-4 text-gray-400" />}
+                        required
+                      />
+                    )}
+                  </div>
 
                   <Input
                     type="password"

@@ -344,6 +344,7 @@ export const OrganizationSettingsPage: React.FC = () => {
   const [publicPageEnabled, setPublicPageEnabled] = useState(activeOrg?.public_page_enabled ?? true);
   const [showGoalsPublicly, setShowGoalsPublicly] = useState(activeOrg?.show_goals_publicly ?? true);
   const [showImpactPublicly, setShowImpactPublicly] = useState(activeOrg?.show_impact_publicly ?? true);
+  const [showCalendarPublicly, setShowCalendarPublicly] = useState(activeOrg?.show_calendar_publicly ?? true);
 
   // Members Dashboard Style Form
   const [dashboardTheme, setDashboardTheme] = useState<"light" | "dark" | "custom">(activeOrg?.dashboard_theme || "light");
@@ -444,6 +445,7 @@ export const OrganizationSettingsPage: React.FC = () => {
       setPublicPageEnabled(activeOrg.public_page_enabled ?? true);
       setShowGoalsPublicly(activeOrg.show_goals_publicly ?? true);
       setShowImpactPublicly(activeOrg.show_impact_publicly ?? true);
+      setShowCalendarPublicly(activeOrg.show_calendar_publicly ?? true);
       setDashboardTheme(activeOrg.dashboard_theme || "light");
       setDashboardLogo(activeOrg.dashboard_logo || "/logo.png");
       setMarketplaceEnabled(activeOrg.marketplace_enabled ?? true);
@@ -517,7 +519,8 @@ export const OrganizationSettingsPage: React.FC = () => {
         allow_public_joining: allowPublicJoining,
         public_page_enabled: publicPageEnabled,
         show_goals_publicly: showGoalsPublicly,
-        show_impact_publicly: showImpactPublicly
+        show_impact_publicly: showImpactPublicly,
+        show_calendar_publicly: showCalendarPublicly
       });
       setActiveOrg(updated, useOrgStore.getState().activeMember);
       addToast("Organization profile page configuration successfully synced live!", "success");
@@ -1174,6 +1177,17 @@ export const OrganizationSettingsPage: React.FC = () => {
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" className="sr-only peer" checked={showImpactPublicly} onChange={(e) => setShowImpactPublicly(e.target.checked)} />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-[var(--org-primary)]"></div>
+                </label>
+              </div>
+
+              <div className="p-3 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-gray-800 dark:text-slate-200">Show Facilities & 24h Lending Calendar Publicly</span>
+                  <span className="text-xs text-gray-500">Expose room capacities and 24-hour occupied reservation calendar to public visitors.</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={showCalendarPublicly} onChange={(e) => setShowCalendarPublicly(e.target.checked)} />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-[var(--org-primary)]"></div>
                 </label>
               </div>

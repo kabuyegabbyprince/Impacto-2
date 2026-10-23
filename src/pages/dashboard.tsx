@@ -1,6 +1,8 @@
 import { GoalsPage } from "./goals";
 import { WaitRoomView } from "../components/WaitRoomView";
 import { DynamicAttendanceGrid } from "../components/DynamicAttendanceGrid";
+import { EventScheduleCalendar } from "../components/EventScheduleCalendar";
+import { ChatVideoMeetModal } from "../components/ChatVideoMeetModal";
 
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -76,7 +78,8 @@ import {
   ArrowLeft,
   Eye,
   Phone,
-  Bell
+  Bell,
+  Video
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
@@ -1981,6 +1984,10 @@ export const ChatRoom: React.FC = () => {
   const createChannelMutation = useCreateChannel();
   const createPollMutation = useCreatePoll();
 
+  const [openMeetModal, setOpenMeetModal] = useState(false);
+  const { data: dbDocs } = useV2Documents(activeOrg?.id);
+  const documents = (dbDocs || []) as Document[];
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
 
@@ -2616,47 +2623,80 @@ export const ChatRoom: React.FC = () => {
       <section className="flex-1 flex flex-col h-full bg-white dark:bg-slate-900 justify-between">
         {activeChannel ? (
           <>
-            <div className="px-4 md:px-6 py-4 border-b border-gray-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/20 leading-none shrink-0">
-              <div className="flex items-center gap-2">
+            <div className="px-3.5 sm:px-5 py-2.5 sm:py-3 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-slate-50/40 dark:bg-slate-900/40 shrink-0 min-h-[56px]">
+              {/* Left Channel Name & Info */}
+              <div className="flex items-center gap-2 min-w-0 flex-1">
                 <button 
                   onClick={() => setActiveChannelId("")}
-                  className="md:hidden p-1 -ml-2 text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 focus:outline-none"
+                  className="md:hidden p-1 -ml-1 text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 focus:outline-none shrink-0 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
                   title="Back to channels"
                 >
                   <ArrowLeft className="h-4.5 w-4.5" />
                 </button>
-                <span className="font-display font-semibold text-sm text-gray-900 dark:text-white"># {activeChannel?.name || "General"}</span>
-                {activeChannel.is_private && <Lock className="h-3.5 w-3.5 text-amber-500" />}
-                <span className="h-1.5 w-1.5 text-slate-300">•</span>
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-mono">{activeChannel.channel_type || "General Room"}</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-display font-semibold text-sm sm:text-base text-gray-900 dark:text-white truncate">
+                    #{activeChannel?.name || "General"}
+                  </span>
+                  {activeChannel.is_private && <Lock className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
+                </div>
+                <span className="hidden sm:inline text-slate-300 dark:text-slate-700 shrink-0">•</span>
+                <span className="hidden sm:inline-block text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+                  {activeChannel.channel_type || "General Room"}
+                </span>
               </div>
-              <div className="flex items-center gap-3">
+
+              {/* Right Action Buttons */}
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => {
-                    if (isFreePlan) {
-                      setShowPollUpgradeModal(true);
-                      addToast("Upgrade to Growth to enable polls", "info");
-                      return;
-                    }
-                    setOpenPollModal(true);
-                  }}
-                  title={isFreePlan ? "Upgrade to Growth to enable polls" : "Launch Poll"}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-3xs cursor-pointer ${
-                    isFreePlan
-                      ? "bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
-                      : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800"
-                  }`}
+                  onClick={() => setOpenMeetModal(true)}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
+                  title="Launch live multi-person video meeting with collaborative doc sharing and in-call chat"
                 >
-                  {isFreePlan ? <Lock className="h-3.5 w-3.5 text-amber-500" /> : <BarChart3 className="h-3.5 w-3.5 text-emerald-600" />}
-                  <span>Launch Poll</span>
-                  {isFreePlan && (
-                    <span className="hidden sm:inline-block text-[10px] text-amber-600 dark:text-amber-400 font-normal">
-                      (Upgrade to Growth to enable polls)
-                    </span>
-                  )}
+                  <Video className="h-3.5 w-3.5 shrink-0" />
+                  <span className="hidden md:inline">Start Live Meet</span>
+                  <span className="md:hidden">Meet</span>
                 </button>
-                <Badge color={activeChannel.is_private ? "amber" : "blue"}>
+
+                <div className="relative group">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isFreePlan) {
+                        setShowPollUpgradeModal(true);
+                        addToast("Upgrade to Growth to enable polls", "info");
+                        return;
+                      }
+                      setOpenPollModal(true);
+                    }}
+                    title={isFreePlan ? "Upgrade to Growth to enable polls" : "Launch Poll"}
+                    className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer ${
+                      isFreePlan
+                        ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
+                        : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800"
+                    }`}
+                  >
+                    {isFreePlan ? <Lock className="h-3.5 w-3.5 text-amber-500 shrink-0" /> : <BarChart3 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />}
+                    <span>Launch Poll</span>
+                    {isFreePlan && (
+                      <span className="hidden lg:inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-400">
+                        Growth
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Clean hover tooltip explaining plan upgrade without deforming button */}
+                  {isFreePlan && (
+                    <div className="absolute right-0 top-full mt-1.5 hidden group-hover:flex flex-col items-end z-50 pointer-events-none">
+                      <div className="bg-slate-900 text-white text-[11px] font-medium py-1 px-2.5 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1.5 border border-slate-700">
+                        <Lock className="h-3 w-3 text-amber-400 shrink-0" />
+                        <span>Upgrade to Growth to enable polls</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <Badge color={activeChannel.is_private ? "amber" : "blue"} className="shrink-0 hidden xs:inline-flex">
                   {activeChannel.is_private ? "Staff Only" : "Active Feed"}
                 </Badge>
               </div>
@@ -3309,6 +3349,17 @@ export const ChatRoom: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      {/* 4. Live Multi-Person Video Meet Modal with Shared Docs & Live Chat */}
+      <ChatVideoMeetModal
+        open={openMeetModal}
+        onClose={() => setOpenMeetModal(false)}
+        channelName={activeChannel?.name || "General"}
+        activeOrg={activeOrg}
+        activeMember={activeMember}
+        members={orgMembers || []}
+        documents={documents}
+      />
     </div>
   );
 };
@@ -3440,21 +3491,21 @@ const OldGoalsTracker: React.FC = () => {
   return (
     <PlanGatedView requiredTier="growth" featureName="Bento Goals & Strategic Analytics">
       <div className="flex flex-col gap-6 select-none font-sans w-full">
-        <div className="flex items-center justify-between border-b pb-4 shrink-0">
-          <div>
-            <h2 className="text-xl md:text-2xl font-bold font-display text-gray-901">{t("goals_tab_title", "Strategic Goals Tracker")}</h2>
-          <p className="text-xs text-gray-500 font-medium">{t("goals_tab_sub", "Verify team metrics, deadlines, and agricultural achievements.")}</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4 shrink-0">
+          <div className="min-w-0">
+            <h2 className="text-xl md:text-2xl font-bold font-display text-gray-901 truncate">{t("goals_tab_title", "Strategic Goals Tracker")}</h2>
+            <p className="text-xs text-gray-500 font-medium">{t("goals_tab_sub", "Verify team metrics, deadlines, and agricultural achievements.")}</p>
+          </div>
+          {canSetGoals ? (
+            <Button icon={<Plus className="h-4 w-4 shrink-0" />} onClick={() => setOpenAddModal(true)} className="whitespace-nowrap shrink-0">
+              {t("btn_add_goal", "Add Goal")}
+            </Button>
+          ) : (
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 flex items-center gap-1.5 whitespace-nowrap shrink-0">
+              <Eye className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> Member Read-Only
+            </span>
+          )}
         </div>
-        {canSetGoals ? (
-          <Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpenAddModal(true)}>
-            {t("btn_add_goal", "Add Goal")}
-          </Button>
-        ) : (
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 flex items-center gap-1.5">
-            <Eye className="h-3.5 w-3.5 text-emerald-600" /> Member Read-Only
-          </span>
-        )}
-      </div>
 
       <div className="relative w-full max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -3958,17 +4009,17 @@ export const MeetingsMinutes: React.FC = () => {
   return (
     <PlanGatedView requiredTier="pro" featureName="Governance Quorum Meetings Validation & Audit Tracker">
       <div className="flex flex-col gap-6 select-none font-sans w-full">
-        <div className="flex items-center justify-between border-b pb-4">
-          <div>
-            <h2 className="text-xl md:text-2xl font-bold font-display text-gray-901">{t("meet_tab_title", "Meetings & Minutes Console")}</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4 shrink-0">
+          <div className="min-w-0">
+            <h2 className="text-xl md:text-2xl font-bold font-display text-gray-901 truncate">{t("meet_tab_title", "Meetings & Minutes Console")}</h2>
             <p className="text-xs text-gray-500">{t("meet_tab_sub", "Coordinate boards, generate agendas, and log auditable transcripts.")}</p>
           </div>
-        {isAdmin && (
-          <Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpenAddModal(true)}>
-            {t("btn_schedule_meet", "Schedule Meeting")}
-          </Button>
-        )}
-      </div>
+          {isAdmin && (
+            <Button icon={<Plus className="h-4 w-4 shrink-0" />} onClick={() => setOpenAddModal(true)} className="whitespace-nowrap shrink-0">
+              {t("btn_schedule_meet", "Schedule Meeting")}
+            </Button>
+          )}
+        </div>
 
       <div className="relative w-full max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -4328,7 +4379,7 @@ export const MeetingsMinutes: React.FC = () => {
               )}
 
               {/* Attendance Fast Controls */}
-              <div className="flex items-center gap-3 justify-end border-b pb-3 mb-1">
+              <div className="flex flex-wrap items-center gap-2.5 justify-end border-b pb-3 mb-1">
                 <button
                   type="button"
                   disabled={!isAllowed}
@@ -4340,7 +4391,7 @@ export const MeetingsMinutes: React.FC = () => {
                     const allActive = orgMembersList?.filter(m => m.status === "active").map((m) => m.id) || [];
                     setTempCheckedInIds(allActive);
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 border ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 border whitespace-nowrap shrink-0 ${
                     !isAllowed
                       ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
                       : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 cursor-pointer border-emerald-200"
@@ -4859,14 +4910,14 @@ export const DocumentsCenter: React.FC = () => {
           </div>
 
           {canManageDocs && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 onClick={() => setIsCertBadgeModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer whitespace-nowrap shrink-0"
                 title="Design & export certificates and member badges"
               >
-                <Award className="h-4 w-4" />
-                Certificate / Badge
+                <Award className="h-4 w-4 shrink-0" />
+                <span>Certificate / Badge</span>
               </button>
               <button
                 onClick={() => {
@@ -4874,10 +4925,10 @@ export const DocumentsCenter: React.FC = () => {
                   setViewingDoc(null);
                   setIsOfficeOpen(true);
                 }}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer whitespace-nowrap shrink-0"
               >
-                <Plus className="h-4 w-4" />
-                Draft Document or Letter
+                <Plus className="h-4 w-4 shrink-0" />
+                <span>Draft Document or Letter</span>
               </button>
             </div>
           )}
@@ -5998,7 +6049,7 @@ export const EventsCalendar: React.FC = () => {
   const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
   const attAccess = canAccessFeature(activeOrg, "qr_attendance");
   const isPaidPlan = lifecycle.effectiveTier !== "free" || attAccess.allowed;
-  const [viewMode, setViewMode] = useState<"grid" | "schedule">("grid");
+  const [viewMode, setViewMode] = useState<"schedule" | "grid">("schedule");
 
   const exportAttendanceMatrixExcel = () => {
     const activeMembers = orgMembers?.filter((m) => m.status === "active") || [];
@@ -6208,17 +6259,6 @@ export const EventsCalendar: React.FC = () => {
           <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-0.5">{t("dashboard_labels.events_board_subtitle")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Direct Local Excel Export */}
-          <Button
-            size="sm"
-            variant="outline"
-            icon={<FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
-            onClick={exportAttendanceMatrixExcel}
-            className="text-xs font-medium"
-            title="Export full attendance matrix to local Excel file"
-          >
-            {isPaidPlan ? "Export Master Matrix (Excel)" : "Export Local Attendance (Excel)"}
-          </Button>
           {isAdmin && (
             <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setOpenAddModal(true)}>
               {t("dashboard_labels.schedule_session")}
@@ -6298,19 +6338,32 @@ export const EventsCalendar: React.FC = () => {
           addToast={addToast}
         />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Events Schedule list */}
-        <div className="lg:col-span-2 flex flex-col gap-4">
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder={t("Filter events by title or location...")}
-              value={eventSearch}
-              onChange={(e) => setEventSearch(e.target.value)}
-              className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 pl-9 pr-4 py-2 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white transition"
-            />
-          </div>
+        <div className="flex flex-col gap-6">
+          {/* Real Interactive Calendar with Rwandan National Holidays and 24h Space Lending */}
+          <EventScheduleCalendar
+            events={events}
+            activeOrg={activeOrg}
+            isAdmin={isAdmin}
+            onEditEvent={handleEditInit}
+            onDeleteEvent={handleDelete}
+            onSelectEvent={(ev) => setSelectedEvent(ev)}
+            selectedEventId={selectedEvent?.id}
+            onAddEventClick={() => setOpenAddModal(true)}
+          />
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Events Schedule list */}
+            <div className="lg:col-span-2 flex flex-col gap-4">
+              <div className="relative w-full max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder={t("Filter events by title or location...")}
+                  value={eventSearch}
+                  onChange={(e) => setEventSearch(e.target.value)}
+                  className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 pl-9 pr-4 py-2 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white transition"
+                />
+              </div>
 
           {filteredEvents.length > 0 ? (
             filteredEvents.map((ev: ImpactEvent) => {
@@ -6500,7 +6553,8 @@ export const EventsCalendar: React.FC = () => {
           </Card>
         </div>
       </div>
-      )}
+    </div>
+    )}
 
       {/* Edit event Modal */}
       <Modal open={openEditModal} onClose={() => setOpenEditModal(false)} title="Edit Scheduled Session">

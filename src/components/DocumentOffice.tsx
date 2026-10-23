@@ -1011,14 +1011,14 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
               <div className="w-full max-w-5xl flex flex-col gap-4 flex-1 transition-all duration-200">
                 
                 {/* PAPER CANVAS */}
-                <div className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 sm:p-10 md:p-12 flex flex-col min-h-[580px] flex-1">
+                <div className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-sm p-4 sm:p-8 md:p-12 flex flex-col min-h-[580px] flex-1">
                   {/* Cooperative Branded Header */}
                   {showBrandedHeader && (
                     <div className="border-b-2 border-[#156c45] pb-4 mb-6 text-center select-none shrink-0">
-                      <h1 className="text-2xl md:text-3xl font-bold font-serif tracking-wider text-gray-900 dark:text-white uppercase">
+                      <h1 className="text-xl sm:text-2xl md:text-3xl font-bold font-serif tracking-wider text-gray-900 dark:text-white uppercase">
                         {activeOrg?.name ? activeOrg.name : "WALKER"}
                       </h1>
-                      <p className="text-[11px] font-mono tracking-widest text-[#4a6357] dark:text-emerald-400 font-semibold uppercase mt-1">
+                      <p className="text-[10px] sm:text-[11px] font-mono tracking-widest text-[#4a6357] dark:text-emerald-400 font-semibold uppercase mt-1">
                         Branded Cooperative Official Communication Desk
                       </p>
                       {isLetter && (
@@ -1039,7 +1039,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
                   {/* Dynamic letter info panel in view mode */}
                   {viewingDoc?.is_letter && (
-                    <div className="mb-6 p-4 bg-[#e8f5ee]/40 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 rounded-xl leading-relaxed text-[#156c45] dark:text-emerald-300">
+                    <div className="mb-6 p-3 sm:p-4 bg-[#e8f5ee]/40 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 rounded-xl leading-relaxed text-[#156c45] dark:text-emerald-300">
                       <h4 className="font-bold text-xs select-none">Received Communication Docket</h4>
                       <p className="text-[11px] font-medium mt-1">
                         This document has been shared with you by the cooperative administrative desk. You have access to review and respond inside the portal.
@@ -1052,7 +1052,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                     ref={editorRef}
                     contentEditable={!readOnly}
                     onInput={handleEditorInput}
-                    className="flex-1 outline-none text-base font-sans leading-relaxed text-gray-800 dark:text-slate-100 min-h-[300px] overflow-visible select-text prose dark:prose-invert max-w-none focus:outline-none"
+                    className="flex-1 outline-none text-sm sm:text-base font-sans leading-relaxed text-gray-800 dark:text-slate-100 min-h-[300px] overflow-visible select-text prose dark:prose-invert max-w-none focus:outline-none break-words"
                     style={{ minHeight: "300px" }}
                     placeholder="Begin typing your official cooperative letter, resolution, or guidelines here..."
                   />
@@ -1172,7 +1172,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                         <tr className="bg-gray-100 dark:bg-slate-950 border-b border-gray-200 dark:border-slate-800 text-gray-550 select-none">
                           <th className="p-2 border-r border-gray-200 dark:border-slate-800 text-center w-10 font-mono font-bold">#</th>
                           {gridData[0]?.map((header, colIdx) => (
-                            <th key={colIdx} className="p-2.5 border-r border-gray-200 dark:border-slate-800 font-bold">
+                            <th key={colIdx} className="p-2.5 border-r border-gray-200 dark:border-slate-800 font-bold min-w-[120px]">
                               <input
                                   type="text"
                                   value={header}

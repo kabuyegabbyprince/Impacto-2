@@ -72,6 +72,7 @@ export interface Organization {
   public_page_enabled?: boolean;
   show_goals_publicly?: boolean;
   show_impact_publicly?: boolean;
+  show_calendar_publicly?: boolean;
   // Members dashboard settings
   dashboard_theme?: "light" | "dark" | "custom";
   dashboard_logo?: string;

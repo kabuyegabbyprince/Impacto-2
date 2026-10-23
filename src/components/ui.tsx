@@ -331,9 +331,9 @@ export const Card: React.FC<CardProps> = ({
       {...props}
     >
       {(title || action) && (
-        <div className="flex items-center justify-between px-6 py-4">
+        <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 gap-2">
           {title && (
-            <h3 className="font-bold text-sm md:text-base text-slate-900 dark:text-slate-100 tracking-tight">
+            <h3 className="font-bold text-sm md:text-base text-slate-900 dark:text-slate-100 tracking-tight text-center w-full">
               {title}
             </h3>
           )}

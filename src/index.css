@@ -72,6 +72,26 @@ body {
   min-height: 100vh;
 }
 
+/* Universal layout resilience across all div elements & flex/grid containers */
+*, ::before, ::after {
+  box-sizing: border-box;
+}
+
+div, section, article, header, footer, main, aside, nav {
+  min-width: 0;
+}
+
+img, video, canvas, svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Responsive string and long token wrapping helpers */
+.break-words-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 /* Ensure all inputs, textareas, select elements, and labels respect dark mode */
 [data-theme="dark"] input, 
 [data-theme="dark"] select, 

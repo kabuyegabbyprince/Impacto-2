@@ -221,9 +221,17 @@ This section outlines the progressive capability tiers in Impacto. Each plan **i
   5. **UI Unlock**: All `PlanGatedView` overlays dissolve immediately. Storage quotas expand to new tier limits (e.g., 5 GB or Infinity), and the workspace enjoys uninterrupted operational access.
 
 
-
-
-
+so here to to day i need you to hep me to make plan to add this to whole application media 
+querieas on verything every thing is well represented as clean as possible on web of every
+device like to write documment word or excel is crap shit then as well as evrything on events 
+by default you must land on event schedure section remove that selected button i want to make 
+schedule more cool as feature by having real calender and with hard coded national holyday
+this wil help every organization to set  the occupatin like there are some organization which lend Space
+ans rooms so they that set when the room are available and their size and that will will have the whole time
+management like 24 hrs to say is ossupied from to that i beleive can be in events then keep this in mind i need 
+to make simple version of meet in chat like video call which can support more people and have active chat and Accessibility
+to share the document all parties can see then make comment and tell me about possible measure to give kinf of offilene 
+on web by use local storage in web  on excel make sure ther sheet is clean all is done by user
 
 
 
