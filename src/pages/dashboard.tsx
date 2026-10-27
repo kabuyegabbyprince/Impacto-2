@@ -85,7 +85,7 @@ import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
 import { useCurrencyStore } from "../store/currencyStore";
 import { OrganizationVerificationModal } from "../components/OrganizationVerificationModal";
-import { Goal, Event as ImpactEvent, NewsPost, Meeting, ChatChannel, Document } from "../types";
+import { Goal, Event as ImpactEvent, EventTask, NewsPost, Meeting, ChatChannel, Document } from "../types";
 import {
   useEvents,
   useUpdateEvent,
@@ -353,12 +353,16 @@ export const DashboardHome: React.FC = () => {
     checkResets();
   }, [activeOrg?.id, isAdmin]);
 
-  const { data: events } = useEvents(activeOrg?.id);
+  const { data: events, refetch: refetchEvents } = useEvents(activeOrg?.id);
+  const updateEventMutation = useUpdateEvent();
   const { data: goals } = useGoals(activeOrg?.id);
   const { data: news } = useNews(activeOrg?.id);
   const { data: members } = useMembers(activeOrg?.id);
   const [openOrgVerifyModal, setOpenOrgVerifyModal] = useState(false);
   const [remindedOfficers, setRemindedOfficers] = useState<Record<string, boolean>>({});
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [taskProgressVal, setTaskProgressVal] = useState<number>(0);
+  const [taskReportText, setTaskReportText] = useState<string>("");
 
   const isRegularMember = activeMember?.role === "member";
   const isOrgAdmin = activeMember?.role === "org_admin" || activeMember?.role === "superadmin" || user?.is_superadmin;
@@ -542,13 +546,101 @@ export const DashboardHome: React.FC = () => {
     return fees.filter((f) => f.status === "pending_confirmation" || f.status === "pending");
   }, [fees, activeMember, user]);
 
+  // Tasks assigned to the logged-in member across all events
+  const myAssignedTasks = React.useMemo(() => {
+    if (!events) return [];
+    const list: Array<{
+      task: EventTask;
+      event: ImpactEvent;
+    }> = [];
+
+    events.forEach((ev) => {
+      let evTasks: EventTask[] = ev.tasks || [];
+      if (!evTasks || evTasks.length === 0) {
+        try {
+          const local = localStorage.getItem(`event_tasks_${ev.id}`);
+          if (local) evTasks = JSON.parse(local);
+        } catch (e) {}
+      }
+
+      if (evTasks && Array.isArray(evTasks)) {
+        evTasks.forEach((t) => {
+          const isAssigned =
+            (activeMember?.id && t.assigned_to_member_id === activeMember.id) ||
+            (user?.id && t.assigned_to_member_id === user.id) ||
+            myMemberIds.has(t.assigned_to_member_id) ||
+            (user?.full_name && t.assigned_to_name && t.assigned_to_name.toLowerCase().trim() === user.full_name.toLowerCase().trim());
+
+          if (isAssigned) {
+            list.push({ task: t, event: ev });
+          }
+        });
+      }
+    });
+
+    return list;
+  }, [events, activeMember, user, myMemberIds]);
+
+  const handleSaveMemberTaskProgress = async (ev: ImpactEvent, targetTask: EventTask) => {
+    let evTasks: EventTask[] = ev.tasks ? [...ev.tasks] : [];
+    if (evTasks.length === 0) {
+      try {
+        const local = localStorage.getItem(`event_tasks_${ev.id}`);
+        if (local) evTasks = JSON.parse(local);
+      } catch (e) {}
+    }
+
+    const updatedTasks = evTasks.map((t) => {
+      if (t.id === targetTask.id) {
+        return {
+          ...t,
+          progress: taskProgressVal,
+          status: (taskProgressVal >= 100 ? "completed" : taskProgressVal > 0 ? "in_progress" : "pending") as "pending" | "in_progress" | "completed",
+          performance_report: taskReportText.trim() || t.performance_report,
+          reported_at: new Date().toISOString()
+        };
+      }
+      return t;
+    });
+
+    const overall_progress = updatedTasks.length > 0
+      ? Math.round(updatedTasks.reduce((sum, item) => sum + (item.progress || 0), 0) / updatedTasks.length)
+      : 0;
+
+    localStorage.setItem(`event_tasks_${ev.id}`, JSON.stringify(updatedTasks));
+    try {
+      const allOrgTasks = JSON.parse(localStorage.getItem(`all_event_tasks_${activeOrg?.id}`) || "{}");
+      allOrgTasks[ev.id] = updatedTasks;
+      localStorage.setItem(`all_event_tasks_${activeOrg?.id}`, JSON.stringify(allOrgTasks));
+    } catch (e) {}
+
+    try {
+      await updateEventMutation.mutateAsync({
+        id: ev.id,
+        org_id: activeOrg?.id || "",
+        title: ev.title,
+        date_time: ev.date_time,
+        location: ev.location,
+        tasks: updatedTasks,
+        overall_progress
+      });
+      addToast(`Task progress saved at ${taskProgressVal}%. Event overall progress is now ${overall_progress}%!`, "success");
+      setEditingTaskId(null);
+      if (refetchEvents) refetchEvents();
+    } catch (err: any) {
+      addToast(`Progress recorded at ${taskProgressVal}%.`, "success");
+      setEditingTaskId(null);
+      if (refetchEvents) refetchEvents();
+    }
+  };
+
   // V2 Trust & Offboarding Mutations
   const submitIdentity = useSubmitIdentityVerification();
   const submitResign = useSubmitResignation();
 
   const [openVerifyModal, setOpenVerifyModal] = useState(false);
   const [docType, setDocType] = useState("National Identification Card");
-  const [docUrl, setDocUrl] = useState("http://impact-o.app/uploads/doc_identity_verified.pdf");
+  const [docUrl, setDocUrl] = useState("https://impacto.rw/uploads/doc_identity_verified.pdf");
 
   const [openResignModal, setOpenResignModal] = useState(false);
   const [resignCategory, setResignCategory] = useState("Relocation or Resettlement");
@@ -1094,6 +1186,216 @@ export const DashboardHome: React.FC = () => {
           </div>
         );
       })()}
+
+      {/* ========================================== */}
+      {/* MY ASSIGNED TASKS & DELIVERABLES (ANY ROLE) */}
+      {/* ========================================== */}
+      {myAssignedTasks.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3.5">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <CheckSquare className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm md:text-base font-bold text-slate-900 dark:text-white">
+                    My Assigned Tasks & Action Deliverables
+                  </h3>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                    {myAssignedTasks.filter(item => item.task.progress >= 100).length}/{myAssignedTasks.length} Completed
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Action items assigned to you. Update your task progress and submit performance reports to advance the event milestone.
+                </p>
+              </div>
+            </div>
+
+            <Link
+              to="/dashboard/events"
+              className="self-start sm:self-center text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 shrink-0"
+            >
+              <span>View All Events</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {myAssignedTasks.map(({ task, event }) => {
+              const dueDateObj = task.due_date ? new Date(task.due_date) : new Date(event.date_time);
+              const isOverdue = dueDateObj < new Date() && (task.progress || 0) < 100;
+              const daysDiff = Math.ceil((dueDateObj.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+              const isEditing = editingTaskId === task.id;
+
+              return (
+                <div
+                  key={task.id}
+                  className={`p-4 rounded-xl border flex flex-col justify-between gap-3 transition ${
+                    task.progress >= 100
+                      ? "bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800"
+                      : isOverdue
+                      ? "bg-rose-50/40 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/60"
+                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-200 dark:hover:border-emerald-800"
+                  }`}
+                >
+                  <div className="space-y-2">
+                    {/* Event name & due date planning clock */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[10px] font-mono uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md truncate max-w-[200px]">
+                        Event: {event.title}
+                      </span>
+
+                      {/* Planning Clock Badge */}
+                      {isOverdue ? (
+                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800 text-[10px] font-bold">
+                          <Clock className="h-3 w-3 shrink-0 text-rose-600 animate-pulse" />
+                          <span>Overdue by {Math.abs(daysDiff)}d (Due {dueDateObj.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })})</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-[10px] font-medium">
+                          <Clock className="h-3 w-3 shrink-0 text-slate-400" />
+                          <span>Due {daysDiff === 0 ? "today" : `in ${daysDiff}d`} ({dueDateObj.toLocaleDateString([], { day: "numeric", month: "short" })})</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white leading-snug">
+                      {task.title}
+                    </h4>
+
+                    {/* Progress Bar & Status */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[11px] font-medium text-slate-500">
+                          Progress Contribution:
+                        </span>
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {task.progress || 0}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            task.progress >= 100
+                              ? "bg-emerald-500"
+                              : task.progress > 0
+                              ? "bg-emerald-500"
+                              : "bg-slate-300 dark:bg-slate-700"
+                          }`}
+                          style={{ width: `${task.progress || 0}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Performance Report Quote if already submitted */}
+                    {task.performance_report && !isEditing && (
+                      <div className="p-2.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40 text-[11px]">
+                        <span className="font-bold text-emerald-800 dark:text-emerald-300 block text-[10px] uppercase tracking-wider mb-0.5">
+                          My Performance Report ({task.reported_at ? new Date(task.reported_at).toLocaleDateString([], { month: "short", day: "numeric" }) : "Recent"}):
+                        </span>
+                        <p className="text-emerald-900 dark:text-emerald-200 italic">"{task.performance_report}"</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action or Editing Form */}
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                    {!isEditing ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                          task.progress >= 100
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                            : task.progress > 0
+                            ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                            : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        }`}>
+                          {task.progress >= 100 ? "Completed" : task.progress > 0 ? "In Progress" : "Pending"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingTaskId(task.id);
+                            setTaskProgressVal(task.progress || 0);
+                            setTaskReportText(task.performance_report || "");
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Edit className="h-3 w-3" />
+                          <span>Update Progress & Report</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 pt-1 animate-in">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
+                            Set Progress Percentage:
+                          </label>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {[0, 25, 50, 75, 100].map((val) => (
+                              <button
+                                key={val}
+                                type="button"
+                                onClick={() => setTaskProgressVal(val)}
+                                className={`px-2.5 py-1 rounded-md text-xs font-bold transition cursor-pointer ${
+                                  taskProgressVal === val
+                                    ? "bg-emerald-600 text-white shadow-xs"
+                                    : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                                }`}
+                              >
+                                {val}% {val === 100 && "✓"}
+                              </button>
+                            ))}
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="5"
+                            value={taskProgressVal}
+                            onChange={(e) => setTaskProgressVal(Number(e.target.value))}
+                            className="w-full accent-emerald-600 cursor-pointer h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
+                            Performance Report / Work Description:
+                          </label>
+                          <textarea
+                            rows={2}
+                            placeholder="Report on what was accomplished, milestones completed, or any challenges encountered..."
+                            value={taskReportText}
+                            onChange={(e) => setTaskReportText(e.target.value)}
+                            className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-2 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingTaskId(null)}
+                            className="px-3 py-1 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveMemberTaskProgress(event, task)}
+                            className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+                          >
+                            Save & Update Event
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ========================================== */}
       {/* 0. PRIMARY WORKSPACE METRICS ROW */}
@@ -2003,10 +2305,15 @@ export const ChatRoom: React.FC = () => {
   const [newChanPrivate, setNewChanPrivate] = useState(false);
 
   const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
-  const isFreePlan = lifecycle.effectiveTier === "free";
+  const videoAccess = canAccessFeature(activeOrg, "video_call");
+  const pollAccess = canAccessFeature(activeOrg, "chat_polls");
+  const isVideoAllowed = videoAccess.allowed;
+  const isPollAllowed = pollAccess.allowed;
+  const isFreePlan = !isPollAllowed;
 
   const [openPollModal, setOpenPollModal] = useState(false);
   const [showPollUpgradeModal, setShowPollUpgradeModal] = useState(false);
+  const [upgradeModalFeature, setUpgradeModalFeature] = useState<"video" | "polls">("polls");
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOpts, setPollOpts] = useState(["", "", ""]);
   const [pollError, setPollError] = useState("");
@@ -2649,36 +2956,54 @@ export const ChatRoom: React.FC = () => {
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setOpenMeetModal(true)}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
-                  title="Launch live multi-person video meeting with collaborative doc sharing and in-call chat"
+                  onClick={() => {
+                    if (!isVideoAllowed) {
+                      setUpgradeModalFeature("video");
+                      setShowPollUpgradeModal(true);
+                      addToast("Live Video Meetings require Growth or Pro tier", "info");
+                      return;
+                    }
+                    setOpenMeetModal(true);
+                  }}
+                  className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer ${
+                    !isVideoAllowed
+                      ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
+                      : "bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
+                  }`}
+                  title={!isVideoAllowed ? "Upgrade to Growth or Pro to start live video meetings" : "Launch live multi-person video meeting with collaborative doc sharing and in-call chat"}
                 >
-                  <Video className="h-3.5 w-3.5 shrink-0" />
+                  {!isVideoAllowed ? <Lock className="h-3.5 w-3.5 text-amber-500 shrink-0" /> : <Video className="h-3.5 w-3.5 shrink-0" />}
                   <span className="hidden md:inline">Start Live Meet</span>
                   <span className="md:hidden">Meet</span>
+                  {!isVideoAllowed && (
+                    <span className="hidden lg:inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-400">
+                      Growth
+                    </span>
+                  )}
                 </button>
 
                 <div className="relative group">
                   <button
                     type="button"
                     onClick={() => {
-                      if (isFreePlan) {
+                      if (!isPollAllowed) {
+                        setUpgradeModalFeature("polls");
                         setShowPollUpgradeModal(true);
                         addToast("Upgrade to Growth to enable polls", "info");
                         return;
                       }
                       setOpenPollModal(true);
                     }}
-                    title={isFreePlan ? "Upgrade to Growth to enable polls" : "Launch Poll"}
+                    title={!isPollAllowed ? "Upgrade to Growth to enable polls" : "Launch Poll"}
                     className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer ${
-                      isFreePlan
+                      !isPollAllowed
                         ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
                         : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800"
                     }`}
                   >
-                    {isFreePlan ? <Lock className="h-3.5 w-3.5 text-amber-500 shrink-0" /> : <BarChart3 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />}
+                    {!isPollAllowed ? <Lock className="h-3.5 w-3.5 text-amber-500 shrink-0" /> : <BarChart3 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />}
                     <span>Launch Poll</span>
-                    {isFreePlan && (
+                    {!isPollAllowed && (
                       <span className="hidden lg:inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-400">
                         Growth
                       </span>
@@ -3214,30 +3539,48 @@ export const ChatRoom: React.FC = () => {
         </form>
       </Modal>
 
-      {/* Poll Upgrade Restriction Modal for Free Plan Users */}
-      <Modal open={showPollUpgradeModal} onClose={() => setShowPollUpgradeModal(false)} title="Upgrade to Growth to enable polls">
+      {/* Feature Upgrade Restriction Modal for Free Plan Users */}
+      <Modal
+        open={showPollUpgradeModal}
+        onClose={() => setShowPollUpgradeModal(false)}
+        title={upgradeModalFeature === "video" ? "Upgrade to Growth to Enable Live Video Meetings" : "Upgrade to Growth to Enable Polls"}
+      >
         <div className="flex flex-col gap-4 p-2 text-center items-center">
           <div className="h-14 w-14 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-inner">
             <Lock className="h-7 w-7" />
           </div>
           <div className="space-y-1.5 max-w-sm">
             <div className="inline-block px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 text-[10px] font-bold uppercase tracking-wider font-mono">
-              Growth Plan Feature
+              Growth & Pro Feature
             </div>
             <h4 className="text-base font-bold text-slate-900 dark:text-white">
-              Upgrade to Growth to enable polls
+              {upgradeModalFeature === "video"
+                ? "Live Video Meetings with Multi-Peer Video"
+                : "Real-Time Interactive Decision Polls"}
             </h4>
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              Real-time interactive decision polls and voting are restricted on the Free plan. <strong>Upgrade to Growth to enable polls</strong> and unlock live consensus polling directly in your team channels.
+              {upgradeModalFeature === "video"
+                ? "Live camera streaming, collaborative in-meeting document co-authoring, and crystal audio channels are available on Growth and Pro plans."
+                : "Interactive multi-choice decision polls, anonymous quorum audits, and exportable tallies are available on Growth and Pro plans."}
             </p>
           </div>
 
           <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-xl text-left w-full text-xs space-y-1.5">
             <span className="font-bold text-emerald-800 dark:text-emerald-300 block">With Growth and Pro Plans you get:</span>
             <ul className="text-emerald-700 dark:text-emerald-400 text-[11px] space-y-1">
-              <li>• Unlimited interactive multi-choice decision polls</li>
-              <li>• Real-time anonymous or attributed vote auditing</li>
-              <li>• Automatic consensus calculation & exportable tallies</li>
+              {upgradeModalFeature === "video" ? (
+                <>
+                  <li>• High-definition multi-peer video & audio meetings</li>
+                  <li>• Built-in real-time markdown document scratchpad</li>
+                  <li>• Native in-call channel chat and attendance verification</li>
+                </>
+              ) : (
+                <>
+                  <li>• Unlimited interactive multi-choice decision polls</li>
+                  <li>• Real-time anonymous or attributed vote auditing</li>
+                  <li>• Automatic consensus calculation & exportable tallies</li>
+                </>
+              )}
             </ul>
           </div>
 
@@ -6047,9 +6390,63 @@ export const EventsCalendar: React.FC = () => {
   const isAdmin = canManageEvents;
 
   const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
+  const eventAccess = canAccessFeature(activeOrg, "event_listings");
+  const taskAccess = canAccessFeature(activeOrg, "task_assignment");
   const attAccess = canAccessFeature(activeOrg, "qr_attendance");
   const isPaidPlan = lifecycle.effectiveTier !== "free" || attAccess.allowed;
   const [viewMode, setViewMode] = useState<"schedule" | "grid">("schedule");
+
+  const [assignTasksOpen, setAssignTasksOpen] = useState(false);
+  const [eventTasks, setEventTasks] = useState<EventTask[]>([]);
+  const [todoTitle, setTodoTitle] = useState("");
+  const [todoMemberId, setTodoMemberId] = useState("");
+  const [todoDueDate, setTodoDueDate] = useState("");
+  const [showTasksForEventId, setShowTasksForEventId] = useState<Record<string, boolean>>({});
+
+  const handleAddTodoItem = () => {
+    if (!todoTitle.trim()) {
+      addToast("Please provide a deliverable description.", "error");
+      return;
+    }
+    const defaultMemberId = todoMemberId || (orgMembers && orgMembers[0]?.id) || "";
+    const assignedMember = orgMembers?.find((m) => m.id === defaultMemberId);
+    const newTask: EventTask = {
+      id: "task-" + Math.random().toString(36).substr(2, 9),
+      event_id: selectedEvent?.id || "temp",
+      title: todoTitle.trim(),
+      assigned_to_member_id: defaultMemberId,
+      assigned_to_name: assignedMember?.user?.full_name || "Unassigned",
+      assigned_to_role: assignedMember?.role || "member",
+      due_date: todoDueDate || dateTime || new Date().toISOString(),
+      progress: 0,
+      status: "pending"
+    };
+
+    setEventTasks((prev) => [...prev, newTask]);
+    setTodoTitle("");
+    setTodoDueDate("");
+  };
+
+  const handleRemoveTodoItem = (taskId: string) => {
+    setEventTasks((prev) => prev.filter((t) => t.id !== taskId));
+  };
+
+  const handleUpdateTaskAssignee = (taskId: string, memberId: string) => {
+    const member = orgMembers?.find((m) => m.id === memberId);
+    setEventTasks((prev) =>
+      prev.map((t) => {
+        if (t.id === taskId) {
+          return {
+            ...t,
+            assigned_to_member_id: memberId,
+            assigned_to_name: member?.user?.full_name || "Unassigned",
+            assigned_to_role: member?.role || "member"
+          };
+        }
+        return t;
+      })
+    );
+  };
 
   const exportAttendanceMatrixExcel = () => {
     const activeMembers = orgMembers?.filter((m) => m.status === "active") || [];
@@ -6180,22 +6577,41 @@ export const EventsCalendar: React.FC = () => {
       return;
     }
 
+    const overall_progress = eventTasks.length > 0
+      ? Math.round(eventTasks.reduce((sum, t) => sum + (t.progress || 0), 0) / eventTasks.length)
+      : 0;
+
     try {
-      await createMutation.mutateAsync({
+      const res = await createMutation.mutateAsync({
         org_id: activeOrg?.id || "",
         title,
         description: desc,
         date_time: new Date(dateTime).toISOString(),
         location,
         status: "upcoming",
-        is_public: isPublic
+        is_public: isPublic,
+        tasks: eventTasks,
+        overall_progress
       });
+
+      if (res && res.id) {
+        localStorage.setItem(`event_tasks_${res.id}`, JSON.stringify(eventTasks));
+        try {
+          const allOrgTasks = JSON.parse(localStorage.getItem(`all_event_tasks_${activeOrg?.id}`) || "{}");
+          allOrgTasks[res.id] = eventTasks;
+          localStorage.setItem(`all_event_tasks_${activeOrg?.id}`, JSON.stringify(allOrgTasks));
+        } catch (e) {}
+      }
+
       setOpenAddModal(false);
       setTitle("");
       setDesc("");
       setDateTime("");
       setLocation("");
+      setEventTasks([]);
+      setAssignTasksOpen(false);
       refetch();
+      addToast("Event and assigned deliverables scheduled successfully!", "success");
     } catch (err) {
       console.error(err);
     }
@@ -6208,6 +6624,19 @@ export const EventsCalendar: React.FC = () => {
     setDateTime(event.date_time.slice(0, 16));
     setLocation(event.location);
     setIsPublic(event.is_public);
+
+    let existingTasks = event.tasks || [];
+    if (!existingTasks || existingTasks.length === 0) {
+      try {
+        const local = localStorage.getItem(`event_tasks_${event.id}`);
+        if (local) existingTasks = JSON.parse(local);
+      } catch (e) {}
+    }
+    setEventTasks(existingTasks);
+    setAssignTasksOpen(existingTasks.length > 0);
+    setTodoTitle("");
+    setTodoMemberId("");
+    setTodoDueDate("");
     setOpenEditModal(true);
   };
 
@@ -6220,6 +6649,10 @@ export const EventsCalendar: React.FC = () => {
       return;
     }
 
+    const overall_progress = eventTasks.length > 0
+      ? Math.round(eventTasks.reduce((sum, t) => sum + (t.progress || 0), 0) / eventTasks.length)
+      : 0;
+
     try {
       await updateEventMutation.mutateAsync({
         id: selectedEvent.id,
@@ -6228,12 +6661,23 @@ export const EventsCalendar: React.FC = () => {
         description: desc,
         date_time: new Date(dateTime).toISOString(),
         location,
-        is_public: isPublic
+        is_public: isPublic,
+        tasks: eventTasks,
+        overall_progress
       });
+
+      localStorage.setItem(`event_tasks_${selectedEvent.id}`, JSON.stringify(eventTasks));
+      try {
+        const allOrgTasks = JSON.parse(localStorage.getItem(`all_event_tasks_${activeOrg?.id}`) || "{}");
+        allOrgTasks[selectedEvent.id] = eventTasks;
+        localStorage.setItem(`all_event_tasks_${activeOrg?.id}`, JSON.stringify(allOrgTasks));
+      } catch (e) {}
+
       setOpenEditModal(false);
       setSelectedEvent(null);
+      setEventTasks([]);
       refetch();
-      addToast("Event updated successfully!", "success");
+      addToast("Event and assigned tasks updated successfully!", "success");
     } catch (err: any) {
       console.error(err);
       addToast(err?.message || "Failed to update event", "error");
@@ -6250,6 +6694,203 @@ export const EventsCalendar: React.FC = () => {
       }
     }
   };
+
+  if (!eventAccess.allowed) {
+    return (
+      <PlanGatedView
+        featureKey="event_listings"
+        requiredTier="growth"
+        featureName="Event Management & Facility Space Scheduling"
+        customMessage="Community events, task delegation, and facility space bookings require a Growth or Pro plan (or Event Package)."
+      >
+        <div />
+      </PlanGatedView>
+    );
+  }
+
+  const renderTaskAssignmentSection = () => (
+    <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden mt-3 bg-slate-50/60 dark:bg-slate-900/50">
+      <button
+        type="button"
+        onClick={() => setAssignTasksOpen(!assignTasksOpen)}
+        className="w-full px-4 py-3 flex items-center justify-between text-left transition hover:bg-slate-100 dark:hover:bg-slate-800/60 cursor-pointer"
+      >
+        <div className="flex items-center gap-2">
+          <CheckSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <span className="text-xs font-bold text-slate-900 dark:text-white">
+            Assign Tasks (Pro & Growth)
+          </span>
+          {eventTasks.length > 0 && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold">
+              {eventTasks.length} {eventTasks.length === 1 ? "task" : "tasks"}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+          {!taskAccess.allowed ? (
+            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 text-[11px] font-semibold">
+              <Lock className="h-3 w-3" /> Growth & Pro
+            </span>
+          ) : (
+            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+              {assignTasksOpen ? "Collapse −" : "Expand +"}
+            </span>
+          )}
+        </div>
+      </button>
+
+      {assignTasksOpen && (
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
+          {!taskAccess.allowed ? (
+            <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-start gap-3">
+              <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <p className="font-bold text-amber-900 dark:text-amber-200">
+                  Task Assignment is Locked on Free Plan
+                </p>
+                <p className="text-amber-700 dark:text-amber-300 mt-1 leading-relaxed text-[11px]">
+                  Task delegation with member tracking, automated planning clocks, and overall event progress rollup is available on Growth and Pro plans.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/dashboard/settings?tab=subscription")}
+                  className="mt-2.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] cursor-pointer inline-flex items-center gap-1"
+                >
+                  Upgrade to Growth / Pro →
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                List action items and assign them to members. Each member will see their assigned tasks on their dashboard, record progress, and submit performance reports contributing to the event's overall progress.
+              </p>
+
+              {/* Extended Form: Add Todo Row */}
+              <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col sm:flex-row gap-2 items-end">
+                <div className="flex-1 w-full">
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
+                    Deliverable / Action Item
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Coordinate venue stage & sound equipment"
+                    value={todoTitle}
+                    onChange={(e) => setTodoTitle(e.target.value)}
+                    className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div className="w-full sm:w-44">
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
+                    Assign Member
+                  </label>
+                  <select
+                    value={todoMemberId}
+                    onChange={(e) => setTodoMemberId(e.target.value)}
+                    className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-2 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
+                  >
+                    <option value="">Select Member...</option>
+                    {orgMembers?.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.user?.full_name || "Member"} ({m.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="w-full sm:w-36">
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
+                    Due Date
+                  </label>
+                  <input
+                    type="date"
+                    value={todoDueDate}
+                    onChange={(e) => setTodoDueDate(e.target.value)}
+                    className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-2 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddTodoItem}
+                  className="w-full sm:w-auto px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shrink-0 cursor-pointer flex items-center justify-center gap-1 h-[33px]"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Add Task</span>
+                </button>
+              </div>
+
+              {/* List of Todos with Member Select Dropdown in Front */}
+              {eventTasks.length > 0 ? (
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider font-bold text-slate-400">
+                    <span>Assigned Deliverables ({eventTasks.length})</span>
+                    <span>Average Progress: {Math.round(eventTasks.reduce((s, t) => s + (t.progress || 0), 0) / eventTasks.length)}%</span>
+                  </div>
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                    {eventTasks.map((task) => (
+                      <div key={task.id} className="p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          {/* Member Select Dropdown in front of each item */}
+                          <div className="w-40 shrink-0">
+                            <select
+                              value={task.assigned_to_member_id}
+                              onChange={(e) => handleUpdateTaskAssignee(task.id, e.target.value)}
+                              className="w-full text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 px-2 py-1 outline-none text-slate-900 dark:text-white cursor-pointer"
+                            >
+                              {orgMembers?.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.user?.full_name || "Member"}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                              {task.title}
+                            </p>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              Due: {task.due_date ? new Date(task.due_date).toLocaleDateString([], { month: "short", day: "numeric" }) : "Event day"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            (task.progress || 0) >= 100
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                              : (task.progress || 0) > 0
+                              ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                          }`}>
+                            {task.progress || 0}%
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTodoItem(task.id)}
+                            className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                            title="Remove task"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-center text-xs text-slate-400 italic py-2">
+                  No deliverables added yet. Use the inputs above to add tasks.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-6 select-none font-sans w-full">
@@ -6281,15 +6922,6 @@ export const EventsCalendar: React.FC = () => {
           >
             <LayoutGrid className="h-3.5 w-3.5" />
             <span>Attendance Grid Matrix</span>
-            {isPaidPlan ? (
-              <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded font-medium">
-                Live
-              </span>
-            ) : (
-              <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.2 rounded font-medium">
-                Free Mode
-              </span>
-            )}
           </button>
           <button
             type="button"
@@ -6397,6 +7029,79 @@ export const EventsCalendar: React.FC = () => {
                   <span>Date: <span className="text-slate-900 dark:text-white font-mono">{new Date(ev.date_time).toLocaleDateString()}</span></span>
                   <span>Venue: <span className="text-slate-900 dark:text-white">{ev.location}</span></span>
                 </div>
+
+                {(() => {
+                  let cardTasks: EventTask[] = ev.tasks || [];
+                  if (!cardTasks || cardTasks.length === 0) {
+                    try {
+                      const local = localStorage.getItem(`event_tasks_${ev.id}`);
+                      if (local) cardTasks = JSON.parse(local);
+                    } catch (e) {}
+                  }
+
+                  if (!cardTasks || cardTasks.length === 0) return null;
+
+                  const overallProgress = ev.overall_progress !== undefined
+                    ? ev.overall_progress
+                    : Math.round(cardTasks.reduce((s, t) => s + (t.progress || 0), 0) / cardTasks.length);
+                  const isExpanded = !!showTasksForEventId[ev.id];
+
+                  return (
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                          <CheckSquare className="h-3.5 w-3.5 text-emerald-600" />
+                          Deliverables Overall Progress:
+                        </span>
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {overallProgress}% ({cardTasks.filter((t) => (t.progress || 0) >= 100).length}/{cardTasks.length} Completed)
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div
+                          className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                          style={{ width: `${overallProgress}%` }}
+                        />
+                      </div>
+
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowTasksForEventId((prev) => ({ ...prev, [ev.id]: !prev[ev.id] }))}
+                          className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>{isExpanded ? "Hide Deliverables & Reports" : `View Deliverables & Reports (${cardTasks.length})`}</span>
+                          <span>{isExpanded ? "▲" : "▼"}</span>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="mt-2 space-y-2 bg-slate-50 dark:bg-slate-950/40 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs animate-in">
+                            {cardTasks.map((task) => (
+                              <div key={task.id} className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-slate-900 dark:text-white truncate max-w-[200px]">{task.title}</span>
+                                  <span className="font-mono font-bold text-[11px] text-emerald-600 dark:text-emerald-400">{task.progress || 0}%</span>
+                                </div>
+                                <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium">
+                                  <span>Assigned: <strong className="text-slate-700 dark:text-slate-300">{task.assigned_to_name}</strong></span>
+                                  <span className="font-mono">Due: {task.due_date ? new Date(task.due_date).toLocaleDateString([], { month: "short", day: "numeric" }) : "-"}</span>
+                                </div>
+                                {task.performance_report && (
+                                  <div className="p-2 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40 text-[11px]">
+                                    <span className="font-bold text-emerald-800 dark:text-emerald-300 block text-[10px] uppercase tracking-wider mb-0.5">
+                                      Member Performance Report ({task.reported_at ? new Date(task.reported_at).toLocaleDateString([], { month: "short", day: "numeric" }) : "Recent"}):
+                                    </span>
+                                    <p className="text-emerald-900 dark:text-emerald-200 italic">"{task.performance_report}"</p>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {isAdmin && (() => {
                   const attAccess = canAccessFeature(activeOrg, "qr_attendance");
@@ -6567,6 +7272,9 @@ export const EventsCalendar: React.FC = () => {
             <Input label="Venue / Location" value={location} onChange={(e) => setLocation(e.target.value)} required />
           </div>
 
+          {/* Extended Task Delegation Form (Pro & Growth) */}
+          {renderTaskAssignmentSection()}
+
           <div className="flex items-center gap-3 mt-4 self-start select-none">
             <input
               type="checkbox"
@@ -6596,6 +7304,9 @@ export const EventsCalendar: React.FC = () => {
             <Input label={t("dashboard_labels.schedule_date_time")} type="datetime-local" value={dateTime} onChange={(e) => setDateTime(e.target.value)} min={new Date().toISOString().slice(0, 16)} />
             <Input label={t("dashboard_labels.venue_location")} value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t("dashboard_labels.venue_placeholder")} />
           </div>
+
+          {/* Extended Task Delegation Form (Pro & Growth) */}
+          {renderTaskAssignmentSection()}
 
           <div className="flex items-center gap-3 mt-4 self-start select-none">
             <input

@@ -904,7 +904,7 @@ export const SuperadminDashboard: React.FC = () => {
         <div className="flex items-center gap-3">
           <div className="hidden sm:flex flex-col text-right">
             <span className="text-xs font-bold text-slate-900 dark:text-white">Lead System Operator</span>
-            <span className="text-[10px] text-emerald-600 font-mono font-semibold">superadmin@impact-o.app</span>
+            <span className="text-[10px] text-emerald-600 font-mono font-semibold">superadmin@impacto.rw</span>
           </div>
           <div className="h-10 w-10 rounded-xl bg-slate-900 dark:bg-slate-800 text-emerald-400 font-black flex items-center justify-center text-xs shadow-sm">
             SA
@@ -3878,7 +3878,7 @@ export const SuperadminDashboard: React.FC = () => {
                       <label className="font-bold text-slate-700 dark:text-slate-300">Auditor Email Address *</label>
                       <Input
                         type="email"
-                        placeholder="e.g. aime@impact-o.app"
+                        placeholder="e.g. aime@impacto.rw"
                         value={staffEmail}
                         onChange={(e) => setStaffEmail(e.target.value)}
                         required

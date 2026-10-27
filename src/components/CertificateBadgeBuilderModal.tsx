@@ -301,7 +301,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
             <div style="text-align: left;">
               <div style="font-size: 9px; text-transform: uppercase; color: #64748b; font-weight: bold;">Date Conferred</div>
               <div style="font-size: 12px; font-weight: bold; color: #0f172a;">${issueDate}</div>
-              <div style="font-size: 8px; font-family: monospace; color: #156c45; margin-top: 3px;">Verify: impact-o.app/verify/${uniqueSerial}</div>
+              <div style="font-size: 8px; font-family: monospace; color: #156c45; margin-top: 3px;">Verify: impacto.rw/verify/${uniqueSerial}</div>
             </div>
 
             <!-- Seal -->
@@ -344,7 +344,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
             <div>
               ${showOrgLogo && effectiveOrgLogo 
                 ? `<div style="background: #ffffff; padding: 10px; border-radius: 12px; display: inline-block; margin-bottom: 16px;"><img src="${effectiveOrgLogo}" style="height: 52px; max-width: 160px; object-fit: contain;" /></div>`
-                : `<div style="font-size: 20px; font-weight: 900; letter-spacing: 1px; margin-bottom: 12px;">IMPACT-O</div>`
+                : `<div style="font-size: 20px; font-weight: 900; letter-spacing: 1px; margin-bottom: 12px;">IMPACTO</div>`
               }
               <div style="font-size: 14px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;">${orgName}</div>
               <div style="font-size: 10px; opacity: 0.85; margin-top: 6px; line-height: 1.4;">${subtitle}</div>
@@ -359,7 +359,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
 
             <div style="border-top: 1px solid rgba(255,255,255,0.25); padding-top: 16px; font-size: 9px; opacity: 0.85; text-align: left;">
               <div>Serial: <span style="font-family: monospace; font-weight: bold;">${uniqueSerial}</span></div>
-              <div style="margin-top: 4px;">Verified Registry: impact-o.app/verify</div>
+              <div style="margin-top: 4px;">Verified Registry: impacto.rw/verify</div>
             </div>
           </div>
 
@@ -476,7 +476,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
             <div style="text-align: left;">
               <div style="font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: bold;">Conferral Date</div>
               <div style="font-size: 13px; font-weight: bold; color: #0f172a;">${issueDate}</div>
-              <div style="font-size: 9px; font-family: monospace; color: #156c45; margin-top: 4px;">impact-o.app/verify/${uniqueSerial}</div>
+              <div style="font-size: 9px; font-family: monospace; color: #156c45; margin-top: 4px;">impacto.rw/verify/${uniqueSerial}</div>
             </div>
 
             <div style="text-align: right; min-width: 220px;">
@@ -650,7 +650,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
           signatory_name: signatoryName,
           signatory_title: signatoryTitle,
           signatory_signature_url: signatureDataUrl || "",
-          qr_verification_url: `https://impact-o.app/verify/${uniqueSerial}`,
+          qr_verification_url: `https://impacto.rw/verify/${uniqueSerial}`,
           status: "issued",
           created_at: new Date().toISOString()
         });
@@ -1193,7 +1193,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                   <div>
                     <span className="text-[9px] uppercase font-bold text-gray-400 block">Date Conferred</span>
                     <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{issueDate}</span>
-                    <span className="text-[8px] font-mono text-[#156c45] block mt-0.5">impact-o.app/verify</span>
+                    <span className="text-[8px] font-mono text-[#156c45] block mt-0.5">impacto.rw/verify</span>
                   </div>
 
                   <div 
@@ -1237,7 +1237,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                         <img src={effectiveOrgLogo} alt="Org" className="h-8 max-w-[100px] object-contain" />
                       </div>
                     ) : (
-                      <div className="font-black text-sm mb-3">IMPACT-O</div>
+                      <div className="font-black text-sm mb-3">IMPACTO</div>
                     )}
                     <h4 className="text-xs font-bold uppercase tracking-wider">{activeOrg?.name || "COOPERATIVE"}</h4>
                     <p className="text-[9px] opacity-80 mt-1">{subtitle}</p>
@@ -1256,7 +1256,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
 
                   <div className="text-[8px] opacity-75 border-t border-white/20 pt-2 font-mono">
                     Token: VERIFIED-TOKEN<br />
-                    Verify: impact-o.app/verify
+                    Verify: impacto.rw/verify
                   </div>
                 </div>
 

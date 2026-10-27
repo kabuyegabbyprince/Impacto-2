@@ -343,7 +343,7 @@ export const AuditorDashboard: React.FC = () => {
           <div className="hidden sm:flex flex-col text-right">
             <span className="text-xs font-bold text-slate-900 dark:text-white">{user?.full_name || "Platform Auditor"}</span>
             <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono font-semibold">
-              {user?.email || "auditor@impact-o.app"}
+              {user?.email || "auditor@impacto.rw"}
             </span>
           </div>
           <div className="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-black flex items-center justify-center text-xs shadow-xs border border-indigo-100 dark:border-slate-700">

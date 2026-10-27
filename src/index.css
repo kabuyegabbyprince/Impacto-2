@@ -83,7 +83,20 @@ div, section, article, header, footer, main, aside, nav {
 
 img, video, canvas, svg {
   max-width: 100%;
+}
+
+img:not([class*="h-"]):not([height]),
+video:not([class*="h-"]):not([height]) {
   height: auto;
+}
+
+#org-header-logo-img {
+  max-height: 32px !important;
+  height: 32px !important;
+  max-width: 120px !important;
+  width: auto !important;
+  object-fit: contain !important;
+  display: block !important;
 }
 
 /* Responsive string and long token wrapping helpers */

@@ -335,7 +335,7 @@ export const OrganizationSettingsPage: React.FC = () => {
   const [slug, setSlug] = useState(activeOrg?.slug || "");
   const [locationName, setLocationName] = useState(activeOrg?.location_name || "Kigali, Rwanda");
   const [contactUs, setContactUs] = useState(activeOrg?.contact_us || "contact@ourorganization.org / +250 788 123 456");
-  const [logoUrl, setLogoUrl] = useState(activeOrg?.logo_url || "/logo.png");
+  const [logoUrl, setLogoUrl] = useState(activeOrg?.logo_url || "");
   const [coverUrl, setCoverUrl] = useState(activeOrg?.cover_url || "from-emerald-500 to-green-600");
   const [galleryInput, setGalleryInput] = useState("");
   const [galleryUrls, setGalleryUrls] = useState<string[]>(activeOrg?.gallery_urls || []);
@@ -348,7 +348,7 @@ export const OrganizationSettingsPage: React.FC = () => {
 
   // Members Dashboard Style Form
   const [dashboardTheme, setDashboardTheme] = useState<"light" | "dark" | "custom">(activeOrg?.dashboard_theme || "light");
-  const [dashboardLogo, setDashboardLogo] = useState(activeOrg?.dashboard_logo || "/logo.png");
+  const [dashboardLogo, setDashboardLogo] = useState(activeOrg?.dashboard_logo || "");
   const [marketplaceEnabled, setMarketplaceEnabled] = useState(activeOrg?.marketplace_enabled ?? true);
 
   // Exit Survey Settings Form
@@ -435,7 +435,7 @@ export const OrganizationSettingsPage: React.FC = () => {
       setSlug(activeOrg.slug || "");
       setLocationName(activeOrg.location_name || "Kigali, Rwanda");
       setContactUs(activeOrg.contact_us || "contact@ourorganization.org / +250 788 123 456");
-      setLogoUrl(activeOrg.logo_url || "/logo.png");
+      setLogoUrl(activeOrg.logo_url || "");
       setCoverUrl(activeOrg.cover_url || "from-emerald-500 to-green-600");
       if (activeOrg.gallery_urls && activeOrg.gallery_urls.length > 0) {
         setGalleryUrls(activeOrg.gallery_urls);
@@ -447,7 +447,7 @@ export const OrganizationSettingsPage: React.FC = () => {
       setShowImpactPublicly(activeOrg.show_impact_publicly ?? true);
       setShowCalendarPublicly(activeOrg.show_calendar_publicly ?? true);
       setDashboardTheme(activeOrg.dashboard_theme || "light");
-      setDashboardLogo(activeOrg.dashboard_logo || "/logo.png");
+      setDashboardLogo(activeOrg.dashboard_logo || "");
       setMarketplaceEnabled(activeOrg.marketplace_enabled ?? true);
       setMName(activeOrg.dues_account_name || activeOrg.donation_account_name || activeOrg.name || "");
       setMtnNum(activeOrg.dues_mtn_number || activeOrg.donation_mtn_number || "");

@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { Event as ImpactEvent, OrgMember } from "../types";
 import { useCurrencyStore } from "../store/currencyStore";
+import { useAuthStore } from "../store/authStore";
+import { useOrgStore } from "../store/orgStore";
 import { useToast } from "./Toast";
 
 export interface SpaceEntity {
@@ -112,6 +114,8 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
 }) => {
   const { addToast } = useToast();
   const { formatAmount } = useCurrencyStore();
+  const { user } = useAuthStore();
+  const { activeMember } = useOrgStore();
 
   const orgId = activeOrg?.id || "default";
 
@@ -509,28 +513,34 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
 
         {/* Quick Actions */}
         <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setBookingSpaceId(spaces[0]?.id || "");
+              if (user?.full_name && !bookingReservedBy) {
+                setBookingReservedBy(user.full_name);
+              }
+              const defaultPhone = user?.phone_number || activeMember?.phone_number || "";
+              if (defaultPhone && !bookingContactPhone) {
+                setBookingContactPhone(defaultPhone);
+              }
+              setOpenBookSpaceModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition cursor-pointer shadow-3xs whitespace-nowrap shrink-0"
+            title="Book a space or room for your activity"
+          >
+            <Clock className="h-3.5 w-3.5 shrink-0" />
+            <span>Reserve Space</span>
+          </button>
           {isAdmin && (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  setBookingSpaceId(spaces[0]?.id || "");
-                  setOpenBookSpaceModal(true);
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition cursor-pointer shadow-3xs whitespace-nowrap shrink-0"
-              >
-                <Clock className="h-3.5 w-3.5 shrink-0" />
-                <span>Reserve Room (24h)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setOpenAddSpaceModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white text-xs font-semibold transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
-              >
-                <Plus className="h-3.5 w-3.5 shrink-0" />
-                <span>Add Facility Space</span>
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => setOpenAddSpaceModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white text-xs font-semibold transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+            >
+              <Plus className="h-3.5 w-3.5 shrink-0" />
+              <span>Add Space</span>
+            </button>
           )}
         </div>
       </div>
@@ -883,17 +893,17 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
       {subTab === "spaces" && (
         <div className="flex flex-col gap-5">
           {/* Top Bar for Space Occupancy View */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
-            <div>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs min-w-0">
+            <div className="min-w-0">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-emerald-600" />
-                <span>Facility Space & Room Lending 24-Hour Schedule</span>
+                <Building2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span className="truncate">Facility Spaces & 24h Schedule</span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Manage room availability, sizes, and 24-hour occupancy time slots. Set when spaces are occupied or open for lending.
+                Room availability and 24-hour occupancy time slots.
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
                 <span>Date:</span>
                 <input
@@ -907,11 +917,19 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                 type="button"
                 onClick={() => {
                   setBookingDate(selectedDate);
+                  if (user?.full_name && !bookingReservedBy) {
+                    setBookingReservedBy(user.full_name);
+                  }
+                  const defaultPhone = user?.phone_number || activeMember?.phone_number || "";
+                  if (defaultPhone && !bookingContactPhone) {
+                    setBookingContactPhone(defaultPhone);
+                  }
                   setOpenBookSpaceModal(true);
                 }}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer shadow-3xs"
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-3xs whitespace-nowrap shrink-0 flex items-center gap-1"
               >
-                + New 24h Reservation
+                <Plus className="h-3.5 w-3.5" />
+                <span>New Booking</span>
               </button>
             </div>
           </div>
@@ -921,18 +939,18 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>
                 <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                  24-Hour Occupancy Timeline for {selectedDateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                  24h Occupancy · {selectedDateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
                 </h4>
                 <p className="text-xs text-slate-400">
-                  Green segments indicate free/available time. Amber segments indicate active bookings.
+                  Green indicates available. Amber indicates occupied.
                 </p>
               </div>
               <div className="flex items-center gap-3 text-xs">
                 <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
-                  <span className="h-3 w-3 rounded bg-emerald-500" /> Free / Available
+                  <span className="h-2.5 w-2.5 rounded bg-emerald-500" /> Available
                 </span>
                 <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-semibold">
-                  <span className="h-3 w-3 rounded bg-amber-500" /> Occupied
+                  <span className="h-2.5 w-2.5 rounded bg-amber-500" /> Occupied
                 </span>
               </div>
             </div>

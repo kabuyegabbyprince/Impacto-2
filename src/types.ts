@@ -179,6 +179,21 @@ export interface MemberTier {
   color: string;
 }
 
+export interface EventTask {
+  id: string;
+  event_id?: string;
+  title: string;
+  assigned_to_member_id: string; // member_id
+  assigned_to_name?: string;
+  assigned_to_role?: string;
+  due_date?: string;
+  progress: number; // 0 to 100
+  status: "todo" | "pending" | "in_progress" | "completed";
+  performance_report?: string;
+  reported_at?: string;
+  created_at?: string;
+}
+
 export interface Event {
   id: string;
   org_id: string;
@@ -202,6 +217,9 @@ export interface Event {
   longitude?: number;
   radius_meters?: number;
   is_broadcasted?: boolean;
+  // Extended Task Assignment & Deliverables
+  tasks?: EventTask[];
+  overall_progress?: number;
 }
 
 export interface EventAttendance {
@@ -327,6 +345,10 @@ export interface Goal {
   period_label?: string;
   achievement_percentage?: number;
   status?: "pending" | "in_progress" | "completed";
+  assigned_to_member_id?: string;
+  assigned_to_name?: string;
+  is_recurring?: boolean;
+  recurrence_cycle?: "weekly" | "monthly" | "quarterly";
 }
 
 export interface GoalUpdate {

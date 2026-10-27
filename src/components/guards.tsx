@@ -91,7 +91,7 @@ export const AuditorRoute: React.FC<{ children: React.ReactNode }> = ({ children
     user.platform_role === "auditor" ||
     user.platform_role === "superadmin" ||
     user.email?.includes("auditor") ||
-    user.email === "superadmin@impact-o.app";
+    user.email === "superadmin@impacto.rw";
 
   if (!hasAuditorAccess) {
     return <Navigate to="/" replace />;

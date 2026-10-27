@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useLocalTranslation } from "../locales/additional-translations";
 import { useOrgStore } from "../store/orgStore";
-import { useGoals, useCreateGoal, useUpdateGoal, useDeleteGoal } from "../hooks/useImpactoData";
+import { useGoals, useCreateGoal, useUpdateGoal, useDeleteGoal, useMembers } from "../hooks/useImpactoData";
 import { Card, Button, Input, Badge, EmptyState, Modal } from "../components/ui";
 import { 
   Plus, 
@@ -22,7 +22,9 @@ import {
   BarChart2,
   Lock,
   PieChart as PieIcon,
-  Sparkles
+  Sparkles,
+  RefreshCw,
+  UserCheck
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend } from "recharts";
 import jsPDF from "jspdf";
@@ -39,6 +41,7 @@ export const GoalsPage: React.FC = () => {
   const isPaidGrowthOrPro = lifecycle.effectiveTier === "growth" || lifecycle.effectiveTier === "pro" || lifecycle.effectiveTier === "enterprise";
 
   const { data: goals = [], isLoading, refetch } = useGoals(activeOrg?.id);
+  const { data: members = [] } = useMembers(activeOrg?.id);
   const createGoalMutation = useCreateGoal();
   const updateGoalMutation = useUpdateGoal();
   const deleteGoalMutation = useDeleteGoal();
@@ -62,6 +65,9 @@ export const GoalsPage: React.FC = () => {
   const [unitVal, setUnitVal] = useState("percent");
   const [deadlineVal, setDeadlineVal] = useState(`${new Date().getFullYear()}-12-31`);
   const [initialAchievement, setInitialAchievement] = useState<number>(0);
+  const [assignedMemberId, setAssignedMemberId] = useState("");
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceCycle, setRecurrenceCycle] = useState<"weekly" | "monthly" | "quarterly">("monthly");
 
   // New Period Bucket Form State
   const [newPeriodType, setNewPeriodType] = useState<"yearly" | "monthly">("yearly");
@@ -346,6 +352,9 @@ export const GoalsPage: React.FC = () => {
     setTargetVal(100);
     setUnitVal("percent");
     setInitialAchievement(0);
+    setAssignedMemberId("");
+    setIsRecurring(false);
+    setRecurrenceCycle("monthly");
     setEditingGoal(null);
     setIsAddGoalOpen(true);
   };
@@ -361,6 +370,9 @@ export const GoalsPage: React.FC = () => {
     setUnitVal(goal.unit || "percent");
     setDeadlineVal(goal.deadline ? goal.deadline.split("T")[0] : `${new Date().getFullYear()}-12-31`);
     setInitialAchievement(goal.achievement_percentage || 0);
+    setAssignedMemberId(goal.assigned_to_member_id || "");
+    setIsRecurring(!!goal.is_recurring);
+    setRecurrenceCycle(goal.recurrence_cycle || "monthly");
     setIsAddGoalOpen(true);
   };
 
@@ -372,6 +384,9 @@ export const GoalsPage: React.FC = () => {
     const clampedAch = Math.max(0, Math.min(100, initialAchievement));
     const statusVal = clampedAch >= 100 ? "completed" : clampedAch > 0 ? "in_progress" : "pending";
     const progressVal = Math.round(((targetVal || 100) * clampedAch) / 100);
+
+    const targetMember = members.find(m => m.id === assignedMemberId);
+    const assignedName = targetMember ? (targetMember.user?.full_name || "Member") : "";
 
     try {
       if (editingGoal) {
@@ -388,6 +403,10 @@ export const GoalsPage: React.FC = () => {
           achievement_percentage: clampedAch,
           status: statusVal,
           current_progress: progressVal,
+          assigned_to_member_id: assignedMemberId || undefined,
+          assigned_to_name: assignedName || undefined,
+          is_recurring: isRecurring,
+          recurrence_cycle: isRecurring ? recurrenceCycle : undefined,
         });
       } else {
         await createGoalMutation.mutateAsync({
@@ -404,6 +423,10 @@ export const GoalsPage: React.FC = () => {
           current_progress: progressVal,
           visibility: "public",
           is_pinned: false,
+          assigned_to_member_id: assignedMemberId || undefined,
+          assigned_to_name: assignedName || undefined,
+          is_recurring: isRecurring,
+          recurrence_cycle: isRecurring ? recurrenceCycle : undefined,
         });
       }
 
@@ -757,7 +780,7 @@ export const GoalsPage: React.FC = () => {
                             )}
                           </button>
 
-                          <div className="space-y-1 flex-1 min-w-0">
+                          <div className="space-y-1.5 flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <h3
                                 className={`text-base font-bold text-slate-800 dark:text-slate-100 leading-snug break-words ${
@@ -766,10 +789,10 @@ export const GoalsPage: React.FC = () => {
                               >
                                 {goal.title}
                               </h3>
-                              {goal.deadline && (
-                                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-full">
-                                  <Clock className="h-3 w-3" />
-                                  {new Date(goal.deadline).toLocaleDateString()}
+                              {goal.assigned_to_name && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-md">
+                                  <UserCheck className="h-3 w-3" />
+                                  <span>{goal.assigned_to_name}</span>
                                 </span>
                               )}
                             </div>
@@ -781,6 +804,46 @@ export const GoalsPage: React.FC = () => {
                             )}
                           </div>
                         </div>
+
+                        {/* Middle: Goals Planning Clock with Overdue Alert (image_250d7ea7.png) */}
+                        {(() => {
+                          const now = new Date();
+                          const dueDate = goal.deadline ? new Date(goal.deadline) : null;
+                          if (!dueDate) return null;
+                          const isPastDue = dueDate.getTime() < now.getTime() && !isCompleted;
+                          const diffDays = Math.max(1, Math.ceil(Math.abs(now.getTime() - dueDate.getTime()) / (1000 * 3600 * 24)));
+                          const formattedDate = dueDate.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
+
+                          return (
+                            <div className="flex flex-col items-center justify-center shrink-0 self-center sm:self-auto py-1">
+                              {isPastDue ? (
+                                <div className="flex flex-col items-center justify-center p-2 rounded-full bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-center shadow-3xs min-w-[90px] min-h-[90px] animate-in fade-in">
+                                  <span className="text-rose-700 dark:text-rose-300 font-extrabold text-[11px] leading-tight block">
+                                    Overdue<br />by {diffDays}d
+                                  </span>
+                                  <div className="flex items-center gap-1 text-rose-600 dark:text-rose-400 mt-1">
+                                    <Clock className="h-3 w-3 shrink-0" />
+                                    <span className="text-[9px] font-bold leading-tight">
+                                      (Due {formattedDate})
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700">
+                                  <Clock className="h-3.5 w-3.5 text-emerald-600" />
+                                  <span>Due {formattedDate}</span>
+                                </div>
+                              )}
+
+                              {goal.is_recurring && (
+                                <div className="flex items-center gap-1 text-teal-600 dark:text-teal-400 text-[10px] font-bold mt-1 text-center">
+                                  <RefreshCw className="h-3 w-3 shrink-0" />
+                                  <span className="leading-tight">Auto-<br />recurring cycle</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* Right: Achievement Slider & Quick Preset Buttons */}
                         <div className="flex flex-wrap items-center gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
@@ -938,6 +1001,57 @@ export const GoalsPage: React.FC = () => {
                   value={initialAchievement}
                   onChange={(e) => setInitialAchievement(Number(e.target.value))}
                 />
+              </div>
+            </div>
+
+            {/* Member Responsibility Assignment & Recurring Timer */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-1.5">
+                  <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Assign Responsibility (Member)</span>
+                </label>
+                <select
+                  value={assignedMemberId}
+                  onChange={(e) => setAssignedMemberId(e.target.value)}
+                  className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 p-2.5 outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"
+                >
+                  <option value="">Unassigned (All Members / Executive)</option>
+                  {members.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.user?.full_name || "Member"} ({m.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between gap-1.5">
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-200 select-none">
+                  <input
+                    type="checkbox"
+                    checked={isRecurring}
+                    onChange={e => setIsRecurring(e.target.checked)}
+                    className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                  />
+                  <span className="flex items-center gap-1.5 text-xs">
+                    <RefreshCw className="h-3.5 w-3.5 text-teal-600" />
+                    <span>Auto-recurring cycle timer</span>
+                  </span>
+                </label>
+                {isRecurring && (
+                  <div className="flex items-center gap-2 pt-1 animate-in fade-in">
+                    <span className="text-[11px] text-slate-500 font-medium">Frequency:</span>
+                    <select
+                      value={recurrenceCycle}
+                      onChange={e => setRecurrenceCycle(e.target.value as any)}
+                      className="text-xs p-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold"
+                    >
+                      <option value="weekly">Weekly cycle</option>
+                      <option value="monthly">Monthly cycle</option>
+                      <option value="quarterly">Quarterly cycle</option>
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
 

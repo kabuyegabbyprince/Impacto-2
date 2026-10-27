@@ -299,15 +299,6 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
             <h3 className="text-base font-semibold text-slate-900 dark:text-white">
               Dynamic Attendance Grid
             </h3>
-            {isPaidPlan ? (
-              <span className="inline-flex items-center text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/60">
-                Interactive Grid
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800/60">
-                <Lock className="h-3 w-3" /> Free Mode
-              </span>
-            )}
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             Two-dimensional matrix with scheduled events in rows and active members in columns.
@@ -338,20 +329,6 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
         </div>
       </div>
 
-      {/* Free Plan Information Banner */}
-      {!isPaidPlan && (
-        <div className="p-3.5 bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/50 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-200">
-          <div className="flex items-center gap-2.5">
-            <Info className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-            <p className="text-xs leading-relaxed font-normal">
-              Direct local spreadsheet export is unlimited. Live interactive check-in in the web matrix is available with the Event Package or upgraded subscriptions.
-            </p>
-          </div>
-          <span className="shrink-0 text-xs font-medium text-amber-800 dark:text-amber-300">
-            Export Enabled
-          </span>
-        </div>
-      )}
 
       {/* Filter and Metric Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

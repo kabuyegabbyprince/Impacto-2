@@ -203,7 +203,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
   const [resolvedHeaderLogo, setResolvedHeaderLogo] = useState<string>("");
 
   useEffect(() => {
-    if (!rawLogo || rawLogo === "/logo.png") {
+    if (!rawLogo || rawLogo.includes("logo.png")) {
       setResolvedHeaderLogo("");
       return;
     }
@@ -343,16 +343,19 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
               );
             })()
           ) : resolvedHeaderLogo ? (
-            <img 
-              id="org-header-logo-img"
-              src={resolvedHeaderLogo} 
-              alt={activeOrg?.name || "Logo"} 
-              className="h-8 max-w-[120px] shrink-0 object-contain rounded"
-              referrerPolicy="no-referrer"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-              }}
-            />
+            <div className="h-8 max-h-8 max-w-[120px] flex items-center justify-center shrink-0 overflow-hidden rounded">
+              <img 
+                id="org-header-logo-img"
+                src={resolvedHeaderLogo} 
+                alt={activeOrg?.name || "Logo"} 
+                className="h-8 w-auto max-h-8 max-w-[120px] shrink-0 object-contain rounded"
+                style={{ height: "32px", maxHeight: "32px", width: "auto", maxWidth: "120px", objectFit: "contain" }}
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
+              />
+            </div>
           ) : (
             <svg className="h-7 w-7 text-[#156c45] dark:text-emerald-400 shrink-0" viewBox="0 0 100 100" fill="none">
               <circle cx="50" cy="35" r="25" stroke="currentColor" strokeWidth="8" />

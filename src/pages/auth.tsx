@@ -1621,10 +1621,6 @@ export const Register: React.FC = () => {
                 <form onSubmit={handleNgoRegister} className="flex flex-col gap-4">
                   {ngoStep === 1 ? (
                     <>
-                      <div className="p-3 bg-emerald-50/60 dark:bg-slate-900 border border-emerald-100 dark:border-slate-800 rounded-xl mb-1 text-xs text-gray-600 dark:text-slate-350 leading-relaxed font-semibold">
-                        Register a new Organization Workspace. The system will automatically build a public profile at impact-o.app/{`@${generatedSlug || "slug"}`} which anyone can view.
-                      </div>
-
                       <Input
                         type="text"
                         label="Organization Name"
@@ -1714,20 +1710,6 @@ export const Register: React.FC = () => {
                           </label>
                         </div>
                       )}
-
-                      {/* Public Page Slug Preview Box */}
-                      <div className="p-3 bg-slate-50 dark:bg-slate-900 border rounded-xl flex flex-col gap-2">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none">
-                          Dynamic URL Preview
-                        </span>
-                        <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400 mt-1">
-                          <Globe className="h-3.5 w-3.5 shrink-0" />
-                          <span>impact-o.app/{generatedSlug ? `@${generatedSlug}` : "..."}</span>
-                        </div>
-                        <p className="text-[10px] text-gray-400 font-medium leading-relaxed leading-normal">
-                          The public will see your active programs, achievements, and donate button at this page. Note: Only verified administrators can access the secure backend workspace.
-                        </p>
-                      </div>
 
                       <Button
                         type="button"
@@ -2581,7 +2563,7 @@ export const OrgPicker: React.FC = () => {
                         {org.org_category}
                       </span>
                       <span className="text-[10px] font-mono text-gray-400 font-semibold select-none">
-                        impact-o.app/@{org.slug}
+                        impacto.rw/@{org.slug}
                       </span>
                     </div>
                     <h4 className="font-display font-extrabold text-sm text-gray-900 dark:text-white mt-2 leading-tight">

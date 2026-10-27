@@ -1222,10 +1222,10 @@ export const PublicOrgPage: React.FC = () => {
                   <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
                     <div>
                       <h2 className="text-base sm:text-lg font-extrabold font-display text-gray-950 dark:text-white">
-                        Facility Spaces & 24h Lending Calendar
+                        Facility Spaces & Calendar
                       </h2>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        Inspect room dimensions, sizes, estimated capacity, and 24-hour occupied times set by the organization. Click any open date or room to send a reservation request.
+                        View room occupancy and request reservations.
                       </p>
                     </div>
                   </div>
@@ -1253,7 +1253,7 @@ export const PublicOrgPage: React.FC = () => {
                                   <span>{monthName}</span>
                                 </h3>
                                 <p className="text-[11px] text-gray-500 font-mono">
-                                  Click any date cell to select room & request 24h space lending
+                                  Select any date to request room booking.
                                 </p>
                               </div>
                             </div>
@@ -1492,14 +1492,14 @@ export const PublicOrgPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-500 leading-relaxed">
-                    Verify official certificates, member ID badges, and compliance seals issued by {org.name}.
+                    Verify certificates and member credentials issued by {org.name}.
                   </p>
                   <Link
                     to={`/verify?code=${org.registration_number || "CERT-2026-" + org.slug}`}
                     className="w-full py-2.5 px-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 text-xs font-bold border border-emerald-300 dark:border-emerald-700 flex items-center justify-center gap-2 transition shadow-3xs"
                   >
                     <Award className="h-4 w-4 text-emerald-600" />
-                    <span>Verify Badge & Certificate</span>
+                    <span>Verify Credentials</span>
                   </Link>
                 </div>
               </div>
@@ -1512,10 +1512,10 @@ export const PublicOrgPage: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-base font-bold font-display text-slate-900 dark:text-white">
-                      Community Support and Contributions
+                      Community Support & Donations
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                      Voluntary Mobile Money contributions for {org.name}. Give any amount to support cooperative initiatives.
+                      Mobile Money contributions to support community initiatives.
                     </p>
                   </div>
                 </div>

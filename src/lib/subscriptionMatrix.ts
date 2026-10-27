@@ -616,6 +616,8 @@ export type ImpactFeatureKey =
   | "basic_chat"
   | "announcements"
   | "event_listings"
+  | "video_call"
+  | "task_assignment"
   | "dues_charges"
   | "payment_proofs"
   | "goals_tracker"
@@ -665,11 +667,13 @@ export function canAccessFeature(
     member_directory: "free",
     basic_chat: "free",
     announcements: "free",
-    event_listings: "free",
+    event_listings: "growth",
+    video_call: "growth",
+    task_assignment: "growth",
     dues_charges: "free",
     payment_proofs: "free",
     goals_tracker: "free",
-    chat_polls: "starter",
+    chat_polls: "growth",
     qr_attendance: "starter",
     excel_export: "growth",
     meeting_minutes: "starter",
@@ -687,6 +691,9 @@ export function canAccessFeature(
   };
 
   const featureToPackageMap: Partial<Record<ImpactFeatureKey, AddOnPackageId>> = {
+    event_listings: "event_pack",
+    video_call: "event_pack",
+    task_assignment: "event_pack",
     qr_attendance: "event_pack",
     excel_export: "event_pack",
     meeting_minutes: "event_pack",

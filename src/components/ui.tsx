@@ -209,7 +209,7 @@ export const ImageUploadInput: React.FC<{
               alt="Preview" 
               className="h-full object-contain animate-fadeIn" 
               onError={(e) => {
-                (e.target as HTMLImageElement).src = "/logo.png";
+                (e.target as HTMLImageElement).style.display = "none";
               }}
             />
           </div>

@@ -313,7 +313,7 @@ export class MockDB {
     const defaultStaff = [
       {
         id: "staff-superadmin-1",
-        email: "superadmin@impact-o.app",
+        email: "superadmin@impacto.rw",
         username: "superadmin",
         full_name: "Lead System Operator",
         role: "superadmin",
@@ -427,7 +427,7 @@ export class MockDB {
         signatory_name: "Evariste Ndagijimana",
         signatory_title: "Cooperative President",
         signatory_signature_url: "",
-        qr_verification_url: "https://impact-o.app/verify/CERT-2026-COOP-8821",
+        qr_verification_url: "https://impacto.rw/verify/CERT-2026-COOP-8821",
         status: "issued",
         created_at: new Date(Date.now() - 14 * 86400000).toISOString()
       },
@@ -445,7 +445,7 @@ export class MockDB {
         signatory_name: "Evariste Ndagijimana",
         signatory_title: "Cooperative President",
         signatory_signature_url: "",
-        qr_verification_url: "https://impact-o.app/verify/CERT-2026-AGRI-4019",
+        qr_verification_url: "https://impacto.rw/verify/CERT-2026-AGRI-4019",
         status: "issued",
         created_at: new Date(Date.now() - 6 * 86400000).toISOString()
       }
