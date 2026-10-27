@@ -314,8 +314,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between px-4 sm:px-6 z-40 shrink-0 select-none shadow-3xs">
-      <div className="flex items-center gap-3">
+    <header className="fixed top-0 left-0 right-0 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between px-2.5 sm:px-6 z-40 shrink-0 select-none shadow-3xs gap-1.5 sm:gap-3">
+      <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 shrink">
         {/* Mobile menu toggle */}
         <button
           id="tour-mobile-menu-toggle"
@@ -487,9 +487,9 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
         )}
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-2.5">
+      <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
         {/* Currency Switcher */}
-        <div className="relative flex items-center">
+        <div className="relative flex items-center shrink-0">
           <button
             id="tour-currency-selector"
             data-tour="currency"
@@ -501,10 +501,10 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
               setNotificationOpen(false);
               setOrgSwitcherOpen(false);
             }}
-            className="flex items-center gap-1.5 px-2.5 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 transition h-8.5 cursor-pointer shadow-3xs whitespace-nowrap"
+            className="flex items-center gap-1 px-1.5 sm:px-2.5 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 transition h-8 sm:h-8.5 cursor-pointer shadow-3xs whitespace-nowrap shrink-0"
           >
             <Coins className="h-3.5 w-3.5 text-[#156c45] dark:text-emerald-400 shrink-0" />
-            <span>{activeCurrency}</span>
+            <span className="text-[11px] font-mono">{activeCurrency}</span>
           </button>
           {currencyOpen && (
             <>
@@ -535,7 +535,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
         </div>
 
         {/* Language switch */}
-        <div className="relative flex items-center">
+        <div className="relative flex items-center shrink-0">
           <button
             id="tour-lang-selector"
             data-tour="language"
@@ -549,17 +549,17 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
             }}
             aria-label="Personal Language and Accessibility Selector"
             title="Choose your personal language preference"
-            className="flex items-center gap-1.5 px-2.5 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 transition h-8.5 cursor-pointer shadow-3xs"
+            className="flex items-center gap-1 px-1.5 sm:px-2.5 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 transition h-8 sm:h-8.5 cursor-pointer shadow-3xs shrink-0"
           >
-            <Globe className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider">
+            <Globe className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
+            <span className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider">
               {(i18n.language || "en").substring(0, 2)}
             </span>
           </button>
           {langMenuOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setLangMenuOpen(false)} />
-              <div className="absolute right-0 top-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl w-52 overflow-hidden shrink-0 z-50 py-1">
+              <div className="absolute right-0 top-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl w-48 sm:w-52 max-w-[calc(100vw-2rem)] overflow-hidden shrink-0 z-50 py-1">
                 <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-700">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
                     Personal Language
@@ -605,14 +605,14 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
         <button
           onClick={toggleTheme}
           aria-label="Toggle dark mode"
-          className="w-8.5 h-8.5 rounded-xl flex items-center justify-center bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 transition cursor-pointer shadow-3xs"
+          className="w-8 sm:w-8.5 h-8 sm:h-8.5 rounded-xl flex items-center justify-center bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 transition cursor-pointer shadow-3xs shrink-0"
         >
           {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
 
         {/* Notifications */}
         {activeOrg && (
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               onClick={() => {
                 setNotificationOpen(!notificationOpen);
@@ -621,7 +621,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                 setLastNotificationTimestamp(now);
               }}
               aria-label="Notifications"
-              className="w-8.5 h-8.5 rounded-xl flex items-center justify-center bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 transition cursor-pointer relative shadow-3xs"
+              className="w-8 sm:w-8.5 h-8 sm:h-8.5 rounded-xl flex items-center justify-center bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 transition cursor-pointer relative shadow-3xs shrink-0"
             >
               <Bell className="h-4 w-4" />
               {hasNewNotification && (
@@ -632,7 +632,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
             {notificationOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setNotificationOpen(false)} />
-                <div className="absolute right-0 top-10 w-80 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-2xl py-3.5 z-50 text-sm shrink-0 flex flex-col gap-2">
+                <div className="absolute right-0 top-10 w-72 sm:w-80 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-2xl py-3.5 z-50 text-sm shrink-0 flex flex-col gap-2">
                   <div className="px-4 pb-2 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
                     <span className="font-bold text-gray-950 dark:text-white">Announcements & Notices</span>
                     <Badge color={hasNewNotification ? "red" : "blue"}>{hasNewNotification ? "New" : "All Read"}</Badge>

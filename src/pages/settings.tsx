@@ -861,7 +861,7 @@ export const OrganizationSettingsPage: React.FC = () => {
       )}
 
       {/* Settings Tab Headers - Modern Segmented Control */}
-      <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 inline-flex items-center gap-1 shadow-3xs overflow-x-auto scrollbar-none select-none shrink-0">
+      <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-1 shadow-3xs overflow-x-auto no-scrollbar max-w-full select-none shrink-0">
         <button
           onClick={() => setActiveTab("general")}
           className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${

@@ -2953,7 +2953,7 @@ export const ChatRoom: React.FC = () => {
               </div>
 
               {/* Right Action Buttons */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 max-w-full overflow-x-auto no-scrollbar whitespace-nowrap">
                 <button
                   type="button"
                   onClick={() => {
@@ -2965,7 +2965,7 @@ export const ChatRoom: React.FC = () => {
                     }
                     setOpenMeetModal(true);
                   }}
-                  className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer ${
+                  className={`inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 h-8 sm:h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer ${
                     !isVideoAllowed
                       ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
                       : "bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
@@ -2982,7 +2982,7 @@ export const ChatRoom: React.FC = () => {
                   )}
                 </button>
 
-                <div className="relative group">
+                <div className="relative group shrink-0">
                   <button
                     type="button"
                     onClick={() => {
@@ -2995,7 +2995,7 @@ export const ChatRoom: React.FC = () => {
                       setOpenPollModal(true);
                     }}
                     title={!isPollAllowed ? "Upgrade to Growth to enable polls" : "Launch Poll"}
-                    className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer ${
+                    className={`inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 h-8 sm:h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer ${
                       !isPollAllowed
                         ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
                         : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800"
@@ -3180,11 +3180,11 @@ export const ChatRoom: React.FC = () => {
                   onChange={handleChatFileChange}
                 />
 
-                <Button size="md" variant="outline" type="button" onClick={() => setShowAttachMenu(!showAttachMenu)} className="px-3 border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/20 text-sky-700 dark:text-sky-300 h-13 w-13 flex items-center justify-center transition-all hover:bg-sky-100 dark:hover:bg-sky-900/30 rounded-xl cursor-pointer shadow-sm shrink-0" title="Attach Files">
-                  <Paperclip className="h-7 w-7" />
+                <Button size="md" variant="outline" type="button" onClick={() => setShowAttachMenu(!showAttachMenu)} className="px-2 sm:px-3 border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/20 text-sky-700 dark:text-sky-300 h-10 sm:h-12 w-10 sm:w-12 flex items-center justify-center transition-all hover:bg-sky-100 dark:hover:bg-sky-900/30 rounded-xl cursor-pointer shadow-sm shrink-0" title="Attach Files">
+                  <Paperclip className="h-5 w-5 sm:h-6 sm:w-6" />
                 </Button>
                 {showAttachMenu && (
-                  <div className="absolute bottom-16 left-0 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl p-2.5 shadow-2xl w-60 flex flex-col gap-1 z-50 select-none animate-in slide-in-from-bottom-3 duration-100">
+                  <div className="absolute bottom-14 sm:bottom-16 left-0 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl p-2.5 shadow-2xl w-60 max-w-[calc(100vw-2rem)] flex flex-col gap-1 z-50 select-none animate-in slide-in-from-bottom-3 duration-100">
                     <button type="button" onClick={() => { setShowNewDocModal(true); setShowAttachMenu(false); }} className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-bold cursor-pointer flex items-center gap-3 text-emerald-700 dark:text-emerald-400 text-[12px] transition">
                       <PlusCircle className="h-5 w-5" /> Create & Attach New Doc
                     </button>
@@ -3245,14 +3245,14 @@ export const ChatRoom: React.FC = () => {
                     }
                     setOpenPollModal(true);
                   }}
-                  className={`px-3 h-13 w-13 flex items-center justify-center transition-all rounded-xl cursor-pointer shadow-xs shrink-0 relative ${
+                  className={`px-2 sm:px-3 h-10 sm:h-12 w-10 sm:w-12 flex items-center justify-center transition-all rounded-xl cursor-pointer shadow-xs shrink-0 relative ${
                     isFreePlan
                       ? "border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
                       : "border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/30"
                   }`}
                   title={isFreePlan ? "Upgrade to Growth to enable polls" : "Launch Poll"}
                 >
-                  <BarChart3 className="h-7 w-7" />
+                  <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6" />
                   {isFreePlan && (
                     <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white rounded-full p-0.5 shadow-xs">
                       <Lock className="h-3 w-3" />
@@ -3272,25 +3272,24 @@ export const ChatRoom: React.FC = () => {
                 )}
               </div>
 
-
-              <div className="flex-1 relative">
+              <div className="flex-1 relative min-w-0">
                 <Input
                   type="text"
-                  placeholder="Send message to room or drag files here..."
+                  placeholder="Send message to room..."
                   value={typedMessage}
                   onChange={(e) => setTypedMessage(e.target.value)}
-                  className="w-full border-gray-200 dark:border-slate-700 dark:bg-slate-800 text-gray-900 dark:text-white rounded-xl h-13 pl-4 pr-12 text-sm focus:ring-1 focus:ring-[var(--org-primary)] font-semibold"
+                  className="w-full border-gray-200 dark:border-slate-700 dark:bg-slate-800 text-gray-900 dark:text-white rounded-xl h-10 sm:h-12 pl-3 sm:pl-4 pr-10 sm:pr-12 text-xs sm:text-sm focus:ring-1 focus:ring-[var(--org-primary)] font-semibold"
                 />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
                   <button 
                     type="button" 
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className="text-gray-400 hover:text-amber-500 transition cursor-pointer p-1.5"
+                    className="text-gray-400 hover:text-amber-500 transition cursor-pointer p-1"
                   >
-                    <Smile className="h-6 w-6" />
+                    <Smile className="h-5 w-5 sm:h-6 sm:w-6" />
                   </button>
                   {showEmojiPicker && (
-                    <div className="absolute bottom-16 right-0 w-[310px] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl p-3 shadow-2xl grid grid-cols-5 gap-2.5 z-50 animate-in fade-in zoom-in duration-100">
+                    <div className="absolute bottom-14 sm:bottom-16 right-0 w-[280px] sm:w-[310px] max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl p-3 shadow-2xl grid grid-cols-5 gap-2 z-50 animate-in fade-in zoom-in duration-100">
                       {commonEmojis.map(emoji => (
                         <button
                           key={emoji}
@@ -3299,7 +3298,7 @@ export const ChatRoom: React.FC = () => {
                             setTypedMessage(prev => prev + emoji);
                             setShowEmojiPicker(false);
                           }}
-                          className="h-11 w-11 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl text-2xl cursor-pointer transition shadow-xs hover:scale-110 active:scale-95"
+                          className="h-10 w-10 sm:h-11 sm:w-11 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl text-xl sm:text-2xl cursor-pointer transition shadow-xs hover:scale-110 active:scale-95"
                         >
                           {emoji}
                         </button>
@@ -3309,8 +3308,8 @@ export const ChatRoom: React.FC = () => {
                 </div>
               </div>
 
-              <Button type="submit" size="md" className="h-13 px-5 bg-[var(--org-primary)] text-white hover:opacity-95 shadow-sm rounded-xl transition-all cursor-pointer">
-                <Send className="h-6 w-6" />
+              <Button type="submit" size="md" className="h-10 sm:h-12 px-3.5 sm:px-5 bg-[var(--org-primary)] text-white hover:opacity-95 shadow-sm rounded-xl transition-all cursor-pointer shrink-0">
+                <Send className="h-5 w-5 sm:h-6 sm:w-6" />
               </Button>
             </form>
 

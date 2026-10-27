@@ -1589,19 +1589,19 @@ export const OrganizationMemberFees: React.FC = () => {
       )}
 
       {/* Filters panel */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-3xs select-none" id="fees-filters-bar">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5 whitespace-nowrap">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-3xs select-none overflow-x-auto max-w-full" id="fees-filters-bar">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 max-w-full overflow-x-auto no-scrollbar pb-1 sm:pb-0">
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0">
               <Filter className="h-3 w-3" /> Cycle Type:
             </span>
-            <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 inline-flex items-center gap-1 text-[11px]" id="filter-btn-group-period">
+            <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 inline-flex items-center gap-1 text-[11px] shrink-0" id="filter-btn-group-period">
               {["all", "weekly", "monthly", "flexible"].map((p) => (
                 <button
                   key={p}
                   type="button"
                   onClick={() => setPeriodFilter(p as any)}
-                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg capitalize transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg capitalize transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                     periodFilter === p
                       ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
@@ -1614,15 +1614,15 @@ export const OrganizationMemberFees: React.FC = () => {
           </div>
 
           {activeTab !== "pending_approvals" && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5 whitespace-nowrap">
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0">
                 <Filter className="h-3 w-3" /> Status:
               </span>
-              <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 inline-flex items-center gap-1 text-[11px]" id="filter-btn-group-status">
+              <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 inline-flex items-center gap-1 text-[11px] shrink-0 max-w-full overflow-x-auto no-scrollbar" id="filter-btn-group-status">
                 <button
                   type="button"
                   onClick={() => setStatusFilter("all")}
-                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                     statusFilter === "all"
                       ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
@@ -1633,7 +1633,7 @@ export const OrganizationMemberFees: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setStatusFilter("paid")}
-                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                     statusFilter === "paid"
                       ? "bg-emerald-600 text-white shadow-3xs"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
@@ -1644,7 +1644,7 @@ export const OrganizationMemberFees: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setStatusFilter("pending_confirmation")}
-                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                     statusFilter === "pending_confirmation"
                       ? "bg-amber-500 text-white shadow-3xs"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
@@ -1655,7 +1655,7 @@ export const OrganizationMemberFees: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setStatusFilter("pending")}
-                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                     statusFilter === "pending"
                       ? "bg-rose-600 text-white shadow-3xs"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
