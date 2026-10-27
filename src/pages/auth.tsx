@@ -2361,8 +2361,13 @@ export const OrgPicker: React.FC = () => {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3 min-w-0 flex-1">
                         <div className="h-11 w-11 rounded-lg overflow-hidden shrink-0 bg-emerald-50 border border-emerald-100 flex items-center justify-center">
-                          {org.logo_url ? (
-                            <img src={org.logo_url} alt={org.name} className="h-full w-full object-cover" />
+                          {org.logo_url && !org.logo_url.includes("logo.png") ? (
+                            <img 
+                              src={org.logo_url} 
+                              alt={org.name} 
+                              className="h-full w-full object-contain p-1" 
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                            />
                           ) : (
                             <Building2 className="h-5 w-5 text-emerald-600" />
                           )}

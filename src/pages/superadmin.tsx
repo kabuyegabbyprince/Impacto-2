@@ -2199,9 +2199,14 @@ export const SuperadminDashboard: React.FC = () => {
                         {/* Section Header */}
                         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b pb-4 dark:border-slate-800">
                           <div className="flex items-center gap-3.5">
-                            <div className="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/60 dark:border-emerald-800 flex items-center justify-center font-bold text-emerald-800 dark:text-emerald-300 text-sm shrink-0">
-                              {orgItem.logo_url ? (
-                                <img src={orgItem.logo_url} alt="" className="h-full w-full object-cover rounded-2xl" />
+                            <div className="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/60 dark:border-emerald-800 flex items-center justify-center font-bold text-emerald-800 dark:text-emerald-300 text-sm shrink-0 overflow-hidden">
+                              {orgItem.logo_url && !orgItem.logo_url.includes("logo.png") ? (
+                                <img 
+                                  src={orgItem.logo_url} 
+                                  alt="" 
+                                  className="h-full w-full object-contain p-1 rounded-2xl" 
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                />
                               ) : (
                                 orgItem.name?.substring(0, 2).toUpperCase() || "OR"
                               )}

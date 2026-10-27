@@ -99,6 +99,11 @@ video:not([class*="h-"]):not([height]) {
   display: block !important;
 }
 
+img[alt="Logo"], img[alt*="logo" i] {
+  max-height: 100%;
+  object-fit: contain;
+}
+
 /* Responsive string and long token wrapping helpers */
 .break-words-anywhere {
   overflow-wrap: anywhere;

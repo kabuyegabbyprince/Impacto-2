@@ -268,8 +268,16 @@ export const CertificateGenerator: React.FC<CertificateGeneratorProps> = ({ memb
 
                 {/* Organization Header */}
                 <div className="mb-6">
-                  {activeOrg?.logo_url && (
-                    <img src={activeOrg.logo_url} alt="Logo" className="h-14 w-14 object-contain mx-auto mb-2" />
+                  {activeOrg?.logo_url && !activeOrg.logo_url.includes("logo.png") && (
+                    <div className="h-14 w-14 mx-auto mb-2 flex items-center justify-center overflow-hidden">
+                      <img 
+                        src={activeOrg.logo_url} 
+                        alt="Logo" 
+                        className="max-h-14 max-w-14 object-contain" 
+                        style={{ maxHeight: "56px", maxWidth: "56px", width: "auto" }}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    </div>
                   )}
                   <p className="text-xs uppercase font-mono tracking-widest font-bold opacity-75">
                     {activeOrg?.name || "Impacto Cooperative Federation"}

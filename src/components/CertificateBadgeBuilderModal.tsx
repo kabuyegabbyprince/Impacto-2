@@ -159,7 +159,8 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
   const effectivePrimary = customPrimaryColor || currentTheme.primary;
   const isLandscape = structure.startsWith("landscape");
 
-  const effectiveOrgLogo = orgLogoOverride || activeOrg?.logo_url || "";
+  const effectiveOrgLogo = (orgLogoOverride && !orgLogoOverride.includes("logo.png") ? orgLogoOverride : "") || 
+    (activeOrg?.logo_url && !activeOrg.logo_url.includes("logo.png") ? activeOrg.logo_url : "");
 
   const filteredMembers = members.filter(m => {
     const q = memberSearch.toLowerCase();

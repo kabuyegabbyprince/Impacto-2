@@ -683,7 +683,7 @@ export const PublicOrgPage: React.FC = () => {
             <div className="flex flex-wrap sm:flex-nowrap items-end gap-3 sm:gap-4">
               {/* Logo Card */}
               <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-3xl bg-white dark:bg-slate-900 border-4 border-white dark:border-slate-900 shadow-xl flex items-center justify-center overflow-hidden shrink-0">
-                {org.logo_url ? (
+                {org.logo_url && !org.logo_url.includes("logo.png") ? (
                   <SafeImage
                     src={org.logo_url}
                     alt={org.name}

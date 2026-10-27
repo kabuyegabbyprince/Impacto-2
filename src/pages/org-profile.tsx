@@ -131,8 +131,16 @@ export const OrganizationProfilePage = () => {
 
         <div className="bg-white dark:bg-slate-900 border p-8 rounded-xl shadow-sm" ref={previewRef}>
           <div className="text-center mb-8 border-b pb-6">
-            {activeOrg.logo_url && (
-              <img src={activeOrg.logo_url} alt="Logo" className="h-20 mx-auto mb-4 object-contain" />
+            {activeOrg.logo_url && !activeOrg.logo_url.includes("logo.png") && (
+              <div className="h-20 max-w-[200px] mx-auto mb-4 flex items-center justify-center overflow-hidden">
+                <img 
+                  src={activeOrg.logo_url} 
+                  alt="Logo" 
+                  className="max-h-20 max-w-full object-contain" 
+                  style={{ maxHeight: "80px", maxWidth: "200px", width: "auto" }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              </div>
             )}
             <h1 className="text-3xl font-display font-bold text-gray-900 dark:text-white">
               {activeOrg.name}

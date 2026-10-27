@@ -556,16 +556,12 @@ export const GuiderAssistant: React.FC<GuiderAssistantProps> = ({ defaultOpen = 
           >
             {/* Impacto Brand Icon Logo */}
             <div className="w-7 h-7 rounded-xl bg-white flex items-center justify-center shadow-xs overflow-hidden shrink-0">
-              <img
-                src="/impacto-logo.png"
-                alt="Impacto Logo"
-                className="w-5 h-5 object-contain"
-                onError={(e) => {
-                  (e.currentTarget as HTMLElement).style.display = "none";
-                  (e.currentTarget.parentElement as HTMLElement).innerHTML =
-                    '<span class="text-[#156c45] font-black text-xs">IM</span>';
-                }}
-              />
+              <svg className="h-5 w-5 text-[#156c45]" viewBox="0 0 100 100" fill="none">
+                <circle cx="50" cy="35" r="25" stroke="currentColor" strokeWidth="9" />
+                <circle cx="35" cy="65" r="25" stroke="currentColor" strokeWidth="9" />
+                <circle cx="65" cy="65" r="25" stroke="currentColor" strokeWidth="9" />
+                <polygon points="53,48 47,48 50,42" fill="#F59E0B" />
+              </svg>
             </div>
 
             <div className="flex flex-col items-start pr-1">
@@ -595,16 +591,12 @@ export const GuiderAssistant: React.FC<GuiderAssistantProps> = ({ defaultOpen = 
           <div className="flex items-center justify-between px-5 py-3.5 bg-[#156c45] text-white rounded-t-2xl sm:rounded-tl-2xl sm:rounded-tr-none select-none border-b border-emerald-800/40">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-white p-1 flex items-center justify-center shadow-xs shrink-0">
-                <img
-                  src="/impacto-logo.png"
-                  alt="Impacto Logo"
-                  className="w-5.5 h-5.5 object-contain"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLElement).style.display = "none";
-                    (e.currentTarget.parentElement as HTMLElement).innerHTML =
-                      '<span class="text-[#156c45] font-black text-xs">IM</span>';
-                  }}
-                />
+                <svg className="h-5.5 w-5.5 text-[#156c45]" viewBox="0 0 100 100" fill="none">
+                  <circle cx="50" cy="35" r="25" stroke="currentColor" strokeWidth="9" />
+                  <circle cx="35" cy="65" r="25" stroke="currentColor" strokeWidth="9" />
+                  <circle cx="65" cy="65" r="25" stroke="currentColor" strokeWidth="9" />
+                  <polygon points="53,48 47,48 50,42" fill="#F59E0B" />
+                </svg>
               </div>
               <div>
                 <h3 className="font-bold text-sm tracking-tight flex items-center gap-2">
