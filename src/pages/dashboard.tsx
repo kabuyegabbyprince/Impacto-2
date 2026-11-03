@@ -85,7 +85,8 @@ import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
 import { useCurrencyStore } from "../store/currencyStore";
 import { OrganizationVerificationModal } from "../components/OrganizationVerificationModal";
-import { Goal, Event as ImpactEvent, EventTask, NewsPost, Meeting, ChatChannel, Document } from "../types";
+import { Goal, GoalTask, Event as ImpactEvent, EventTask, NewsPost, Meeting, ChatChannel, Document } from "../types";
+import { RealtimeTaskCountdown } from "../components/RealtimeTaskCountdown";
 import {
   useEvents,
   useUpdateEvent,
@@ -713,6 +714,19 @@ export const DashboardHome: React.FC = () => {
 
   const pinnedGoals = goals?.filter((g) => g.is_pinned) || [];
   const displayGoals = pinnedGoals.length > 0 ? pinnedGoals : (goals?.slice(0, 3) || []);
+
+  const myAssignedGoalTasks = React.useMemo(() => {
+    if (!goals || !activeMember?.id) return [];
+    const list: { goal: Goal; task: GoalTask }[] = [];
+    goals.forEach((g) => {
+      (g.tasks || []).forEach((t) => {
+        if (t.assigned_to_member_id === activeMember.id) {
+          list.push({ goal: g, task: t });
+        }
+      });
+    });
+    return list;
+  }, [goals, activeMember?.id]);
   const activeEvents = events?.slice(0, 3) || [];
   const activeNews = news?.slice(0, 3) || [];
   const recentDocs = accessibleDocs.slice(0, 4);
@@ -1011,20 +1025,20 @@ export const DashboardHome: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
+                <span className="text-xs font-bold text-slate-900 dark:text-white">
                   Organization Status:
                 </span>
                 {activeOrg.verification_status === "verified" ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 flex items-center gap-1">
-                    <CheckCircle2 className="h-2.5 w-2.5" /> VERIFIED GREEN TICK
+                  <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> Verified Organization
                   </span>
                 ) : activeOrg.verification_status === "pending_review" ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 flex items-center gap-1">
-                    <Clock className="h-2.5 w-2.5" /> AWAITING SYSTEM AUDIT
+                  <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 inline-flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-amber-500 animate-pulse shrink-0" /> Pending Audit
                   </span>
                 ) : (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300">
-                    UNVERIFIED
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" /> Unverified
                   </span>
                 )}
               </div>
@@ -1083,7 +1097,7 @@ export const DashboardHome: React.FC = () => {
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     Leadership Verification Roster & Reminders
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-bold">
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/60 dark:border-amber-900/40">
                       Admin Exclusive View
                     </span>
                   </h3>
@@ -1643,7 +1657,56 @@ export const DashboardHome: React.FC = () => {
               </Link>
             </div>
 
-            <div className="pt-4">
+            <div className="pt-4 flex flex-col gap-4">
+              {/* Member Personal Action Tasks with Live Countdown */}
+              {myAssignedGoalTasks.length > 0 && (
+                <div className="p-3.5 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/80 dark:border-emerald-900/40 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Target className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>My Assigned Goal Tasks ({myAssignedGoalTasks.length})</span>
+                    </span>
+                    <Link
+                      to="/dashboard/goals"
+                      className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline"
+                    >
+                      Log Notes →
+                    </Link>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {myAssignedGoalTasks.slice(0, 2).map(({ goal, task }) => (
+                      <div
+                        key={task.id}
+                        onClick={() => navigate("/dashboard/goals")}
+                        className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-emerald-100 dark:border-emerald-950/80 hover:border-emerald-300 transition cursor-pointer shadow-3xs"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="font-bold text-xs text-slate-800 dark:text-slate-100 truncate">
+                            {task.title}
+                          </span>
+                          <RealtimeTaskCountdown
+                            deadline={task.deadline}
+                            isCompleted={task.status === "completed" || (task.progress || 0) >= 100}
+                            compact
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                          <span>Goal: {goal.title}</span>
+                          <span className="font-mono font-bold text-emerald-600">{task.progress || 0}%</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                            style={{ width: `${task.progress || 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {displayGoals.length > 0 ? (
                 <div className="flex flex-col gap-4">
                   {displayGoals.map((g) => {
@@ -2825,7 +2888,7 @@ export const ChatRoom: React.FC = () => {
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl flex h-[76vh] overflow-hidden select-none font-sans shadow-sm shrink-0 w-full animate-in fade-in duration-200 relative">
+    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl flex h-[calc(100vh-130px)] sm:h-[76vh] overflow-hidden select-none font-sans shadow-sm shrink-0 w-full animate-in fade-in duration-200 relative">
       {/* Sidebar Categorized Channels */}
       <aside className={`absolute inset-0 z-50 md:relative w-full md:w-56 border-r border-gray-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/60 flex flex-col justify-between shrink-0 transition-transform duration-200 ${activeChannelId ? "-translate-x-full md:translate-x-0" : "translate-x-0"}`}>
         <div className="p-4 flex-1 overflow-y-auto flex flex-col gap-5">
@@ -6394,6 +6457,7 @@ export const EventsCalendar: React.FC = () => {
   const attAccess = canAccessFeature(activeOrg, "qr_attendance");
   const isPaidPlan = lifecycle.effectiveTier !== "free" || attAccess.allowed;
   const [viewMode, setViewMode] = useState<"schedule" | "grid">("schedule");
+  const [eventSubTab, setEventSubTab] = useState<"calendar" | "spaces" | "agenda">("calendar");
 
   const [assignTasksOpen, setAssignTasksOpen] = useState(false);
   const [eventTasks, setEventTasks] = useState<EventTask[]>([]);
@@ -6980,283 +7044,287 @@ export const EventsCalendar: React.FC = () => {
             onSelectEvent={(ev) => setSelectedEvent(ev)}
             selectedEventId={selectedEvent?.id}
             onAddEventClick={() => setOpenAddModal(true)}
+            activeSubTab={eventSubTab}
+            onSubTabChange={(tab) => setEventSubTab(tab)}
           />
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Events Schedule list */}
-            <div className="lg:col-span-2 flex flex-col gap-4">
-              <div className="relative w-full max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder={t("Filter events by title or location...")}
-                  value={eventSearch}
-                  onChange={(e) => setEventSearch(e.target.value)}
-                  className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 pl-9 pr-4 py-2 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white transition"
-                />
-              </div>
-
-          {filteredEvents.length > 0 ? (
-            filteredEvents.map((ev: ImpactEvent) => {
-              const isEventPassed = new Date(ev.date_time) < new Date();
-              const displayEventStatus = isEventPassed ? "completed" : ev.status;
-              return (
-                <Card key={ev.id} title={ev.title} action={
-                  <div className="flex items-center gap-1.5">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-md ${
-                      displayEventStatus === "completed" 
-                        ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                        : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-                    }`}>
-                      {displayEventStatus}
-                    </span>
-                    {isAdmin && (
-                      <>
-                        <button onClick={() => handleEditInit(ev)} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
-                          <Edit className="h-3.5 w-3.5" />
-                        </button>
-                        <button onClick={() => handleDelete(ev)} className="p-1 text-slate-400 hover:text-rose-600">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                }>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-normal">{ev.description}</p>
-                
-                <div className="grid grid-cols-2 gap-4 text-xs font-medium text-slate-500 border-t border-slate-100 dark:border-slate-800 pt-3">
-                  <span>Date: <span className="text-slate-900 dark:text-white font-mono">{new Date(ev.date_time).toLocaleDateString()}</span></span>
-                  <span>Venue: <span className="text-slate-900 dark:text-white">{ev.location}</span></span>
+          {eventSubTab === "agenda" && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Events Schedule list */}
+              <div className="lg:col-span-2 flex flex-col gap-4">
+                <div className="relative w-full max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder={t("Filter events by title or location...")}
+                    value={eventSearch}
+                    onChange={(e) => setEventSearch(e.target.value)}
+                    className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 pl-9 pr-4 py-2 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white transition"
+                  />
                 </div>
 
-                {(() => {
-                  let cardTasks: EventTask[] = ev.tasks || [];
-                  if (!cardTasks || cardTasks.length === 0) {
-                    try {
-                      const local = localStorage.getItem(`event_tasks_${ev.id}`);
-                      if (local) cardTasks = JSON.parse(local);
-                    } catch (e) {}
-                  }
+            {filteredEvents.length > 0 ? (
+              filteredEvents.map((ev: ImpactEvent) => {
+                const isEventPassed = new Date(ev.date_time) < new Date();
+                const displayEventStatus = isEventPassed ? "completed" : ev.status;
+                return (
+                  <Card key={ev.id} title={ev.title} action={
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-md ${
+                        displayEventStatus === "completed" 
+                          ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                          : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      }`}>
+                        {displayEventStatus}
+                      </span>
+                      {isAdmin && (
+                        <>
+                          <button onClick={() => handleEditInit(ev)} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+                            <Edit className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => handleDelete(ev)} className="p-1 text-slate-400 hover:text-rose-600">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  }>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 leading-normal">{ev.description}</p>
+                  
+                  <div className="grid grid-cols-2 gap-4 text-xs font-medium text-slate-500 border-t border-slate-100 dark:border-slate-800 pt-3">
+                    <span>Date: <span className="text-slate-900 dark:text-white font-mono">{new Date(ev.date_time).toLocaleDateString()}</span></span>
+                    <span>Venue: <span className="text-slate-900 dark:text-white">{ev.location}</span></span>
+                  </div>
 
-                  if (!cardTasks || cardTasks.length === 0) return null;
+                  {(() => {
+                    let cardTasks: EventTask[] = ev.tasks || [];
+                    if (!cardTasks || cardTasks.length === 0) {
+                      try {
+                        const local = localStorage.getItem(`event_tasks_${ev.id}`);
+                        if (local) cardTasks = JSON.parse(local);
+                      } catch (e) {}
+                    }
 
-                  const overallProgress = ev.overall_progress !== undefined
-                    ? ev.overall_progress
-                    : Math.round(cardTasks.reduce((s, t) => s + (t.progress || 0), 0) / cardTasks.length);
-                  const isExpanded = !!showTasksForEventId[ev.id];
+                    if (!cardTasks || cardTasks.length === 0) return null;
 
-                  return (
-                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                          <CheckSquare className="h-3.5 w-3.5 text-emerald-600" />
-                          Deliverables Overall Progress:
-                        </span>
-                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          {overallProgress}% ({cardTasks.filter((t) => (t.progress || 0) >= 100).length}/{cardTasks.length} Completed)
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                        <div
-                          className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-                          style={{ width: `${overallProgress}%` }}
-                        />
-                      </div>
+                    const overallProgress = ev.overall_progress !== undefined
+                      ? ev.overall_progress
+                      : Math.round(cardTasks.reduce((s, t) => s + (t.progress || 0), 0) / cardTasks.length);
+                    const isExpanded = !!showTasksForEventId[ev.id];
 
-                      <div className="pt-1">
-                        <button
-                          type="button"
-                          onClick={() => setShowTasksForEventId((prev) => ({ ...prev, [ev.id]: !prev[ev.id] }))}
-                          className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>{isExpanded ? "Hide Deliverables & Reports" : `View Deliverables & Reports (${cardTasks.length})`}</span>
-                          <span>{isExpanded ? "▲" : "▼"}</span>
-                        </button>
+                    return (
+                      <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                            <CheckSquare className="h-3.5 w-3.5 text-emerald-600" />
+                            Deliverables Overall Progress:
+                          </span>
+                          <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            {overallProgress}% ({cardTasks.filter((t) => (t.progress || 0) >= 100).length}/{cardTasks.length} Completed)
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                          <div
+                            className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                            style={{ width: `${overallProgress}%` }}
+                          />
+                        </div>
 
-                        {isExpanded && (
-                          <div className="mt-2 space-y-2 bg-slate-50 dark:bg-slate-950/40 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs animate-in">
-                            {cardTasks.map((task) => (
-                              <div key={task.id} className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 space-y-1.5">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-semibold text-slate-900 dark:text-white truncate max-w-[200px]">{task.title}</span>
-                                  <span className="font-mono font-bold text-[11px] text-emerald-600 dark:text-emerald-400">{task.progress || 0}%</span>
-                                </div>
-                                <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium">
-                                  <span>Assigned: <strong className="text-slate-700 dark:text-slate-300">{task.assigned_to_name}</strong></span>
-                                  <span className="font-mono">Due: {task.due_date ? new Date(task.due_date).toLocaleDateString([], { month: "short", day: "numeric" }) : "-"}</span>
-                                </div>
-                                {task.performance_report && (
-                                  <div className="p-2 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40 text-[11px]">
-                                    <span className="font-bold text-emerald-800 dark:text-emerald-300 block text-[10px] uppercase tracking-wider mb-0.5">
-                                      Member Performance Report ({task.reported_at ? new Date(task.reported_at).toLocaleDateString([], { month: "short", day: "numeric" }) : "Recent"}):
-                                    </span>
-                                    <p className="text-emerald-900 dark:text-emerald-200 italic">"{task.performance_report}"</p>
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowTasksForEventId((prev) => ({ ...prev, [ev.id]: !prev[ev.id] }))}
+                            className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>{isExpanded ? "Hide Deliverables & Reports" : `View Deliverables & Reports (${cardTasks.length})`}</span>
+                            <span>{isExpanded ? "▲" : "▼"}</span>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="mt-2 space-y-2 bg-slate-50 dark:bg-slate-950/40 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs animate-in">
+                              {cardTasks.map((task) => (
+                                <div key={task.id} className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 space-y-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-semibold text-slate-900 dark:text-white truncate max-w-[200px]">{task.title}</span>
+                                    <span className="font-mono font-bold text-[11px] text-emerald-600 dark:text-emerald-400">{task.progress || 0}%</span>
                                   </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                                  <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium">
+                                    <span>Assigned: <strong className="text-slate-700 dark:text-slate-300">{task.assigned_to_name}</strong></span>
+                                    <span className="font-mono">Due: {task.due_date ? new Date(task.due_date).toLocaleDateString([], { month: "short", day: "numeric" }) : "-"}</span>
+                                  </div>
+                                  {task.performance_report && (
+                                    <div className="p-2 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40 text-[11px]">
+                                      <span className="font-bold text-emerald-800 dark:text-emerald-300 block text-[10px] uppercase tracking-wider mb-0.5">
+                                        Member Performance Report ({task.reported_at ? new Date(task.reported_at).toLocaleDateString([], { month: "short", day: "numeric" }) : "Recent"}):
+                                      </span>
+                                      <p className="text-emerald-900 dark:text-emerald-200 italic">"{task.performance_report}"</p>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()}
 
-                {isAdmin && (() => {
-                  const attAccess = canAccessFeature(activeOrg, "qr_attendance");
-                  return (
-                    <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 select-none">
-                      <span className="text-xs text-slate-400">Manage roster</span>
-                      <Button size="sm" variant={selectedEvent?.id === ev.id ? "default" : "outline"} onClick={() => setSelectedEvent(ev)} className="flex items-center gap-1.5 text-xs font-medium">
-                        {!attAccess.allowed && <Lock className="h-3 w-3 text-amber-500" />}
-                        {attAccess.allowed ? "Mark Attendance" : "View Attendance"}
-                      </Button>
-                    </div>
-                  );
-                })()}
-              </Card>
-            );
-          })
-          ) : (
-            <EmptyState title={t("No Scheduled Events")} message={t("No active events currently match your search parameter filters.")} />
-          )}
-        </div>
-
-        {/* Attendance Tracker Roster Widget with Checkboxes */}
-        <div className="flex flex-col gap-6">
-          <Card title="Event Attendance Checklist">
-            {selectedEvent ? (() => {
-              const attAccess = canAccessFeature(activeOrg, "qr_attendance");
-              const isAllowed = attAccess.allowed;
-
-              return (
-              <div className="space-y-4">
-                <div className="border-b border-slate-100 dark:border-slate-800 pb-3 space-y-1 text-xs">
-                  <span className="text-xs font-medium text-slate-500">Selected Event</span>
-                  <p className="font-semibold text-slate-900 dark:text-white leading-tight">{selectedEvent.title}</p>
-                  <div className="flex justify-between items-center pt-2 font-mono text-xs text-slate-400">
-                    <span>Present: {attendanceList?.length || 0}</span>
-                    <span>Total: {orgMembers?.filter((m) => m.status === "active").length || 0} active</span>
-                  </div>
-                </div>
-
-                {!isAllowed && (
-                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-start gap-2.5">
-                    <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                    <div className="text-xs">
-                      <p className="font-medium text-amber-900 dark:text-amber-200">Attendance Marking Restricted</p>
-                      <p className="text-amber-700 dark:text-amber-300 mt-1 leading-relaxed text-xs">
-                        Marking attendance requires the Event Package or an active subscription tier.
-                      </p>
-                      <div className="mt-2.5">
-                        <Button
-                          size="sm"
-                          className="bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs py-1 px-2.5 rounded-lg cursor-pointer"
-                          onClick={() => navigate("/dashboard/settings?tab=subscription")}
-                        >
-                          Upgrade Plan
+                  {isAdmin && (() => {
+                    const attAccess = canAccessFeature(activeOrg, "qr_attendance");
+                    return (
+                      <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 select-none">
+                        <span className="text-xs text-slate-400">Manage roster</span>
+                        <Button size="sm" variant={selectedEvent?.id === ev.id ? "default" : "outline"} onClick={() => setSelectedEvent(ev)} className="flex items-center gap-1.5 text-xs font-medium">
+                          {!attAccess.allowed && <Lock className="h-3 w-3 text-amber-500" />}
+                          {attAccess.allowed ? "Mark Attendance" : "View Attendance"}
                         </Button>
                       </div>
+                    );
+                  })()}
+                </Card>
+              );
+            })
+            ) : (
+              <EmptyState title={t("No Scheduled Events")} message={t("No active events currently match your search parameter filters.")} />
+            )}
+          </div>
+
+          {/* Attendance Tracker Roster Widget with Checkboxes */}
+          <div className="flex flex-col gap-6">
+            <Card title="Event Attendance Checklist">
+              {selectedEvent ? (() => {
+                const attAccess = canAccessFeature(activeOrg, "qr_attendance");
+                const isAllowed = attAccess.allowed;
+
+                return (
+                <div className="space-y-4">
+                  <div className="border-b border-slate-100 dark:border-slate-800 pb-3 space-y-1 text-xs">
+                    <span className="text-xs font-medium text-slate-500">Selected Event</span>
+                    <p className="font-semibold text-slate-900 dark:text-white leading-tight">{selectedEvent.title}</p>
+                    <div className="flex justify-between items-center pt-2 font-mono text-xs text-slate-400">
+                      <span>Present: {attendanceList?.length || 0}</span>
+                      <span>Total: {orgMembers?.filter((m) => m.status === "active").length || 0} active</span>
                     </div>
                   </div>
-                )}
 
-                {/* Live Filter */}
-                <Input
-                  placeholder="Filter members by name..."
-                  value={attendanceSearch}
-                  onChange={(e) => setAttendanceSearch(e.target.value)}
-                  className="text-xs"
-                />
-
-                {/* Members checklist roster */}
-                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl p-1 select-none space-y-0.5 bg-slate-50/50 dark:bg-slate-950/20">
-                  {orgMembers && orgMembers.filter((m) => m.status === "active").length > 0 ? (
-                    orgMembers
-                      .filter((m) => m.status === "active")
-                      .filter((m) => m.user?.full_name?.toLowerCase().includes(attendanceSearch.toLowerCase()))
-                      .map((m) => {
-                        const isPresent = attendanceList?.some((a) => a.member_id === m.id);
-                        return (
-                          <label
-                            key={m.id}
-                            className={`flex items-center justify-between p-2 rounded-lg transition-colors ${
-                              !isAllowed
-                                ? "cursor-not-allowed opacity-75"
-                                : isPresent
-                                ? "bg-emerald-50 dark:bg-emerald-950/40 cursor-pointer"
-                                : "hover:bg-white dark:hover:bg-slate-900 cursor-pointer"
-                            }`}
+                  {!isAllowed && (
+                    <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-start gap-2.5">
+                      <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div className="text-xs">
+                        <p className="font-medium text-amber-900 dark:text-amber-200">Attendance Marking Restricted</p>
+                        <p className="text-amber-700 dark:text-amber-300 mt-1 leading-relaxed text-xs">
+                          Marking attendance requires the Event Package or an active subscription tier.
+                        </p>
+                        <div className="mt-2.5">
+                          <Button
+                            size="sm"
+                            className="bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs py-1 px-2.5 rounded-lg cursor-pointer"
+                            onClick={() => navigate("/dashboard/settings?tab=subscription")}
                           >
-                            <div className="flex flex-col leading-snug">
-                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">{m.user?.full_name}</span>
-                              <span className="text-[10px] text-slate-400 font-mono">#{m.member_number || "A-Z"}</span>
-                            </div>
-
-                            <input
-                              type="checkbox"
-                              checked={!!isPresent}
-                              disabled={!isAllowed}
-                              onChange={async (e) => {
-                                if (!isAllowed) {
-                                  addToast("Marking attendance requires the Event Package or a Paid Plan.", "error");
-                                  return;
-                                }
-                                const checked = e.target.checked;
-                                try {
-                                  if (checked) {
-                                    await checkInMutation.mutateAsync({
-                                      event_id: selectedEvent.id,
-                                      member_id: m.id,
-                                      method: "manual"
-                                    });
-                                    addToast(`Marked ${m.user?.full_name} as Present`, "success");
-                                  } else {
-                                    await checkOutMutation.mutateAsync({
-                                      event_id: selectedEvent.id,
-                                      member_id: m.id
-                                    });
-                                    addToast(`Marked ${m.user?.full_name} as Absent`, "success");
-                                  }
-                                } catch (err: any) {
-                                  addToast(err.message || "Attendance modification failed", "error");
-                                }
-                              }}
-                              className={`h-4 w-4 text-emerald-600 focus:ring-emerald-500 rounded border-slate-300 transition ${
-                                !isAllowed ? "cursor-not-allowed opacity-50" : "cursor-pointer"
-                              }`}
-                            />
-                          </label>
-                        );
-                      })
-                  ) : (
-                    <p className="text-xs text-center text-slate-400 py-4 italic">No active members found.</p>
+                            Upgrade Plan
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                   )}
-                </div>
 
-                <Button
-                  className="w-full mt-2 py-2 text-xs flex items-center justify-center gap-2 font-medium bg-emerald-600 hover:bg-emerald-700 text-white"
-                  icon={<FileSpreadsheet className="h-4 w-4" />}
-                  onClick={() => {
-                    addToast(`Attendance finalized for "${selectedEvent.title}". Downloading Excel Matrix...`, "success");
-                    exportAttendanceMatrixExcel();
-                  }}
-                >
-                  Export Attendance Matrix (Excel)
-                </Button>
-              </div>
-              );
-            })() : (
-              <div className="text-center py-10">
-                <CalendarDays className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-                <p className="text-xs text-gray-500 max-w-xs mx-auto">
-                  Click the &quot;Mark Attendance&quot; trigger button on any scheduled event session card to view and manage its member attendance checklist.
-                </p>
-              </div>
-            )}
-          </Card>
+                  {/* Live Filter */}
+                  <Input
+                    placeholder="Filter members by name..."
+                    value={attendanceSearch}
+                    onChange={(e) => setAttendanceSearch(e.target.value)}
+                    className="text-xs"
+                  />
+
+                  {/* Members checklist roster */}
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl p-1 select-none space-y-0.5 bg-slate-50/50 dark:bg-slate-950/20">
+                    {orgMembers && orgMembers.filter((m) => m.status === "active").length > 0 ? (
+                      orgMembers
+                        .filter((m) => m.status === "active")
+                        .filter((m) => m.user?.full_name?.toLowerCase().includes(attendanceSearch.toLowerCase()))
+                        .map((m) => {
+                          const isPresent = attendanceList?.some((a) => a.member_id === m.id);
+                          return (
+                            <label
+                              key={m.id}
+                              className={`flex items-center justify-between p-2 rounded-lg transition-colors ${
+                                !isAllowed
+                                  ? "cursor-not-allowed opacity-75"
+                                  : isPresent
+                                  ? "bg-emerald-50 dark:bg-emerald-950/40 cursor-pointer"
+                                  : "hover:bg-white dark:hover:bg-slate-900 cursor-pointer"
+                              }`}
+                            >
+                              <div className="flex flex-col leading-snug">
+                                <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">{m.user?.full_name}</span>
+                                <span className="text-[10px] text-slate-400 font-mono">#{m.member_number || "A-Z"}</span>
+                              </div>
+
+                              <input
+                                type="checkbox"
+                                checked={!!isPresent}
+                                disabled={!isAllowed}
+                                onChange={async (e) => {
+                                  if (!isAllowed) {
+                                    addToast("Marking attendance requires the Event Package or a Paid Plan.", "error");
+                                    return;
+                                  }
+                                  const checked = e.target.checked;
+                                  try {
+                                    if (checked) {
+                                      await checkInMutation.mutateAsync({
+                                        event_id: selectedEvent.id,
+                                        member_id: m.id,
+                                        method: "manual"
+                                      });
+                                      addToast(`Marked ${m.user?.full_name} as Present`, "success");
+                                    } else {
+                                      await checkOutMutation.mutateAsync({
+                                        event_id: selectedEvent.id,
+                                        member_id: m.id
+                                      });
+                                      addToast(`Marked ${m.user?.full_name} as Absent`, "success");
+                                    }
+                                  } catch (err: any) {
+                                    addToast(err.message || "Attendance modification failed", "error");
+                                  }
+                                }}
+                                className={`h-4 w-4 text-emerald-600 focus:ring-emerald-500 rounded border-slate-300 transition ${
+                                  !isAllowed ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                                }`}
+                              />
+                            </label>
+                          );
+                        })
+                    ) : (
+                      <p className="text-xs text-center text-slate-400 py-4 italic">No active members found.</p>
+                    )}
+                  </div>
+
+                  <Button
+                    className="w-full mt-2 py-2 text-xs flex items-center justify-center gap-2 font-medium bg-emerald-600 hover:bg-emerald-700 text-white"
+                    icon={<FileSpreadsheet className="h-4 w-4" />}
+                    onClick={() => {
+                      addToast(`Attendance finalized for "${selectedEvent.title}". Downloading Excel Matrix...`, "success");
+                      exportAttendanceMatrixExcel();
+                    }}
+                  >
+                    Export Attendance Matrix (Excel)
+                  </Button>
+                </div>
+                );
+              })() : (
+                <div className="text-center py-10">
+                  <CalendarDays className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                  <p className="text-xs text-gray-500 max-w-xs mx-auto">
+                    Click the &quot;Mark Attendance&quot; trigger button on any scheduled event session card to view and manage its member attendance checklist.
+                  </p>
+                </div>
+              )}
+            </Card>
+          </div>
         </div>
-      </div>
+        )}
     </div>
     )}
 

@@ -35,9 +35,10 @@ import {
   TrendingUp,
   AlertCircle
 } from "lucide-react";
-import guiderData from "../data/guiderKnowledgeBase.json";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
+import { getOrgSubscriptionLifecycle } from "../lib/subscriptionMatrix";
+import guiderData from "../data/guiderKnowledgeBase.json";
 
 interface GuiderAssistantProps {
   defaultOpen?: boolean;
@@ -110,7 +111,8 @@ export const GuiderAssistant: React.FC<GuiderAssistantProps> = ({ defaultOpen = 
 
   // Determine user role and plan details
   const userRole = activeMember?.role || (user?.is_superadmin ? "superadmin" : "member");
-  const subscriptionPlan = activeOrg?.subscription_tier || "starter";
+  const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
+  const subscriptionPlan = lifecycle.effectiveTier || "free";
 
   const roleLabels: Record<string, Record<LangCode, string>> = {
     superadmin: { en: "Super Admin", rw: "Umuyobozi Mukuru", fr: "Super Administrateur" },
@@ -121,14 +123,18 @@ export const GuiderAssistant: React.FC<GuiderAssistantProps> = ({ defaultOpen = 
   };
 
   const planLabels: Record<string, Record<LangCode, string>> = {
-    trial: { en: "Free Trial", rw: "Icyiciro cy'Igerageza", fr: "Essai Gratuit" },
-    starter: { en: "Starter Tier ($10)", rw: "Ifatabuguzi rya Starter ($10)", fr: "Forfait Starter (10 $)" },
-    growth: { en: "Growth Tier ($25)", rw: "Ifatabuguzi rya Growth ($25)", fr: "Forfait Growth (25 $)" },
-    enterprise: { en: "Pro Plan ($40)", rw: "Ifatabuguzi rya Pro ($40)", fr: "Forfait Pro (40 $)" }
+    free: { en: "Free Plan", rw: "Gahunda y'Ubuntu (Buntu)", fr: "Forfait Gratuit" },
+    trial: { en: "Growth Free Trial", rw: "Igerageza rya Growth", fr: "Essai Gratuit Growth" },
+    starter: { en: "Starter Plan ($10)", rw: "Ifatabuguzi rya Starter ($10)", fr: "Forfait Starter (10 $)" },
+    growth: { en: "Growth Plan ($10)", rw: "Ifatabuguzi rya Growth ($10)", fr: "Forfait Growth (10 $)" },
+    pro: { en: "Pro Plan ($25)", rw: "Ifatabuguzi rya Pro ($25)", fr: "Forfait Pro (25 $)" },
+    enterprise: { en: "Pro Plan ($25)", rw: "Ifatabuguzi rya Pro ($25)", fr: "Forfait Pro (25 $)" }
   };
 
   const displayRoleName = roleLabels[userRole]?.[currentLang] || roleLabels.member[currentLang];
-  const displayPlanName = planLabels[subscriptionPlan]?.[currentLang] || planLabels.starter[currentLang];
+  const displayPlanName = lifecycle.isTrial
+    ? planLabels.trial[currentLang]
+    : planLabels[subscriptionPlan]?.[currentLang] || planLabels.free[currentLang];
   const userName = user?.full_name || (currentLang === "rw" ? "Umunyamuryango" : "Member");
 
   // Localized UI strings

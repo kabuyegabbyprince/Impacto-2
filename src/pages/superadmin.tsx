@@ -31,6 +31,7 @@ import {
   Activity,
   ShieldCheck,
   Lock,
+  ChevronLeft,
   ChevronRight,
   Users,
   UserCheck,
@@ -53,7 +54,8 @@ import {
   Sparkles,
   Phone,
   Copy,
-  Plus
+  Plus,
+  LogOut
 } from "lucide-react";
 import {
   SUBSCRIPTION_TIERS,
@@ -124,8 +126,8 @@ const SubscriptionTierCell: React.FC<{
           onChange={(e) => setSelectedTier(e.target.value)}
           className="text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-emerald-500 font-bold text-slate-900 dark:text-slate-100 outline-none cursor-pointer shadow-xs flex-1"
         >
-          <option value="growth">Growth Plan ($25 / Default Trial)</option>
-          <option value="pro">Pro Plan ($40 / Unlimited)</option>
+          <option value="growth">Growth Plan ($10 / Default Trial)</option>
+          <option value="pro">Pro Plan ($25 / Unlimited)</option>
           <option value="starter">Starter Plan ($10 / 100 Members)</option>
           <option value="free">Free Forever Plan ($0 / 30 Members)</option>
         </select>
@@ -154,42 +156,19 @@ const SubscriptionTierCell: React.FC<{
           +3d Grace
         </button>
         <button
-          onClick={() => onUpdate(row.id, "reset_growth_trial")}
+          onClick={() => onUpdate(row.id, "add_10_members")}
           className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 hover:underline px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/50"
-          title="Reset to 30-Day Growth Plan Trial"
+          title="Grant +10 Member Quota above plan limit"
         >
-          Reset Trial
+          +10 Member
         </button>
-      </div>
-
-      {/* Quick $4 Package Audit / Grant Toggles */}
-      <div className="mt-1 pt-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1 flex-wrap">
-        <span className="text-[9.5px] font-bold text-slate-400 font-mono">Grant Pkg:</span>
-        {(Object.keys(ADDON_PACKAGES) as AddOnPackageId[]).map((pkgKey) => {
-          const isActive = lifecycle.activePackages.includes(pkgKey);
-          return (
-            <button
-              key={pkgKey}
-              type="button"
-              onClick={() => onTogglePackage?.(row.id, pkgKey)}
-              className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded transition ${
-                isActive
-                  ? "bg-emerald-600 text-white"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200"
-              }`}
-              title={`Toggle ${ADDON_PACKAGES[pkgKey]?.name || pkgKey} (+20 members)`}
-            >
-              {pkgKey === "event_pack" ? "Event" : pkgKey === "finance_pack" ? "Finance" : pkgKey === "document_pack" ? "Doc" : "Pro"}{isActive ? " ✓" : ""}
-            </button>
-          );
-        })}
       </div>
     </div>
   );
 };
 
 export const SuperadminDashboard: React.FC = () => {
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { data: platformData, refetch } = usePlatformAdminData();
   const { addToast } = useToast();
 
@@ -227,15 +206,13 @@ export const SuperadminDashboard: React.FC = () => {
           subscription_ends_at: graceEnds
         });
         setSuccessMsg(`Granted 3-day grace period to ${name}`);
-      } else if (actionOrTier === "reset_growth_trial") {
+      } else if (actionOrTier === "add_10_members") {
+        const currentBonus = Number(matchedOrg?.bonus_member_slots || 0);
         await updateOrgMutation.mutateAsync({
           id: orgId,
-          subscription_tier: "growth",
-          subscription_status: "trial",
-          subscription_ends_at: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
-          created_at: new Date().toISOString()
+          bonus_member_slots: currentBonus + 10
         });
-        setSuccessMsg(`Reset ${name} to 30-Day Growth Plan Trial`);
+        setSuccessMsg(`Added +10 Member Quota bonus to ${name} (${currentBonus + 10} total bonus slots)`);
       } else if (actionOrTier === "free") {
         await updateOrgMutation.mutateAsync({
           id: orgId,
@@ -307,6 +284,13 @@ export const SuperadminDashboard: React.FC = () => {
   };
 
   const [activeTab, setActiveTab] = useState<"stats" | "orgs" | "payments" | "verifications" | "referrals" | "errors" | "staff" | "billing_setup" | "db_status">("stats");
+  const tabsRef = useRef<HTMLDivElement>(null);
+
+  const scrollTabs = (direction: 'left' | 'right') => {
+    if (tabsRef.current) {
+      tabsRef.current.scrollBy({ left: direction === 'left' ? -220 : 220, behavior: 'smooth' });
+    }
+  };
   const [verificationFilter, setVerificationFilter] = useState<"all" | "pending_review" | "verified" | "unverified" | "rejected">("all");
   const [reviewingOrg, setReviewingOrg] = useState<any>(null);
   const [reviewRejectReason, setReviewRejectReason] = useState("");
@@ -919,117 +903,148 @@ export const SuperadminDashboard: React.FC = () => {
               Exit to App
             </Button>
           </Link>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              logout();
+              window.location.href = "/login";
+            }}
+            className="font-bold text-xs h-10 px-3.5 rounded-xl border-rose-200 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-1.5 cursor-pointer"
+          >
+            <LogOut className="h-3.5 w-3.5" /> Sign Out
+          </Button>
         </div>
       </header>
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 lg:px-8 py-8 flex-1 w-full flex flex-col gap-8">
-        {/* Navigation Tabs Header */}
-        <div className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 inline-flex items-center gap-1 shadow-3xs overflow-x-auto scrollbar-none select-none shrink-0">
+        {/* Navigation Tabs Header with Scroll Buttons */}
+        <div className="flex items-center gap-1.5 w-full">
           <button
-            onClick={() => setActiveTab("stats")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === "stats"
-                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
-            }`}
+            type="button"
+            onClick={() => scrollTabs('left')}
+            className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 shrink-0 cursor-pointer shadow-3xs flex items-center justify-center"
+            title="Scroll Left"
           >
-            <Activity className="h-3.5 w-3.5" /> SaaS Overview & Analytics
+            <ChevronLeft className="h-4 w-4" />
           </button>
+
+          <div ref={tabsRef} className="p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-1 shadow-3xs overflow-x-auto no-scrollbar scroll-smooth select-none shrink-0 flex-1 max-w-full">
+            <button
+              onClick={() => setActiveTab("stats")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === "stats"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+              }`}
+            >
+              <Activity className="h-3.5 w-3.5" /> SaaS Overview & Analytics
+            </button>
+            <button
+              onClick={() => setActiveTab("orgs")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === "orgs"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+              }`}
+            >
+              <Building2 className="h-3.5 w-3.5" /> Tenant Audits & Licenses ({totalOrgs})
+            </button>
+            <button
+              onClick={() => setActiveTab("payments")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === "payments"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+              }`}
+            >
+              <CreditCard className="h-3.5 w-3.5" /> MoMo Approval Queue
+              {awaitingPayments > 0 && (
+                <span className="px-1.5 py-0.5 text-[10px] bg-rose-500 text-white rounded-full font-mono font-black">
+                  {awaitingPayments}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab("verifications")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === "verifications"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+              }`}
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Authenticity & Verifications
+              {orgs.filter((o: any) => o.verification_status === "pending_review").length > 0 && (
+                <span className="px-1.5 py-0.5 text-[10px] bg-amber-500 text-slate-950 rounded-full font-mono font-black">
+                  {orgs.filter((o: any) => o.verification_status === "pending_review").length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab("referrals")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === "referrals"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+              }`}
+            >
+              <HeartHandshake className="h-3.5 w-3.5 text-teal-600" /> Promoters & Referrals ({allReferrals.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("staff")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === "staff"
+                  ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+              }`}
+            >
+              <Users className="h-3.5 w-3.5" /> Staff & Auditors ({staffList.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("errors")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === "errors"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+              }`}
+            >
+              <MessageSquare className="h-3.5 w-3.5" /> Support & Incidents
+              {pendingBugs > 0 && (
+                <span className="px-1.5 py-0.5 text-[10px] bg-amber-500 text-slate-950 rounded-full font-mono font-black">
+                  {pendingBugs}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab("billing_setup")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === "billing_setup"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+              }`}
+            >
+              <Settings className="h-3.5 w-3.5" /> Global Billing Config
+            </button>
+            <button
+              onClick={() => setActiveTab("db_status")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                activeTab === "db_status"
+                  ? "bg-white dark:bg-slate-900 text-cyan-600 dark:text-cyan-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+              }`}
+            >
+              <Database className="h-3.5 w-3.5" /> Database Health
+            </button>
+          </div>
+
           <button
-            onClick={() => setActiveTab("orgs")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === "orgs"
-                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
-            }`}
+            type="button"
+            onClick={() => scrollTabs('right')}
+            className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 shrink-0 cursor-pointer shadow-3xs flex items-center justify-center"
+            title="Scroll Right"
           >
-            <Building2 className="h-3.5 w-3.5" /> Tenant Audits & Licenses ({totalOrgs})
-          </button>
-          <button
-            onClick={() => setActiveTab("payments")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === "payments"
-                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
-            }`}
-          >
-            <CreditCard className="h-3.5 w-3.5" /> MoMo Approval Queue
-            {awaitingPayments > 0 && (
-              <span className="px-1.5 py-0.5 text-[10px] bg-rose-500 text-white rounded-full font-mono font-black">
-                {awaitingPayments}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("verifications")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === "verifications"
-                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
-            }`}
-          >
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Authenticity & Verifications
-            {orgs.filter((o: any) => o.verification_status === "pending_review").length > 0 && (
-              <span className="px-1.5 py-0.5 text-[10px] bg-amber-500 text-slate-950 rounded-full font-mono font-black">
-                {orgs.filter((o: any) => o.verification_status === "pending_review").length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("referrals")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === "referrals"
-                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
-            }`}
-          >
-            <HeartHandshake className="h-3.5 w-3.5 text-teal-600" /> Promoters & Referrals ({allReferrals.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("staff")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === "staff"
-                ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-3xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
-            }`}
-          >
-            <Users className="h-3.5 w-3.5" /> Staff & Auditors ({staffList.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("errors")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === "errors"
-                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
-            }`}
-          >
-            <MessageSquare className="h-3.5 w-3.5" /> Support & Incidents
-            {pendingBugs > 0 && (
-              <span className="px-1.5 py-0.5 text-[10px] bg-amber-500 text-slate-950 rounded-full font-mono font-black">
-                {pendingBugs}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("billing_setup")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === "billing_setup"
-                ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
-            }`}
-          >
-            <Settings className="h-3.5 w-3.5" /> Global Billing Config
-          </button>
-          <button
-            onClick={() => setActiveTab("db_status")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === "db_status"
-                ? "bg-white dark:bg-slate-900 text-cyan-600 dark:text-cyan-400 shadow-3xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
-            }`}
-          >
-            <Database className="h-3.5 w-3.5" /> Database Health
+            <ChevronRight className="h-4 w-4" />
           </button>
         </div>
 
@@ -1348,7 +1363,7 @@ export const SuperadminDashboard: React.FC = () => {
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                   <div>
                     <h3 className="text-base font-black font-display text-slate-900 dark:text-white">Tenant Workspaces & Subscription Matrix</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Manage Free (30 m.), Starter (100 m.), Growth (500 m.), and Pro ($40 / Unlimited) tiers, grant 3-day grace periods, or extend 30-day licenses.</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Manage Free (30 m.), Starter (100 m.), Growth ($10 / 500 m.), and Pro ($25 / Unlimited) tiers, grant 3-day grace periods, or extend 30-day licenses.</p>
                   </div>
                   <div className="w-full md:w-80">
                     <Input
@@ -4044,29 +4059,56 @@ export const SuperadminDashboard: React.FC = () => {
                 errors.map((errItem: any) => {
                   const isResolved = errItem.status === "resolved";
                   const isChatOpen = activeChatId === errItem.id;
+                  const matchedOrg = orgs.find((o: any) => o.id === errItem.org_id);
+                  const fullMessage = errItem.description || errItem.error_message || errItem.message || "No detailed message provided.";
+
                   return (
                     <div key={errItem.id} className="p-5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 rounded-2xl flex flex-col gap-4 shadow-xs">
                       <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3">
+                        <div className="flex items-start gap-3 flex-1">
                           <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-bold shrink-0 ${isResolved ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"}`}>
                             {isResolved ? <CheckCircle className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />}
                           </div>
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-black text-slate-900 dark:text-white font-display">{errItem.page || "Cooperative Portal"}</span>
-                              <Badge color={isResolved ? "green" : "amber"}>{isResolved ? "Resolved" : "Pending Support"}</Badge>
+                          <div className="flex flex-col gap-1.5 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-black text-slate-900 dark:text-white font-display">
+                                {matchedOrg?.name || errItem.org_name || "Cooperative Workspace"}
+                              </span>
+                              <span className="text-[11px] font-mono text-slate-500 bg-slate-200/60 dark:bg-slate-700/60 px-2 py-0.5 rounded">
+                                {errItem.page || "Support Portal"}
+                              </span>
+                              <Badge color={isResolved ? "green" : "amber"}>
+                                {isResolved ? "Resolved" : "Pending Support"}
+                              </Badge>
                             </div>
-                            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">{errItem.error_message}</p>
-                            <span className="text-[10px] text-slate-400 font-mono mt-1">Reported: {new Date(errItem.created_at).toLocaleString()}</span>
+
+                            {/* Complete Message View */}
+                            <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed shadow-2xs font-sans">
+                              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block mb-1">
+                                Full Submitted Incident Message:
+                              </span>
+                              {fullMessage}
+                            </div>
+
+                            <div className="flex items-center gap-3 text-[10px] text-slate-400 font-mono mt-0.5">
+                              <span>Reported: {new Date(errItem.created_at).toLocaleString()}</span>
+                              {errItem.user_email && <span>• Submitter: <strong className="text-slate-700 dark:text-slate-300">{errItem.user_email}</strong></span>}
+                            </div>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
-                          {!isResolved && (
-                            <Button size="sm" variant="outline" className="text-xs font-bold h-9 px-3 rounded-xl border-slate-300 dark:border-slate-700" onClick={() => setActiveChatId(isChatOpen ? "" : errItem.id)}>
-                              {isChatOpen ? "Close Reply" : "Reply Ticket"}
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs font-bold h-9 px-3 rounded-xl border-slate-300 dark:border-slate-700 flex items-center gap-1.5"
+                            onClick={() => {
+                              setActiveChatId(isChatOpen ? "" : errItem.id);
+                            }}
+                          >
+                            <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />
+                            {isChatOpen ? "Hide Chat" : "Chat & Reply"}
+                          </Button>
                           {!isResolved && (
                             <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-9 px-3 rounded-xl shadow-xs" onClick={() => handleResolveBugDirect(errItem.id)}>
                               Resolve Ticket
@@ -4077,20 +4119,34 @@ export const SuperadminDashboard: React.FC = () => {
 
                       {errItem.admin_notes && (
                         <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800 rounded-xl text-xs text-emerald-900 dark:text-emerald-200 flex flex-col gap-1">
-                          <span className="font-bold uppercase tracking-wider text-[10px] text-emerald-700 dark:text-emerald-400">Admin Response Dispatched:</span>
-                          <p>{errItem.admin_notes}</p>
+                          <span className="font-bold uppercase tracking-wider text-[10px] text-emerald-700 dark:text-emerald-400">
+                            Super Admin Response Dispatched:
+                          </span>
+                          <p className="whitespace-pre-wrap">{errItem.admin_notes}</p>
                         </div>
                       )}
 
                       {isChatOpen && (
-                        <form onSubmit={handleSendChatReply} className="flex items-center gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            if (!tempReply.trim()) return;
+                            handleSendChatReply(e);
+                          }}
+                          className="flex items-center gap-3 pt-3 border-t border-slate-200 dark:border-slate-700 animate-in fade-in"
+                        >
                           <Input
-                            placeholder="Type direct support operator response..."
+                            placeholder={`Type live support reply to ${matchedOrg?.name || 'organization'}...`}
                             value={tempReply}
                             onChange={(e) => setTempReply(e.target.value)}
                             className="flex-1 text-xs"
                           />
-                          <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 px-5 rounded-xl shadow-xs" icon={<Send className="h-4 w-4" />}>
+                          <Button
+                            type="submit"
+                            size="sm"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 px-5 rounded-xl shadow-xs flex items-center gap-1.5"
+                          >
+                            <Send className="h-4 w-4" />
                             Send Reply
                           </Button>
                         </form>

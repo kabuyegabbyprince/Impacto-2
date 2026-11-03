@@ -55,6 +55,7 @@ export interface Organization {
   active_packages?: string[];
   packages_data?: Record<string, { expires_at: string; purchased_at: string }>;
   org_category: string;
+  bonus_member_slots?: number;
   created_at: string;
   // Authenticity & Verification
   verification_status?: "unverified" | "pending_review" | "verified" | "rejected";
@@ -73,6 +74,10 @@ export interface Organization {
   show_goals_publicly?: boolean;
   show_impact_publicly?: boolean;
   show_calendar_publicly?: boolean;
+  // Rentable spaces & Public event calendar booking
+  has_rentable_spaces?: boolean;
+  rentable_spaces?: RentableSpace[];
+  show_space_calendar_publicly?: boolean;
   // Members dashboard settings
   dashboard_theme?: "light" | "dark" | "custom";
   dashboard_logo?: string;
@@ -192,6 +197,48 @@ export interface EventTask {
   performance_report?: string;
   reported_at?: string;
   created_at?: string;
+  estimated_time?: string; // e.g. "2 hours", "45 mins"
+  estimated_duration_minutes?: number;
+}
+
+export interface RentableSpace {
+  id: string;
+  org_id: string;
+  name: string;
+  people_range: string; // e.g. "10 - 50 people"
+  image_url?: string;
+  cost?: number; // optional, e.g. 15000 (RWF)
+  cost_unit?: string; // "hour" | "day" | "event"
+  currency?: string; // "RWF"
+  description?: string;
+  amenities?: string[];
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface SpaceBookingRequest {
+  id: string;
+  org_id: string;
+  space_id: string;
+  space_name: string;
+  room_image?: string;
+  date: string; // YYYY-MM-DD
+  start_time: string; // HH:MM
+  end_time: string; // HH:MM
+  title: string;
+  requester_name: string;
+  requester_email?: string;
+  requester_phone: string;
+  attendees_count?: number;
+  people_range?: string;
+  notes?: string;
+  cost?: number;
+  status: "pending" | "approved" | "rejected" | "scheduled";
+  created_at: string;
+  approved_at?: string;
+  approved_by?: string;
+  event_id?: string;
+  user_id?: string;
 }
 
 export interface Event {
@@ -325,6 +372,35 @@ export interface ChatMessage {
   sender_avatar?: string;
 }
 
+export interface GoalTaskComment {
+  id: string;
+  author_id: string;
+  author_name: string;
+  author_role?: string;
+  comment: string;
+  progress_at_time?: number;
+  created_at: string;
+}
+
+export interface GoalTask {
+  id: string;
+  goal_id?: string;
+  title: string;
+  description?: string; // Large text input for detailed task instructions/deliverables
+  assigned_to_member_id: string; // member_id (primary / first)
+  assigned_to_name: string;
+  assigned_to_member_ids?: string[]; // Multiple assigned member IDs
+  assigned_to_names?: string[]; // Multiple assigned member names
+  assigned_to_role?: string;
+  deadline: string; // ISO date/time string (can exceed parent goal deadline)
+  progress: number; // 0 to 100
+  status: "todo" | "in_progress" | "completed";
+  comments?: GoalTaskComment[];
+  last_comment?: string;
+  completed_at?: string;
+  created_at: string;
+}
+
 export interface Goal {
   id: string;
   org_id: string;
@@ -332,6 +408,7 @@ export interface Goal {
   description: string;
   target?: number;
   unit?: string;
+  min_expected?: number; // Minimum expected achievement threshold percentage (e.g. 70%)
   current_progress: number;
   starting_progress?: number;
   deadline: string;
@@ -349,6 +426,7 @@ export interface Goal {
   assigned_to_name?: string;
   is_recurring?: boolean;
   recurrence_cycle?: "weekly" | "monthly" | "quarterly";
+  tasks?: GoalTask[];
 }
 
 export interface GoalUpdate {

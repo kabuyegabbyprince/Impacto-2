@@ -27,6 +27,7 @@ import { useCurrencyStore } from "../store/currencyStore";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
 import { useToast } from "./Toast";
+import { RentableSpacesManager } from "./RentableSpacesManager";
 
 export interface SpaceEntity {
   id: string;
@@ -100,6 +101,8 @@ interface EventScheduleCalendarProps {
   onSelectEvent?: (event: ImpactEvent) => void;
   selectedEventId?: string;
   onAddEventClick?: () => void;
+  activeSubTab?: "calendar" | "spaces" | "agenda";
+  onSubTabChange?: (tab: "calendar" | "spaces" | "agenda") => void;
 }
 
 export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
@@ -110,7 +113,9 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
   onDeleteEvent,
   onSelectEvent,
   selectedEventId,
-  onAddEventClick
+  onAddEventClick,
+  activeSubTab,
+  onSubTabChange
 }) => {
   const { addToast } = useToast();
   const { formatAmount } = useCurrencyStore();
@@ -130,107 +135,47 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
   });
 
   // Calendar display tab: 'calendar' (Interactive month view) | 'spaces' (Room lending & 24h occupancy) | 'agenda' (List view)
-  const [subTab, setSubTab] = useState<"calendar" | "spaces" | "agenda">("calendar");
+  const [internalSubTab, setInternalSubTab] = useState<"calendar" | "spaces" | "agenda">("calendar");
+  const subTab = activeSubTab !== undefined ? activeSubTab : internalSubTab;
+  const setSubTab = (tab: "calendar" | "spaces" | "agenda") => {
+    setInternalSubTab(tab);
+    if (onSubTabChange) onSubTabChange(tab);
+  };
 
-  // Spaces list persistent storage
+  // Rentable spaces master toggle
+  const hasRentableSpaces = Boolean(
+    activeOrg?.has_rentable_spaces ||
+    (orgId && localStorage.getItem(`org_has_rentable_spaces_${orgId}`) === "true")
+  );
+
+  // Spaces list persistent storage (default: empty array)
   const [spaces, setSpaces] = useState<SpaceEntity[]>(() => {
     const key = `org_spaces_${orgId}`;
     const raw = localStorage.getItem(key);
     if (raw) {
       try {
-        return JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
       } catch (e) {
         console.error("Failed to parse spaces", e);
       }
     }
-    // Default spaces for any organization lending facilities
-    return [
-      {
-        id: "space-1",
-        org_id: orgId,
-        name: "Main Community Conference Hall",
-        type: "Hall / Auditorium",
-        capacity: 180,
-        size_sqm: 220,
-        hourly_rate: 15000,
-        amenities: ["High-speed WiFi", "HD Projector", "PA Sound System", "Air Conditioning", "Stage & Podium"],
-        manager_name: "Jean Paul Habimana",
-        manager_phone: "0788123456",
-        status: "available"
-      },
-      {
-        id: "space-2",
-        org_id: orgId,
-        name: "Executive Boardroom & Meeting Hub",
-        type: "Boardroom",
-        capacity: 22,
-        size_sqm: 45,
-        hourly_rate: 8000,
-        amenities: ["Smart TV Screen", "Video Conference Camera", "Whiteboard", "Executive Chairs", "AC"],
-        manager_name: "Aline Mukamana",
-        manager_phone: "0789654321",
-        status: "available"
-      },
-      {
-        id: "space-3",
-        org_id: orgId,
-        name: "Digital Training & Coworking Lab",
-        type: "Training Lab",
-        capacity: 40,
-        size_sqm: 85,
-        hourly_rate: 10000,
-        amenities: ["Power Outlets on Desks", "Fast Fiber Internet", "Dual Projectors", "Ergonomic Chairs"],
-        manager_name: "Eric Ndayisaba",
-        manager_phone: "0788776655",
-        status: "available"
-      }
-    ];
+    return [];
   });
 
-  // Space bookings persistent storage
+  // Space bookings persistent storage (default: empty array)
   const [bookings, setBookings] = useState<SpaceBooking[]>(() => {
-    const key = `org_space_bookings_${orgId}`;
+    const key = `org_space_requests_${orgId}`;
     const raw = localStorage.getItem(key);
     if (raw) {
       try {
-        return JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
       } catch (e) {
         console.error("Failed to parse bookings", e);
       }
     }
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    return [
-      {
-        id: "bk-1",
-        org_id: orgId,
-        space_id: "space-1",
-        space_name: "Main Community Conference Hall",
-        date: todayStr,
-        start_time: "09:00",
-        end_time: "13:00",
-        title: "Youth Agribusiness & Digital Leadership Workshop",
-        reserved_by: "Rwanda Youth Agritech Forum",
-        contact_phone: "0788334455",
-        attendees_count: 95,
-        notes: "Requires microphone system and projector setup.",
-        status: "confirmed"
-      },
-      {
-        id: "bk-2",
-        org_id: orgId,
-        space_id: "space-2",
-        space_name: "Executive Boardroom & Meeting Hub",
-        date: todayStr,
-        start_time: "14:00",
-        end_time: "17:30",
-        title: "Cooperative Supervisory Board Audit Review",
-        reserved_by: "Internal Audit Committee",
-        contact_phone: "0788998877",
-        attendees_count: 14,
-        notes: "Confidential financial review session.",
-        status: "confirmed"
-      }
-    ];
+    return [];
   });
 
   // Save to localStorage when state changes
@@ -492,9 +437,13 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
             }`}
           >
             <Building2 className="h-3.5 w-3.5 shrink-0" />
-            <span>Space & Room Lending (24h)</span>
-            <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded-full font-bold shrink-0">
-              {spaces.length}
+            <span>Rentable Spaces & Calendar</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 ${
+              hasRentableSpaces
+                ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                : "bg-slate-200 dark:bg-slate-700 text-slate-500"
+            }`}>
+              {hasRentableSpaces ? spaces.length : "Off"}
             </span>
           </button>
           <button
@@ -889,245 +838,20 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
         </div>
       )}
 
-      {/* VIEW B: SPACE & ROOM LENDING WITH FULL 24-HOUR TIME OCCUPANCY METERS */}
+      {/* VIEW B: RENTABLE SPACES, 24H SCHEDULE, BOOKING APPROVALS & EVENT TO-DOS */}
       {subTab === "spaces" && (
-        <div className="flex flex-col gap-5">
-          {/* Top Bar for Space Occupancy View */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs min-w-0">
-            <div className="min-w-0">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                <span className="truncate">Facility Spaces & 24h Schedule</span>
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Room availability and 24-hour occupancy time slots.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                <span>Date:</span>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={e => setSelectedDate(e.target.value)}
-                  className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white outline-none font-mono"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  setBookingDate(selectedDate);
-                  if (user?.full_name && !bookingReservedBy) {
-                    setBookingReservedBy(user.full_name);
-                  }
-                  const defaultPhone = user?.phone_number || activeMember?.phone_number || "";
-                  if (defaultPhone && !bookingContactPhone) {
-                    setBookingContactPhone(defaultPhone);
-                  }
-                  setOpenBookSpaceModal(true);
-                }}
-                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer shadow-3xs whitespace-nowrap shrink-0 flex items-center gap-1"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>New Booking</span>
-              </button>
-            </div>
-          </div>
-
-          {/* 24-Hour Visual Occupancy Matrix for all Organization Spaces */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-4 sm:p-5 flex flex-col gap-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div>
-                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                  24h Occupancy · {selectedDateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
-                </h4>
-                <p className="text-xs text-slate-400">
-                  Green indicates available. Amber indicates occupied.
-                </p>
-              </div>
-              <div className="flex items-center gap-3 text-xs">
-                <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
-                  <span className="h-2.5 w-2.5 rounded bg-emerald-500" /> Available
-                </span>
-                <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-semibold">
-                  <span className="h-2.5 w-2.5 rounded bg-amber-500" /> Occupied
-                </span>
-              </div>
-            </div>
-
-            {/* Spaces timeline list */}
-            <div className="flex flex-col gap-6">
-              {spaces.map(space => {
-                const spaceBookingsOnDate = bookings.filter(b => b.space_id === space.id && b.date === selectedDate);
-                const isFullyAvailable = spaceBookingsOnDate.length === 0;
-
-                return (
-                  <div
-                    key={space.id}
-                    className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/20 flex flex-col gap-3"
-                  >
-                    {/* Space info header */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h5 className="font-bold text-sm text-slate-900 dark:text-white">
-                            {space.name}
-                          </h5>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                            {space.type}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1">
-                          <span className="flex items-center gap-1">
-                            <Users className="h-3.5 w-3.5 text-slate-400" />
-                            <span>Capacity: <strong>{space.capacity} seats</strong></span>
-                          </span>
-                          <span>•</span>
-                          <span className="flex items-center gap-1">
-                            <Maximize2 className="h-3.5 w-3.5 text-slate-400" />
-                            <span>Size: <strong>{space.size_sqm} m²</strong></span>
-                          </span>
-                          <span>•</span>
-                          <span>
-                            Rate: <strong>{space.hourly_rate > 0 ? `${space.hourly_rate.toLocaleString()} RWF/hr` : "Free Community Access"}</strong>
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 self-start sm:self-auto">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedSpaceForBooking(space);
-                            setBookingSpaceId(space.id);
-                            setBookingDate(selectedDate);
-                            setOpenBookSpaceModal(true);
-                          }}
-                          className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer"
-                        >
-                          + Reserve Slot
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Amenities chips */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {space.amenities.map((am, i) => (
-                        <span
-                          key={i}
-                          className="text-[10px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-md"
-                        >
-                          ✓ {am}
-                        </span>
-                      ))}
-                    </div>
-
-                    {/* 24-HOUR TIMELINE BAR */}
-                    <div className="flex flex-col gap-1.5 pt-2">
-                      <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                        <span>00:00</span>
-                        <span>06:00</span>
-                        <span>12:00 (Noon)</span>
-                        <span>18:00</span>
-                        <span>23:59</span>
-                      </div>
-
-                      {/* 24-segment bar */}
-                      <div
-                        style={{ display: "grid", gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}
-                        className="h-7 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-emerald-500/20"
-                      >
-                        {hours24.map(hour => {
-                          const occupancy = getSpaceOccupancyAtHour(space.id, selectedDate, hour);
-                          const isOccupied = Boolean(occupancy);
-
-                          return (
-                            <div
-                              key={hour}
-                              title={
-                                isOccupied
-                                  ? `${hour}:00 - Occupied by "${occupancy?.title}" (${occupancy?.start_time} to ${occupancy?.end_time})`
-                                  : `${hour}:00 - Available for booking`
-                              }
-                              className={`h-full border-r border-slate-100 dark:border-slate-800 transition cursor-pointer relative group flex items-center justify-center ${
-                                isOccupied
-                                  ? "bg-amber-500 hover:bg-amber-600 text-white"
-                                  : "bg-emerald-500/30 hover:bg-emerald-500/50"
-                              }`}
-                              onClick={() => {
-                                if (isOccupied && occupancy) {
-                                  addToast(
-                                    `Occupied: "${occupancy.title}" by ${occupancy.reserved_by} (${occupancy.start_time} - ${occupancy.end_time})`,
-                                    "info"
-                                  );
-                                } else {
-                                  setSelectedSpaceForBooking(space);
-                                  setBookingSpaceId(space.id);
-                                  setBookingStartTime(`${String(hour).padStart(2, "0")}:00`);
-                                  setBookingEndTime(`${String(Math.min(23, hour + 2)).padStart(2, "0")}:00`);
-                                  setBookingDate(selectedDate);
-                                  setOpenBookSpaceModal(true);
-                                }
-                              }}
-                            >
-                              <span className="text-[8px] font-mono opacity-0 group-hover:opacity-100 transition font-bold">
-                                {hour}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Active Bookings Summary on Date */}
-                      {spaceBookingsOnDate.length > 0 ? (
-                        <div className="flex flex-col gap-1.5 mt-2">
-                          <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                            Occupied Time Slots ({spaceBookingsOnDate.length}):
-                          </span>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            {spaceBookingsOnDate.map(bk => (
-                              <div
-                                key={bk.id}
-                                className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs flex items-center justify-between"
-                              >
-                                <div>
-                                  <span className="font-bold text-amber-900 dark:text-amber-200 block truncate max-w-[200px]">
-                                    {bk.title}
-                                  </span>
-                                  <span className="text-[10px] text-amber-800 dark:text-amber-300 font-mono">
-                                    Occupied: {bk.start_time} to {bk.end_time} • {bk.reserved_by}
-                                  </span>
-                                </div>
-                                {isAdmin && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteBooking(bk.id, bk.title)}
-                                    className="p-1 text-slate-400 hover:text-rose-600 transition"
-                                    title="Cancel booking"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">
-                          ✓ Space is completely unoccupied and available all 24 hours on this date.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        <RentableSpacesManager
+          activeOrg={activeOrg}
+          isAdmin={isAdmin}
+          onEventCreated={(ev) => {
+            if (onSelectEvent) onSelectEvent(ev);
+          }}
+          onSwitchToCalendar={() => setSubTab("calendar")}
+        />
       )}
 
       {/* VIEW C: AGENDA ROSTER & SESSIONS (Standard view with quick filters) */}
-      {subTab === "agenda" && (
+      {subTab === "agenda" && !onSubTabChange && (
         <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
             <div>

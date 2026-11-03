@@ -15,6 +15,8 @@ import {
   ChatChannel,
   ChatMessage,
   Goal,
+  GoalTask,
+  GoalTaskComment,
   Grant,
   LedgerEntry,
   Donation,
@@ -482,15 +484,27 @@ export function useUpdateOrganization() {
         let updatedOrg: Organization | null = null;
         const updateData: Record<string, any> = { ...rest };
 
-        // If donation credentials were not set but dues values were provided, map them to DB columns
-        if (updateData.donation_account_name === undefined && dues_account_name !== undefined) {
-          updateData.donation_account_name = dues_account_name;
+        // Include Mobile Money merchant code & collection numbers in DB update payload
+        if (dues_account_name !== undefined) {
+          updateData.dues_account_name = dues_account_name;
+          if (updateData.donation_account_name === undefined) {
+            updateData.donation_account_name = dues_account_name;
+          }
         }
-        if (updateData.donation_mtn_number === undefined && dues_mtn_number !== undefined) {
-          updateData.donation_mtn_number = dues_mtn_number;
+        if (dues_mtn_number !== undefined) {
+          updateData.dues_mtn_number = dues_mtn_number;
+          if (updateData.donation_mtn_number === undefined) {
+            updateData.donation_mtn_number = dues_mtn_number;
+          }
         }
-        if (updateData.donation_airtel_number === undefined && dues_airtel_number !== undefined) {
-          updateData.donation_airtel_number = dues_airtel_number;
+        if (dues_airtel_number !== undefined) {
+          updateData.dues_airtel_number = dues_airtel_number;
+          if (updateData.donation_airtel_number === undefined) {
+            updateData.donation_airtel_number = dues_airtel_number;
+          }
+        }
+        if (momo_merchant_code !== undefined) {
+          updateData.momo_merchant_code = momo_merchant_code;
         }
 
         // Auto-prune loop for any non-existent columns in Supabase schema cache
@@ -2072,10 +2086,32 @@ export function useGoals(orgId: string | undefined) {
             console.warn("[Goals Supabase Sync] Failed to sync local goals:", syncErr);
           }
         }
-        return Array.from(resultMap.values());
+        const hydratedGoals = Array.from(resultMap.values()).map((g) => {
+          if (!g.tasks || g.tasks.length === 0) {
+            try {
+              const localTasks = localStorage.getItem(`impacto_goal_tasks_${g.id}`);
+              if (localTasks) {
+                g.tasks = JSON.parse(localTasks);
+              }
+            } catch {}
+          }
+          return g;
+        });
+        return hydratedGoals;
       }
       await delay();
-      return MockDB.getGoals().filter((g) => g.org_id === orgId);
+      const mockGoals = MockDB.getGoals().filter((g) => g.org_id === orgId);
+      return mockGoals.map((g) => {
+        if (!g.tasks || g.tasks.length === 0) {
+          try {
+            const localTasks = localStorage.getItem(`impacto_goal_tasks_${g.id}`);
+            if (localTasks) {
+              g.tasks = JSON.parse(localTasks);
+            }
+          } catch {}
+        }
+        return g;
+      });
     },
     enabled: !!orgId,
   });
@@ -2119,6 +2155,12 @@ export function useCreateGoal() {
         goals.push(newGoal);
         MockDB.saveGoals(goals);
         createdGoal = newGoal;
+      }
+
+      if (payload.tasks && payload.tasks.length > 0 && createdGoal) {
+        try {
+          localStorage.setItem(`impacto_goal_tasks_${createdGoal.id}`, JSON.stringify(payload.tasks));
+        } catch {}
       }
 
       try {
@@ -2364,6 +2406,161 @@ export function useDeleteGoal() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["goals", data.org_id] });
       queryClient.invalidateQueries({ queryKey: ["audit_logs", data.org_id] });
+    },
+  });
+}
+
+export function useUpdateGoalTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      goalId,
+      taskId,
+      progress,
+      status,
+      comment,
+      member,
+      orgId,
+    }: {
+      goalId: string;
+      taskId: string;
+      progress: number;
+      status: "todo" | "in_progress" | "completed";
+      comment?: string;
+      member: { id: string; name: string; role?: string };
+      orgId: string;
+    }) => {
+      let targetGoal: Goal | null = null;
+      if (isSupabaseConfigured) {
+        try {
+          const { data } = await supabase.from("goals").select("*").eq("id", goalId).maybeSingle();
+          if (data) targetGoal = data as Goal;
+        } catch (e) {
+          console.warn("Error fetching goal for task update:", e);
+        }
+      }
+
+      const localGoals = MockDB.getGoals();
+      if (!targetGoal) {
+        targetGoal = localGoals.find((g) => g.id === goalId) || null;
+      }
+
+      // Merge local tasks if necessary
+      let tasks: GoalTask[] = targetGoal?.tasks ? [...targetGoal.tasks] : [];
+      if (!tasks || tasks.length === 0) {
+        try {
+          const stored = localStorage.getItem(`impacto_goal_tasks_${goalId}`);
+          if (stored) tasks = JSON.parse(stored);
+        } catch {}
+      }
+
+      const taskIdx = tasks.findIndex((t) => t.id === taskId);
+      if (taskIdx === -1) {
+        throw new Error("Task not found on goal");
+      }
+
+      const existingTask = tasks[taskIdx];
+      const updatedComments: GoalTaskComment[] = existingTask.comments ? [...existingTask.comments] : [];
+      if (comment && comment.trim()) {
+        updatedComments.push({
+          id: "cmt_" + Date.now(),
+          author_id: member.id,
+          author_name: member.name,
+          author_role: member.role,
+          comment: comment.trim(),
+          progress_at_time: progress,
+          created_at: new Date().toISOString(),
+        });
+      }
+
+      const updatedTask: GoalTask = {
+        ...existingTask,
+        progress,
+        status,
+        comments: updatedComments,
+        last_comment: comment && comment.trim() ? comment.trim() : existingTask.last_comment,
+        completed_at: status === "completed" ? (existingTask.completed_at || new Date().toISOString()) : undefined,
+      };
+
+      tasks[taskIdx] = updatedTask;
+
+      // Recalculate parent goal overall achievement
+      const totalTasks = tasks.length;
+      const avgProgress = Math.round(tasks.reduce((sum, t) => sum + (t.progress || 0), 0) / totalTasks);
+      const goalStatus: "pending" | "in_progress" | "completed" =
+        avgProgress >= 100 ? "completed" : avgProgress > 0 ? "in_progress" : "pending";
+      const current_progress = Math.round(((targetGoal?.target || 100) * avgProgress) / 100);
+
+      // Save to localStorage fallback
+      try {
+        localStorage.setItem(`impacto_goal_tasks_${goalId}`, JSON.stringify(tasks));
+      } catch {}
+
+      // Update in Supabase
+      if (isSupabaseConfigured) {
+        try {
+          const { error } = await supabase
+            .from("goals")
+            .update({
+              tasks,
+              achievement_percentage: avgProgress,
+              current_progress,
+              status: goalStatus,
+              last_edited_at: new Date().toISOString(),
+            })
+            .eq("id", goalId);
+          if (error) {
+            console.warn("Supabase update tasks column notice, falling back without tasks field:", error);
+            await supabase
+              .from("goals")
+              .update({
+                achievement_percentage: avgProgress,
+                current_progress,
+                status: goalStatus,
+                last_edited_at: new Date().toISOString(),
+              })
+              .eq("id", goalId);
+          }
+        } catch (sbErr) {
+          console.warn("Supabase task update caught error:", sbErr);
+        }
+      }
+
+      // Update in MockDB
+      const mockIdx = localGoals.findIndex((g) => g.id === goalId);
+      if (mockIdx !== -1) {
+        localGoals[mockIdx] = {
+          ...localGoals[mockIdx],
+          tasks,
+          achievement_percentage: avgProgress,
+          current_progress,
+          status: goalStatus,
+          last_edited_at: new Date().toISOString(),
+        };
+        MockDB.saveGoals(localGoals);
+      }
+
+      // Log system audit event
+      try {
+        recordSystemAuditEvent({
+          org_id: orgId,
+          action: "goal.task_updated",
+          action_label: `Task Progress: ${member.name} updated '${updatedTask.title}' to ${progress}% (${status})`,
+          target_table: "goals",
+          target_id: goalId,
+          target_label: updatedTask.title,
+          old_value: { progress: existingTask.progress, status: existingTask.status },
+          new_value: { progress, status, comment },
+        });
+      } catch (logErr) {
+        console.warn("[Audit] Failed to log goal task update:", logErr);
+      }
+
+      return { goalId, taskId, tasks, avgProgress, goalStatus };
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["goals", vars.orgId] });
+      queryClient.invalidateQueries({ queryKey: ["audit_logs", vars.orgId] });
     },
   });
 }

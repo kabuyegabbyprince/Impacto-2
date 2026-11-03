@@ -60,6 +60,7 @@ import {
 import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "./MoMoPushPaymentModal";
 import { OrganizationVerificationModal } from "./OrganizationVerificationModal";
 import { ReferralCenterModal } from "./ReferralCenterModal";
+import { PlanDetailsDisclosure } from "./PlanDetailsDisclosure";
 import { UssdPaymentHelper, cleanMerchantCode, cleanPhoneNumber } from "./UssdPaymentHelper";
 import { getOrgSubscriptionLifecycle } from "../lib/subscriptionMatrix";
 import { useAuthStore } from "../store/authStore";
@@ -1107,7 +1108,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
   const [momoPhone, setMomoPhone] = useState("");
   const [momoRef, setMomoRef] = useState("");
   const [smsProof, setSmsProof] = useState("");
-  const [selectedTier, setSelectedTier] = useState("Growth Plan - $25/month");
+  const [selectedTier, setSelectedTier] = useState("Growth Plan - $10/month");
   
   const [alertNotify, setAlertNotify] = useState(false);
   const [paySuccessAlert, setPaySuccessAlert] = useState("");
@@ -1202,10 +1203,10 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
 
   const handleLockoutMoMoSuccess = async (data: MoMoPaymentSuccessData) => {
     try {
-      let costUsd = 25;
+      let costUsd = 10;
       if (selectedTier.includes("Free")) costUsd = 0;
-      else if (selectedTier.includes("Growth")) costUsd = 25;
-      else if (selectedTier.includes("Pro")) costUsd = 40;
+      else if (selectedTier.includes("Growth")) costUsd = 10;
+      else if (selectedTier.includes("Pro")) costUsd = 25;
       else if (selectedTier.includes("Enterprise")) costUsd = 80;
 
       await submitPaymentMutation.mutateAsync({
@@ -1219,13 +1220,13 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         proof_url: `[PawaPay Verified] Push payment authorized on MTN SIM (${data.payerPhone}). Deposit ID: ${data.depositId}`
       });
 
-      const tierCode = selectedTier.toLowerCase().includes("growth")
-        ? "growth"
-        : selectedTier.toLowerCase().includes("pro")
+      const tierCode = selectedTier.toLowerCase().includes("pro") || selectedTier.toLowerCase().includes("enterprise")
         ? "pro"
-        : selectedTier.toLowerCase().includes("enterprise")
-        ? "enterprise"
-        : "starter";
+        : selectedTier.toLowerCase().includes("growth")
+        ? "growth"
+        : selectedTier.toLowerCase().includes("starter")
+        ? "starter"
+        : "free";
 
       if (activeOrg) {
         const updatedOrg = await updateOrgMutation.mutateAsync({
@@ -1266,10 +1267,10 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     setSubmittingPayment(true);
     try {
       const rate = platformSettings.usd_to_rwf_rate || 1350;
-      let costUsd = 25;
+      let costUsd = 10;
       if (selectedTier.includes("Free")) costUsd = 0;
-      else if (selectedTier.includes("Growth")) costUsd = 25;
-      else if (selectedTier.includes("Pro")) costUsd = 40;
+      else if (selectedTier.includes("Growth")) costUsd = 10;
+      else if (selectedTier.includes("Pro")) costUsd = 25;
       else if (selectedTier.includes("Enterprise")) costUsd = 80;
 
       const randomRef = "TXN" + Math.floor(100000000 + Math.random() * 900000000);
@@ -1317,10 +1318,10 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     setSubmittingPayment(true);
     try {
       const rate = platformSettings.usd_to_rwf_rate || 1350;
-      let costUsd = 25;
+      let costUsd = 10;
       if (selectedTier.includes("Free")) costUsd = 0;
-      else if (selectedTier.includes("Growth")) costUsd = 25;
-      else if (selectedTier.includes("Pro")) costUsd = 40;
+      else if (selectedTier.includes("Growth")) costUsd = 10;
+      else if (selectedTier.includes("Pro")) costUsd = 25;
       else if (selectedTier.includes("Enterprise")) costUsd = 80;
 
       const randomRef = "TXN" + Math.floor(100000000 + Math.random() * 900000000);
@@ -1388,10 +1389,10 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     if (!isBlocked) return null;
 
     const rate = platformSettings.usd_to_rwf_rate || 1350;
-    let costUsd = 25;
+    let costUsd = 10;
     if (selectedTier.includes("Free")) costUsd = 0;
-    else if (selectedTier.includes("Growth")) costUsd = 25;
-    else if (selectedTier.includes("Pro")) costUsd = 40;
+    else if (selectedTier.includes("Growth")) costUsd = 10;
+    else if (selectedTier.includes("Pro")) costUsd = 25;
     else if (selectedTier.includes("Enterprise")) costUsd = 80;
     const amountRwf = costUsd * rate;
 
@@ -1648,11 +1649,13 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                         className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100 select-none focus:ring-1 focus:ring-emerald-500 font-medium"
                       >
                         <option value="Free Forever Plan - $0/month">Free Forever Plan — $0</option>
-                        <option value="Growth Plan - $25/month">Growth Tier — $25 ({(25 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(25, 'USD'))})</option>
-                        <option value="Pro Plan - $40/month">Pro Plan — $40 ({(40 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(40, 'USD'))})</option>
+                        <option value="Growth Plan - $10/month">Growth Tier — $10 ({(10 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(10, 'USD'))})</option>
+                        <option value="Pro Plan - $25/month">Pro Plan — $25 ({(25 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(25, 'USD'))})</option>
                         <option value="Enterprise Plan - Custom">Enterprise Plan — Custom / Contact Sales</option>
                       </select>
                     </div>
+
+                    <PlanDetailsDisclosure defaultOpen={false} />
 
                     <div className="flex flex-col gap-1">
                       <Input
@@ -1803,11 +1806,13 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                         className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100 select-none focus:ring-1 focus:ring-emerald-500 font-medium"
                       >
                         <option value="Free Forever Plan - $0/month">Free Forever Plan — $0</option>
-                        <option value="Growth Plan - $25/month">Growth Tier — $25 ({(25 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(25, 'USD'))})</option>
-                        <option value="Pro Plan - $40/month">Pro Plan — $40 ({(40 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(40, 'USD'))})</option>
+                        <option value="Growth Plan - $10/month">Growth Tier — $10 ({(10 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(10, 'USD'))})</option>
+                        <option value="Pro Plan - $25/month">Pro Plan — $25 ({(25 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(25, 'USD'))})</option>
                         <option value="Enterprise Plan - Custom">Enterprise Plan — Custom / Contact Sales</option>
                       </select>
                     </div>
+
+                    <PlanDetailsDisclosure defaultOpen={false} />
 
                     <div className="flex flex-col gap-1">
                       <Input
@@ -2044,10 +2049,10 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         onClose={() => setOpenLockoutMoMo(false)}
         amount={(() => {
           const rate = platformSettings.usd_to_rwf_rate || 1350;
-          let costUsd = 25;
+          let costUsd = 10;
           if (selectedTier.includes("Free")) costUsd = 0;
-          else if (selectedTier.includes("Growth")) costUsd = 25;
-          else if (selectedTier.includes("Pro")) costUsd = 40;
+          else if (selectedTier.includes("Growth")) costUsd = 10;
+          else if (selectedTier.includes("Pro")) costUsd = 25;
           else if (selectedTier.includes("Enterprise")) costUsd = 80;
           return costUsd * rate;
         })()}
@@ -2055,7 +2060,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         defaultPayerName={activeOrg?.name}
         description={`Impacto License Renewal: ${selectedTier}`}
         itemType="subscription"
-        itemId={selectedTier.toLowerCase().includes("growth") ? "growth" : selectedTier.toLowerCase().includes("pro") ? "pro" : "starter"}
+        itemId={selectedTier.toLowerCase().includes("growth") ? "growth" : selectedTier.toLowerCase().includes("pro") ? "pro" : "free"}
         recipientMtnNumber={platformSettings.mtn_payment_number}
         recipientMerchantCode={platformSettings.momo_merchant_code || platformSettings.mtn_merchant_code}
         recipientName={platformSettings.payment_name}

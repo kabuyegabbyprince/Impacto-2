@@ -190,6 +190,7 @@ export const PublicOrgPage: React.FC = () => {
   const [resStartTime, setResStartTime] = useState("09:00");
   const [resEndTime, setResEndTime] = useState("13:00");
   const [resOrganizer, setResOrganizer] = useState("");
+  const [resEmail, setResEmail] = useState("");
   const [resPhone, setResPhone] = useState("");
   const [resAttendees, setResAttendees] = useState("20");
   const [resNotes, setResNotes] = useState("");
@@ -224,6 +225,14 @@ export const PublicOrgPage: React.FC = () => {
   const [roomAmenities, setRoomAmenities] = useState("WiFi, HD Projector, Sound System, AC");
 
   const isUserOrgAdmin = user?.is_superadmin || (org && user && (org as any).created_by === user.id);
+
+  const hasRentableSpaces = Boolean(
+    org?.has_rentable_spaces ||
+    (org?.id && localStorage.getItem(`org_has_rentable_spaces_${org.id}`) === "true")
+  );
+  const showSpaceCalendar = Boolean(
+    org?.show_space_calendar_publicly ?? org?.show_calendar_publicly ?? true
+  );
 
   const handleSaveRoom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -312,15 +321,22 @@ export const PublicOrgPage: React.FC = () => {
 
     const newReq = {
       id: `req-${Date.now()}`,
+      org_id: org?.id,
       space_id: reserveSpaceTarget.id,
       space_name: reserveSpaceTarget.name,
+      room_image: reserveSpaceTarget.image_url || reserveSpaceTarget.image || "",
       title: resTitle.trim(),
       date: resDate,
       start_time: resStartTime,
       end_time: resEndTime,
       reserved_by: resOrganizer.trim(),
+      requester_name: resOrganizer.trim(),
+      requester_email: resEmail.trim(),
       contact_phone: resPhone.trim(),
+      requester_phone: resPhone.trim(),
       attendees_count: Number(resAttendees) || 10,
+      people_range: reserveSpaceTarget.people_range || (reserveSpaceTarget.capacity ? `Up to ${reserveSpaceTarget.capacity} people` : ""),
+      cost: reserveSpaceTarget.cost || reserveSpaceTarget.hourly_rate || 0,
       notes: resNotes.trim(),
       status: "pending",
       created_at: new Date().toISOString()
@@ -332,11 +348,15 @@ export const PublicOrgPage: React.FC = () => {
       localStorage.setItem(`org_space_requests_${org.id}`, JSON.stringify(updated));
     }
     setOpenReserveModal(false);
-    setResTitle("");
-    setResOrganizer("");
-    setResPhone("");
-    setResNotes("");
-    addToast("Space reservation request sent successfully to cooperative administration!", "success");
+
+    addToast("Space reservation requested! Redirecting to sign up with the organization...", "success");
+
+    // Redirect user to register with organization preselected and booking attached
+    setTimeout(() => {
+      navigate(
+        `/signup?org=${org?.id || ""}&booking_id=${newReq.id}&name=${encodeURIComponent(resOrganizer.trim())}&email=${encodeURIComponent(resEmail.trim())}&phone=${encodeURIComponent(resPhone.trim())}`
+      );
+    }, 600);
   };
 
   const pageDossierRef = useRef<HTMLDivElement>(null);
@@ -435,13 +455,13 @@ export const PublicOrgPage: React.FC = () => {
           try {
             const rawSpaces = localStorage.getItem(`org_spaces_${matchedOrg.id}`);
             if (rawSpaces) {
-              setSpaces(JSON.parse(rawSpaces));
+              const parsed = JSON.parse(rawSpaces);
+              setSpaces(Array.isArray(parsed) ? parsed : []);
+            } else if (matchedOrg.rentable_spaces && Array.isArray(matchedOrg.rentable_spaces)) {
+              setSpaces(matchedOrg.rentable_spaces);
             } else {
-              setSpaces([
-                { id: "space-1", name: "Main Community Conference Hall", type: "Auditorium / Hall", size_sqm: 220, capacity: 180, hourly_rate: 15000, amenities: ["WiFi", "HD Projector", "PA Sound System", "Air Conditioning"] },
-                { id: "space-2", name: "Executive Boardroom", type: "Boardroom", size_sqm: 45, capacity: 22, hourly_rate: 8000, amenities: ["Smart TV Screen", "Video Conf Camera", "Whiteboard", "AC"] },
-                { id: "space-3", name: "Digital Training & Coworking Lab", type: "Training Lab", size_sqm: 85, capacity: 40, hourly_rate: 10000, amenities: ["Power Outlets on Desks", "Fast Fiber Internet"] }
-              ]);
+              // Default: no spaces unless configured
+              setSpaces([]);
             }
             const rawReqs = localStorage.getItem(`org_space_requests_${matchedOrg.id}`);
             if (rawReqs) setSpaceRequests(JSON.parse(rawReqs));
@@ -836,19 +856,21 @@ export const PublicOrgPage: React.FC = () => {
               )}
             </button>
 
-            <button
-              onClick={() => setActiveTab("calendar")}
-              className={`pb-3 text-sm font-bold transition-all relative ${
-                activeTab === "calendar"
-                  ? "text-emerald-700 dark:text-emerald-400 font-extrabold"
-                  : "text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 font-medium"
-              }`}
-            >
-              Facilities & Calendar
-              {activeTab === "calendar" && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600 rounded-full" />
-              )}
-            </button>
+            {hasRentableSpaces && showSpaceCalendar && (
+              <button
+                onClick={() => setActiveTab("calendar")}
+                className={`pb-3 text-sm font-bold transition-all relative ${
+                  activeTab === "calendar"
+                    ? "text-emerald-700 dark:text-emerald-400 font-extrabold"
+                    : "text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-200 font-medium"
+                }`}
+              >
+                Facilities & Calendar
+                {activeTab === "calendar" && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600 rounded-full" />
+                )}
+              </button>
+            )}
           </div>
         </div>
 
@@ -1217,7 +1239,7 @@ export const PublicOrgPage: React.FC = () => {
               )}
 
               {/* TAB 6: FACILITIES & CALENDAR */}
-              {activeTab === "calendar" && org.show_calendar_publicly !== false && (
+              {activeTab === "calendar" && (org?.show_space_calendar_publicly ?? org?.show_calendar_publicly !== false) && (
                 <div className="bg-white dark:bg-slate-900 border border-gray-200/80 dark:border-slate-800 rounded-2xl p-6 sm:p-7 shadow-xs flex flex-col gap-6">
                   <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
                     <div>
@@ -1225,10 +1247,82 @@ export const PublicOrgPage: React.FC = () => {
                         Facility Spaces & Calendar
                       </h2>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        View room occupancy and request reservations.
+                        Select a room and pick an available date on the calendar to submit your reservation request.
                       </p>
                     </div>
                   </div>
+
+                  {/* RENTABLE ROOMS SHOWCASE */}
+                  {spaces.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                      <span className="text-xs font-extrabold uppercase text-gray-400 tracking-wider font-mono">
+                        Available Rentable Rooms ({spaces.length}):
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {spaces.map((s) => (
+                          <div
+                            key={s.id}
+                            className="bg-slate-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/80 rounded-2xl overflow-hidden flex flex-col justify-between group hover:border-emerald-500 transition shadow-3xs"
+                          >
+                            <div className="relative h-36 w-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                              {s.image_url ? (
+                                <img
+                                  src={s.image_url}
+                                  alt={s.name}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                  <Building className="h-8 w-8 opacity-40" />
+                                </div>
+                              )}
+                              <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-slate-950/70 text-white text-[10px] font-bold flex items-center gap-1">
+                                <Users className="h-3 w-3 text-emerald-400" />
+                                <span>{s.people_range || (s.capacity ? `Up to ${s.capacity} persons` : "Flexible")}</span>
+                              </div>
+                              {s.cost !== undefined && s.cost !== null && s.cost > 0 ? (
+                                <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-extrabold font-mono">
+                                  {Number(s.cost).toLocaleString()} RWF / {s.cost_unit || "hour"}
+                                </div>
+                              ) : (
+                                <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-slate-900/80 text-emerald-300 text-[9px] font-bold">
+                                  Free Access
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="p-3.5 flex flex-col gap-2">
+                              <div>
+                                <h4 className="font-extrabold text-sm text-gray-900 dark:text-white">
+                                  {s.name}
+                                </h4>
+                                {s.description && (
+                                  <p className="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
+                                    {s.description}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center justify-between pt-2 border-t border-gray-200/60 dark:border-slate-700/60">
+                                <span className="text-[10px] text-emerald-600 font-semibold">
+                                  ● Available for rent
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReserveSpaceTarget(s);
+                                    setOpenReserveModal(true);
+                                  }}
+                                  className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs transition cursor-pointer"
+                                >
+                                  Book Room
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* INTERACTIVE MONTH OCCUPANCY CALENDAR */}
                   <div className="flex flex-col gap-4">
@@ -1473,10 +1567,43 @@ export const PublicOrgPage: React.FC = () => {
                 <div className="pt-4 border-t border-gray-100 dark:border-slate-800 flex flex-col gap-1">
                   <span className="text-xs font-bold text-gray-900 dark:text-white">Contact Us:</span>
                   <p className="text-xs text-gray-600 dark:text-slate-400 break-words font-medium">
-                    {org.contact_us ||
-                      (org.donation_mtn_number
-                        ? `contact@ourorganization.org / +250 ${org.donation_mtn_number}`
-                        : "contact@ourorganization.org / +250 788 123 456")}
+                    {(() => {
+                      // 1. Organization custom contacts
+                      const rawContact = org.contact_us?.trim();
+                      const isPlaceholder =
+                        !rawContact ||
+                        rawContact.toLowerCase().includes("contact@ourorganization.org") ||
+                        rawContact.includes("788 123 456");
+
+                      if (rawContact && !isPlaceholder) {
+                        return rawContact;
+                      }
+
+                      const orgEmail = (org as any).email || (org as any).contact_email;
+                      const orgPhone =
+                        (org as any).phone ||
+                        (org as any).contact_phone ||
+                        (org.donation_mtn_number
+                          ? `+250 ${org.donation_mtn_number}`
+                          : org.dues_mtn_number
+                          ? `+250 ${org.dues_mtn_number}`
+                          : "");
+
+                      if (orgEmail && orgPhone) {
+                        return `${orgEmail} / ${orgPhone}`;
+                      }
+                      if (orgEmail) return orgEmail;
+                      if (orgPhone) return orgPhone;
+
+                      // 2. Fallback to Impacto platform contacts
+                      const impactoContact = "support@impacto.rw / +250 788 000 000";
+                      if (impactoContact) {
+                        return impactoContact;
+                      }
+
+                      // 3. If there is not ones yet say _
+                      return "_";
+                    })()}
                   </p>
                 </div>
 
@@ -1487,7 +1614,7 @@ export const PublicOrgPage: React.FC = () => {
                       <ShieldCheck className="h-4 w-4 text-emerald-600" />
                       <span>Official Verification</span>
                     </span>
-                    <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-400 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                    <span className="text-[10px] font-mono font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-200/80 dark:border-emerald-900/50">
                       ACTIVE
                     </span>
                   </div>
@@ -1932,6 +2059,20 @@ export const PublicOrgPage: React.FC = () => {
                   />
                 </div>
                 <div>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Email Address *</label>
+                  <input
+                    type="email"
+                    required
+                    value={resEmail}
+                    onChange={(e) => setResEmail(e.target.value)}
+                    placeholder="name@example.com"
+                    className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
                   <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Contact Telephone *</label>
                   <input
                     type="text"
@@ -1942,9 +2083,6 @@ export const PublicOrgPage: React.FC = () => {
                     className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Estimated Attendees Count</label>
                   <input
@@ -1954,9 +2092,6 @@ export const PublicOrgPage: React.FC = () => {
                     placeholder="25"
                     className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
                   />
-                </div>
-                <div className="flex items-center text-xs text-gray-500 pt-5">
-                  <span>Max Room Capacity: <strong>{reserveSpaceTarget.capacity || "N/A"} Persons</strong></span>
                 </div>
               </div>
 
@@ -1971,6 +2106,10 @@ export const PublicOrgPage: React.FC = () => {
                 />
               </div>
 
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-gray-200/60 dark:border-slate-700/60 text-[11px] text-gray-500">
+                📌 Submitting this request will direct you to sign up with <strong>{org?.name || "the organization"}</strong> so administrators can review your request and keep you updated.
+              </div>
+
               <div className="flex items-center justify-end gap-2.5 mt-2 pt-3 border-t border-gray-100 dark:border-slate-800">
                 <button
                   type="button"
@@ -1981,9 +2120,10 @@ export const PublicOrgPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs transition cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5"
                 >
-                  Send Reservation Request
+                  <span>Submit Request & Continue to Sign Up</span>
+                  <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
             </form>

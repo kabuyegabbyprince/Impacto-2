@@ -11,13 +11,11 @@ import { Badge, Button, Modal } from "./ui";
 import { SubscriptionPayment, Organization } from "../types";
 import { useOrgSubscriptionPayments, usePlatformSettings } from "../hooks/useImpactoData";
 import { useOrgStore } from "../store/orgStore";
-import { AddOnPackageId } from "../lib/subscriptionMatrix";
 
 interface SubscriptionPaymentDashboardProps {
   org?: Organization | null;
   orgId?: string;
   onOpenRenewModal?: () => void;
-  onOpenAddonModal?: (pkgId?: AddOnPackageId) => void;
 }
 
 export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboardProps> = ({
@@ -153,7 +151,7 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
             <Coins className="h-8 w-8 text-slate-400" />
             <span className="text-xs font-bold text-slate-700 dark:text-slate-300">No payment records found yet</span>
             <p className="text-[11px] text-slate-500 max-w-sm">
-              Use MTN MoMo or Airtel Money to activate your subscription plan or add-on feature packages.
+              Use MTN MoMo or Airtel Money to activate your subscription plan.
             </p>
           </div>
         )}

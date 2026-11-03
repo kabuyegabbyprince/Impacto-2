@@ -40,14 +40,14 @@ export interface AddOnPackageDefinition {
 export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierDefinition> = {
   free: {
     id: "free",
-    name: "Free Forever Plan",
+    name: "Free Plan",
     priceUsd: 0,
     priceRwfApprox: 0,
     memberLimit: 30,
     storageLimitMB: 100,
     storageLimitBytes: 100 * 1024 * 1024, // 100 MB
     badgeColor: "gray",
-    tagline: "Essential grassroots community coordination",
+    tagline: "Essential grassroots community coordination (Free Mode)",
     coreFeatures: [
       "Member Directory & Roles (up to 30 active members)",
       "Announcements News Feed & Broadcasts",
@@ -58,7 +58,7 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierDefinition> = {
       "Payment Proof Uploads (MoMo & Bank receipts)",
       "Safe Read-Only Data Preservation (Zero deletion on excess)"
     ],
-    description: "Ideal for small grassroots groups and nascent community associations."
+    description: "Default free plan mode for organizations after trial finishes or for grassroots community groups."
   },
   starter: {
     id: "starter",
@@ -83,8 +83,8 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierDefinition> = {
   growth: {
     id: "growth",
     name: "Growth Plan (Default Trial)",
-    priceUsd: 25,
-    priceRwfApprox: 33750,
+    priceUsd: 10,
+    priceRwfApprox: 13500,
     memberLimit: 500,
     storageLimitMB: 5000, // 5 GB
     storageLimitBytes: 5000 * 1024 * 1024,
@@ -106,8 +106,8 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierDefinition> = {
   pro: {
     id: "pro",
     name: "Pro Plan",
-    priceUsd: 40,
-    priceRwfApprox: 54000,
+    priceUsd: 25,
+    priceRwfApprox: 33750,
     memberLimit: Infinity,
     storageLimitMB: Infinity,
     storageLimitBytes: Infinity,
@@ -157,13 +157,14 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierDefinition> = {
  * Safely resolves a TierDefinition with guaranteed fallbacks to prevent undefined access errors.
  */
 export function getTierDefinition(tier?: string | null): TierDefinition {
-  if (!tier) return SUBSCRIPTION_TIERS.growth;
+  if (!tier) return SUBSCRIPTION_TIERS.free;
   const normalized = String(tier).trim().toLowerCase();
   if (normalized.includes("enterprise")) return SUBSCRIPTION_TIERS.enterprise || SUBSCRIPTION_TIERS.pro;
   if (normalized.includes("pro") || normalized.includes("vip")) return SUBSCRIPTION_TIERS.pro;
+  if (normalized.includes("growth")) return SUBSCRIPTION_TIERS.growth;
   if (normalized.includes("starter")) return SUBSCRIPTION_TIERS.starter;
   if (normalized.includes("free")) return SUBSCRIPTION_TIERS.free;
-  return SUBSCRIPTION_TIERS[normalized as SubscriptionTier] || SUBSCRIPTION_TIERS.growth;
+  return SUBSCRIPTION_TIERS[normalized as SubscriptionTier] || SUBSCRIPTION_TIERS.free;
 }
 
 export const ADDON_PACKAGES: Record<AddOnPackageId, AddOnPackageDefinition> = {
@@ -284,6 +285,7 @@ export interface OrgLifecycleStatus {
   isReadOnlyMode: boolean; // Safe mode when Free plan exceeds quotas
   isReadOnlySafeMode: boolean; // Alias for isReadOnlyMode
   isLocked: boolean; // True if subscription or trial has fully expired
+  isExpired: boolean; // True if subscription or trial has expired
   isGracePeriod: boolean; // Alias for isInGracePeriod
   
   // UI Display helpers
@@ -419,6 +421,7 @@ export function getOrgSubscriptionLifecycle(
       isReadOnlyMode: false,
       isReadOnlySafeMode: false,
       isLocked: false,
+      isExpired: false,
       isGracePeriod: false,
       statusLabel: "Growth Plan (30-Day Trial)",
       badgeColor: "emerald"
@@ -429,23 +432,23 @@ export function getOrgSubscriptionLifecycle(
   let rawTier: SubscriptionTier = "free";
   const tierStr = (org.subscription_tier || (org as any).subscription_plan || "").toLowerCase();
   if (tierStr.includes("enterprise") || tierStr.includes("pro") || tierStr.includes("vip")) rawTier = "pro";
-  else if (tierStr.includes("starter")) rawTier = "starter";
   else if (tierStr.includes("growth")) rawTier = "growth";
   else if (tierStr.includes("trial")) rawTier = "growth";
+  else if (tierStr.includes("starter")) rawTier = "starter";
   else if (tierStr.includes("free")) rawTier = "free";
-  else rawTier = org.subscription_status === "active" ? "starter" : "free";
+  else rawTier = org.subscription_status === "active" ? "growth" : "free";
 
   const createdTime = org.created_at ? new Date(org.created_at).getTime() : now;
   const elapsedMs = Math.max(0, now - createdTime);
   const daysSinceCreation = Math.floor(elapsedMs / (1000 * 3600 * 24));
 
-  const isExplicitTrial = (org.subscription_tier === "trial" || (org.subscription_status === "trial" && !org.subscription_tier)) && rawTier !== "free";
-  const isExplicitActive = org.subscription_status === "active";
-  const isExplicitExpired = org.subscription_status === "expired";
-
   const trialMs = TRIAL_DURATION_DAYS * 24 * 3600 * 1000;
   const graceMs = GRACE_PERIOD_DAYS * 24 * 3600 * 1000;
   const totalTrialMs = trialMs + graceMs;
+
+  const isExplicitActive = org.subscription_status === "active" && !org.subscription_tier?.includes("trial");
+  const isExplicitExpired = org.subscription_status === "expired";
+  const hasPaidEndDate = !!org.subscription_ends_at && new Date(org.subscription_ends_at).getTime() > now;
 
   let isTrial = false;
   let isInGracePeriod = false;
@@ -456,56 +459,51 @@ export function getOrgSubscriptionLifecycle(
   let subscriptionDaysRemaining = 0;
 
   if (rawTier === "free") {
-    // Free forever tier is static and persistent
+    // Free plan is static and permanent
     subscriptionDaysRemaining = Infinity;
-  } else if (isExplicitTrial) {
+  } else if (hasPaidEndDate || isExplicitActive) {
+    const endsTime = org.subscription_ends_at ? new Date(org.subscription_ends_at).getTime() : now + 30 * 24 * 3600 * 1000;
+    if (endsTime > now) {
+      subscriptionDaysRemaining = Math.max(0, Math.ceil((endsTime - now) / (1000 * 3600 * 24)));
+    } else if (endsTime + graceMs > now) {
+      isInGracePeriod = true;
+      graceDaysRemaining = Math.max(0, Math.ceil(((endsTime + graceMs) - now) / (1000 * 3600 * 24)));
+    } else {
+      isSubscriptionExpired = true;
+    }
+  } else {
+    // 30-Day Growth Free Trial
     if (elapsedMs < trialMs) {
       isTrial = true;
       trialDaysRemaining = Math.max(0, Math.ceil((trialMs - elapsedMs) / (1000 * 3600 * 24)));
     } else if (elapsedMs < totalTrialMs) {
-      isTrial = false;
       isInGracePeriod = true;
       graceDaysRemaining = Math.max(0, Math.ceil((totalTrialMs - elapsedMs) / (1000 * 3600 * 24)));
     } else {
+      // 30 days trial finished -> sent directly to Free Plan
       isTrialExpired = true;
     }
-  } else if (isExplicitActive) {
-    if (org.subscription_ends_at) {
-      const endsTime = new Date(org.subscription_ends_at).getTime();
-      if (endsTime > now) {
-        subscriptionDaysRemaining = Math.max(0, Math.ceil((endsTime - now) / (1000 * 3600 * 24)));
-      } else if (endsTime + graceMs > now) {
-        isInGracePeriod = true;
-        graceDaysRemaining = Math.max(0, Math.ceil(((endsTime + graceMs) - now) / (1000 * 3600 * 24)));
-      } else {
-        isSubscriptionExpired = true;
-      }
-    } else {
-      subscriptionDaysRemaining = 30;
-    }
-  } else if (isExplicitExpired) {
-    isSubscriptionExpired = true;
   }
 
   // Effective tier deduction
-  // If Free Plan, always Free Forever
-  // If Trial is active, effective tier is Growth.
-  // If Trial or Paid expired, transition to Free Forever.
-  let effectiveTier: SubscriptionTier = rawTier;
+  // When the 30-day trial expires, organizations are sent directly to Free Plan (NOT starter plan)!
+  let effectiveTier: SubscriptionTier = "free";
   if (rawTier === "free") {
     effectiveTier = "free";
+  } else if (hasPaidEndDate || (isExplicitActive && !isTrialExpired && !isSubscriptionExpired)) {
+    effectiveTier = rawTier;
   } else if (isTrial || isInGracePeriod) {
     effectiveTier = "growth";
   } else if (isTrialExpired || isSubscriptionExpired) {
-    effectiveTier = "free"; // Resumption on Free Forever
-  } else if (isExplicitActive) {
-    effectiveTier = rawTier;
+    // FINISHED 30-DAY TRIAL -> SENT TO FREE PLAN (NOT STARTER PLAN)
+    effectiveTier = "free";
+  } else {
+    effectiveTier = "free";
   }
 
-  // Active add-on packages (apply to Free and Starter plans)
+  // Active add-on packages
   const activePackages = getOrgActivePackages(org);
-  const isEligibleForPacks = effectiveTier === "free" || effectiveTier === "starter";
-  const bonusMemberSlots = isEligibleForPacks ? activePackages.length * 20 : 0;
+  const bonusMemberSlots = activePackages.length * 20;
 
   const tierDef = getTierDefinition(effectiveTier);
   const baseMemberLimit = tierDef.memberLimit;
@@ -519,7 +517,7 @@ export function getOrgSubscriptionLifecycle(
 
   // Read-only lockdown rule:
   // "If member count or storage exceeds limits, excess records enter read-only mode safely without data deletion."
-  const isReadOnlyMode = (effectiveTier === "free" || effectiveTier === "starter") && (isMemberLimitExceeded || isStorageLimitExceeded);
+  const isReadOnlyMode = effectiveTier === "free" && (isMemberLimitExceeded || isStorageLimitExceeded);
 
   let statusLabel = "";
   let badgeColor: "emerald" | "amber" | "blue" | "purple" | "rose" | "gray" = "emerald";
@@ -531,16 +529,19 @@ export function getOrgSubscriptionLifecycle(
   } else if (isInGracePeriod) {
     statusLabel = `Grace Period (${graceDaysRemaining}d left)`;
     badgeColor = "amber";
-    headlineWarning = `3-Day Grace Period active (${graceDaysRemaining} days remaining). Upgrade to maintain Growth features before switching to Free Forever limits.`;
+    headlineWarning = `3-Day Grace Period active (${graceDaysRemaining} days remaining). Upgrade to Growth or your workspace will transition to the Free Plan.`;
   } else if (isReadOnlyMode) {
-    statusLabel = `${tierDef.name} (Safe Read-Only Mode)`;
+    statusLabel = "Free Plan (Safe Read-Only Mode)";
     badgeColor = "amber";
-    headlineWarning = `Your organization exceeds the member quota (${activeMemberCount}/${memberLimit} members). Excess records are preserved in read-only mode safely. Add packages (+20 members each) or upgrade to Growth.`;
+    headlineWarning = `Your organization exceeds the Free Plan member quota (${activeMemberCount}/${memberLimit} members). Excess records are preserved in read-only mode safely without deletion. Upgrade to Growth ($10/mo) for 500 members.`;
   } else if (effectiveTier === "free") {
-    statusLabel = activePackages.length > 0 ? `Free Forever + ${activePackages.length} Pack(s)` : "Free Forever Plan";
+    statusLabel = "Free Plan";
     badgeColor = "gray";
+    if (isTrialExpired) {
+      headlineWarning = "Your 30-day Growth trial has finished. Your organization is now operating on the Free Plan. Upgrade anytime to unlock advanced Growth or Pro features.";
+    }
   } else if (effectiveTier === "starter") {
-    statusLabel = activePackages.length > 0 ? `Starter + ${activePackages.length} Pack(s)` : `Starter Plan (${subscriptionDaysRemaining}d active)`;
+    statusLabel = `Starter Plan (${subscriptionDaysRemaining}d active)`;
     badgeColor = "blue";
   } else if (effectiveTier === "growth") {
     statusLabel = `Growth Plan (${subscriptionDaysRemaining}d active)`;
@@ -604,6 +605,7 @@ export function getOrgSubscriptionLifecycle(
     isReadOnlyMode,
     isReadOnlySafeMode: isReadOnlyMode,
     isLocked: isSubscriptionExpired || isTrialExpired,
+    isExpired: isTrialExpired || isSubscriptionExpired,
     isGracePeriod: isInGracePeriod,
     statusLabel,
     badgeColor,
@@ -728,16 +730,11 @@ export function canAccessFeature(
     };
   }
 
-  const packageDef = recommendedPackage ? ADDON_PACKAGES[recommendedPackage] : undefined;
   const targetTierDef = getTierDefinition(reqTier);
 
   return {
     allowed: false,
     requiredTier: reqTier,
-    recommendedPackage,
-    packageDef,
-    message: packageDef
-      ? `Unlock with the ${packageDef.name} ($4/mo, +20 members) or upgrade to ${targetTierDef.name}.`
-      : `Feature requires ${targetTierDef.name} or higher.`
+    message: `This feature requires the ${targetTierDef.name} ($${targetTierDef.priceUsd}/mo) or higher. Upgrade your workspace to unlock complete access.`
   };
 }

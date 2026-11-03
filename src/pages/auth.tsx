@@ -595,6 +595,10 @@ export const Register: React.FC = () => {
   const [searchParams] = useSearchParams();
   const orgIdFromParam = searchParams.get("org_id") || searchParams.get("org");
   const modeFromParam = searchParams.get("mode");
+  const bookingIdFromParam = searchParams.get("booking_id") || searchParams.get("booking");
+  const nameFromParam = searchParams.get("name") || "";
+  const emailFromParam = searchParams.get("email") || "";
+  const phoneFromParam = searchParams.get("phone") || "";
   
   const { data: orgs, isLoading: isLoadingOrgs } = useOrganizations();
   const { user, setUser, setSession, logout } = useAuthStore();
@@ -607,12 +611,21 @@ export const Register: React.FC = () => {
   const [error, setError] = useState("");
 
   // Participant Account Fields
-  const [partName, setPartName] = useState("");
-  const [partEmail, setPartEmail] = useState("");
-  const [partPhone, setPartPhone] = useState("");
-  const [partRegMethod, setPartRegMethod] = useState<"phone" | "email">("phone");
+  const [partName, setPartName] = useState(nameFromParam);
+  const [partEmail, setPartEmail] = useState(emailFromParam);
+  const [partPhone, setPartPhone] = useState(phoneFromParam);
+  const [partRegMethod, setPartRegMethod] = useState<"phone" | "email">(emailFromParam ? "email" : "phone");
   const [partPassword, setPartPassword] = useState("");
   const [partSelectedOrg, setPartSelectedOrg] = useState("");
+
+  useEffect(() => {
+    if (nameFromParam) setPartName(nameFromParam);
+    if (emailFromParam) {
+      setPartEmail(emailFromParam);
+      setPartRegMethod("email");
+    }
+    if (phoneFromParam) setPartPhone(phoneFromParam);
+  }, [nameFromParam, emailFromParam, phoneFromParam]);
 
   useEffect(() => {
     if (orgIdFromParam) {
@@ -897,6 +910,22 @@ export const Register: React.FC = () => {
         sessionStorage.setItem("impacto_just_registered", "true");
         setUser(dbUser);
 
+        // Link pending space booking request if initiated from public page
+        if (bookingIdFromParam && partSelectedOrg) {
+          try {
+            const rawReqs = localStorage.getItem(`org_space_requests_${partSelectedOrg}`);
+            if (rawReqs) {
+              const reqs = JSON.parse(rawReqs);
+              const updated = reqs.map((r: any) =>
+                r.id === bookingIdFromParam
+                  ? { ...r, user_id: authUser.id, requester_email: registeredEmail, requester_name: partName.trim() }
+                  : r
+              );
+              localStorage.setItem(`org_space_requests_${partSelectedOrg}`, JSON.stringify(updated));
+            }
+          } catch (e) {}
+        }
+
         recordReferralAttribution(partReferralCode, authUser.id, partName.trim(), partSelectedOrg, orgRecord?.name);
 
         if (partSelectedOrg && orgRecord && memberRecord) {
@@ -908,8 +937,8 @@ export const Register: React.FC = () => {
         await new Promise((res) => setTimeout(res, 800));
         const users = MockDB.getUsers();
         
-        if (users.some((u) => u.email.toLowerCase() === registeredEmail.toLowerCase())) {
-          setError("Account with this email or telephone number is already registered on this platform.");
+        if (users.some((u) => u.email.toLowerCase() === registeredEmail.toLowerCase() || (cleanPhone && u.phone_number === cleanPhone))) {
+          setError("That email address or telephone number is already occupied. Please log in or use a different credential.");
           setLoading(false);
           return;
         }
@@ -966,6 +995,22 @@ export const Register: React.FC = () => {
         sessionStorage.setItem("impacto_just_registered", "true");
         setUser(newUser);
         setSession({ token: "demo" });
+
+        // Link pending space booking request if initiated from public page
+        if (bookingIdFromParam && partSelectedOrg) {
+          try {
+            const rawReqs = localStorage.getItem(`org_space_requests_${partSelectedOrg}`);
+            if (rawReqs) {
+              const reqs = JSON.parse(rawReqs);
+              const updated = reqs.map((r: any) =>
+                r.id === bookingIdFromParam
+                  ? { ...r, user_id: newUser.id, requester_email: registeredEmail, requester_name: partName.trim() }
+                  : r
+              );
+              localStorage.setItem(`org_space_requests_${partSelectedOrg}`, JSON.stringify(updated));
+            }
+          } catch (e) {}
+        }
 
         if (partSelectedOrg && createdMember && targetOrg) {
           setActiveOrg(targetOrg, createdMember);
@@ -1159,7 +1204,7 @@ export const Register: React.FC = () => {
         const orgsList = MockDB.getOrgs();
 
         if (users.some((u) => u.email.toLowerCase() === adminEmail.toLowerCase())) {
-          setError("Administrator email address is already registered.");
+          setError("That email address or telephone number is already occupied. Please log in or use a different credential.");
           setLoading(false);
           return;
         }
@@ -1507,6 +1552,21 @@ export const Register: React.FC = () => {
                 <p className="text-xs text-gray-500 mb-4 font-medium leading-relaxed">
                   Create an account to participate in active agricultural, green, and health cooperatives across Rwanda.
                 </p>
+
+                {bookingIdFromParam && (
+                  <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl mb-4 flex items-start gap-2.5 text-xs text-emerald-900 dark:text-emerald-200 shadow-3xs">
+                    <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-extrabold block text-emerald-950 dark:text-emerald-300">
+                        Space Rental Request Attached
+                      </span>
+                      <span className="text-[11px] leading-relaxed block mt-0.5">
+                        Your organization is preselected. Finish signing up to link your space reservation request and receive administrative approval notices.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <form onSubmit={handleParticipantRegister} className="flex flex-col gap-4">
                   <Input
                     type="text"

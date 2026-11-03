@@ -123,10 +123,6 @@ const RootPortalEntrance: React.FC = () => {
     return <Navigate to="/auditor" replace />;
   }
 
-  if (!activeOrg) {
-    return <Navigate to="/org-picker" replace />;
-  }
-
   return <Navigate to="/dashboard" replace />;
 };
 

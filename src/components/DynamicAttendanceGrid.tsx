@@ -297,11 +297,11 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-              Dynamic Attendance Grid
+              Attendance Matrix
             </h3>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Two-dimensional matrix with scheduled events in rows and active members in columns.
+            Two-dimensional matrix with scheduled events in columns (X-Axis) and active members in rows (Y-Axis).
           </p>
         </div>
 
@@ -332,26 +332,26 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
 
       {/* Filter and Metric Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Event Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search events (rows)..."
-            value={eventSearch}
-            onChange={(e) => setEventSearch(e.target.value)}
-            className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-8 pr-3 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
-          />
-        </div>
-
         {/* Member Search */}
         <div className="relative">
           <Users className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
           <input
             type="text"
-            placeholder="Filter users (columns)..."
+            placeholder="Filter members (rows Y-Axis)..."
             value={memberSearch}
             onChange={(e) => setMemberSearch(e.target.value)}
+            className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-8 pr-3 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
+          />
+        </div>
+
+        {/* Event Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search events (columns X-Axis)..."
+            value={eventSearch}
+            onChange={(e) => setEventSearch(e.target.value)}
             className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-8 pr-3 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
           />
         </div>
@@ -360,7 +360,7 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
         <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 text-xs">
           <span className="text-slate-500">Dimensions:</span>
           <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">
-            {filteredEvents.length} Events × {activeMembers.length} Members
+            {activeMembers.length} Members × {filteredEvents.length} Events
           </span>
         </div>
 
@@ -373,50 +373,59 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
         </div>
       </div>
 
-      {/* The Dynamic Matrix Grid (Users in Columns, Events in Rows) */}
+      {/* The Dynamic Matrix Table (Events on X-Axis Header, Members on Y-Axis Rows) */}
       <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs bg-white dark:bg-slate-900">
         <div className="overflow-x-auto max-h-[580px] scrollbar-thin">
           <table className="w-full border-collapse text-left text-xs">
-            {/* Table Header: Columns = Users/Members */}
+            {/* Table Header: Columns = Events (X-Axis) */}
             <thead className="sticky top-0 z-20 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 select-none">
               <tr>
-                {/* Sticky Left: Event Title & Details */}
-                <th className="sticky left-0 z-30 bg-slate-50 dark:bg-slate-800 p-3 min-w-[220px] font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
+                {/* Sticky Left: Member Name & Details (Y-Axis) */}
+                <th className="sticky left-0 z-30 bg-slate-50 dark:bg-slate-800 p-3 min-w-[200px] font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-slate-500" />
-                    <span>Scheduled Events</span>
+                    <Users className="h-3.5 w-3.5 text-slate-500" />
+                    <span>Member Directory (Y-Axis)</span>
                   </div>
                 </th>
 
-                {/* Columns for each User / Member */}
-                {activeMembers.map((m) => {
-                  const initial = (m.user?.full_name || "M").charAt(0).toUpperCase();
+                {/* Columns for each Scheduled Event (X-Axis) */}
+                {filteredEvents.map((ev, idx) => {
+                  const isPassed = new Date(ev.date_time) < new Date();
                   return (
                     <th
-                      key={m.id}
-                      className="p-2.5 min-w-[120px] max-w-[140px] text-center font-medium text-slate-700 dark:text-slate-300 border-r border-slate-200/60 dark:border-slate-700/60"
+                      key={ev.id}
+                      className="p-2.5 min-w-[130px] max-w-[160px] text-center font-medium text-slate-700 dark:text-slate-300 border-r border-slate-200/60 dark:border-slate-700/60"
                     >
                       <div className="flex flex-col items-center gap-0.5">
-                        <div className="h-6 w-6 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-[10px] flex items-center justify-center border border-slate-200 dark:border-slate-700">
-                          {initial}
-                        </div>
-                        <span className="font-semibold text-xs truncate w-full" title={m.user?.full_name}>
-                          {m.user?.full_name || "Member"}
+                        <span className="text-[10px] font-mono text-slate-400">
+                          #{idx + 1}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          #{m.member_number || "ID"}
+                        <span className="font-semibold text-xs truncate w-full text-slate-900 dark:text-white" title={ev.title}>
+                          {ev.title}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {new Date(ev.date_time).toLocaleDateString()}
+                        </span>
+                        <span
+                          className={`text-[9px] font-medium px-1.5 py-0.2 rounded capitalize mt-0.5 ${
+                            isPassed
+                              ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                              : "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+                          }`}
+                        >
+                          {isPassed ? "Completed" : ev.status}
                         </span>
                       </div>
                     </th>
                   );
                 })}
 
-                {/* Right: Summary Columns per Event */}
+                {/* Right: Member Attendance Summary Columns */}
                 <th className="p-2.5 min-w-[65px] text-center font-semibold text-slate-700 dark:text-slate-300 border-l border-slate-200 dark:border-slate-700">
-                  Present
+                  Attended
                 </th>
                 <th className="p-2.5 min-w-[65px] text-center font-semibold text-slate-700 dark:text-slate-300">
-                  Absent
+                  Missed
                 </th>
                 <th className="p-2.5 min-w-[70px] text-center font-semibold text-slate-700 dark:text-slate-300">
                   Rate %
@@ -424,67 +433,54 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
               </tr>
             </thead>
 
-            {/* Table Body: Rows = Events */}
+            {/* Table Body: Rows = Members (Y-Axis) */}
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredEvents.length > 0 ? (
-                filteredEvents.map((ev, idx) => {
-                  let rowPresentCount = 0;
+              {activeMembers.length > 0 ? (
+                activeMembers.map((m, idx) => {
+                  let memberAttendedCount = 0;
 
-                  // Precalculate row present count
-                  activeMembers.forEach((m) => {
+                  // Precalculate member attendance across all columns
+                  filteredEvents.forEach((ev) => {
                     if (attendanceSet.has(`${ev.id}_${m.id}`)) {
-                      rowPresentCount++;
+                      memberAttendedCount++;
                     }
                   });
 
-                  const rowAbsentCount = activeMembers.length - rowPresentCount;
-                  const rowRate = activeMembers.length > 0 ? Math.round((rowPresentCount / activeMembers.length) * 100) : 0;
-                  const isPassed = new Date(ev.date_time) < new Date();
+                  const memberMissedCount = filteredEvents.length - memberAttendedCount;
+                  const memberRate = filteredEvents.length > 0 ? Math.round((memberAttendedCount / filteredEvents.length) * 100) : 0;
+                  const initial = (m.user?.full_name || "M").charAt(0).toUpperCase();
 
                   return (
                     <tr
-                      key={ev.id}
+                      key={m.id}
                       className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors group"
                     >
-                      {/* Sticky Left Event Info Column */}
+                      {/* Sticky Left Member Info Row Header */}
                       <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800/80 p-3 border-r border-slate-200 dark:border-slate-700">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-mono text-slate-400">
-                              #{idx + 1}
-                            </span>
-                            <span className="font-semibold text-slate-900 dark:text-white text-xs line-clamp-1" title={ev.title}>
-                              {ev.title}
-                            </span>
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs flex items-center justify-center shrink-0 border border-emerald-200 dark:border-emerald-800">
+                            {initial}
                           </div>
-                          <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                            <span>{new Date(ev.date_time).toLocaleDateString()}</span>
-                            <span>•</span>
-                            <span className="truncate max-w-[110px]" title={ev.location}>{ev.location}</span>
-                          </div>
-                          <div>
-                            <span
-                              className={`text-[10px] font-medium px-1.5 py-0.5 rounded capitalize ${
-                                isPassed
-                                  ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                                  : "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
-                              }`}
-                            >
-                              {isPassed ? "Completed" : ev.status}
+                          <div className="space-y-0.5">
+                            <span className="font-semibold text-slate-900 dark:text-white text-xs block truncate max-w-[140px]" title={m.user?.full_name}>
+                              {m.user?.full_name || "Member"}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono block">
+                              #{m.member_number || `MEM-${idx + 1}`}
                             </span>
                           </div>
                         </div>
                       </td>
 
-                      {/* Interactive User Attendance Cells */}
-                      {activeMembers.map((m) => {
+                      {/* Interactive Attendance Cells per Event Column */}
+                      {filteredEvents.map((ev) => {
                         const cellKey = `${ev.id}_${m.id}`;
                         const isPresent = attendanceSet.has(cellKey);
                         const isUpdating = updatingCell === cellKey;
 
                         return (
                           <td
-                            key={m.id}
+                            key={ev.id}
                             className="p-2 text-center border-r border-slate-100 dark:border-slate-800/60"
                           >
                             <button
@@ -502,8 +498,8 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
                               }`}
                               title={
                                 !isPaidPlan
-                                  ? `${m.user?.full_name} is ${isPresent ? "Present" : "Absent"}.`
-                                  : `Click to mark ${m.user?.full_name} as ${isPresent ? "Absent" : "Present"}`
+                                  ? `${m.user?.full_name} is ${isPresent ? "Present" : "Absent"} for "${ev.title}".`
+                                  : `Click to mark ${m.user?.full_name} as ${isPresent ? "Absent" : "Present"} for "${ev.title}"`
                               }
                             >
                               {isUpdating ? (
@@ -524,15 +520,15 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
                         );
                       })}
 
-                      {/* Event Row Summaries */}
+                      {/* Member Row Attendance Summary */}
                       <td className="p-2 text-center font-medium text-emerald-700 dark:text-emerald-400 border-l border-slate-100 dark:border-slate-800">
-                        {rowPresentCount}
+                        {memberAttendedCount}
                       </td>
                       <td className="p-2 text-center font-medium text-rose-600 dark:text-rose-400">
-                        {rowAbsentCount}
+                        {memberMissedCount}
                       </td>
                       <td className="p-2 text-center font-medium text-slate-700 dark:text-slate-300">
-                        {rowRate}%
+                        {memberRate}%
                       </td>
                     </tr>
                   );
@@ -540,10 +536,10 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
               ) : (
                 <tr>
                   <td
-                    colSpan={activeMembers.length + 4}
+                    colSpan={filteredEvents.length + 4}
                     className="text-center py-10 text-slate-400 italic"
                   >
-                    No matching scheduled events found.
+                    No matching active members found.
                   </td>
                 </tr>
               )}

@@ -41,6 +41,8 @@ import {
   Building2,
   Wallet,
   ShieldCheck,
+  ShieldAlert,
+  Lock,
   Layers,
   ArrowUpRight,
   ArrowDownRight,
@@ -82,6 +84,7 @@ import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { PlanGatedView } from "../components/PlanGatedView";
 import { EmptyLedgerState, EmptyGrantsState, EmptyReportsState } from "../components/EmptyModuleStates";
 import { BulkMemberInviteModal } from "../components/BulkMemberInviteModal";
+import { OrganizationVerificationModal } from "../components/OrganizationVerificationModal";
 
 // ==========================================
 // 1. ROSTER MEMBERS LISTS (Admin Route)
@@ -2795,6 +2798,9 @@ export const GrantsTracker: React.FC<GrantsTrackerProps> = ({ defaultTab = "gran
   const { formatAmount } = useCurrencyStore();
 
   const isAccountant = (activeMember?.role as string) === "accountant" || !!user?.is_superadmin;
+  const isOrgVerified = activeOrg?.verification_status === "verified";
+  const isPendingReview = activeOrg?.verification_status === "pending_review";
+  const [openVerificationModal, setOpenVerificationModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"grants" | "donations" | "overview">(defaultTab);
 
   // Grants state & hooks
@@ -2858,6 +2864,14 @@ export const GrantsTracker: React.FC<GrantsTrackerProps> = ({ defaultTab = "gran
   // Grant handlers
   const handleCreateGrant = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isOrgVerified) {
+      addToast(
+        "Organization validation required: Your organization must be officially verified with the Green Tick before applying for or tracking strategic grants.",
+        "error"
+      );
+      setOpenVerificationModal(true);
+      return;
+    }
     if (!grantTitle || !funder || !range || !deadline) return;
 
     try {
@@ -2888,6 +2902,14 @@ export const GrantsTracker: React.FC<GrantsTrackerProps> = ({ defaultTab = "gran
   };
 
   const handleGrantStatusUpdate = async (id: string, nextStatus: any) => {
+    if (!isOrgVerified) {
+      addToast(
+        "Organization validation required: Only verified organizations can submit proposals or receive grant disbursements.",
+        "error"
+      );
+      setOpenVerificationModal(true);
+      return;
+    }
     try {
       await updateGrantStatusMutation.mutateAsync({ grantId: id, status: nextStatus, orgId: activeOrg?.id || "" });
       refetchGrants();
@@ -3011,8 +3033,26 @@ export const GrantsTracker: React.FC<GrantsTrackerProps> = ({ defaultTab = "gran
           </div>
 
           {activeTab === "grants" && (
-            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpenAddGrantModal(true)} className="rounded-xl bg-emerald-700 hover:bg-emerald-800">
-              {t("btn_track_grant")}
+            <Button
+              icon={!isOrgVerified ? <Lock className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              onClick={() => {
+                if (!isOrgVerified) {
+                  addToast(
+                    "To get grant funding your organization must be officially validated. Please submit your registration certificate to proceed.",
+                    "warning"
+                  );
+                  setOpenVerificationModal(true);
+                  return;
+                }
+                setOpenAddGrantModal(true);
+              }}
+              className={`rounded-xl ${
+                !isOrgVerified
+                  ? "bg-amber-600 hover:bg-amber-700"
+                  : "bg-emerald-700 hover:bg-emerald-800"
+              }`}
+            >
+              {!isOrgVerified ? "Validate to Track Grants" : t("btn_track_grant")}
             </Button>
           )}
 
@@ -3023,6 +3063,59 @@ export const GrantsTracker: React.FC<GrantsTrackerProps> = ({ defaultTab = "gran
           )}
         </div>
       </div>
+
+      {/* Organization Validation Status Banner for Grants */}
+      {!isOrgVerified ? (
+        <div className="rounded-2xl border p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-amber-200 dark:border-amber-900/60 shadow-3xs">
+          <div className="flex items-start gap-3.5">
+            <div className="p-2.5 rounded-xl bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-400 shrink-0">
+              <ShieldAlert className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                  {isPendingReview
+                    ? "Organization Verification In Progress"
+                    : "Organization Validation Required to Access Grants"}
+                </h3>
+                <span className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded-md font-bold ${
+                  isPendingReview
+                    ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                    : "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300"
+                }`}>
+                  {isPendingReview ? "Pending Review" : "Validation Required"}
+                </span>
+              </div>
+              <p className="text-xs text-gray-600 dark:text-slate-300 mt-1 max-w-2xl leading-relaxed">
+                {isPendingReview
+                  ? "Your legal registration documents are currently under review by compliance officers. Once verified, strategic grant applications and disbursement records will be fully unlocked."
+                  : "Institutional funders and international grantmakers require legal registration validation. Validate your organization with your RDB, RCA, or RGB certificate to apply for and log strategic grants."}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant={isPendingReview ? "outline" : "primary"}
+            onClick={() => setOpenVerificationModal(true)}
+            icon={<ShieldCheck className="h-4 w-4" />}
+            className="shrink-0 text-xs font-bold"
+          >
+            {isPendingReview ? "View Verification Status" : "Validate Organization Now"}
+          </Button>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-950/20 px-4 py-2.5 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-medium">
+            <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span>Official Legal Validation Active • Verified with Impacto Green Tick for Grants & Sourced Funding</span>
+          </div>
+          <button
+            onClick={() => setOpenVerificationModal(true)}
+            className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
+          >
+            View Certificate
+          </button>
+        </div>
+      )}
 
       {/* TAB 1: GRANTS DIRECTORY */}
       {activeTab === "grants" && (
@@ -3050,20 +3143,35 @@ export const GrantsTracker: React.FC<GrantsTrackerProps> = ({ defaultTab = "gran
                     </span>
                     
                     <div className="flex gap-1.5 shrink-0 select-none">
-                      {g.status === "tracking" && (
-                        <Button size="sm" onClick={() => handleGrantStatusUpdate(g.id, "applied")}>
-                          {t("btn_mark_applied")}
-                        </Button>
-                      )}
-                      {g.status === "applied" && (
-                        <div className="flex gap-1">
-                          <Button size="sm" onClick={() => handleGrantStatusUpdate(g.id, "successful")}>
-                            {t("btn_successful")}
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleGrantStatusUpdate(g.id, "unsuccessful")}>
-                            {t("btn_unsuccessful")}
-                          </Button>
-                        </div>
+                      {!isOrgVerified ? (
+                        <button
+                          onClick={() => {
+                            addToast("Organization validation required: You must be validated as an organization before submitting or advancing grant proposals.", "warning");
+                            setOpenVerificationModal(true);
+                          }}
+                          className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 flex items-center gap-1.5 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40 transition"
+                        >
+                          <Lock className="h-3 w-3" />
+                          <span>Validation Required</span>
+                        </button>
+                      ) : (
+                        <>
+                          {g.status === "tracking" && (
+                            <Button size="sm" onClick={() => handleGrantStatusUpdate(g.id, "applied")}>
+                              {t("btn_mark_applied")}
+                            </Button>
+                          )}
+                          {g.status === "applied" && (
+                            <div className="flex gap-1">
+                              <Button size="sm" onClick={() => handleGrantStatusUpdate(g.id, "successful")}>
+                                {t("btn_successful")}
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => handleGrantStatusUpdate(g.id, "unsuccessful")}>
+                                {t("btn_unsuccessful")}
+                              </Button>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -3332,6 +3440,16 @@ export const GrantsTracker: React.FC<GrantsTrackerProps> = ({ defaultTab = "gran
           </Button>
         </form>
       </Modal>
+
+      {/* Organization Legal Verification Modal */}
+      {activeOrg && (
+        <OrganizationVerificationModal
+          open={openVerificationModal}
+          onClose={() => setOpenVerificationModal(false)}
+          org={activeOrg}
+          members={members || []}
+        />
+      )}
     </div>
   );
 };

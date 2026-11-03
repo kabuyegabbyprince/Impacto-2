@@ -326,7 +326,10 @@ export const OrganizationMemberFees: React.FC = () => {
       return {
         isFlexible: true,
         label: "Flexible (Settle anytime)",
-        badgeClass: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900"
+        daysLeft: 999,
+        isOverdue: false,
+        overdueDays: 0,
+        formattedDate: "Flexible"
       };
     }
 
@@ -348,8 +351,11 @@ export const OrganizationMemberFees: React.FC = () => {
     if (!deadlineStr) {
       return {
         isFlexible: false,
-        label: "Unsettled dues (Standard)",
-        badgeClass: "text-stone-600 bg-stone-100 dark:bg-slate-800"
+        label: "Standard terms",
+        daysLeft: 0,
+        isOverdue: false,
+        overdueDays: 0,
+        formattedDate: "Standard"
       };
     }
 
@@ -374,8 +380,8 @@ export const OrganizationMemberFees: React.FC = () => {
         formattedDate,
         daysLeft,
         isOverdue: false,
-        label: `Due by ${formattedDate} (${daysLeft}d left)`,
-        badgeClass: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-900 font-bold"
+        overdueDays: 0,
+        label: `Due ${formattedDate} (${daysLeft}d left)`
       };
     } else if (daysLeft === 0) {
       return {
@@ -384,8 +390,8 @@ export const OrganizationMemberFees: React.FC = () => {
         formattedDate,
         daysLeft: 0,
         isOverdue: false,
-        label: `Due Today (${formattedDate})`,
-        badgeClass: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse font-bold"
+        overdueDays: 0,
+        label: `Due Today (${formattedDate})`
       };
     } else {
       const overdueDays = Math.abs(daysLeft);
@@ -395,8 +401,8 @@ export const OrganizationMemberFees: React.FC = () => {
         formattedDate,
         daysLeft,
         isOverdue: true,
-        label: `Overdue by ${overdueDays}d (Due ${formattedDate})`,
-        badgeClass: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-900 font-bold"
+        overdueDays,
+        label: `Overdue by ${overdueDays}d (Due ${formattedDate})`
       };
     }
   };
@@ -1669,190 +1675,7 @@ export const OrganizationMemberFees: React.FC = () => {
         </div>
       </div>
 
-      {/* Accountant View Mode Toggle: Schemes & Cycles vs Member Invoices */}
-      {isAccountant && activeTab === "ledger" && (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-stone-50 dark:bg-slate-900/90 rounded-2xl border border-stone-200/80 dark:border-slate-800">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-stone-700 dark:text-slate-300">View Format:</span>
-            <div className="p-1 bg-white dark:bg-slate-950 rounded-xl border border-gray-200 dark:border-slate-800 inline-flex items-center gap-1 text-xs shadow-xs">
-              <button
-                type="button"
-                id="btn-view-schemes"
-                onClick={() => setLedgerViewMode("schemes")}
-                className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                  ledgerViewMode === "schemes"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "text-stone-600 dark:text-slate-400 hover:text-stone-900 dark:hover:text-white"
-                }`}
-              >
-                <Layers className="h-3.5 w-3.5" /> Dues Schemes & Cycles
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
-                  ledgerViewMode === "schemes"
-                    ? "bg-emerald-800 text-white"
-                    : "bg-gray-100 dark:bg-slate-800 text-stone-700 dark:text-slate-300"
-                }`}>
-                  {duesSchemes.length}
-                </span>
-              </button>
-              <button
-                type="button"
-                id="btn-view-invoices"
-                onClick={() => setLedgerViewMode("invoices")}
-                className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                  ledgerViewMode === "invoices"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "text-stone-600 dark:text-slate-400 hover:text-stone-900 dark:hover:text-white"
-                }`}
-              >
-                <FileSpreadsheet className="h-3.5 w-3.5" /> Individual Member Invoices
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
-                  ledgerViewMode === "invoices"
-                    ? "bg-emerald-800 text-white"
-                    : "bg-gray-100 dark:bg-slate-800 text-stone-700 dark:text-slate-300"
-                }`}>
-                  {filteredFees.length}
-                </span>
-              </button>
-            </div>
-          </div>
-          <div className="text-[11px] text-gray-500 dark:text-slate-400">
-            {ledgerViewMode === "schemes"
-              ? "Showing master dues schemes created by accountant. Updating a scheme updates all users."
-              : "Showing individual invoice rows for all members."}
-          </div>
-        </div>
-      )}
-
-      {/* Main Roster Tracking Table view or Master Schemes view */}
-      {isAccountant && activeTab === "ledger" && ledgerViewMode === "schemes" ? (
-        loadingFees ? (
-          <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-xl" id="div-schemes-loading">
-            <Clock className="h-8 w-8 text-emerald-600 animate-spin mx-auto mb-3" />
-            <p className="text-xs text-gray-400 animate-pulse font-bold tracking-wider">Loading dues schemes & cycles...</p>
-          </div>
-        ) : duesSchemes.length > 0 ? (
-          <div className="space-y-4" id="dues-schemes-container">
-            <div className="grid grid-cols-1 gap-3">
-              {duesSchemes.map((scheme) => {
-                const percentPaid = Math.round((scheme.cleared_count / (scheme.member_count || 1)) * 100);
-                const isOverdue = scheme.due_date && new Date(scheme.due_date).getTime() < Date.now();
-                return (
-                  <div
-                    key={scheme.key}
-                    className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-3xs hover:border-emerald-500/50 transition"
-                  >
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                      {/* Left: Scheme Info */}
-                      <div className="space-y-1.5 min-w-[240px]">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900">
-                            {scheme.payment_period}
-                          </span>
-                          <h3 className="text-base font-bold text-stone-900 dark:text-white">
-                            {scheme.period_date}
-                          </h3>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-slate-400 font-medium">
-                          <span>
-                            Rate: <strong className="font-mono text-stone-900 dark:text-white">{scheme.rate_amount.toLocaleString()} RWF</strong> / member
-                          </span>
-                          <span>•</span>
-                          <span>
-                            Assigned: <strong className="text-stone-900 dark:text-white">{scheme.member_count} members</strong>
-                          </span>
-                          {scheme.due_date && (
-                            <>
-                              <span>•</span>
-                              <span className={`inline-flex items-center gap-1 font-bold ${
-                                isOverdue ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
-                              }`}>
-                                <Clock className="h-3 w-3" />
-                                Due: {new Date(scheme.due_date).toLocaleDateString()}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                        {scheme.admin_note && (
-                          <p className="text-[11px] text-gray-400 dark:text-slate-500 italic">
-                            Note: {scheme.admin_note}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Middle: Collection Progress */}
-                      <div className="flex-1 max-w-md bg-stone-50 dark:bg-slate-950/60 p-3 rounded-xl border border-gray-100 dark:border-slate-800/80">
-                        <div className="flex items-center justify-between text-xs font-bold mb-1.5">
-                          <span className="text-stone-700 dark:text-slate-300">
-                            Collections: <span className="text-emerald-600 font-mono">{scheme.total_cleared.toLocaleString()} RWF</span> / {scheme.total_expected.toLocaleString()} RWF
-                          </span>
-                          <span className="text-emerald-600 font-mono font-bold">{percentPaid}% Cleared</span>
-                        </div>
-                        <div className="w-full bg-stone-200 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden flex">
-                          <div
-                            className="bg-emerald-500 h-full transition-all duration-500"
-                            style={{ width: `${percentPaid}%` }}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-slate-400 font-semibold mt-1.5">
-                          <span className="text-emerald-600 font-bold">{scheme.cleared_count} Paid</span>
-                          {scheme.review_count > 0 && (
-                            <span className="text-amber-500 font-bold">{scheme.review_count} In Review</span>
-                          )}
-                          <span className="text-rose-600 font-bold">{scheme.pending_count} Unpaid</span>
-                        </div>
-                      </div>
-
-                      {/* Right: Actions */}
-                      <div className="flex items-center gap-2 self-end lg:self-center shrink-0">
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          onClick={() => {
-                            setSearchQuery(scheme.period_date);
-                            setLedgerViewMode("invoices");
-                          }}
-                          className="flex items-center gap-1 text-xs font-bold"
-                          title="View all member slips for this cycle"
-                        >
-                          <Users className="h-3.5 w-3.5 text-emerald-600" /> Member Slips ({scheme.member_count})
-                        </Button>
-
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          onClick={() => openEditModal(scheme.members[0], true)}
-                          className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 border-blue-200 dark:border-blue-900/50"
-                          title="Edit this due and update all users"
-                        >
-                          <Pencil className="h-3.5 w-3.5" /> Edit & Update All
-                        </Button>
-
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          onClick={() => handleDeleteCycleDirect(scheme)}
-                          className="flex items-center gap-1 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-900/50"
-                          title="Delete this due cycle for all members"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" /> Delete Due
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <div className="text-center py-20 bg-white dark:bg-slate-900 border rounded-xl" id="empty-dues-schemes">
-            <Coins className="h-12 w-12 text-gray-300 dark:text-slate-720 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-stone-800 dark:text-white">No Dues Schemes Recorded</h3>
-            <p className="text-xs text-gray-450 mt-1 max-w-sm mx-auto">
-              Charge new dues from the button above to set up a collection cycle for cooperative members.
-            </p>
-          </div>
-        )
-      ) : loadingFees ? (
+      {loadingFees ? (
         <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-xl" id="div-fees-loading">
           <Clock className="h-8 w-8 text-emerald-600 animate-spin mx-auto mb-3" />
           <p className="text-xs text-gray-400 animate-pulse font-bold tracking-wider">Retrieving cooperative dues and receipts...</p>
@@ -1907,109 +1730,146 @@ export const OrganizationMemberFees: React.FC = () => {
                       <td className="py-3.5 px-4 max-w-xs">
                         {fee.status === "paid" ? (
                           <div className="flex flex-col gap-0.5" id={`settlement-info-${fee.id}`}>
-                            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1">
-                              <CheckCircle2 className="h-3 w-3 shrink-0" /> Verified: {fee.paid_by_method || "Direct gateway"}
+                            <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> Verified: {fee.paid_by_method || "Direct gateway"}
                             </span>
                             {fee.transaction_reference && (
-                              <span className="text-[9px] font-mono font-black text-gray-500 bg-gray-100 dark:bg-slate-800 px-1 py-0.5 rounded inline-block w-fit">
+                              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 pl-5">
                                 Ref: {fee.transaction_reference}
                               </span>
                             )}
                           </div>
                         ) : fee.status === "pending_confirmation" ? (
                           <div className="flex flex-col gap-0.5" id={`settlement-info-${fee.id}`}>
-                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1">
-                              <Clock className="h-3 w-3 shrink-0" /> Reported via {fee.paid_by_method}
+                            <span className="text-xs font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                              <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" /> Reported via {fee.paid_by_method}
                             </span>
-                            <span className="text-[9px] text-gray-400 font-medium truncate">
-                              Wait supervisor validation...
+                            <span className="text-[11px] text-slate-400 dark:text-slate-500 pl-5">
+                              Awaiting supervisor validation
                             </span>
                           </div>
                         ) : (
-                          <div className="flex flex-col gap-1" id={`settlement-info-${fee.id}`}>
+                          <div className="flex flex-col gap-0.5" id={`settlement-info-${fee.id}`}>
                             {(() => {
                               const info = getFeeDeadlineInfo(fee);
+                              if (info.isFlexible) {
+                                return (
+                                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" />
+                                    Flexible (Settle anytime)
+                                  </span>
+                                );
+                              }
+                              if (info.isOverdue) {
+                                return (
+                                  <div className="flex flex-col">
+                                    <span className="text-xs font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
+                                      Overdue by {info.overdueDays}d
+                                    </span>
+                                    <span className="text-[11px] text-slate-500 dark:text-slate-400 pl-3">
+                                      Due {info.formattedDate}
+                                    </span>
+                                  </div>
+                                );
+                              }
+                              if (info.daysLeft === 0) {
+                                return (
+                                  <span className="text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                                    Due Today ({info.formattedDate})
+                                  </span>
+                                );
+                              }
                               return (
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold w-fit inline-flex items-center gap-1 ${info.badgeClass}`}>
-                                  <Clock className="h-3 w-3 shrink-0" />
-                                  {info.label}
-                                </span>
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
+                                    Due {info.formattedDate}
+                                  </span>
+                                  <span className="text-[11px] text-slate-400 dark:text-slate-500 pl-3">
+                                    {info.daysLeft} days left
+                                  </span>
+                                </div>
                               );
                             })()}
                             {fee.is_recurring && (
-                              <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5 select-none">
-                                <Repeat className="h-2.5 w-2.5 shrink-0" /> Auto-recurring cycle
+                              <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1 mt-0.5 select-none pl-3">
+                                <Repeat className="h-2.5 w-2.5 text-slate-400 shrink-0" /> Auto-recurring cycle
                               </span>
                             )}
                           </div>
                         )}
                       </td>
                       <td className="py-3.5 px-4 select-none">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider leading-none ${
-                          fee.status === "paid"
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                            : fee.status === "pending_confirmation"
-                              ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                              : "bg-rose-100 text-rose-850 dark:bg-rose-900/30 dark:text-rose-300"
-                        }`}>
-                          <span className={`h-1 w-1 rounded-full ${
-                            fee.status === "paid" 
-                              ? "bg-emerald-600" 
-                              : fee.status === "pending_confirmation" 
-                                ? "bg-amber-600 animate-pulse" 
-                                : "bg-rose-600"
-                          }`} />
-                          {fee.status === "paid" 
-                            ? "CLEARED" 
-                            : fee.status === "pending_confirmation" 
-                              ? "PENDING REVIEW" 
-                              : "UNPAID OUTSTANDING"
-                          }
-                        </span>
+                        {fee.status === "paid" ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                            Cleared
+                          </span>
+                        ) : fee.status === "pending_confirmation" ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                            Under Review
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400">
+                            <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
+                            Unpaid
+                          </span>
+                        )}
                       </td>
-                      <td className="py-3.5 px-4 text-right selection:none shrink-0 border-l border-dashed dark:border-slate-800/60">
+                      <td className="py-3.5 px-4 text-right selection:none shrink-0 border-l border-slate-100 dark:border-slate-800/80">
                         <div className="flex items-center justify-end gap-1.5">
                           {/* Member side pay button */}
                           {fee.status === "pending" && isMyOwn && (
-                            <Button 
+                            <button 
                               id={`btn-member-pay-${fee.id}`}
-                              size="xs" 
-                              className="bg-emerald-700 hover:bg-emerald-850 flex items-center gap-1 text-[11px] font-extrabold rounded-lg shadow-xs"
                               onClick={() => {
                                 setSelectedFeeToPay(fee);
                                 setPayMethod("MTN MoMo / Airtel");
                               }}
+                              className="h-7 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium inline-flex items-center gap-1.5 shadow-2xs transition"
                             >
-                              <Smartphone className="h-3 w-3" /> Pay or Report
-                            </Button>
+                              <Smartphone className="h-3.5 w-3.5" /> Pay
+                            </button>
                           )}
 
                           {/* Member slip under review indicator */}
                           {!isAccountant && fee.status === "pending_confirmation" && (
-                            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-bold flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-900/40">
+                            <span className="h-7 px-2.5 text-[11px] text-amber-700 dark:text-amber-400 font-medium inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 rounded-lg border border-amber-200 dark:border-amber-900/40">
                               <Clock className="h-3 w-3 animate-spin text-amber-600" /> Slip Under Review
                             </span>
                           )}
 
                           {/* Accountant Review & Verify actions */}
                           {isAccountant && (fee.status === "pending_confirmation" || fee.status === "pending") && (
-                            <Button
+                            <button
                               id={`btn-admin-review-${fee.id}`}
-                              size="xs"
-                              variant="secondary"
-                              className={`flex items-center gap-1 font-bold text-[11px] rounded-lg ${
-                                fee.status === "pending_confirmation"
-                                  ? "bg-amber-600 hover:bg-amber-700 text-stone-900"
-                                  : "bg-emerald-700 hover:bg-emerald-800 text-white"
-                              }`}
                               onClick={() => {
                                 setReviewingFee(fee);
                                 setAdminNoteInput("");
                               }}
+                              className={`h-7 px-2.5 text-xs font-medium rounded-lg inline-flex items-center gap-1.5 transition shadow-2xs text-white ${
+                                fee.status === "pending_confirmation"
+                                  ? "bg-amber-600 hover:bg-amber-700"
+                                  : "bg-emerald-600 hover:bg-emerald-700"
+                              }`}
                             >
                               <ShieldCheck className="h-3.5 w-3.5" />
                               {fee.status === "pending_confirmation" ? "Review Slip" : "Verify Payment"}
-                            </Button>
+                            </button>
+                          )}
+
+                          {/* View Official Receipt button for paid dues */}
+                          {fee.status === "paid" && (
+                            <button
+                              id={`btn-receipt-${fee.id}`}
+                              onClick={() => setViewingReceiptFee(fee)}
+                              className="h-7 px-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium rounded-lg inline-flex items-center gap-1.5 transition"
+                            >
+                              <Receipt className="h-3.5 w-3.5 text-slate-500" /> Receipt
+                            </button>
                           )}
 
                           {/* Edit Due for accountants only */}
@@ -2017,10 +1877,10 @@ export const OrganizationMemberFees: React.FC = () => {
                             <button
                               id={`btn-edit-fee-${fee.id}`}
                               onClick={() => openEditModal(fee)}
-                              className="p-1.5 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 transition flex items-center gap-1 font-bold text-[10px]"
-                              title="Edit Due/Charge Details"
+                              className="h-7 px-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium rounded-lg inline-flex items-center gap-1 transition"
+                              title="Edit Details"
                             >
-                              <Pencil className="h-3.5 w-3.5" /> Edit
+                              <Pencil className="h-3 w-3" /> Edit
                             </button>
                           )}
 
@@ -2029,10 +1889,10 @@ export const OrganizationMemberFees: React.FC = () => {
                             <button
                               id={`btn-delete-fee-${fee.id}`}
                               onClick={() => setDeletingFee(fee)}
-                              className="p-1.5 text-rose-600 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-200 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition flex items-center gap-1 font-bold text-[10px]"
-                              title="Delete Due/Charge"
+                              className="h-7 px-2 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-900 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 text-xs font-medium rounded-lg inline-flex items-center gap-1 transition"
+                              title="Delete"
                             >
-                              <Trash2 className="h-3.5 w-3.5" /> Delete
+                              <Trash2 className="h-3 w-3" /> Delete
                             </button>
                           )}
 
@@ -2041,24 +1901,11 @@ export const OrganizationMemberFees: React.FC = () => {
                             <button
                               id={`btn-admin-toggle-legacy-${fee.id}`}
                               onClick={() => handleToggleStatusLegacy(fee)}
-                              className="p-1.5 text-gray-400 hover:text-stone-900 dark:hover:text-amber-500 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800"
-                              title="Force Toggle/Adjust Balance"
+                              className="h-7 w-7 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg inline-flex items-center justify-center transition"
+                              title="Toggle Cleared / Unpaid"
                             >
-                              <CheckCircle2 className="h-4 w-4" />
+                              <CheckCircle2 className="h-3.5 w-3.5" />
                             </button>
-                          )}
-
-                          {/* View Official Receipt button for paid dues */}
-                          {fee.status === "paid" && (
-                            <Button
-                              id={`btn-receipt-${fee.id}`}
-                              size="xs"
-                              variant="outline"
-                              className="border-emerald-600/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 flex items-center gap-1 text-[10px] font-bold h-7 px-2 rounded-lg"
-                              onClick={() => setViewingReceiptFee(fee)}
-                            >
-                              <Receipt className="h-3 w-3" /> Receipt
-                            </Button>
                           )}
                         </div>
                       </td>
@@ -2983,41 +2830,38 @@ export const OrganizationMemberFees: React.FC = () => {
                           </td>
                           <td className="py-3 px-4">
                             {fee.status === "paid" ? (
-                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
-                                <CheckCircle2 className="h-3 w-3 shrink-0" /> Settled
+                              <span className="text-xs text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1.5">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> Settled
+                              </span>
+                            ) : deadlineInfo.isOverdue ? (
+                              <span className="text-xs text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1.5">
+                                <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
+                                Overdue · {fee.due_date ? new Date(fee.due_date).toLocaleDateString() : deadlineInfo.formattedDate}
                               </span>
                             ) : (
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold inline-flex items-center gap-1 ${deadlineInfo.badgeClass}`}>
-                                <Clock className="h-3 w-3 shrink-0" />
+                              <span className="text-xs text-slate-600 dark:text-slate-400 font-medium flex items-center gap-1.5">
+                                <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                 {fee.due_date ? new Date(fee.due_date).toLocaleDateString() : deadlineInfo.label}
                               </span>
                             )}
                           </td>
                           <td className="py-3 px-4">
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                                fee.status === "paid"
-                                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                                  : fee.status === "pending_confirmation"
-                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                                  : "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300"
-                              }`}
-                            >
-                              <span
-                                className={`h-1.5 w-1.5 rounded-full ${
-                                  fee.status === "paid"
-                                    ? "bg-emerald-600"
-                                    : fee.status === "pending_confirmation"
-                                    ? "bg-amber-600 animate-pulse"
-                                    : "bg-rose-600"
-                                }`}
-                              />
-                              {fee.status === "paid"
-                                ? "Cleared"
-                                : fee.status === "pending_confirmation"
-                                ? "Under Review"
-                                : "Unpaid"}
-                            </span>
+                            {fee.status === "paid" ? (
+                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                Cleared
+                              </span>
+                            ) : fee.status === "pending_confirmation" ? (
+                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                                Under Review
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400">
+                                <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
+                                Unpaid
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1">

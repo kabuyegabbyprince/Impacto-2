@@ -28,9 +28,11 @@ import {
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend } from "recharts";
 import jsPDF from "jspdf";
-import { Goal } from "../types";
+import { Goal, GoalTask } from "../types";
 import { getOrgSubscriptionLifecycle } from "../lib/subscriptionMatrix";
 import { GoalProgressCharts } from "../components/GoalProgressCharts";
+import { RealtimeTaskCountdown } from "../components/RealtimeTaskCountdown";
+import { MemberGoalTasksView } from "../components/MemberGoalTasksView";
 
 export const GoalsPage: React.FC = () => {
   const { t } = useLocalTranslation();
@@ -47,7 +49,7 @@ export const GoalsPage: React.FC = () => {
   const deleteGoalMutation = useDeleteGoal();
 
   // Filters & State
-  const [activeTab, setActiveTab] = useState<"all" | "yearly" | "monthly">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "yearly" | "monthly" | "tasks">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPeriodFilter, setSelectedPeriodFilter] = useState<string>("all");
 
@@ -63,11 +65,20 @@ export const GoalsPage: React.FC = () => {
   const [periodLabel, setPeriodLabel] = useState(`${new Date().getFullYear()}`);
   const [targetVal, setTargetVal] = useState<number>(100);
   const [unitVal, setUnitVal] = useState("percent");
+  const [minExpectedVal, setMinExpectedVal] = useState<number>(70);
   const [deadlineVal, setDeadlineVal] = useState(`${new Date().getFullYear()}-12-31`);
-  const [initialAchievement, setInitialAchievement] = useState<number>(0);
-  const [assignedMemberId, setAssignedMemberId] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceCycle, setRecurrenceCycle] = useState<"weekly" | "monthly" | "quarterly">("monthly");
+
+  // Advanced Tasks state for subtasks assignment (Supports multi-member selection & large description)
+  const [advancedTasks, setAdvancedTasks] = useState<GoalTask[]>([]);
+  const [showAdvancedTasks, setShowAdvancedTasks] = useState(true);
+  const [draftTaskMemberIds, setDraftTaskMemberIds] = useState<string[]>([]);
+  const [draftTaskTitle, setDraftTaskTitle] = useState("");
+  const [draftTaskDescription, setDraftTaskDescription] = useState("");
+  const [draftTaskDeadline, setDraftTaskDeadline] = useState(
+    new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().split("T")[0]
+  );
 
   // New Period Bucket Form State
   const [newPeriodType, setNewPeriodType] = useState<"yearly" | "monthly">("yearly");
@@ -90,6 +101,18 @@ export const GoalsPage: React.FC = () => {
 
     return list;
   }, [goals]);
+
+  // Compute number of tasks assigned to current member
+  const myAssignedTasksCount = useMemo(() => {
+    if (!activeMember?.id) return 0;
+    let count = 0;
+    goals.forEach((g) => {
+      (g.tasks || []).forEach((t) => {
+        if (t.assigned_to_member_id === activeMember.id) count++;
+      });
+    });
+    return count;
+  }, [goals, activeMember]);
 
   // Chart data for Growth/Pro visualization
   const chartBarData = useMemo(() => {
@@ -342,6 +365,45 @@ export const GoalsPage: React.FC = () => {
     }
   };
 
+  // Draft subtask management (Multi-member & Large Description)
+  const handleAddDraftTask = () => {
+    if (!draftTaskTitle.trim()) return;
+    const selectedMembers = members.filter((m) => draftTaskMemberIds.includes(m.id));
+    const assignedNames = selectedMembers.map((m) => m.user?.full_name || m.role || "Member");
+    const primaryMember = selectedMembers[0] || activeMember;
+
+    const newTask: GoalTask = {
+      id: "task_" + Math.random().toString(36).substring(2, 9),
+      title: draftTaskTitle.trim(),
+      description: draftTaskDescription.trim() || undefined,
+      assigned_to_member_id: primaryMember?.id || activeMember?.id || "",
+      assigned_to_name: assignedNames.join(", ") || primaryMember?.user?.full_name || "Member",
+      assigned_to_member_ids: draftTaskMemberIds.length > 0 ? draftTaskMemberIds : (primaryMember?.id ? [primaryMember.id] : []),
+      assigned_to_names: assignedNames.length > 0 ? assignedNames : [primaryMember?.user?.full_name || "Member"],
+      assigned_to_role: primaryMember?.role || activeMember?.role,
+      deadline: new Date(draftTaskDeadline || Date.now() + 14 * 24 * 3600 * 1000).toISOString(),
+      progress: 0,
+      status: "todo",
+      comments: [],
+      created_at: new Date().toISOString(),
+    };
+
+    setAdvancedTasks((prev) => [...prev, newTask]);
+    setDraftTaskTitle("");
+    setDraftTaskDescription("");
+    setDraftTaskMemberIds([]);
+  };
+
+  const handleToggleMemberForDraftTask = (memberId: string) => {
+    setDraftTaskMemberIds((prev) =>
+      prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
+    );
+  };
+
+  const handleRemoveDraftTask = (id: string) => {
+    setAdvancedTasks((prev) => prev.filter((t) => t.id !== id));
+  };
+
   // Open Add Goal modal prefilled with specific period
   const openAddGoalModalForPeriod = (type: "yearly" | "monthly", label: string) => {
     if (!canManageGoals) return;
@@ -351,10 +413,15 @@ export const GoalsPage: React.FC = () => {
     setGoalDescription("");
     setTargetVal(100);
     setUnitVal("percent");
-    setInitialAchievement(0);
-    setAssignedMemberId("");
+    setMinExpectedVal(70);
     setIsRecurring(false);
     setRecurrenceCycle("monthly");
+    setAdvancedTasks([]);
+    setShowAdvancedTasks(true);
+    setDraftTaskTitle("");
+    setDraftTaskDescription("");
+    setDraftTaskMemberIds([]);
+    setDraftTaskDeadline(new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().split("T")[0]);
     setEditingGoal(null);
     setIsAddGoalOpen(true);
   };
@@ -368,11 +435,16 @@ export const GoalsPage: React.FC = () => {
     setPeriodLabel(goal.period_label || `${new Date().getFullYear()}`);
     setTargetVal(goal.target || 100);
     setUnitVal(goal.unit || "percent");
+    setMinExpectedVal(goal.min_expected ?? 70);
     setDeadlineVal(goal.deadline ? goal.deadline.split("T")[0] : `${new Date().getFullYear()}-12-31`);
-    setInitialAchievement(goal.achievement_percentage || 0);
-    setAssignedMemberId(goal.assigned_to_member_id || "");
     setIsRecurring(!!goal.is_recurring);
     setRecurrenceCycle(goal.recurrence_cycle || "monthly");
+    setAdvancedTasks(goal.tasks ? [...goal.tasks] : []);
+    setShowAdvancedTasks(true);
+    setDraftTaskTitle("");
+    setDraftTaskDescription("");
+    setDraftTaskMemberIds([]);
+    setDraftTaskDeadline(new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().split("T")[0]);
     setIsAddGoalOpen(true);
   };
 
@@ -381,12 +453,18 @@ export const GoalsPage: React.FC = () => {
     e.preventDefault();
     if (!goalTitle.trim() || !activeOrg?.id) return;
 
-    const clampedAch = Math.max(0, Math.min(100, initialAchievement));
-    const statusVal = clampedAch >= 100 ? "completed" : clampedAch > 0 ? "in_progress" : "pending";
-    const progressVal = Math.round(((targetVal || 100) * clampedAch) / 100);
+    // Calculate overall average achievement from all members' subtasks!
+    let clampedAch = 0;
+    if (advancedTasks.length > 0) {
+      const avgScore = Math.round(
+        advancedTasks.reduce((sum, t) => sum + (t.progress || 0), 0) / advancedTasks.length
+      );
+      clampedAch = avgScore;
+    }
 
-    const targetMember = members.find(m => m.id === assignedMemberId);
-    const assignedName = targetMember ? (targetMember.user?.full_name || "Member") : "";
+    const statusVal: "pending" | "in_progress" | "completed" = 
+      clampedAch >= 100 ? "completed" : clampedAch > 0 ? "in_progress" : "pending";
+    const progressVal = Math.round(((targetVal || 100) * clampedAch) / 100);
 
     try {
       if (editingGoal) {
@@ -399,14 +477,14 @@ export const GoalsPage: React.FC = () => {
           period_label: periodLabel,
           target: targetVal,
           unit: unitVal,
+          min_expected: minExpectedVal,
           deadline: new Date(deadlineVal).toISOString(),
           achievement_percentage: clampedAch,
           status: statusVal,
           current_progress: progressVal,
-          assigned_to_member_id: assignedMemberId || undefined,
-          assigned_to_name: assignedName || undefined,
           is_recurring: isRecurring,
           recurrence_cycle: isRecurring ? recurrenceCycle : undefined,
+          tasks: advancedTasks,
         });
       } else {
         await createGoalMutation.mutateAsync({
@@ -417,16 +495,16 @@ export const GoalsPage: React.FC = () => {
           period_label: periodLabel,
           target: targetVal,
           unit: unitVal,
+          min_expected: minExpectedVal,
           deadline: new Date(deadlineVal).toISOString(),
           achievement_percentage: clampedAch,
           status: statusVal,
           current_progress: progressVal,
           visibility: "public",
           is_pinned: false,
-          assigned_to_member_id: assignedMemberId || undefined,
-          assigned_to_name: assignedName || undefined,
           is_recurring: isRecurring,
           recurrence_cycle: isRecurring ? recurrenceCycle : undefined,
+          tasks: advancedTasks,
         });
       }
 
@@ -537,6 +615,22 @@ export const GoalsPage: React.FC = () => {
           >
             {t("goals_tab_monthly")} ({goals.filter((g) => g.period_type === "monthly").length})
           </button>
+          <button
+            onClick={() => setActiveTab("tasks")}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+              activeTab === "tasks"
+                ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs font-semibold"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            }`}
+          >
+            <Target className="h-3.5 w-3.5 text-emerald-600" />
+            <span>My Assigned Tasks</span>
+            {myAssignedTasksCount > 0 && (
+              <span className="bg-emerald-600 text-white text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full">
+                {myAssignedTasksCount}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Search & Actions */}
@@ -637,8 +731,15 @@ export const GoalsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Main Period Buckets List */}
-      {isLoading ? (
+      {/* Main Period Buckets List OR Member Tasks View */}
+      {activeTab === "tasks" ? (
+        <MemberGoalTasksView
+          goals={goals}
+          currentMember={activeMember}
+          orgId={activeOrg?.id || ""}
+          canManageGoals={canManageGoals}
+        />
+      ) : isLoading ? (
         <div className="p-12 text-center text-slate-400 font-medium">{t("goals_loading_text")}</div>
       ) : groupedGoals.length === 0 ? (
         <Card>
@@ -789,10 +890,17 @@ export const GoalsPage: React.FC = () => {
                               >
                                 {goal.title}
                               </h3>
-                              {goal.assigned_to_name && (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-md">
-                                  <UserCheck className="h-3 w-3" />
-                                  <span>{goal.assigned_to_name}</span>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-md">
+                                Min Target: {goal.min_expected ?? 70}%
+                              </span>
+                              {achievementScore < (goal.min_expected ?? 70) && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 px-2 py-0.5 rounded-md">
+                                  ⚠️ Below Min Target ({goal.min_expected ?? 70}%)
+                                </span>
+                              )}
+                              {achievementScore >= (goal.min_expected ?? 70) && achievementScore > 0 && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-md">
+                                  ✓ Met Min Target
                                 </span>
                               )}
                             </div>
@@ -801,6 +909,25 @@ export const GoalsPage: React.FC = () => {
                               <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
                                 {goal.description}
                               </p>
+                            )}
+
+                            {goal.tasks && goal.tasks.length > 0 && (
+                              <div className="pt-1 flex flex-wrap items-center gap-1.5">
+                                <span className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-md">
+                                  {goal.tasks.filter(t => t.status === "completed" || (t.progress || 0) >= 100).length}/{goal.tasks.length} Subtasks Done
+                                </span>
+                                {goal.tasks.slice(0, 2).map((st) => (
+                                  <span key={st.id} className="text-[10px] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded flex items-center gap-1">
+                                    <span className="truncate max-w-[120px]">{st.title}</span>
+                                    <span className="font-mono font-bold text-emerald-600">({st.progress || 0}%)</span>
+                                  </span>
+                                ))}
+                                {goal.tasks.length > 2 && (
+                                  <span className="text-[10px] text-slate-400 font-mono">
+                                    +{goal.tasks.length - 2} more
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -992,67 +1119,229 @@ export const GoalsPage: React.FC = () => {
 
               <div>
                 <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
-                  {t("goals_field_score_label")}
+                  Minimum Expected Goal Target (%)
                 </label>
                 <Input
                   type="number"
                   min={0}
                   max={100}
-                  value={initialAchievement}
-                  onChange={(e) => setInitialAchievement(Number(e.target.value))}
+                  value={minExpectedVal}
+                  onChange={(e) => setMinExpectedVal(Number(e.target.value))}
+                  placeholder="e.g. 70"
                 />
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Threshold percentage required to pass this goal's minimum target.
+                </p>
               </div>
             </div>
 
-            {/* Member Responsibility Assignment & Recurring Timer */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1 flex items-center gap-1.5">
-                  <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
-                  <span>Assign Responsibility (Member)</span>
-                </label>
-                <select
-                  value={assignedMemberId}
-                  onChange={(e) => setAssignedMemberId(e.target.value)}
-                  className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 p-2.5 outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"
-                >
-                  <option value="">Unassigned (All Members / Executive)</option>
-                  {members.map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.user?.full_name || "Member"} ({m.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* Auto-recurring Cycle Timer */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between gap-1.5">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-200 select-none">
+                <input
+                  type="checkbox"
+                  checked={isRecurring}
+                  onChange={e => setIsRecurring(e.target.checked)}
+                  className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+                <span className="flex items-center gap-1.5 text-xs">
+                  <RefreshCw className="h-3.5 w-3.5 text-teal-600" />
+                  <span>Auto-recurring cycle timer</span>
+                </span>
+              </label>
+              {isRecurring && (
+                <div className="flex items-center gap-2 pt-1 animate-in fade-in">
+                  <span className="text-[11px] text-slate-500 font-medium">Frequency:</span>
+                  <select
+                    value={recurrenceCycle}
+                    onChange={e => setRecurrenceCycle(e.target.value as any)}
+                    className="text-xs p-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold"
+                  >
+                    <option value="weekly">Weekly cycle</option>
+                    <option value="monthly">Monthly cycle</option>
+                    <option value="quarterly">Quarterly cycle</option>
+                  </select>
+                </div>
+              )}
+            </div>
 
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between gap-1.5">
-                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-200 select-none">
-                  <input
-                    type="checkbox"
-                    checked={isRecurring}
-                    onChange={e => setIsRecurring(e.target.checked)}
-                    className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                  />
-                  <span className="flex items-center gap-1.5 text-xs">
-                    <RefreshCw className="h-3.5 w-3.5 text-teal-600" />
-                    <span>Auto-recurring cycle timer</span>
+            {/* Advanced Section: Subtask Delegation (Multi-Member Assignment & Large Description Input) */}
+            <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowAdvancedTasks(!showAdvancedTasks)}
+                className="w-full flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-left cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Target className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="font-bold text-slate-800 dark:text-slate-100 text-xs">
+                    Advanced: Assign Subtasks to One or More Members
                   </span>
-                </label>
-                {isRecurring && (
-                  <div className="flex items-center gap-2 pt-1 animate-in fade-in">
-                    <span className="text-[11px] text-slate-500 font-medium">Frequency:</span>
-                    <select
-                      value={recurrenceCycle}
-                      onChange={e => setRecurrenceCycle(e.target.value as any)}
-                      className="text-xs p-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold"
-                    >
-                      <option value="weekly">Weekly cycle</option>
-                      <option value="monthly">Monthly cycle</option>
-                      <option value="quarterly">Quarterly cycle</option>
-                    </select>
+                  {advancedTasks.length > 0 && (
+                    <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 rounded font-mono text-[10px] font-bold">
+                      {advancedTasks.length} task{advancedTasks.length === 1 ? "" : "s"}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  {showAdvancedTasks ? "Collapse ▲" : "Expand ▼"}
+                </span>
+              </button>
+
+              {showAdvancedTasks && (
+                <div className="p-3.5 space-y-3.5 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 animate-in fade-in">
+                  <p className="text-[11px] text-slate-500">
+                    Delegate tasks to one or multiple members with large detailed descriptions and independent deadlines (can be set beyond the goal deadline). Each member's task progress directly dictates the goal's overall real-time average!
+                  </p>
+
+                  <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                    <span className="font-bold text-[11px] text-slate-700 dark:text-slate-200 uppercase tracking-wider block">
+                      Add New Subtask
+                    </span>
+
+                    {/* 1. Multi-member selection checkboxes */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1.5">
+                        1. Assign to Member(s) — Select One or Multiple:
+                      </label>
+                      <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+                        {members.length === 0 ? (
+                          <span className="text-[11px] text-slate-400 italic">No members found in organization.</span>
+                        ) : (
+                          members.map((m) => {
+                            const isSelected = draftTaskMemberIds.includes(m.id);
+                            return (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => handleToggleMemberForDraftTask(m.id)}
+                                className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border ${
+                                  isSelected
+                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                    : "bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-200"
+                                }`}
+                              >
+                                <span>{isSelected ? "✓" : "+"}</span>
+                                <span>{m.user?.full_name || "Member"}</span>
+                                <span className="opacity-75 font-mono text-[9px]">({m.role})</span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                      {draftTaskMemberIds.length > 0 && (
+                        <p className="text-[10px] text-emerald-600 font-bold mt-1">
+                          Assigned to {draftTaskMemberIds.length} member{draftTaskMemberIds.length === 1 ? "" : "s"}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* 2. Task Title */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                        2. Task Title / Deliverable Name
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Procure organic fertilizer & audit supplier receipts"
+                        value={draftTaskTitle}
+                        onChange={(e) => setDraftTaskTitle(e.target.value)}
+                        className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 outline-none focus:ring-1 focus:ring-emerald-500 font-semibold"
+                      />
+                    </div>
+
+                    {/* 3. Large Input to Describe Task */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                        3. Large Task Description & Detailed Deliverables
+                      </label>
+                      <textarea
+                        rows={3}
+                        placeholder="Detailed instructions, milestones, quality criteria, and expected outcome for assigned members..."
+                        value={draftTaskDescription}
+                        onChange={(e) => setDraftTaskDescription(e.target.value)}
+                        className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 outline-none focus:ring-1 focus:ring-emerald-500 font-sans leading-relaxed"
+                      />
+                    </div>
+
+                    {/* 4. Task Deadline (Can exceed main goal deadline) & Add Button */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                        4. Task Specific Deadline (Can be set beyond goal deadline)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="date"
+                          value={draftTaskDeadline}
+                          onChange={(e) => setDraftTaskDeadline(e.target.value)}
+                          className="flex-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2 outline-none focus:ring-1 focus:ring-emerald-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddDraftTask}
+                          disabled={!draftTaskTitle.trim()}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold cursor-pointer shrink-0 shadow-xs"
+                        >
+                          + Add Subtask
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
+
+                  {/* List of Added Draft Subtasks */}
+                  {advancedTasks.length > 0 ? (
+                    <div className="space-y-2 pt-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Assigned Subtasks ({advancedTasks.length})
+                      </span>
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+                        {advancedTasks.map((t, idx) => (
+                          <div
+                            key={t.id}
+                            className="p-3 flex items-start justify-between gap-3 bg-white dark:bg-slate-900 text-xs"
+                          >
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <span className="font-mono text-[10px] text-slate-400 font-bold shrink-0 mt-0.5">
+                                #{idx + 1}
+                              </span>
+                              <div className="min-w-0 space-y-1">
+                                <span className="font-bold text-slate-900 dark:text-white block leading-snug">
+                                  {t.title}
+                                </span>
+                                {t.description && (
+                                  <p className="text-[11px] text-slate-500 line-clamp-2">
+                                    {t.description}
+                                  </p>
+                                )}
+                                <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 pt-0.5">
+                                  <span className="text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.2 rounded">
+                                    👥 {t.assigned_to_name}
+                                  </span>
+                                  <span>•</span>
+                                  <span>📅 Due {new Date(t.deadline).toLocaleDateString()}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDraftTask(t.id)}
+                              className="text-slate-400 hover:text-rose-600 p-1 rounded transition cursor-pointer shrink-0"
+                              title="Remove Task"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 italic text-center py-2">
+                      No subtasks added yet. Add tasks above to delegate responsibilities to specific members.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">

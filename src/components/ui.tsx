@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, Eye, EyeOff } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, X, UploadCloud } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { uploadFileToSupabase, resolveFileUrl, fileToDataURL } from "../lib/storageService";
 import { isSupabaseConfigured } from "../lib/supabase";
@@ -177,27 +177,42 @@ export const ImageUploadInput: React.FC<{
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
-        className={`w-full rounded-lg border-2 border-dashed transition-all p-3 flex flex-col gap-3 ${
+        className={`w-full rounded-xl border-2 border-dashed transition-all p-3 flex flex-col gap-3 overflow-hidden ${
           dragOver ? "border-[var(--org-primary)] bg-[var(--org-primary-l)]" : "border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900"
         }`}
       >
-        <div className="flex items-center gap-3">
-          <input
-            type="url"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="flex-1 text-sm bg-transparent border-none outline-none focus:ring-0 dark:text-white p-1"
-            placeholder={placeholder || "https://..."}
-          />
-          <div className="h-6 w-px bg-gray-200 dark:bg-slate-700 mx-1" />
-          <label className="shrink-0 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold rounded cursor-pointer transition text-gray-700 dark:text-slate-300 flex items-center gap-1.5">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full min-w-0">
+          <div className="flex items-center flex-1 min-w-0 bg-slate-50 dark:bg-slate-800/60 rounded-xl px-2.5 py-1.5 border border-slate-200 dark:border-slate-700/80 focus-within:ring-2 focus-within:ring-[#156c45] focus-within:border-transparent transition">
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              className="w-full min-w-0 text-xs sm:text-sm bg-transparent border-none outline-none focus:ring-0 dark:text-white truncate"
+              placeholder={placeholder || "https://..."}
+            />
+            {value && (
+              <button
+                type="button"
+                onClick={() => onChange("")}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded shrink-0 ml-1 cursor-pointer transition"
+                title="Clear input"
+                aria-label="Clear input"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <label className="shrink-0 px-3.5 py-2 sm:py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold rounded-xl cursor-pointer transition text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 border border-slate-200/80 dark:border-slate-700 select-none whitespace-nowrap shadow-3xs">
             {uploading ? (
               <>
                 <Spinner size="sm" className="scale-75" />
-                Uploading...
+                <span>Uploading...</span>
               </>
             ) : (
-              "Upload File"
+              <>
+                <UploadCloud className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                <span>Upload File</span>
+              </>
             )}
             <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} disabled={uploading} />
           </label>
