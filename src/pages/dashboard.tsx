@@ -3,6 +3,7 @@ import { WaitRoomView } from "../components/WaitRoomView";
 import { DynamicAttendanceGrid } from "../components/DynamicAttendanceGrid";
 import { EventScheduleCalendar } from "../components/EventScheduleCalendar";
 import { ChatVideoMeetModal } from "../components/ChatVideoMeetModal";
+import { getTaskDeadlineNotice, useTaskProgressSync } from "../hooks/useTaskProgressSync";
 
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -6470,35 +6471,78 @@ export const EventsCalendar: React.FC = () => {
   const [eventTasks, setEventTasks] = useState<EventTask[]>([]);
   const [todoTitle, setTodoTitle] = useState("");
   const [todoMemberId, setTodoMemberId] = useState("");
+  const [todoMemberIds, setTodoMemberIds] = useState<string[]>([]);
   const [todoDueDate, setTodoDueDate] = useState("");
   const [showTasksForEventId, setShowTasksForEventId] = useState<Record<string, boolean>>({});
+
+  const { syncEventTaskProgress } = useTaskProgressSync(activeOrg?.id);
 
   const handleAddTodoItem = () => {
     if (!todoTitle.trim()) {
       addToast("Please provide a deliverable description.", "error");
       return;
     }
-    const defaultMemberId = todoMemberId || (orgMembers && orgMembers[0]?.id) || "";
-    const assignedMember = orgMembers?.find((m) => m.id === defaultMemberId);
+    const assignedIds = todoMemberIds.length > 0
+      ? todoMemberIds
+      : (todoMemberId ? [todoMemberId] : (orgMembers && orgMembers[0] ? [orgMembers[0].id] : []));
+
+    const assignedMembers = orgMembers?.filter((m) => assignedIds.includes(m.id)) || [];
+    const memberNames = assignedMembers.map((m) => m.user?.full_name || "Member");
+
     const newTask: EventTask = {
       id: "task-" + Math.random().toString(36).substr(2, 9),
       event_id: selectedEvent?.id || "temp",
       title: todoTitle.trim(),
-      assigned_to_member_id: defaultMemberId,
-      assigned_to_name: assignedMember?.user?.full_name || "Unassigned",
-      assigned_to_role: assignedMember?.role || "member",
-      due_date: todoDueDate || dateTime || new Date().toISOString(),
+      assigned_to_member_id: assignedIds[0] || "",
+      assigned_to_member_ids: assignedIds,
+      assigned_to_name: memberNames.length > 0 ? memberNames.join(", ") : "Unassigned",
+      assigned_to_role: assignedMembers[0]?.role || "member",
+      due_date: todoDueDate || dateTime || new Date().toISOString().split("T")[0],
       progress: 0,
       status: "pending"
     };
 
-    setEventTasks((prev) => [...prev, newTask]);
+    setEventTasks((prev) => {
+      const updated = [...prev, newTask];
+      if (selectedEvent?.id && selectedEvent.id !== "temp") {
+        syncEventTaskProgress(selectedEvent.id, updated);
+      }
+      return updated;
+    });
     setTodoTitle("");
     setTodoDueDate("");
+    setTodoMemberIds([]);
+    setTodoMemberId("");
   };
 
   const handleRemoveTodoItem = (taskId: string) => {
-    setEventTasks((prev) => prev.filter((t) => t.id !== taskId));
+    setEventTasks((prev) => {
+      const updated = prev.filter((t) => t.id !== taskId);
+      if (selectedEvent?.id && selectedEvent.id !== "temp") {
+        syncEventTaskProgress(selectedEvent.id, updated);
+      }
+      return updated;
+    });
+  };
+
+  const handleUpdateEventTaskProgress = (taskId: string, newProgress: number) => {
+    const clampedProgress = Math.min(100, Math.max(0, newProgress));
+    setEventTasks((prev) => {
+      const updated = prev.map((t) => {
+        if (t.id === taskId) {
+          return {
+            ...t,
+            progress: clampedProgress,
+            status: clampedProgress >= 100 ? ("completed" as const) : clampedProgress > 0 ? ("in_progress" as const) : ("todo" as const),
+          };
+        }
+        return t;
+      });
+      if (selectedEvent?.id && selectedEvent.id !== "temp") {
+        syncEventTaskProgress(selectedEvent.id, updated);
+      }
+      return updated;
+    });
   };
 
   const handleUpdateTaskAssignee = (taskId: string, memberId: string) => {
@@ -6836,122 +6880,188 @@ export const EventsCalendar: React.FC = () => {
                 List action items and assign them to members. Each member will see their assigned tasks on their dashboard, record progress, and submit performance reports contributing to the event's overall progress.
               </p>
 
-              {/* Extended Form: Add Todo Row - Clean responsive layout with zero label collision */}
-              <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end">
-                  <div className="md:col-span-5">
-                    <label className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider block mb-1">
-                      Deliverable / Action Item
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Coordinate venue stage & sound equipment"
-                      value={todoTitle}
-                      onChange={(e) => setTodoTitle(e.target.value)}
-                      className="w-full h-9 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white shadow-xs"
-                    />
-                  </div>
-
-                  <div className="md:col-span-3">
-                    <label className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider block mb-1">
-                      Assign Member
+              {/* Extended Form: Add Todo Row - Spacious Multi-Row Design with Multi-Member Select */}
+              <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                  <div className="sm:col-span-7">
+                    <label className="text-[10px] font-extrabold text-slate-700 dark:text-slate-300 uppercase tracking-wider block mb-1">
+                      ASSIGN MEMBER(S) — MULTI-SELECT
                     </label>
                     <select
-                      value={todoMemberId}
-                      onChange={(e) => setTodoMemberId(e.target.value)}
-                      className="w-full h-9 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white shadow-xs cursor-pointer"
+                      multiple
+                      value={todoMemberIds}
+                      onChange={(e) => {
+                        const selected = Array.from(e.target.selectedOptions, (opt) => (opt as HTMLOptionElement).value);
+                        setTodoMemberIds(selected);
+                      }}
+                      className="w-full h-20 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white font-medium shadow-xs"
                     >
-                      <option value="">Select Member...</option>
                       {orgMembers?.map((m) => (
                         <option key={m.id} value={m.id}>
                           {m.user?.full_name || m.user?.email || "Member"} ({m.role})
                         </option>
                       ))}
                     </select>
+                    {todoMemberIds.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {todoMemberIds.map((id) => {
+                          const m = orgMembers?.find((mem) => mem.id === id);
+                          return (
+                            <span
+                              key={id}
+                              className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold flex items-center gap-1"
+                            >
+                              <span>{m?.user?.full_name || "Member"}</span>
+                              <button
+                                type="button"
+                                onClick={() => setTodoMemberIds(todoMemberIds.filter((mId) => mId !== id))}
+                                className="hover:text-rose-600 cursor-pointer font-extrabold"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
-                  <div className="md:col-span-2">
-                    <label className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider block mb-1">
-                      Due Date
+                  <div className="sm:col-span-5">
+                    <label className="text-[10px] font-extrabold text-slate-700 dark:text-slate-300 uppercase tracking-wider block mb-1">
+                      DUE DATE
                     </label>
                     <input
                       type="date"
                       value={todoDueDate}
                       onChange={(e) => setTodoDueDate(e.target.value)}
-                      className="w-full h-9 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white shadow-xs"
+                      className="w-full h-9 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white font-semibold shadow-xs"
                     />
                   </div>
+                </div>
 
-                  <div className="md:col-span-2">
-                    <button
-                      type="button"
-                      onClick={handleAddTodoItem}
-                      className="w-full h-9 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shrink-0 cursor-pointer flex items-center justify-center gap-1.5 shadow-xs transition"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>Add Task</span>
-                    </button>
-                  </div>
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-700 dark:text-slate-300 uppercase tracking-wider block mb-1">
+                    DELIVERABLE / ACTION ITEM & INSTRUCTIONS
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Coordinate venue stage setup, audit sound equipment, and manage registration table..."
+                    value={todoTitle}
+                    onChange={(e) => setTodoTitle(e.target.value)}
+                    className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white font-medium shadow-xs leading-relaxed"
+                  />
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={handleAddTodoItem}
+                    disabled={!todoTitle.trim()}
+                    className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shrink-0 cursor-pointer flex items-center justify-center gap-1.5 shadow-xs transition"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Add Task</span>
+                  </button>
                 </div>
               </div>
 
-              {/* List of Todos with Member Select Dropdown in Front */}
+              {/* List of Deliverables with Live Progress Bar & Deadline Notifications */}
               {eventTasks.length > 0 ? (
-                <div className="space-y-2 pt-1">
-                  <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider font-bold text-slate-400">
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">
                     <span>Assigned Deliverables ({eventTasks.length})</span>
                     <span>Average Progress: {Math.round(eventTasks.reduce((s, t) => s + (t.progress || 0), 0) / eventTasks.length)}%</span>
                   </div>
-                  <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
-                    {eventTasks.map((task) => (
-                      <div key={task.id} className="p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          {/* Member Select Dropdown in front of each item */}
-                          <div className="w-40 shrink-0">
-                            <select
-                              value={task.assigned_to_member_id}
-                              onChange={(e) => handleUpdateTaskAssignee(task.id, e.target.value)}
-                              className="w-full text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 px-2 py-1 outline-none text-slate-900 dark:text-white cursor-pointer"
+
+                  <div className="space-y-2.5">
+                    {eventTasks.map((task) => {
+                      const notice = getTaskDeadlineNotice(task.due_date, (task.progress || 0) >= 100);
+                      return (
+                        <div
+                          key={task.id}
+                          className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-2.5"
+                        >
+                          {/* Deadline Alert Notice Banner */}
+                          {notice && (
+                            <div className={`p-2 rounded-lg border text-[10px] font-semibold flex items-center gap-1.5 ${notice.colorClass}`}>
+                              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                              <span>{notice.label}</span>
+                            </div>
+                          )}
+
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                                {task.title}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-2 mt-1 text-[10px] text-slate-500">
+                                <span className="text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded flex items-center gap-1">
+                                  <Users className="h-3 w-3" />
+                                  <span>{task.assigned_to_name || "Assigned Members"}</span>
+                                </span>
+                                <span>•</span>
+                                <span className="font-mono">
+                                  Due: {task.due_date ? new Date(task.due_date).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "Event Day"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTodoItem(task.id)}
+                              className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer self-start sm:self-center"
+                              title="Remove task"
                             >
-                              {orgMembers?.map((m) => (
-                                <option key={m.id} value={m.id}>
-                                  {m.user?.full_name || "Member"}
-                                </option>
-                              ))}
-                            </select>
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
 
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
-                              {task.title}
-                            </p>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              Due: {task.due_date ? new Date(task.due_date).toLocaleDateString([], { month: "short", day: "numeric" }) : "Event day"}
-                            </span>
+                          {/* Live Visual Progress Bar & Controls */}
+                          <div className="space-y-1.5 pt-1 border-t border-slate-100 dark:border-slate-800">
+                            <div className="flex items-center justify-between text-[10px] font-bold">
+                              <span className="text-slate-500">Task Completion</span>
+                              <span className="text-emerald-600 font-mono">{task.progress || 0}%</span>
+                            </div>
+
+                            <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                              <div
+                                style={{ width: `${Math.min(100, Math.max(0, task.progress || 0))}%` }}
+                                className="h-full bg-emerald-500 transition-all duration-300 rounded-full"
+                              />
+                            </div>
+
+                            <div className="flex items-center justify-between pt-1">
+                              <div className="flex items-center gap-1">
+                                {[0, 25, 50, 75, 100].map((pct) => (
+                                  <button
+                                    key={pct}
+                                    type="button"
+                                    onClick={() => handleUpdateEventTaskProgress(task.id, pct)}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                                      (task.progress || 0) === pct
+                                        ? "bg-emerald-600 text-white shadow-xs"
+                                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
+                                    }`}
+                                  >
+                                    {pct}%
+                                  </button>
+                                ))}
+                              </div>
+
+                              <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                                (task.progress || 0) >= 100
+                                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                                  : (task.progress || 0) > 0
+                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                                  : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                              }`}>
+                                {(task.progress || 0) >= 100 ? "Completed" : (task.progress || 0) > 0 ? "In Progress" : "To Do"}
+                              </span>
+                            </div>
                           </div>
                         </div>
-
-                        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            (task.progress || 0) >= 100
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                              : (task.progress || 0) > 0
-                              ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
-                              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                          }`}>
-                            {task.progress || 0}%
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveTodoItem(task.id)}
-                            className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
-                            title="Remove task"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : (

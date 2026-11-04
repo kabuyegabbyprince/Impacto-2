@@ -11,23 +11,19 @@ export const LogoLoader: React.FC<LogoLoaderProps> = ({
 }) => {
   return (
     <div className="flex flex-col items-center justify-center p-8 select-none font-sans text-center min-h-[300px]">
-      <div className="relative w-16 h-16 inline-block text-emerald-600 dark:text-emerald-500">
+      <div className="w-16 h-16 inline-block">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" className="w-full h-full">
-          <circle fill="currentColor" stroke="currentColor" strokeWidth="15" r="15" cx="35" cy="100">
-            <animate attributeName="cx" calcMode="spline" dur="2" values="35;165;165;35;35" keySplines="0 .1 .5 1;0 .1 .5 1;0 .1 .5 1;0 .1 .5 1" repeatCount="indefinite" begin="0"></animate>
+          <radialGradient id="a18" cx=".66" fx=".66" cy=".3125" fy=".3125" gradientTransform="scale(1.5)">
+            <stop offset="0" stopColor="#26A70F"></stop>
+            <stop offset=".3" stopColor="#26A70F" stopOpacity=".9"></stop>
+            <stop offset=".6" stopColor="#26A70F" stopOpacity=".6"></stop>
+            <stop offset=".8" stopColor="#26A70F" stopOpacity=".3"></stop>
+            <stop offset="1" stopColor="#26A70F" stopOpacity="0"></stop>
+          </radialGradient>
+          <circle transform-origin="center" fill="none" stroke="url(#a18)" strokeWidth="15" strokeLinecap="round" strokeDasharray="200 1000" strokeDashoffset="0" cx="100" cy="100" r="70">
+            <animateTransform type="rotate" attributeName="transform" calcMode="spline" dur="2" values="360;0" keyTimes="0;1" keySplines="0 0 1 1" repeatCount="indefinite"></animateTransform>
           </circle>
-          <circle fill="currentColor" stroke="currentColor" strokeWidth="15" opacity=".8" r="15" cx="35" cy="100">
-            <animate attributeName="cx" calcMode="spline" dur="2" values="35;165;165;35;35" keySplines="0 .1 .5 1;0 .1 .5 1;0 .1 .5 1;0 .1 .5 1" repeatCount="indefinite" begin="0.05"></animate>
-          </circle>
-          <circle fill="currentColor" stroke="currentColor" strokeWidth="15" opacity=".6" r="15" cx="35" cy="100">
-            <animate attributeName="cx" calcMode="spline" dur="2" values="35;165;165;35;35" keySplines="0 .1 .5 1;0 .1 .5 1;0 .1 .5 1;0 .1 .5 1" repeatCount="indefinite" begin=".1"></animate>
-          </circle>
-          <circle fill="currentColor" stroke="currentColor" strokeWidth="15" opacity=".4" r="15" cx="35" cy="100">
-            <animate attributeName="cx" calcMode="spline" dur="2" values="35;165;165;35;35" keySplines="0 .1 .5 1;0 .1 .5 1;0 .1 .5 1;0 .1 .5 1" repeatCount="indefinite" begin=".15"></animate>
-          </circle>
-          <circle fill="currentColor" stroke="currentColor" strokeWidth="15" opacity=".2" r="15" cx="35" cy="100">
-            <animate attributeName="cx" calcMode="spline" dur="2" values="35;165;165;35;35" keySplines="0 .1 .5 1;0 .1 .5 1;0 .1 .5 1;0 .1 .5 1" repeatCount="indefinite" begin=".2"></animate>
-          </circle>
+          <circle transform-origin="center" fill="none" opacity=".2" stroke="#26A70F" strokeWidth="15" strokeLinecap="round" cx="100" cy="100" r="70"></circle>
         </svg>
       </div>
       

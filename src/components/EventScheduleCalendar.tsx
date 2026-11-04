@@ -890,7 +890,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
             <div>
               <h4 className="text-base font-bold text-slate-900 dark:text-white">
-                All Scheduled Community Sessions & Space Lends
+                Our Events & Space Lends
               </h4>
               <p className="text-xs text-slate-400">
                 Chronological list of all events, general assemblies, and room occupancies.
@@ -900,9 +900,9 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
               <button
                 type="button"
                 onClick={onAddEventClick}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition"
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
               >
-                + Schedule Community Session
+                + Our Event
               </button>
             )}
           </div>

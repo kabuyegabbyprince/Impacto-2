@@ -312,7 +312,7 @@ export const translations: Record<string, Record<string, string>> = {
     "lbl_minutes_transcript": "Audited Meetings Transcript & Resolutions",
     "lbl_minutes_not_logged": "Resolutions & Minutes transcript are not logged for this assembly yet.",
     "lbl_invite_link": "Conference link",
-    "modal_schedule_meet_title": "Schedule Community Session",
+    "modal_schedule_meet_title": "Our Event",
     "lbl_meet_title": "Meeting Title / Subject",
     "lbl_meet_desc": "Brief Description / Purpose",
     "lbl_meet_hours": "Duration Minutes",

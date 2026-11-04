@@ -1142,36 +1142,6 @@ export const GoalsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Auto-recurring Cycle Timer */}
-            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between gap-1.5">
-              <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-200 select-none">
-                <input
-                  type="checkbox"
-                  checked={isRecurring}
-                  onChange={e => setIsRecurring(e.target.checked)}
-                  className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                />
-                <span className="flex items-center gap-1.5 text-xs">
-                  <RefreshCw className="h-3.5 w-3.5 text-teal-600" />
-                  <span>Auto-recurring cycle timer</span>
-                </span>
-              </label>
-              {isRecurring && (
-                <div className="flex items-center gap-2 pt-1 animate-in fade-in">
-                  <span className="text-[11px] text-slate-500 font-medium">Frequency:</span>
-                  <select
-                    value={recurrenceCycle}
-                    onChange={e => setRecurrenceCycle(e.target.value as any)}
-                    className="text-xs p-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold"
-                  >
-                    <option value="weekly">Weekly cycle</option>
-                    <option value="monthly">Monthly cycle</option>
-                    <option value="quarterly">Quarterly cycle</option>
-                  </select>
-                </div>
-              )}
-            </div>
-
             {/* Advanced Section: Subtask Delegation (Multi-Member Assignment & Large Description Input) */}
             <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
               <button
@@ -1207,41 +1177,51 @@ export const GoalsPage: React.FC = () => {
                       Add New Subtask
                     </span>
 
-                    {/* 1. Multi-member selection checkboxes with real icons */}
+                    {/* 1. Member selection select input with multi-select pills */}
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1.5">
-                        1. Assign to Member(s) — Select One or Multiple:
+                      <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                        1. Assign to Member(s) — Multi-Select:
                       </label>
-                      <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+                      <select
+                        multiple
+                        value={draftTaskMemberIds}
+                        onChange={(e) => {
+                          const selected = Array.from(e.target.selectedOptions, (opt) => (opt as HTMLOptionElement).value);
+                          setDraftTaskMemberIds(selected);
+                        }}
+                        className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2 outline-none focus:ring-1 focus:ring-emerald-500 font-medium h-20"
+                      >
                         {members.length === 0 ? (
-                          <span className="text-[11px] text-slate-400 italic">No members found in organization.</span>
+                          <option disabled value="">No members found in organization</option>
                         ) : (
-                          members.map((m) => {
-                            const isSelected = draftTaskMemberIds.includes(m.id);
-                            return (
-                              <button
-                                key={m.id}
-                                type="button"
-                                onClick={() => handleToggleMemberForDraftTask(m.id)}
-                                className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border ${
-                                  isSelected
-                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
-                                    : "bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-200"
-                                }`}
-                              >
-                                {isSelected ? <Check className="h-3 w-3 shrink-0" /> : <Plus className="h-3 w-3 shrink-0" />}
-                                <span>{m.user?.full_name || "Member"}</span>
-                                <span className="opacity-75 font-mono text-[9px]">({m.role})</span>
-                              </button>
-                            );
-                          })
+                          members.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.user?.full_name || "Member"} ({m.role})
+                            </option>
+                          ))
                         )}
-                      </div>
+                      </select>
                       {draftTaskMemberIds.length > 0 && (
-                        <p className="text-[10px] text-emerald-600 font-bold mt-1 flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          <span>Assigned to {draftTaskMemberIds.length} member{draftTaskMemberIds.length === 1 ? "" : "s"}</span>
-                        </p>
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {draftTaskMemberIds.map((id) => {
+                            const m = members.find((mem) => mem.id === id);
+                            return (
+                              <span
+                                key={id}
+                                className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold flex items-center gap-1"
+                              >
+                                <span>{m?.user?.full_name || "Member"}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setDraftTaskMemberIds(draftTaskMemberIds.filter((mId) => mId !== id))}
+                                  className="hover:text-rose-600 cursor-pointer font-extrabold"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
 
@@ -1300,7 +1280,7 @@ export const GoalsPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* List of Added Draft Subtasks with Clean Icons */}
+                  {/* List of Added Draft Subtasks with Visual Live Progress Bars */}
                   {advancedTasks.length > 0 ? (
                     <div className="space-y-2 pt-1">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
@@ -1310,43 +1290,59 @@ export const GoalsPage: React.FC = () => {
                         {advancedTasks.map((t, idx) => (
                           <div
                             key={t.id}
-                            className="p-3 flex items-start justify-between gap-3 bg-white dark:bg-slate-900 text-xs"
+                            className="p-3 flex flex-col gap-2 bg-white dark:bg-slate-900 text-xs"
                           >
-                            <div className="flex items-start gap-2.5 min-w-0">
-                              <span className="font-mono text-[10px] text-slate-400 font-bold shrink-0 mt-0.5">
-                                #{idx + 1}
-                              </span>
-                              <div className="min-w-0 space-y-1">
-                                <span className="font-bold text-slate-900 dark:text-white block leading-snug">
-                                  {t.title}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-2.5 min-w-0">
+                                <span className="font-mono text-[10px] text-slate-400 font-bold shrink-0 mt-0.5">
+                                  #{idx + 1}
                                 </span>
-                                {t.description && (
-                                  <p className="text-[11px] text-slate-500 line-clamp-2">
-                                    {t.description}
-                                  </p>
-                                )}
-                                <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 pt-0.5">
-                                  <span className="text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                    <Users className="h-3 w-3" />
-                                    <span>{t.assigned_to_name}</span>
+                                <div className="min-w-0 space-y-1">
+                                  <span className="font-bold text-slate-900 dark:text-white block leading-snug">
+                                    {t.title}
                                   </span>
-                                  <span>•</span>
-                                  <span className="flex items-center gap-1 font-mono">
-                                    <Calendar className="h-3 w-3 text-slate-400" />
-                                    <span>Due {new Date(t.deadline).toLocaleDateString()}</span>
-                                  </span>
+                                  {t.description && (
+                                    <p className="text-[11px] text-slate-500 line-clamp-2">
+                                      {t.description}
+                                    </p>
+                                  )}
+                                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 pt-0.5">
+                                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                      <Users className="h-3 w-3" />
+                                      <span>{t.assigned_to_name}</span>
+                                    </span>
+                                    <span>•</span>
+                                    <span className="flex items-center gap-1 font-mono">
+                                      <Calendar className="h-3 w-3 text-slate-400" />
+                                      <span>Due {new Date(t.deadline).toLocaleDateString()}</span>
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveDraftTask(t.id)}
+                                className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer shrink-0"
+                                title="Remove Task"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveDraftTask(t.id)}
-                              className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer shrink-0"
-                              title="Remove Task"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            {/* Visual Progress Bar for Goal Subtask */}
+                            <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                              <div className="flex justify-between items-center text-[10px] font-bold">
+                                <span className="text-slate-400">Subtask Progress</span>
+                                <span className="text-emerald-600 font-mono">{t.progress || 0}%</span>
+                              </div>
+                              <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                  style={{ width: `${Math.min(100, Math.max(0, t.progress || 0))}%` }}
+                                  className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                                />
+                              </div>
+                            </div>
                           </div>
                         ))}
                       </div>

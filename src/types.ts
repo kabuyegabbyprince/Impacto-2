@@ -188,7 +188,8 @@ export interface EventTask {
   id: string;
   event_id?: string;
   title: string;
-  assigned_to_member_id: string; // member_id
+  assigned_to_member_id: string; // primary member_id
+  assigned_to_member_ids?: string[]; // multi-member selection array
   assigned_to_name?: string;
   assigned_to_role?: string;
   due_date?: string;
