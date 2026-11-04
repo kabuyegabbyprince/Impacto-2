@@ -2073,10 +2073,12 @@ export function useGoals(orgId: string | undefined) {
           console.warn("Supabase fetch goals error:", dbErr);
         }
 
-        const localGoals = MockDB.getGoals().filter((g) => g.org_id === orgId);
+        const localGoals = MockDB.getGoals().filter((g) => g.org_id === orgId && !g.is_deleted);
         const resultMap = new Map<string, Goal>();
         localGoals.forEach((g) => resultMap.set(g.id, g));
-        sbGoals.forEach((g) => resultMap.set(g.id, g));
+        sbGoals.forEach((g) => {
+          if (!g.is_deleted) resultMap.set(g.id, g);
+        });
 
         const unsynced = localGoals.filter((g) => !sbGoals.some((s) => s.id === g.id));
         if (unsynced.length > 0) {
@@ -2086,7 +2088,7 @@ export function useGoals(orgId: string | undefined) {
             console.warn("[Goals Supabase Sync] Failed to sync local goals:", syncErr);
           }
         }
-        const hydratedGoals = Array.from(resultMap.values()).map((g) => {
+        const hydratedGoals = Array.from(resultMap.values()).filter(g => !g.is_deleted).map((g) => {
           if (!g.tasks || g.tasks.length === 0) {
             try {
               const localTasks = localStorage.getItem(`impacto_goal_tasks_${g.id}`);
@@ -2100,8 +2102,8 @@ export function useGoals(orgId: string | undefined) {
         return hydratedGoals;
       }
       await delay();
-      const mockGoals = MockDB.getGoals().filter((g) => g.org_id === orgId);
-      return mockGoals.map((g) => {
+      const mockGoals = MockDB.getGoals().filter((g) => g.org_id === orgId && !g.is_deleted);
+      return mockGoals.filter(g => !g.is_deleted).map((g) => {
         if (!g.tasks || g.tasks.length === 0) {
           try {
             const localTasks = localStorage.getItem(`impacto_goal_tasks_${g.id}`);
@@ -2380,11 +2382,8 @@ export function useDeleteGoal() {
         }
       }
       await delay();
-      const idx = goals.findIndex((g) => g.id === id);
-      if (idx !== -1) {
-        goals[idx] = { ...goals[idx], is_deleted: true, last_edited_at };
-        MockDB.saveGoals(goals);
-      }
+      const filteredGoals = goals.filter((g) => g.id !== id);
+      MockDB.saveGoals(filteredGoals);
 
       try {
         recordSystemAuditEvent({

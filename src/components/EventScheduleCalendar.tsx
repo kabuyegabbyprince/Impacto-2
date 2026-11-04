@@ -134,19 +134,22 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
     return `${y}-${m}-${d}`;
   });
 
-  // Calendar display tab: 'calendar' (Interactive month view) | 'spaces' (Room lending & 24h occupancy) | 'agenda' (List view)
-  const [internalSubTab, setInternalSubTab] = useState<"calendar" | "spaces" | "agenda">("calendar");
-  const subTab = activeSubTab !== undefined ? activeSubTab : internalSubTab;
-  const setSubTab = (tab: "calendar" | "spaces" | "agenda") => {
-    setInternalSubTab(tab);
-    if (onSubTabChange) onSubTabChange(tab);
-  };
-
   // Rentable spaces master toggle
   const hasRentableSpaces = Boolean(
     activeOrg?.has_rentable_spaces ||
     (orgId && localStorage.getItem(`org_has_rentable_spaces_${orgId}`) === "true")
   );
+
+  // Calendar display tab: 'calendar' (Interactive month view) | 'spaces' (Room lending & 24h occupancy) | 'agenda' (List view)
+  const [internalSubTab, setInternalSubTab] = useState<"calendar" | "spaces" | "agenda">("calendar");
+  const rawSubTab = activeSubTab !== undefined ? activeSubTab : internalSubTab;
+  const subTab = (!hasRentableSpaces && rawSubTab === "spaces") ? "calendar" : rawSubTab;
+
+  const setSubTab = (tab: "calendar" | "spaces" | "agenda") => {
+    const target = (!hasRentableSpaces && tab === "spaces") ? "calendar" : tab;
+    setInternalSubTab(target);
+    if (onSubTabChange) onSubTabChange(target);
+  };
 
   // Spaces list persistent storage (default: empty array)
   const [spaces, setSpaces] = useState<SpaceEntity[]>(() => {
@@ -427,25 +430,27 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
             <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
             <span>Interactive Calendar</span>
           </button>
-          <button
-            type="button"
-            onClick={() => setSubTab("spaces")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0 ${
-              subTab === "spaces"
-                ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-            }`}
-          >
-            <Building2 className="h-3.5 w-3.5 shrink-0" />
-            <span>Rentable Spaces & Calendar</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 ${
-              hasRentableSpaces
-                ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
-                : "bg-slate-200 dark:bg-slate-700 text-slate-500"
-            }`}>
-              {hasRentableSpaces ? spaces.length : "Off"}
-            </span>
-          </button>
+          {hasRentableSpaces && (
+            <button
+              type="button"
+              onClick={() => setSubTab("spaces")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0 ${
+                subTab === "spaces"
+                  ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              }`}
+            >
+              <Building2 className="h-3.5 w-3.5 shrink-0" />
+              <span>Host Event</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 ${
+                hasRentableSpaces
+                  ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                  : "bg-slate-200 dark:bg-slate-700 text-slate-500"
+              }`}>
+                {spaces.length}
+              </span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setSubTab("agenda")}
@@ -460,38 +465,40 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
           </button>
         </div>
 
-        {/* Quick Actions */}
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => {
-              setBookingSpaceId(spaces[0]?.id || "");
-              if (user?.full_name && !bookingReservedBy) {
-                setBookingReservedBy(user.full_name);
-              }
-              const defaultPhone = user?.phone_number || activeMember?.phone_number || "";
-              if (defaultPhone && !bookingContactPhone) {
-                setBookingContactPhone(defaultPhone);
-              }
-              setOpenBookSpaceModal(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition cursor-pointer shadow-3xs whitespace-nowrap shrink-0"
-            title="Book a space or room for your activity"
-          >
-            <Clock className="h-3.5 w-3.5 shrink-0" />
-            <span>Reserve Space</span>
-          </button>
-          {isAdmin && (
+        {/* Quick Actions (Only shown when rentable spaces is on) */}
+        {hasRentableSpaces && (
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={() => setOpenAddSpaceModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white text-xs font-semibold transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+              onClick={() => {
+                setBookingSpaceId(spaces[0]?.id || "");
+                if (user?.full_name && !bookingReservedBy) {
+                  setBookingReservedBy(user.full_name);
+                }
+                const defaultPhone = user?.phone_number || activeMember?.phone_number || "";
+                if (defaultPhone && !bookingContactPhone) {
+                  setBookingContactPhone(defaultPhone);
+                }
+                setOpenBookSpaceModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition cursor-pointer shadow-3xs whitespace-nowrap shrink-0"
+              title="Book a space or room for your activity"
             >
-              <Plus className="h-3.5 w-3.5 shrink-0" />
-              <span>Add Space</span>
+              <Clock className="h-3.5 w-3.5 shrink-0" />
+              <span>Reserve Space</span>
             </button>
-          )}
-        </div>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setOpenAddSpaceModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white text-xs font-semibold transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+              >
+                <Plus className="h-3.5 w-3.5 shrink-0" />
+                <span>Add Space</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* VIEW A: INTERACTIVE REAL MONTH CALENDAR */}
@@ -646,7 +653,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                       {dayEvents.length > 0 && (
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" title={`${dayEvents.length} Events`} />
                       )}
-                      {dayBookings.length > 0 && (
+                      {hasRentableSpaces && dayBookings.length > 0 && (
                         <span className="h-1.5 w-1.5 rounded-full bg-sky-500" title={`${dayBookings.length} Space Bookings`} />
                       )}
                     </div>
@@ -666,18 +673,20 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                   <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
                   <span>Org Event</span>
                 </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-sky-500" />
-                  <span>Space Occupied (24h)</span>
-                </span>
+                {hasRentableSpaces && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-sky-500" />
+                    <span>Space Occupied (24h)</span>
+                  </span>
+                )}
               </div>
               <span className="text-[11px] font-medium text-slate-400">
-                Click any date to inspect 24h occupancy & events
+                {hasRentableSpaces ? "Click any date to inspect 24h occupancy & events" : "Click any date to inspect scheduled events"}
               </span>
             </div>
           </div>
 
-          {/* Side Panel: Selected Date Overview & 24h Occupancy Breakdown (4 Cols) */}
+          {/* Side Panel: Selected Date Overview (4 Cols) */}
           <div className="lg:col-span-4 flex flex-col gap-4">
             {/* Date Details Card */}
             <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col gap-3">
@@ -695,23 +704,26 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                     })}
                   </h4>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBookingDate(selectedDate);
-                    setOpenBookSpaceModal(true);
-                  }}
-                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer shadow-3xs"
-                >
-                  + Book Space
-                </button>
+                {hasRentableSpaces && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBookingDate(selectedDate);
+                      setOpenBookSpaceModal(true);
+                    }}
+                    className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer shadow-3xs"
+                  >
+                    + Book Space
+                  </button>
+                )}
               </div>
 
               {/* Holiday Alert if applicable */}
               {selectedHoliday && (
                 <div className="p-3 rounded-xl bg-gradient-to-r from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20 border border-amber-200 dark:border-amber-800/60 flex flex-col gap-1">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 dark:text-amber-200">
-                    <span>🇷🇼 Official Public Holiday</span>
+                    <CalendarIcon className="h-3.5 w-3.5 text-amber-600" />
+                    <span>Official Public Holiday</span>
                   </div>
                   <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
                     {selectedHoliday.name} • <span className="italic">{selectedHoliday.kinyarwanda}</span>
@@ -782,64 +794,66 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                 )}
               </div>
 
-              {/* Space Occupancy on Date */}
-              <div className="flex flex-col gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
-                  <Building2 className="h-3.5 w-3.5 text-sky-600" />
-                  <span>Space Lending Occupancy ({selectedDateBookings.length})</span>
-                </span>
+              {/* Space Occupancy on Date (Only rendered when rentable spaces is on) */}
+              {hasRentableSpaces && (
+                <div className="flex flex-col gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                    <Building2 className="h-3.5 w-3.5 text-sky-600" />
+                    <span>Space Lending Occupancy ({selectedDateBookings.length})</span>
+                  </span>
 
-                {selectedDateBookings.length > 0 ? (
-                  <div className="flex flex-col gap-2 max-h-56 overflow-y-auto">
-                    {selectedDateBookings.map(bk => (
-                      <div
-                        key={bk.id}
-                        className="p-2.5 rounded-xl bg-sky-50/60 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/50 text-xs flex flex-col gap-1"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-sky-950 dark:text-sky-200 truncate">{bk.title}</span>
-                          {isAdmin && (
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteBooking(bk.id, bk.title)}
-                              className="text-slate-400 hover:text-rose-600 transition"
-                              title="Cancel / Release Space"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
+                  {selectedDateBookings.length > 0 ? (
+                    <div className="flex flex-col gap-2 max-h-56 overflow-y-auto">
+                      {selectedDateBookings.map(bk => (
+                        <div
+                          key={bk.id}
+                          className="p-2.5 rounded-xl bg-sky-50/60 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/50 text-xs flex flex-col gap-1"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-sky-950 dark:text-sky-200 truncate">{bk.title}</span>
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteBooking(bk.id, bk.title)}
+                                className="text-slate-400 hover:text-rose-600 transition"
+                                title="Cancel / Release Space"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                            {bk.space_name}
+                          </span>
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono mt-0.5">
+                            <span>{bk.start_time} - {bk.end_time}</span>
+                            <span>{bk.attendees_count} people</span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 truncate">
+                            Lent to: <strong>{bk.reserved_by}</strong> ({bk.contact_phone})
+                          </div>
                         </div>
-                        <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                          {bk.space_name}
-                        </span>
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono mt-0.5">
-                          <span>◷ {bk.start_time} - {bk.end_time}</span>
-                          <span>{bk.attendees_count} people</span>
-                        </div>
-                        <div className="text-[10px] text-slate-500 truncate">
-                          Lent to: <strong>{bk.reserved_by}</strong> ({bk.contact_phone})
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30 text-center">
-                    <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 block">
-                      All Spaces Available!
-                    </span>
-                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5 block">
-                      No rooms are booked on this date.
-                    </span>
-                  </div>
-                )}
-              </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30 text-center">
+                      <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 block">
+                        All Spaces Available!
+                      </span>
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5 block">
+                        No rooms are booked on this date.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
 
       {/* VIEW B: RENTABLE SPACES, 24H SCHEDULE, BOOKING APPROVALS & EVENT TO-DOS */}
-      {subTab === "spaces" && (
+      {subTab === "spaces" && hasRentableSpaces && (
         <RentableSpacesManager
           activeOrg={activeOrg}
           isAdmin={isAdmin}

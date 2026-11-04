@@ -2133,7 +2133,7 @@ export const OrganizationMemberFees: React.FC = () => {
                   </>
                 ) : (
                   <div className="p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl text-center select-none text-[11px] text-stone-600 dark:text-slate-400 border font-semibold">
-                    🕊️ Flexible contribution fees have no strict due date or automated reminders.
+                    Flexible contribution fees have no strict due date or automated reminders.
                   </div>
                 )}
               </div>

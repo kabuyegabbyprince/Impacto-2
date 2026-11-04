@@ -256,8 +256,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
         id: `sub-payment-notif-${p.id}-${p.status}`,
         type: isApproved ? ("payment_success" as const) : ("payment_rejected" as const),
         title: isApproved 
-          ? (isPkg ? "🎉 Add-On Package Activated!" : "🎉 Subscription Approved & Active!")
-          : "⚠️ Subscription Payment Rejected",
+          ? (isPkg ? "Add-On Package Activated!" : "Subscription Approved & Active!")
+          : "Subscription Payment Rejected",
         summary: isApproved
           ? `${p.plan || "Plan"} payment of ${(p.amount_local || 0).toLocaleString()} RWF (Ref: ${p.reference || p.transaction_reference || "TXN"}) was verified. All features active.`
           : `${p.plan || "Plan"} proof of ${(p.amount_local || 0).toLocaleString()} RWF was rejected. Notes: ${p.audit_notes || "Please check transaction details and resubmit."}`,

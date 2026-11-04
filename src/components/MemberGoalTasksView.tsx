@@ -12,7 +12,9 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  Users,
+  AlertTriangle
 } from "lucide-react";
 import { Goal, GoalTask, OrgMember } from "../types";
 import { RealtimeTaskCountdown } from "./RealtimeTaskCountdown";
@@ -67,19 +69,19 @@ export const MemberGoalTasksView: React.FC<MemberGoalTasksViewProps> = ({
       const overdueDays = Math.abs(diffDays);
       return {
         type: "overdue",
-        label: `🚨 Daily Overdue Alert: Task is ${overdueDays === 0 ? "due today" : `${overdueDays} day(s) past deadline`}! Incomplete task reduces overall goal average.`,
+        label: `Daily Overdue Alert: Task is ${overdueDays === 0 ? "due today" : `${overdueDays} day(s) past deadline`}! Incomplete task reduces overall goal average.`,
         color: "bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/60 dark:border-rose-900 dark:text-rose-300",
       };
     } else if (diffDays === 1) {
       return {
         type: "urgent",
-        label: "⚠️ Urgent: Task is due tomorrow! Complete your portion now.",
+        label: "Urgent: Task is due tomorrow! Complete your portion now.",
         color: "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/60 dark:border-amber-900 dark:text-amber-300",
       };
     } else if (diffDays <= 7) {
       return {
         type: "reminder",
-        label: `📅 Reminder: Task is due in ${diffDays} day(s) (1-week deadline window).`,
+        label: `Reminder: Task is due in ${diffDays} day(s) (1-week deadline window).`,
         color: "bg-teal-50 border-teal-200 text-teal-800 dark:bg-teal-950/60 dark:border-teal-900 dark:text-teal-300",
       };
     }
@@ -309,8 +311,8 @@ export const MemberGoalTasksView: React.FC<MemberGoalTasksViewProps> = ({
                   {/* Assignees & Deadline Info */}
                   <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-2.5">
                     <span className="flex items-center gap-1 font-medium">
-                      <User className="h-3.5 w-3.5 text-slate-400" />
-                      <span>👥 {task.assigned_to_name || "Unassigned"}</span>
+                      <Users className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>{task.assigned_to_name || "Unassigned"}</span>
                       {isMine && (
                         <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded">
                           (Assigned to You)

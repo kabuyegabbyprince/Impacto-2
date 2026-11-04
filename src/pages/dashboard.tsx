@@ -79,7 +79,9 @@ import {
   Eye,
   Phone,
   Bell,
-  Video
+  Video,
+  MapPin,
+  Check
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
@@ -905,7 +907,7 @@ export const DashboardHome: React.FC = () => {
                 <Megaphone className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
                 <div className="flex flex-col">
                   <span className="font-extrabold text-[10px] uppercase tracking-wider text-blue-800 dark:text-blue-450">
-                    📢 ACTIVE VIRTUAL ATTENDANCE BROADCAST
+                    ACTIVE VIRTUAL ATTENDANCE BROADCAST
                   </span>
                   <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1">
                     Please confirm your attendance presence for the scheduled online session:{" "}
@@ -921,7 +923,7 @@ export const DashboardHome: React.FC = () => {
                 className="self-start sm:self-center bg-blue-600 hover:bg-blue-700 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shrink-0 transition cursor-pointer font-sans"
                 onClick={() => handleConfirmOnlineAttendance(item)}
               >
-                Confirm My Attendance ✔
+                <span>Confirm My Attendance</span>
               </button>
             </div>
           ))}
@@ -937,7 +939,7 @@ export const DashboardHome: React.FC = () => {
             <KeyRound className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="flex flex-col">
               <span className="font-extrabold text-[10px] uppercase tracking-wider text-amber-800 dark:text-amber-400">
-                🔑 WORKSPACE ADMINISTRATOR ALERT: PASSWORD RESET REQUEST
+                WORKSPACE ADMINISTRATOR ALERT: PASSWORD RESET REQUEST
               </span>
               <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1">
                 You have {pendingPwResetCount} pending password reset override request{pendingPwResetCount > 1 ? "s" : ""} awaiting your administrator approval.
@@ -4446,7 +4448,7 @@ export const MeetingsMinutes: React.FC = () => {
               <Card key={m.id} title={m.title} action={
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge color={displayStatus === "completed" ? "green" : (m.location_type === "online" ? "blue" : "emerald")}>
-                    {m.location_type === "online" ? "💻 ONLINE" : "📍 PHYSICAL"}
+                    {m.location_type === "online" ? "Online" : "Physical"}
                   </Badge>
                   <Badge color={displayStatus === "completed" ? "green" : "blue"}>{t(displayStatus)}</Badge>
                   
@@ -4579,14 +4581,14 @@ export const MeetingsMinutes: React.FC = () => {
                 onClick={() => setLocationType("on-site")}
                 className={`py-1.5 text-xs font-bold rounded-md transition ${locationType === "on-site" ? "bg-white text-stone-900 shadow-sm" : "text-gray-500"}`}
               >
-                📍 Physical (On-Site)
+                Physical (On-Site)
               </button>
               <button
                 type="button"
                 onClick={() => setLocationType("online")}
                 className={`py-1.5 text-xs font-bold rounded-md transition ${locationType === "online" ? "bg-white text-stone-900 shadow-sm" : "text-gray-500"}`}
               >
-                💻 Virtual (Online Broadcast)
+                Virtual (Online Broadcast)
               </button>
             </div>
           </div>
@@ -4594,7 +4596,7 @@ export const MeetingsMinutes: React.FC = () => {
           {locationType === "on-site" && (
             <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 flex flex-col gap-3 animate-in">
               <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-800">
-                📍 PHYSICAL GEOLOCATION FENCING SECURITY
+                Physical Geolocation Fencing Security
               </span>
               <div className="grid grid-cols-2 gap-3">
                 <Input 
@@ -4623,7 +4625,8 @@ export const MeetingsMinutes: React.FC = () => {
                   onClick={handleGetMyLocation}
                   className="px-3.5 py-2.5 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-extrabold transition shrink-0 mt-5 flex items-center gap-1 cursor-pointer"
                 >
-                  📍 Use Current Location
+                  <MapPin className="h-3.5 w-3.5 text-emerald-700" />
+                  <span>Use Current Location</span>
                 </button>
               </div>
             </div>
@@ -4690,14 +4693,14 @@ export const MeetingsMinutes: React.FC = () => {
                   onClick={() => setLocationType("on-site")}
                   className={`py-1.5 text-xs font-bold rounded-md transition ${locationType === "on-site" ? "bg-white text-stone-900 shadow-sm" : "text-gray-500"}`}
                 >
-                  📍 Physical (On-Site)
+                  Physical (On-Site)
                 </button>
                 <button
                   type="button"
                   onClick={() => setLocationType("online")}
                   className={`py-1.5 text-xs font-bold rounded-md transition ${locationType === "online" ? "bg-white text-stone-900 shadow-sm" : "text-gray-500"}`}
                 >
-                  💻 Virtual (Online Broadcast)
+                  Virtual (Online Broadcast)
                 </button>
               </div>
             </div>
@@ -4705,7 +4708,7 @@ export const MeetingsMinutes: React.FC = () => {
             {locationType === "on-site" && (
               <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 flex flex-col gap-3 animate-in">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-800">
-                  📍 PHYSICAL GEOLOCATION FENCING SECURITY
+                  Physical Geolocation Fencing Security
                 </span>
                 <div className="grid grid-cols-2 gap-3">
                   <Input 
@@ -4734,7 +4737,8 @@ export const MeetingsMinutes: React.FC = () => {
                     onClick={handleGetMyLocation}
                     className="px-3.5 py-2.5 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-extrabold transition shrink-0 mt-5 flex items-center gap-1 cursor-pointer"
                   >
-                    📍 Use Current Location
+                    <MapPin className="h-3.5 w-3.5 text-emerald-700" />
+                    <span>Use Current Location</span>
                   </button>
                 </div>
               </div>
@@ -4878,17 +4882,20 @@ export const MeetingsMinutes: React.FC = () => {
                                     <span className="text-gray-300">•</span>
                                     {detail.status === "mismatch" && (
                                       <span className="px-1.5 py-0.5 rounded-lg bg-amber-50 text-amber-800 font-mono text-[9px] border border-amber-200 flex items-center gap-1">
-                                        ⚠️ Tried to Attend (Geofence Mismatch: {detail.distance_meters?.toFixed(0)}m away)
+                                        <AlertTriangle className="h-2.5 w-2.5 text-amber-600" />
+                                        <span>Tried to Attend (Geofence Mismatch: {detail.distance_meters?.toFixed(0)}m away)</span>
                                       </span>
                                     )}
                                     {detail.status === "attempted" && (
                                       <span className="px-1.5 py-0.5 rounded-lg bg-orange-50 text-orange-800 font-mono text-[9px] border border-orange-200 flex items-center gap-1">
-                                        ⚠️ Tried to Attend (GPS Blocked)
+                                        <AlertTriangle className="h-2.5 w-2.5 text-orange-600" />
+                                        <span>Tried to Attend (GPS Blocked)</span>
                                       </span>
                                     )}
                                     {detail.status === "present" && (
                                       <span className="px-1.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 font-mono text-[9px] border border-emerald-200 flex items-center gap-1">
-                                        ✅ Verified GPS ({detail.check_in_method === "online_confirm" ? "Online Confirm" : "On-Site"})
+                                        <Check className="h-2.5 w-2.5 text-emerald-600" />
+                                        <span>Verified GPS ({detail.check_in_method === "online_confirm" ? "Online Confirm" : "On-Site"})</span>
                                       </span>
                                     )}
                                   </>
@@ -6829,59 +6836,63 @@ export const EventsCalendar: React.FC = () => {
                 List action items and assign them to members. Each member will see their assigned tasks on their dashboard, record progress, and submit performance reports contributing to the event's overall progress.
               </p>
 
-              {/* Extended Form: Add Todo Row */}
-              <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col sm:flex-row gap-2 items-end">
-                <div className="flex-1 w-full">
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
-                    Deliverable / Action Item
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Coordinate venue stage & sound equipment"
-                    value={todoTitle}
-                    onChange={(e) => setTodoTitle(e.target.value)}
-                    className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
-                  />
-                </div>
+              {/* Extended Form: Add Todo Row - Clean responsive layout with zero label collision */}
+              <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end">
+                  <div className="md:col-span-5">
+                    <label className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider block mb-1">
+                      Deliverable / Action Item
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Coordinate venue stage & sound equipment"
+                      value={todoTitle}
+                      onChange={(e) => setTodoTitle(e.target.value)}
+                      className="w-full h-9 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white shadow-xs"
+                    />
+                  </div>
 
-                <div className="w-full sm:w-44">
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
-                    Assign Member
-                  </label>
-                  <select
-                    value={todoMemberId}
-                    onChange={(e) => setTodoMemberId(e.target.value)}
-                    className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-2 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
-                  >
-                    <option value="">Select Member...</option>
-                    {orgMembers?.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.user?.full_name || "Member"} ({m.role})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  <div className="md:col-span-3">
+                    <label className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider block mb-1">
+                      Assign Member
+                    </label>
+                    <select
+                      value={todoMemberId}
+                      onChange={(e) => setTodoMemberId(e.target.value)}
+                      className="w-full h-9 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white shadow-xs cursor-pointer"
+                    >
+                      <option value="">Select Member...</option>
+                      {orgMembers?.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.user?.full_name || m.user?.email || "Member"} ({m.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div className="w-full sm:w-36">
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
-                    Due Date
-                  </label>
-                  <input
-                    type="date"
-                    value={todoDueDate}
-                    onChange={(e) => setTodoDueDate(e.target.value)}
-                    className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 px-2 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
-                  />
-                </div>
+                  <div className="md:col-span-2">
+                    <label className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider block mb-1">
+                      Due Date
+                    </label>
+                    <input
+                      type="date"
+                      value={todoDueDate}
+                      onChange={(e) => setTodoDueDate(e.target.value)}
+                      className="w-full h-9 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white shadow-xs"
+                    />
+                  </div>
 
-                <button
-                  type="button"
-                  onClick={handleAddTodoItem}
-                  className="w-full sm:w-auto px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shrink-0 cursor-pointer flex items-center justify-center gap-1 h-[33px]"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>Add Task</span>
-                </button>
+                  <div className="md:col-span-2">
+                    <button
+                      type="button"
+                      onClick={handleAddTodoItem}
+                      className="w-full h-9 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shrink-0 cursor-pointer flex items-center justify-center gap-1.5 shadow-xs transition"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Add Task</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* List of Todos with Member Select Dropdown in Front */}
@@ -6965,7 +6976,7 @@ export const EventsCalendar: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           {isAdmin && (
             <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setOpenAddModal(true)}>
-              {t("dashboard_labels.schedule_session")}
+              Event Plan
             </Button>
           )}
         </div>

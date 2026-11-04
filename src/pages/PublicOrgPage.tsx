@@ -46,6 +46,7 @@ import {
   BookOpen,
   Smartphone,
   Send,
+  Info,
   Loader2,
   Receipt,
   PhoneCall,
@@ -1498,10 +1499,10 @@ export const PublicOrgPage: React.FC = () => {
                                 {req.title} <span className="text-emerald-600 font-normal">({req.space_name})</span>
                               </span>
                               <div className="flex flex-wrap items-center gap-3 text-gray-500 font-mono text-[11px]">
-                                <span>📅 {req.date} ({req.start_time} - {req.end_time})</span>
-                                <span>👤 Org: {req.reserved_by}</span>
-                                <span>📞 {req.contact_phone}</span>
-                                {req.attendees_count ? <span>👥 {req.attendees_count} Attendees</span> : null}
+                                <span className="flex items-center gap-1"><Calendar className="h-3 w-3 text-slate-400" /> {req.date} ({req.start_time} - {req.end_time})</span>
+                                <span className="flex items-center gap-1"><User className="h-3 w-3 text-slate-400" /> Org: {req.reserved_by}</span>
+                                <span className="flex items-center gap-1"><Phone className="h-3 w-3 text-slate-400" /> {req.contact_phone}</span>
+                                {req.attendees_count ? <span className="flex items-center gap-1"><Users className="h-3 w-3 text-slate-400" /> {req.attendees_count} Attendees</span> : null}
                               </div>
                             </div>
                             <span className={`px-3 py-1 rounded-full text-[10px] font-mono font-black uppercase shrink-0 ${
@@ -2106,8 +2107,9 @@ export const PublicOrgPage: React.FC = () => {
                 />
               </div>
 
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-gray-200/60 dark:border-slate-700/60 text-[11px] text-gray-500">
-                📌 Submitting this request will direct you to sign up with <strong>{org?.name || "the organization"}</strong> so administrators can review your request and keep you updated.
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-gray-200/60 dark:border-slate-700/60 text-[11px] text-gray-500 flex items-center gap-1.5">
+                <Info className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span>Submitting this request will direct you to sign up with <strong>{org?.name || "the organization"}</strong> so administrators can review your request and keep you updated.</span>
               </div>
 
               <div className="flex items-center justify-end gap-2.5 mt-2 pt-3 border-t border-gray-100 dark:border-slate-800">

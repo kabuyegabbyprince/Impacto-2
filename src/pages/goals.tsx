@@ -24,7 +24,12 @@ import {
   PieChart as PieIcon,
   Sparkles,
   RefreshCw,
-  UserCheck
+  UserCheck,
+  Users,
+  X,
+  ChevronDown,
+  ChevronUp,
+  AlertTriangle
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend } from "recharts";
 import jsPDF from "jspdf";
@@ -895,12 +900,14 @@ export const GoalsPage: React.FC = () => {
                               </span>
                               {achievementScore < (goal.min_expected ?? 70) && (
                                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 px-2 py-0.5 rounded-md">
-                                  ⚠️ Below Min Target ({goal.min_expected ?? 70}%)
+                                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                                  <span>Below Min Target ({goal.min_expected ?? 70}%)</span>
                                 </span>
                               )}
                               {achievementScore >= (goal.min_expected ?? 70) && achievementScore > 0 && (
                                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-md">
-                                  ✓ Met Min Target
+                                  <Check className="h-3 w-3 shrink-0" />
+                                  <span>Met Min Target</span>
                                 </span>
                               )}
                             </div>
@@ -1183,9 +1190,10 @@ export const GoalsPage: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                  {showAdvancedTasks ? "Collapse ▲" : "Expand ▼"}
-                </span>
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  <span>{showAdvancedTasks ? "Collapse" : "Expand"}</span>
+                  {showAdvancedTasks ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                </div>
               </button>
 
               {showAdvancedTasks && (
@@ -1199,7 +1207,7 @@ export const GoalsPage: React.FC = () => {
                       Add New Subtask
                     </span>
 
-                    {/* 1. Multi-member selection checkboxes */}
+                    {/* 1. Multi-member selection checkboxes with real icons */}
                     <div>
                       <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1.5">
                         1. Assign to Member(s) — Select One or Multiple:
@@ -1221,7 +1229,7 @@ export const GoalsPage: React.FC = () => {
                                     : "bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-200"
                                 }`}
                               >
-                                <span>{isSelected ? "✓" : "+"}</span>
+                                {isSelected ? <Check className="h-3 w-3 shrink-0" /> : <Plus className="h-3 w-3 shrink-0" />}
                                 <span>{m.user?.full_name || "Member"}</span>
                                 <span className="opacity-75 font-mono text-[9px]">({m.role})</span>
                               </button>
@@ -1230,30 +1238,45 @@ export const GoalsPage: React.FC = () => {
                         )}
                       </div>
                       {draftTaskMemberIds.length > 0 && (
-                        <p className="text-[10px] text-emerald-600 font-bold mt-1">
-                          Assigned to {draftTaskMemberIds.length} member{draftTaskMemberIds.length === 1 ? "" : "s"}
+                        <p className="text-[10px] text-emerald-600 font-bold mt-1 flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          <span>Assigned to {draftTaskMemberIds.length} member{draftTaskMemberIds.length === 1 ? "" : "s"}</span>
                         </p>
                       )}
                     </div>
 
-                    {/* 2. Task Title */}
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1">
-                        2. Task Title / Deliverable Name
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Procure organic fertilizer & audit supplier receipts"
-                        value={draftTaskTitle}
-                        onChange={(e) => setDraftTaskTitle(e.target.value)}
-                        className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 outline-none focus:ring-1 focus:ring-emerald-500 font-semibold"
-                      />
+                    {/* 2. Task Title & Deadline Grid for Maximum Speed */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+                      <div className="sm:col-span-8">
+                        <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                          2. Task Title / Deliverable Name
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Procure organic fertilizer & audit supplier receipts"
+                          value={draftTaskTitle}
+                          onChange={(e) => setDraftTaskTitle(e.target.value)}
+                          className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 outline-none focus:ring-1 focus:ring-emerald-500 font-semibold h-9"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-4">
+                        <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                          Task Deadline (Can exceed goal deadline)
+                        </label>
+                        <input
+                          type="date"
+                          value={draftTaskDeadline}
+                          onChange={(e) => setDraftTaskDeadline(e.target.value)}
+                          className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-emerald-500 h-9"
+                        />
+                      </div>
                     </div>
 
-                    {/* 3. Large Input to Describe Task */}
+                    {/* 3. Large Input to Describe Task & Quick Action Button */}
                     <div>
                       <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1">
-                        3. Large Task Description & Detailed Deliverables
+                        3. Detailed Deliverables & Instructions
                       </label>
                       <textarea
                         rows={3}
@@ -1264,31 +1287,20 @@ export const GoalsPage: React.FC = () => {
                       />
                     </div>
 
-                    {/* 4. Task Deadline (Can exceed main goal deadline) & Add Button */}
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 mb-1">
-                        4. Task Specific Deadline (Can be set beyond goal deadline)
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="date"
-                          value={draftTaskDeadline}
-                          onChange={(e) => setDraftTaskDeadline(e.target.value)}
-                          className="flex-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2 outline-none focus:ring-1 focus:ring-emerald-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleAddDraftTask}
-                          disabled={!draftTaskTitle.trim()}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold cursor-pointer shrink-0 shadow-xs"
-                        >
-                          + Add Subtask
-                        </button>
-                      </div>
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={handleAddDraftTask}
+                        disabled={!draftTaskTitle.trim()}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold cursor-pointer shrink-0 shadow-xs flex items-center gap-1.5 transition"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Add Subtask</span>
+                      </button>
                     </div>
                   </div>
 
-                  {/* List of Added Draft Subtasks */}
+                  {/* List of Added Draft Subtasks with Clean Icons */}
                   {advancedTasks.length > 0 ? (
                     <div className="space-y-2 pt-1">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
@@ -1314,11 +1326,15 @@ export const GoalsPage: React.FC = () => {
                                   </p>
                                 )}
                                 <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 pt-0.5">
-                                  <span className="text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.2 rounded">
-                                    👥 {t.assigned_to_name}
+                                  <span className="text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                    <Users className="h-3 w-3" />
+                                    <span>{t.assigned_to_name}</span>
                                   </span>
                                   <span>•</span>
-                                  <span>📅 Due {new Date(t.deadline).toLocaleDateString()}</span>
+                                  <span className="flex items-center gap-1 font-mono">
+                                    <Calendar className="h-3 w-3 text-slate-400" />
+                                    <span>Due {new Date(t.deadline).toLocaleDateString()}</span>
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -1326,10 +1342,10 @@ export const GoalsPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleRemoveDraftTask(t.id)}
-                              className="text-slate-400 hover:text-rose-600 p-1 rounded transition cursor-pointer shrink-0"
+                              className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer shrink-0"
                               title="Remove Task"
                             >
-                              ✕
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         ))}

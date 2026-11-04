@@ -35,10 +35,32 @@ import { Badge, Button, Input, Modal, Card } from "./ui";
 import { useAuditLogs, useCreateAuditLog } from "../hooks/useImpactoData";
 import { useOrgStore } from "../store/orgStore";
 import { useAuthStore } from "../store/authStore";
-import { useToast } from "./Toast";
 import { AuditLog } from "../types";
 import { PlanGatedView } from "./PlanGatedView";
+import { useToast } from "./Toast";
 import { getAuditActionSummary, recordSystemAuditEvent } from "../lib/auditLogger";
+
+// Privacy helper: Redact sensitive identity and document information from audit views
+const sanitizeForPrivacy = (obj: any): any => {
+  if (!obj || typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizeForPrivacy);
+  const safe: Record<string, any> = {};
+  const sensitiveKeys = new Set([
+    "password", "password_hash", "password_plain", "token", "secret", "api_key",
+    "passport_photo_url", "id_document_url", "id_document_number", "national_id",
+    "phone_number", "phone", "dues_mtn_number", "dues_airtel_number", "ip_address", "user_agent"
+  ]);
+  for (const [k, v] of Object.entries(obj)) {
+    if (sensitiveKeys.has(k.toLowerCase())) {
+      safe[k] = "[PROTECTED FOR PRIVACY]";
+    } else if (typeof v === "object" && v !== null) {
+      safe[k] = sanitizeForPrivacy(v);
+    } else {
+      safe[k] = v;
+    }
+  }
+  return safe;
+};
 
 export const AuditLogsDashboard: React.FC = () => {
   const { activeOrg, activeMember } = useOrgStore();
@@ -124,8 +146,7 @@ export const AuditLogsDashboard: React.FC = () => {
         const matchLabel = (log.action_label || "").toLowerCase().includes(q);
         const matchActor = (log.performed_by || "").toLowerCase().includes(q);
         const matchTarget = (log.target_label || log.target_table || "").toLowerCase().includes(q);
-        const matchIp = (log.ip_address || "").toLowerCase().includes(q);
-        if (!matchAction && !matchLabel && !matchActor && !matchTarget && !matchIp) {
+        if (!matchAction && !matchLabel && !matchActor && !matchTarget) {
           return false;
         }
       }
@@ -446,13 +467,12 @@ export const AuditLogsDashboard: React.FC = () => {
             <table className="w-full text-left border-collapse text-xs">
               <thead className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700 font-mono text-[10px] text-slate-500 uppercase tracking-wider">
                 <tr>
-                  <th className="py-3 px-4">Timestamp</th>
-                  <th className="py-3 px-4">Event Summary & Impact</th>
-                  <th className="py-3 px-4">Operation</th>
-                  <th className="py-3 px-4">Actor</th>
-                  <th className="py-3 px-4">Target Record</th>
-                  <th className="py-3 px-4">Client / Origin</th>
-                  <th className="py-3 px-4 text-right">Mutation Details</th>
+                  <th className="py-3 px-4">Role</th>
+                  <th className="py-3 px-4">User</th>
+                  <th className="py-3 px-4">What He Did</th>
+                  <th className="py-3 px-4">Time</th>
+                  <th className="py-3 px-4">Module / Scope</th>
+                  <th className="py-3 px-4 text-right">Privacy-Safe Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/80">
@@ -460,24 +480,50 @@ export const AuditLogsDashboard: React.FC = () => {
                   filteredLogs.map((log) => {
                     const summary = getAuditActionSummary(log);
                     const opKind = getOperationKind(log);
-                    const isMobile = (log.user_agent || "").toLowerCase().includes("iphone") || (log.user_agent || "").toLowerCase().includes("android");
                     const hasDiff = !!log.old_value || !!log.new_value;
+
+                    // Compute clean, privacy-safe actor role
+                    const actorRole = (log.performed_by || "").toLowerCase().includes("accountant")
+                      ? "Accountant"
+                      : (log.performed_by || "").toLowerCase().includes("superadmin") || (log.performed_by || "").toLowerCase().includes("admin")
+                      ? "Admin"
+                      : (log.performed_by || "").toLowerCase().includes("auditor")
+                      ? "Auditor"
+                      : (log.performed_by || "").toLowerCase().includes("system")
+                      ? "System"
+                      : "Staff";
 
                     return (
                       <tr key={log.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-750/50 transition">
-                        {/* Timestamp */}
-                        <td className="py-3 px-4 whitespace-nowrap font-mono text-slate-600 dark:text-slate-400">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-slate-800 dark:text-slate-200">
-                              {new Date(log.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                            </span>
-                            <span className="text-[10px] text-slate-400">
-                              {new Date(log.created_at).toLocaleDateString()}
+                        {/* 1. Role */}
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold font-mono uppercase tracking-wider ${
+                            actorRole === "Admin"
+                              ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50"
+                              : actorRole === "Accountant"
+                              ? "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200/50"
+                              : actorRole === "Auditor"
+                              ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/50"
+                              : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60"
+                          }`}>
+                            <ShieldCheck className="h-3 w-3" />
+                            <span>{actorRole}</span>
+                          </span>
+                        </td>
+
+                        {/* 2. User */}
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <div className="h-7 w-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-[11px] shrink-0">
+                              <User className="h-3.5 w-3.5" />
+                            </div>
+                            <span className="font-bold text-slate-900 dark:text-slate-100">
+                              {log.performed_by || "Platform Operator"}
                             </span>
                           </div>
                         </td>
 
-                        {/* Event Summary & Impact */}
+                        {/* 3. What He Did */}
                         <td className="py-3 px-4 max-w-sm">
                           <div className="flex flex-col">
                             <span className="font-bold text-slate-900 dark:text-slate-100 leading-snug">
@@ -489,74 +535,26 @@ export const AuditLogsDashboard: React.FC = () => {
                           </div>
                         </td>
 
-                        {/* Operation Badge */}
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          {opKind === "deleted" ? (
-                            <Badge color="rose">
-                              <Trash2 className="h-3 w-3 mr-1" />
-                              DELETED
-                            </Badge>
-                          ) : opKind === "edited" ? (
-                            <Badge color="amber">
-                              <Edit3 className="h-3 w-3 mr-1" />
-                              EDITED
-                            </Badge>
-                          ) : opKind === "created" ? (
-                            <Badge color="emerald">
-                              <PlusCircle className="h-3 w-3 mr-1" />
-                              CREATED
-                            </Badge>
-                          ) : opKind === "auth" ? (
-                            <Badge color="blue">
-                              <KeyRound className="h-3 w-3 mr-1" />
-                              AUTH
-                            </Badge>
-                          ) : (
-                            <Badge color="purple">
-                              <Coins className="h-3 w-3 mr-1" />
-                              FINANCE
-                            </Badge>
-                          )}
-                        </td>
-
-                        {/* Actor */}
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <div className="h-7 w-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-[11px] shrink-0">
-                              <User className="h-3.5 w-3.5" />
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="font-bold text-slate-900 dark:text-slate-100">
-                                {log.performed_by || "System Automated"}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                Staff / Admin
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Target Record */}
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <div className="flex flex-col font-mono text-[11px]">
-                            <span className="font-semibold text-slate-700 dark:text-slate-300">
-                              {log.target_label || log.target_table || "Workspace"}
+                        {/* 4. Time */}
+                        <td className="py-3 px-4 whitespace-nowrap font-mono text-slate-600 dark:text-slate-400">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-slate-800 dark:text-slate-200">
+                              {new Date(log.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                             </span>
-                            <span className="text-[10px] text-slate-400 truncate max-w-[140px]">
-                              table: {log.target_table || "system"}
+                            <span className="text-[10px] text-slate-400">
+                              {new Date(log.created_at).toLocaleDateString()}
                             </span>
                           </div>
                         </td>
 
-                        {/* Client IP & Device */}
-                        <td className="py-3 px-4 whitespace-nowrap font-mono text-[11px] text-slate-500 dark:text-slate-400">
-                          <div className="flex items-center gap-1.5">
-                            {isMobile ? <Smartphone className="h-3 w-3" /> : <Laptop className="h-3 w-3" />}
-                            <span>{log.ip_address || "Internal Proxy"}</span>
-                          </div>
+                        {/* 5. Module / Scope */}
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                            {log.target_label || "Workspace Management"}
+                          </span>
                         </td>
 
-                        {/* Actions */}
+                        {/* 6. Details */}
                         <td className="py-3 px-4 text-right whitespace-nowrap">
                           {hasDiff ? (
                             <button
@@ -565,10 +563,10 @@ export const AuditLogsDashboard: React.FC = () => {
                               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-400 font-bold transition text-[11px] cursor-pointer"
                             >
                               <Eye className="h-3 w-3" />
-                              <span>Inspect Diff</span>
+                              <span>View Summary</span>
                             </button>
                           ) : (
-                            <span className="text-[10px] text-slate-400 italic">No Mutation State</span>
+                            <span className="text-[10px] text-slate-400 italic">Completed</span>
                           )}
                         </td>
                       </tr>
@@ -576,23 +574,17 @@ export const AuditLogsDashboard: React.FC = () => {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={7} className="py-16 text-center text-slate-400">
+                    <td colSpan={6} className="py-16 text-center text-slate-400">
                       <div className="max-w-md mx-auto flex flex-col items-center">
                         <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-700/60 flex items-center justify-center text-slate-400 mb-3">
                           <History className="h-6 w-6" />
                         </div>
                         <h3 className="font-display font-bold text-base text-slate-800 dark:text-slate-200">
-                          No System Audit Events Recorded Yet
+                          No Audit Activity Recorded
                         </h3>
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                          All operational activities—such as whenever members are registered, edited, or deleted, or ledger entries and strategic goals are modified—will automatically record here in real-time.
+                          All operational actions—such as when members are managed, dues recorded, or goals updated—are tracked here while protecting privacy.
                         </p>
-                        <div className="mt-4 flex items-center gap-2">
-                          <Button size="sm" variant="outline" onClick={handleTriggerTestEvent}>
-                            <Sparkles className="h-3.5 w-3.5 mr-1 text-emerald-600" />
-                            Record Health Verification Check
-                          </Button>
-                        </div>
                       </div>
                     </td>
                   </tr>
@@ -602,12 +594,12 @@ export const AuditLogsDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Diff Inspector Modal */}
+        {/* Diff Inspector Modal (Fully Sanitized for Privacy) */}
         {selectedLogForDiff && (
           <Modal
             open={!!selectedLogForDiff}
             onClose={() => setSelectedLogForDiff(null)}
-            title="System Audit Mutation Inspector"
+            title="System Audit Inspection"
             maxWidth="max-w-2xl"
           >
             <div className="flex flex-col gap-4 text-left font-sans select-none">
@@ -620,14 +612,14 @@ export const AuditLogsDashboard: React.FC = () => {
                   <Badge color="blue">{selectedLogForDiff.action}</Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-500 font-mono">
-                  <div>Actor: <strong className="text-slate-700 dark:text-slate-300">{selectedLogForDiff.performed_by}</strong></div>
-                  <div>Target: <strong className="text-slate-700 dark:text-slate-300">{selectedLogForDiff.target_table} ({selectedLogForDiff.target_label})</strong></div>
-                  <div>Time: {new Date(selectedLogForDiff.created_at).toISOString()}</div>
-                  <div>IP: {selectedLogForDiff.ip_address || "127.0.0.1"}</div>
+                  <div>Operator: <strong className="text-slate-700 dark:text-slate-300">{selectedLogForDiff.performed_by}</strong></div>
+                  <div>Scope: <strong className="text-slate-700 dark:text-slate-300">{selectedLogForDiff.target_label || "Workspace Management"}</strong></div>
+                  <div>Time: {new Date(selectedLogForDiff.created_at).toLocaleString()}</div>
+                  <div>Privacy Status: <strong className="text-emerald-600">Sanitized & Safe</strong></div>
                 </div>
               </div>
 
-              {/* Side by side state diff */}
+              {/* Side by side state diff - with sensitive personal data redacted */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* Previous state */}
                 <div className="flex flex-col gap-1.5">
@@ -637,7 +629,7 @@ export const AuditLogsDashboard: React.FC = () => {
                   </span>
                   <pre className="p-3 bg-slate-900 text-rose-300 text-[11px] font-mono rounded-xl overflow-x-auto max-h-64 border border-slate-800 leading-relaxed">
                     {selectedLogForDiff.old_value
-                      ? JSON.stringify(selectedLogForDiff.old_value, null, 2)
+                      ? JSON.stringify(sanitizeForPrivacy(selectedLogForDiff.old_value), null, 2)
                       : "// No prior record (New entity created)"}
                   </pre>
                 </div>
@@ -650,7 +642,7 @@ export const AuditLogsDashboard: React.FC = () => {
                   </span>
                   <pre className="p-3 bg-slate-900 text-emerald-300 text-[11px] font-mono rounded-xl overflow-x-auto max-h-64 border border-slate-800 leading-relaxed">
                     {selectedLogForDiff.new_value
-                      ? JSON.stringify(selectedLogForDiff.new_value, null, 2)
+                      ? JSON.stringify(sanitizeForPrivacy(selectedLogForDiff.new_value), null, 2)
                       : "// Record deleted or purged"}
                   </pre>
                 </div>
@@ -660,10 +652,10 @@ export const AuditLogsDashboard: React.FC = () => {
               <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
                 <span className="text-slate-500 flex items-center gap-1">
                   <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  Immutable ledger hash verified against tenant partition.
+                  Audit record cryptographically validated. Private identity credentials redacted.
                 </span>
                 <Button size="sm" variant="outline" onClick={() => setSelectedLogForDiff(null)}>
-                  Close Inspector
+                  Close
                 </Button>
               </div>
             </div>

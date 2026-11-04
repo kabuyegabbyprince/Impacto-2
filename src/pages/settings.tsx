@@ -2134,10 +2134,10 @@ export const OrganizationSettingsPage: React.FC = () => {
                         value={statusBadge}
                         onChange={(e) => setStatusBadge(e.target.value as any)}
                       >
-                        <option value="active">🟢 Active</option>
-                        <option value="remote">💻 Remote</option>
-                        <option value="field">🌾 In Field</option>
-                        <option value="away">⏳ Away</option>
+                        <option value="active">Active</option>
+                        <option value="remote">Remote</option>
+                        <option value="field">In Field</option>
+                        <option value="away">Away</option>
                       </select>
                     </div>
 
@@ -2148,9 +2148,9 @@ export const OrganizationSettingsPage: React.FC = () => {
                         value={profileVisibility}
                         onChange={(e) => setProfileVisibility(e.target.value as any)}
                       >
-                        <option value="members_only">👥 Members Only</option>
-                        <option value="public">🌐 Public Directory</option>
-                        <option value="private">🔒 Private</option>
+                        <option value="members_only">Members Only</option>
+                        <option value="public">Public Directory</option>
+                        <option value="private">Private</option>
                       </select>
                     </div>
                   </div>
