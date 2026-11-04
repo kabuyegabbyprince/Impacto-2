@@ -564,15 +564,20 @@ export const PublicOrgPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 flex flex-col items-center justify-center p-4">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-14 w-14 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 flex items-center justify-center shadow-xs animate-pulse">
-            <Globe className="h-7 w-7 text-emerald-600 dark:text-emerald-400 animate-spin-slow" />
+        <div className="flex flex-col items-center gap-5">
+          <div className="relative flex items-center justify-center">
+            <div className="absolute h-16 w-16 rounded-full border-4 border-emerald-500/20 animate-ping" />
+            <div className="h-14 w-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-600/30">
+              <Loader2 className="h-7 w-7 animate-spin" />
+            </div>
           </div>
-          <div className="text-center">
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">
-              Resolving Public Organization Portal...
+          <div className="text-center space-y-1">
+            <h3 className="text-base font-bold text-gray-900 dark:text-white font-display">
+              Loading Public Organization Portal...
             </h3>
-            <p className="text-xs text-gray-500 font-mono mt-1">/@{targetSlug || "workspace"}</p>
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-mono">
+              /@{targetSlug || "workspace"}
+            </p>
           </div>
         </div>
       </div>

@@ -2360,25 +2360,12 @@ export function useDeleteGoal() {
 
       if (isSupabaseConfigured) {
         try {
-          const { error } = await supabase
+          await supabase
             .from("goals")
-            .update({ is_deleted: true, last_edited_at })
+            .delete()
             .eq("id", id);
-          if (error) throw error;
         } catch (dbErr: any) {
-          if (
-            dbErr.code === "PGRST204" ||
-            dbErr.message?.includes("is_deleted") ||
-            dbErr.message?.includes("last_edited_at")
-          ) {
-            const { error } = await supabase
-              .from("goals")
-              .delete()
-              .eq("id", id);
-            if (error) throw error;
-          } else {
-            throw dbErr;
-          }
+          console.warn("Supabase goal delete notice:", dbErr);
         }
       }
       await delay();

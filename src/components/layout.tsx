@@ -219,6 +219,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
     return () => { active = false; };
   }, [rawLogo]);
 
+  const isPrivilegedRole = activeMember?.role === "org_admin" || activeMember?.role === "accountant" || user?.is_superadmin;
+
   const announcementsList = [
     ...(news || []).map((n) => ({
       id: "news-" + n.id,
@@ -236,47 +238,49 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
       time: m.date_time || new Date().toISOString(),
       path: "/dashboard",
     })),
-    ...(notificationSends || []).map((ns) => {
-      const lower = (ns.body_text || "").toLowerCase();
-      const isConfirmed = lower.includes("confirmed") || lower.includes("cleared") || lower.includes("verified") || lower.includes("approved");
-      const isRejected = lower.includes("rejected");
-      return {
-        id: "notif-" + ns.id,
-        type: isConfirmed ? ("payment_success" as const) : isRejected ? ("payment_rejected" as const) : ("notification" as const),
-        title: isConfirmed ? "Payment / Subscription Approved" : isRejected ? "Payment Proof Rejected" : lower.includes("submitted") ? "Payment Slip Submitted" : "Cooperative Update",
-        summary: ns.body_text || "Notice dispatched",
-        time: ns.created_at || new Date().toISOString(),
-        path: lower.includes("subscription") || lower.includes("package") ? "/dashboard/settings?tab=subscription" : "/dashboard/fees",
-      };
-    }),
-    ...(orgSubPayments || []).filter(p => p.status === "approved" || p.status === "rejected").map((p) => {
-      const isPkg = p.package_id || p.item_type === "package" || (p.plan || "").toLowerCase().includes("package");
-      const isApproved = p.status === "approved";
-      return {
-        id: `sub-payment-notif-${p.id}-${p.status}`,
-        type: isApproved ? ("payment_success" as const) : ("payment_rejected" as const),
-        title: isApproved 
-          ? (isPkg ? "Add-On Package Activated!" : "Subscription Approved & Active!")
-          : "Subscription Payment Rejected",
-        summary: isApproved
-          ? `${p.plan || "Plan"} payment of ${(p.amount_local || 0).toLocaleString()} RWF (Ref: ${p.reference || p.transaction_reference || "TXN"}) was verified. All features active.`
-          : `${p.plan || "Plan"} proof of ${(p.amount_local || 0).toLocaleString()} RWF was rejected. Notes: ${p.audit_notes || "Please check transaction details and resubmit."}`,
-        time: p.validated_at || p.audited_at || p.submitted_at || new Date().toISOString(),
-        path: "/dashboard/settings?tab=subscription",
-      };
-    }),
-    ...(memberFees || []).filter(f => f.status === "paid" || f.status === "pending_confirmation").map((f) => ({
-      id: "fee-status-" + f.id + "-" + (f.paid_at || f.reported_at || f.status),
-      type: f.status === "paid" ? ("payment_success" as const) : ("payment_pending" as const),
-      title: f.status === "paid"
-        ? `Payment Cleared: ${f.member_name}`
-        : `Slip Pending Review: ${f.member_name}`,
-      summary: f.status === "paid"
-        ? `${f.amount.toLocaleString()} RWF for ${f.payment_period.toUpperCase()} (${f.period_date}) verified and confirmed by accountant.`
-        : `Slip submitted for ${f.amount.toLocaleString()} RWF (${f.payment_period.toUpperCase()}). Pending verification.`,
-      time: f.paid_at || f.reported_at || f.created_at || new Date().toISOString(),
-      path: "/dashboard/fees",
-    }))
+    ...(isPrivilegedRole ? [
+      ...(notificationSends || []).map((ns) => {
+        const lower = (ns.body_text || "").toLowerCase();
+        const isConfirmed = lower.includes("confirmed") || lower.includes("cleared") || lower.includes("verified") || lower.includes("approved");
+        const isRejected = lower.includes("rejected");
+        return {
+          id: "notif-" + ns.id,
+          type: isConfirmed ? ("payment_success" as const) : isRejected ? ("payment_rejected" as const) : ("notification" as const),
+          title: isConfirmed ? "Payment / Subscription Approved" : isRejected ? "Payment Proof Rejected" : lower.includes("submitted") ? "Payment Slip Submitted" : "Cooperative Update",
+          summary: ns.body_text || "Notice dispatched",
+          time: ns.created_at || new Date().toISOString(),
+          path: lower.includes("subscription") || lower.includes("package") ? "/dashboard/settings?tab=subscription" : "/dashboard/fees",
+        };
+      }),
+      ...(orgSubPayments || []).filter(p => p.status === "approved" || p.status === "rejected").map((p) => {
+        const isPkg = p.package_id || p.item_type === "package" || (p.plan || "").toLowerCase().includes("package");
+        const isApproved = p.status === "approved";
+        return {
+          id: `sub-payment-notif-${p.id}-${p.status}`,
+          type: isApproved ? ("payment_success" as const) : ("payment_rejected" as const),
+          title: isApproved 
+            ? (isPkg ? "Add-On Package Activated!" : "Subscription Approved & Active!")
+            : "Subscription Payment Rejected",
+          summary: isApproved
+            ? `${p.plan || "Plan"} payment of ${(p.amount_local || 0).toLocaleString()} RWF (Ref: ${p.reference || p.transaction_reference || "TXN"}) was verified. All features active.`
+            : `${p.plan || "Plan"} proof of ${(p.amount_local || 0).toLocaleString()} RWF was rejected. Notes: ${p.audit_notes || "Please check transaction details and resubmit."}`,
+          time: p.validated_at || p.audited_at || p.submitted_at || new Date().toISOString(),
+          path: "/dashboard/settings?tab=subscription",
+        };
+      }),
+      ...(memberFees || []).filter(f => f.status === "paid" || f.status === "pending_confirmation").map((f) => ({
+        id: "fee-status-" + f.id + "-" + (f.paid_at || f.reported_at || f.status),
+        type: f.status === "paid" ? ("payment_success" as const) : ("payment_pending" as const),
+        title: f.status === "paid"
+          ? `Payment Cleared: ${f.member_name}`
+          : `Slip Pending Review: ${f.member_name}`,
+        summary: f.status === "paid"
+          ? `${f.amount.toLocaleString()} RWF for ${f.payment_period.toUpperCase()} (${f.period_date}) verified and confirmed by accountant.`
+          : `Slip submitted for ${f.amount.toLocaleString()} RWF (${f.payment_period.toUpperCase()}). Pending verification.`,
+        time: f.paid_at || f.reported_at || f.created_at || new Date().toISOString(),
+        path: "/dashboard/fees",
+      }))
+    ] : [])
   ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 
   const hasNewNotification = announcementsList.length > 0 && 

@@ -134,21 +134,27 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
     return `${y}-${m}-${d}`;
   });
 
-  // Rentable spaces master toggle
-  const hasRentableSpaces = Boolean(
-    activeOrg?.has_rentable_spaces ||
-    (orgId && localStorage.getItem(`org_has_rentable_spaces_${orgId}`) === "true")
-  );
-
   // Calendar display tab: 'calendar' (Interactive month view) | 'spaces' (Room lending & 24h occupancy) | 'agenda' (List view)
   const [internalSubTab, setInternalSubTab] = useState<"calendar" | "spaces" | "agenda">("calendar");
   const rawSubTab = activeSubTab !== undefined ? activeSubTab : internalSubTab;
-  const subTab = (!hasRentableSpaces && rawSubTab === "spaces") ? "calendar" : rawSubTab;
+  const subTab = rawSubTab;
+
+  // Rentable spaces master toggle
+  const hasRentableSpaces = Boolean(
+    activeOrg?.has_rentable_spaces ||
+    (orgId && localStorage.getItem(`org_has_rentable_spaces_${orgId}`) === "true") ||
+    subTab === "spaces"
+  );
 
   const setSubTab = (tab: "calendar" | "spaces" | "agenda") => {
-    const target = (!hasRentableSpaces && tab === "spaces") ? "calendar" : tab;
-    setInternalSubTab(target);
-    if (onSubTabChange) onSubTabChange(target);
+    if (tab === "spaces" && orgId) {
+      localStorage.setItem(`org_has_rentable_spaces_${orgId}`, "true");
+      if (activeOrg) {
+        activeOrg.has_rentable_spaces = true;
+      }
+    }
+    setInternalSubTab(tab);
+    if (onSubTabChange) onSubTabChange(tab);
   };
 
   // Spaces list persistent storage (default: empty array)
@@ -441,7 +447,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
               }`}
             >
               <Building2 className="h-3.5 w-3.5 shrink-0" />
-              <span>Host Event</span>
+              <span>Host External Event</span>
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 ${
                 hasRentableSpaces
                   ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
@@ -461,44 +467,58 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
             }`}
           >
             <Layers className="h-3.5 w-3.5 shrink-0" />
-            <span>Agenda & Roster</span>
+            <span>Our Event</span>
           </button>
         </div>
 
-        {/* Quick Actions (Only shown when rentable spaces is on) */}
-        {hasRentableSpaces && (
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                setBookingSpaceId(spaces[0]?.id || "");
-                if (user?.full_name && !bookingReservedBy) {
-                  setBookingReservedBy(user.full_name);
-                }
-                const defaultPhone = user?.phone_number || activeMember?.phone_number || "";
-                if (defaultPhone && !bookingContactPhone) {
-                  setBookingContactPhone(defaultPhone);
-                }
-                setOpenBookSpaceModal(true);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition cursor-pointer shadow-3xs whitespace-nowrap shrink-0"
-              title="Book a space or room for your activity"
-            >
-              <Clock className="h-3.5 w-3.5 shrink-0" />
-              <span>Reserve Space</span>
-            </button>
-            {isAdmin && (
+        {/* Quick Actions & Host External Event */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setSubTab("spaces");
+              setOpenAddSpaceModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+          >
+            <Plus className="h-3.5 w-3.5 shrink-0" />
+            <span>Host External Event</span>
+          </button>
+
+          {hasRentableSpaces && spaces.length > 0 && (
+            <>
               <button
                 type="button"
-                onClick={() => setOpenAddSpaceModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white text-xs font-semibold transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+                onClick={() => {
+                  setBookingSpaceId(spaces[0]?.id || "");
+                  if (user?.full_name && !bookingReservedBy) {
+                    setBookingReservedBy(user.full_name);
+                  }
+                  const defaultPhone = user?.phone_number || activeMember?.phone_number || "";
+                  if (defaultPhone && !bookingContactPhone) {
+                    setBookingContactPhone(defaultPhone);
+                  }
+                  setOpenBookSpaceModal(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition cursor-pointer shadow-3xs whitespace-nowrap shrink-0"
+                title="Book a space or room for your activity"
               >
-                <Plus className="h-3.5 w-3.5 shrink-0" />
-                <span>Add Space</span>
+                <Clock className="h-3.5 w-3.5 shrink-0" />
+                <span>Reserve Space</span>
               </button>
-            )}
-          </div>
-        )}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setOpenAddSpaceModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white text-xs font-semibold transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+                >
+                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                  <span>Add Space</span>
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* VIEW A: INTERACTIVE REAL MONTH CALENDAR */}
@@ -853,7 +873,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
       )}
 
       {/* VIEW B: RENTABLE SPACES, 24H SCHEDULE, BOOKING APPROVALS & EVENT TO-DOS */}
-      {subTab === "spaces" && hasRentableSpaces && (
+      {subTab === "spaces" && (
         <RentableSpacesManager
           activeOrg={activeOrg}
           isAdmin={isAdmin}
