@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import jsPDF from "jspdf";
 import { useParams, useNavigate, useLocation, Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -62,7 +63,6 @@ import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "../components/MoMo
 import { cleanMerchantCode, cleanPhoneNumber } from "../components/UssdPaymentHelper";
 import { useCreateDonation } from "../hooks/useImpactoData";
 import { resolveFileUrl } from "../lib/storageService";
-import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
 /**
@@ -312,6 +312,160 @@ export const PublicOrgPage: React.FC = () => {
   const [inquiryMsg, setInquiryMsg] = useState("");
   const [inquirySubmitting, setInquirySubmitting] = useState(false);
   const [inquirySuccess, setInquirySuccess] = useState(false);
+
+  // Track Reservation & Payment State
+  const [openTrackModal, setOpenTrackModal] = useState(false);
+  const [trackSearchTerm, setTrackSearchTerm] = useState("");
+
+  // Payment Modal State
+  const [payingRequest, setPayingRequest] = useState<any | null>(null);
+  const [payReceiptName, setPayReceiptName] = useState("");
+  const [payPhone, setPayPhone] = useState("");
+  const [payMethod, setPayMethod] = useState<"momo" | "airtel" | "card">("momo");
+  const [payRef, setPayRef] = useState("");
+  const [isProcessingPay, setIsProcessingPay] = useState(false);
+
+  // Filter requests matching search name/email/phone/id
+  const filteredTrackRequests = spaceRequests.filter((req) => {
+    if (!trackSearchTerm.trim()) return true;
+    const term = trackSearchTerm.trim().toLowerCase();
+    const nameMatch = (req.receipt_name || req.requester_name || req.reserved_by || "").toLowerCase().includes(term);
+    const emailMatch = (req.requester_email || "").toLowerCase().includes(term);
+    const phoneMatch = (req.contact_phone || req.requester_phone || "").toLowerCase().includes(term);
+    const idMatch = (req.id || "").toLowerCase().includes(term);
+    return nameMatch || emailMatch || phoneMatch || idMatch;
+  });
+
+  const openPaymentForRequest = (req: any) => {
+    setPayingRequest(req);
+    setPayReceiptName(req.receipt_name || req.requester_name || req.reserved_by || "");
+    setPayPhone(req.contact_phone || req.requester_phone || "");
+    setPayRef(`TXN-${Math.floor(100000 + Math.random() * 900000)}`);
+  };
+
+  const handleCompleteSpacePayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payingRequest) return;
+    if (!payReceiptName.trim()) {
+      addToast("Please enter the name to appear on your official payment receipt.", "error");
+      return;
+    }
+
+    setIsProcessingPay(true);
+
+    setTimeout(() => {
+      const finalReceiptName = payReceiptName.trim();
+      const updatedList = spaceRequests.map((req) => {
+        if (req.id === payingRequest.id) {
+          return {
+            ...req,
+            status: "approved",
+            is_paid: true,
+            receipt_name: finalReceiptName,
+            requester_name: finalReceiptName,
+            payment_method: payMethod,
+            payment_ref: payRef || `TXN-${Date.now()}`,
+            paid_amount: req.cost || 0,
+            paid_at: new Date().toISOString(),
+          };
+        }
+        return req;
+      });
+
+      setSpaceRequests(updatedList);
+      if (org?.id) {
+        localStorage.setItem(`org_space_requests_${org.id}`, JSON.stringify(updatedList));
+      }
+
+      setIsProcessingPay(false);
+      const paidReq = updatedList.find((r) => r.id === payingRequest.id);
+      setPayingRequest(null);
+      addToast(`Payment confirmed! Official receipt generated for ${finalReceiptName}.`, "success");
+
+      if (paidReq) {
+        generateSpacePaymentReceiptPDF(paidReq, finalReceiptName);
+      }
+    }, 800);
+  };
+
+  const generateSpacePaymentReceiptPDF = (req: any, receiptName: string) => {
+    try {
+      const doc = new jsPDF();
+      const primaryColor = [38, 167, 15]; // Emerald
+      const slateDark = [15, 23, 42];
+
+      // Header Banner
+      doc.setFillColor(245, 248, 246);
+      doc.rect(0, 0, 210, 42, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.text(org?.name || "Organization Portal", 14, 18);
+
+      doc.setFontSize(10);
+      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+      doc.text("OFFICIAL SPACE RESERVATION RECEIPT & PASS", 14, 26);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Receipt Ref: ${req.payment_ref || req.id}`, 14, 34);
+      doc.text(`Date Issued: ${new Date().toLocaleDateString()}`, 130, 34);
+
+      let y = 50;
+      // Receipt Details Box
+      doc.setDrawColor(226, 232, 240);
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(14, y, 182, 75, 3, 3, "FD");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.text("RESERVATION & PAYMENT DETAILS", 20, y + 10);
+
+      doc.setFontSize(9);
+      doc.setTextColor(slateDark[0], slateDark[1], slateDark[2]);
+
+      doc.text("Receipt Issued To (Client Name):", 20, y + 20);
+      doc.setFont("helvetica", "bold");
+      doc.text(receiptName, 85, y + 20);
+
+      doc.setFont("helvetica", "normal");
+      doc.text("Reserved Venue / Room:", 20, y + 28);
+      doc.setFont("helvetica", "bold");
+      doc.text(req.space_name || "Facility Room", 85, y + 28);
+
+      doc.setFont("helvetica", "normal");
+      doc.text("Event Purpose / Title:", 20, y + 36);
+      doc.text(req.title || "Community Event", 85, y + 36);
+
+      doc.text("Date & Time Reserved:", 20, y + 44);
+      doc.text(`${req.date || "Selected Date"} (${req.start_time || "09:00"} - ${req.end_time || "12:00"})`, 85, y + 44);
+
+      doc.text("Payment Method:", 20, y + 52);
+      doc.text((req.payment_method || "MoMo").toUpperCase(), 85, y + 52);
+
+      doc.text("Total Paid Amount:", 20, y + 60);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(38, 167, 15);
+      doc.text(`RWF ${Number(req.paid_amount || req.cost || 0).toLocaleString()}`, 85, y + 60);
+
+      // Verified Stamp
+      doc.setDrawColor(38, 167, 15);
+      doc.roundedRect(130, y + 15, 55, 22, 2, 2, "D");
+      doc.setFontSize(8);
+      doc.setTextColor(38, 167, 15);
+      doc.setFont("helvetica", "bold");
+      doc.text("STATUS: PAID & VERIFIED", 133, y + 25);
+      doc.setFont("helvetica", "normal");
+      doc.text("Verified Public Entry", 133, y + 32);
+
+      doc.save(`Receipt_${receiptName.replace(/\s+/g, "_")}_${req.id}.pdf`);
+    } catch (err) {
+      console.error("Failed to generate PDF receipt:", err);
+    }
+  };
 
   const handleSpaceReservationSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -771,8 +925,17 @@ export const PublicOrgPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Right side: Action Buttons Island (Clean: Share + Join Organization) */}
-            <div className="bg-white dark:bg-slate-900 border border-gray-200/80 dark:border-slate-800 rounded-2xl p-1.5 sm:p-2 shadow-sm flex items-center gap-2 shrink-0 self-start md:self-end">
+            {/* Right side: Action Buttons Island (Clean: Share + Join Organization + Track Reservation) */}
+            <div className="bg-white dark:bg-slate-900 border border-gray-200/80 dark:border-slate-800 rounded-2xl p-1.5 sm:p-2 shadow-sm flex flex-wrap items-center gap-2 shrink-0 self-start md:self-end">
+              <button
+                onClick={() => setOpenTrackModal(true)}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                title="Track your reservation status and complete payments"
+              >
+                <Search className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <span>Track Reservation & Pay</span>
+              </button>
+
               <button
                 onClick={handleShare}
                 className="px-3.5 py-2.5 rounded-xl bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5"
@@ -2290,6 +2453,286 @@ export const PublicOrgPage: React.FC = () => {
                   className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs cursor-pointer"
                 >
                   {editingRoomId ? "Update Room" : "Save New Room"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* MODAL: TRACK RESERVATION & PAY (PUBLIC CLIENT LOOKUP) */}
+      {openTrackModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-2xl p-6 sm:p-7 shadow-2xl flex flex-col gap-4 text-slate-900 dark:text-white max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800">
+              <div>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <Search className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <h3 className="text-base sm:text-lg font-extrabold font-display">
+                    Track Reservation Order & Pay
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Search by <strong>Name on Receipt</strong>, Email, Phone, or Booking ID to check approval status and complete payments.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpenTrackModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Search Input Box */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                Enter Name on Receipt / Email / Phone Number / Booking Ref:
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="e.g. John Doe, Tech Conference, john@gmail.com..."
+                  value={trackSearchTerm}
+                  onChange={(e) => setTrackSearchTerm(e.target.value)}
+                  className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 pl-10 pr-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-medium"
+                />
+              </div>
+            </div>
+
+            {/* Reservation Order Results */}
+            <div className="space-y-3 pt-2">
+              <span className="text-[11px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                Matching Reservation Orders ({filteredTrackRequests.length})
+              </span>
+
+              {filteredTrackRequests.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+                  <Building2 className="h-8 w-8 text-slate-300 mx-auto" />
+                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    No matching reservations found.
+                  </p>
+                  <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                    Try entering the exact Name on Receipt, Phone, or Email you submitted when requesting space reservation.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredTrackRequests.map((req) => {
+                    const isApproved = req.status === "approved" || req.status === "scheduled" || req.status === "accepted";
+                    const isPaid = req.is_paid || req.paid_at;
+                    const isRejected = req.status === "rejected" || req.status === "declined";
+
+                    return (
+                      <div
+                        key={req.id}
+                        className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-xs space-y-3"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                          <div>
+                            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                              Booking Ref: #{req.id}
+                            </span>
+                            <h4 className="text-sm font-extrabold text-slate-900 dark:text-white leading-snug">
+                              {req.space_name} — {req.title}
+                            </h4>
+                          </div>
+
+                          {/* Order Status Badge */}
+                          <div>
+                            {isPaid ? (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
+                                <CheckCircle2 className="h-3 w-3" />
+                                <span>Paid & Confirmed</span>
+                              </span>
+                            ) : isApproved ? (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border border-teal-300 dark:border-teal-800 flex items-center gap-1">
+                                <Check className="h-3 w-3" />
+                                <span>Approved — Awaiting Payment</span>
+                              </span>
+                            ) : isRejected ? (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+                                Declined / Rejected
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                <span>Pending Admin Review</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-bold">Name on Receipt:</span>
+                            <span className="font-bold text-slate-900 dark:text-white">{req.receipt_name || req.requester_name || req.reserved_by}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-bold">Reserved Date & Time:</span>
+                            <span className="font-semibold">{req.date} ({req.start_time || "09:00"} - {req.end_time || "12:00"})</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-bold">Contact Phone:</span>
+                            <span className="font-mono">{req.contact_phone || req.requester_phone || "N/A"}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-bold">Total Space Rate:</span>
+                            <span className="font-bold text-emerald-600 font-mono">RWF {Number(req.cost || 0).toLocaleString()}</span>
+                          </div>
+                        </div>
+
+                        {/* Order Actions */}
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+                          {isPaid ? (
+                            <button
+                              type="button"
+                              onClick={() => generateSpacePaymentReceiptPDF(req, req.receipt_name || req.requester_name || "Client")}
+                              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                              <span>Download Official Receipt (PDF)</span>
+                            </button>
+                          ) : isApproved ? (
+                            <button
+                              type="button"
+                              onClick={() => openPaymentForRequest(req)}
+                              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              <span>Pay Booking Fee (MoMo / Card)</span>
+                            </button>
+                          ) : isRejected ? (
+                            <span className="text-[11px] text-rose-600 font-semibold italic">
+                              This reservation request was declined by organization management.
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-amber-600 font-semibold italic">
+                              Your order is currently pending review by organization managers. Payment option will unlock once approved.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PAY SPACE RESERVATION FEE (MOMO / CARD) */}
+      {payingRequest && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl flex flex-col gap-4 text-slate-900 dark:text-white">
+            <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800">
+              <h3 className="text-base font-extrabold font-display">
+                Pay Space Reservation Fee
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPayingRequest(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCompleteSpacePayment} className="flex flex-col gap-3.5 text-xs">
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/50 rounded-xl border border-emerald-200 dark:border-emerald-800 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400 block">
+                  Booking Summary
+                </span>
+                <p className="font-bold text-slate-900 dark:text-white text-xs">
+                  {payingRequest.space_name} — {payingRequest.title}
+                </p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                  Amount Due: <strong className="text-emerald-600 font-mono">RWF {Number(payingRequest.cost || 0).toLocaleString()}</strong>
+                </p>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Name for Official Receipt *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={payReceiptName}
+                  onChange={(e) => setPayReceiptName(e.target.value)}
+                  placeholder="Exact Full Name or Company Name for Receipt..."
+                  className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-semibold"
+                />
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  This exact name will be saved to your order record and used in search tracking.
+                </p>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Payment Gateway Method *
+                </label>
+                <select
+                  value={payMethod}
+                  onChange={(e) => setPayMethod(e.target.value as any)}
+                  className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-semibold cursor-pointer"
+                >
+                  <option value="momo">MTN Mobile Money (*182#)</option>
+                  <option value="airtel">Airtel Money (*182#)</option>
+                  <option value="card">Visa / Mastercard Credit Card</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Mobile Money Phone Number *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={payPhone}
+                  onChange={(e) => setPayPhone(e.target.value)}
+                  placeholder="078XXXXXXX"
+                  className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  MoMo Transaction Reference / Code
+                </label>
+                <input
+                  type="text"
+                  value={payRef}
+                  onChange={(e) => setPayRef(e.target.value)}
+                  placeholder="e.g. TXN-892401"
+                  className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 mt-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setPayingRequest(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isProcessingPay}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5"
+                >
+                  {isProcessingPay ? (
+                    <span>Processing Payment...</span>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>Confirm & Generate PDF Receipt</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

@@ -113,9 +113,12 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
   const isProPlan = activeOrg?.subscription_status === "trial" || activeOrg?.subscription_tier === "growth" || activeOrg?.subscription_tier === "enterprise";
 
   // --- Word Editor States ---
-  const [wordContent, setWordContent] = useState("");
+  const [wordPages, setWordPages] = useState<string[]>([""]);
+  const [activePageIndex, setActivePageIndex] = useState<number>(0);
   const [isLetter, setIsLetter] = useState(false);
-  const [showBrandedHeader, setShowBrandedHeader] = useState(true);
+  const [showBrandedHeader, setShowBrandedHeader] = useState(false);
+  const [showRefBar, setShowRefBar] = useState(false);
+  const [showSignatoryFooter, setShowSignatoryFooter] = useState(false);
   const [isCustomizedDissemination, setIsCustomizedDissemination] = useState(false);
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
   const [sendToAll, setSendToAll] = useState(false);
@@ -123,32 +126,77 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
   const [showMobileSettings, setShowMobileSettings] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
 
-  // --- Excel Editor States ---
-  // Initial 12 rows by 6 columns
-  const [gridData, setGridData] = useState<string[][]>([
-    ["ID", "Full Name", "Email Address", "Registered Shares", "Contribution (RWF)", "Status"],
-    ["101", "Divine Uwera", "divine@coop.rw", "15", "150000", "Paid"],
-    ["102", "Jean Bosco", "bosco@coop.rw", "10", "100000", "Paid"],
-    ["103", "Marie Claire", "claire@coop.rw", "12", "120000", "Pending"],
-    ["104", "Anicet Ruzima", "ruzima@coop.rw", "20", "200000", "Paid"],
-    ["105", "Peace Uwase", "peace@coop.rw", "8", "80000", "Pending"],
-    ["", "", "", "", "", ""],
-    ["", "", "", "", "", ""],
-    ["", "", "", "", "", ""]
+  // --- Excel Editor States (Multi-Sheet, Empty Grid by Default) ---
+  interface ExcelSheet {
+    id: string;
+    name: string;
+    data: string[][];
+  }
+  const [sheets, setSheets] = useState<ExcelSheet[]>([
+    { id: "sheet-1", name: "Sheet 1", data: Array.from({ length: 15 }, () => Array(8).fill("")) }
   ]);
+  const [activeSheetId, setActiveSheetId] = useState<string>("sheet-1");
+
+  const activeSheet = sheets.find(s => s.id === activeSheetId) || sheets[0];
+  const gridData = activeSheet.data;
+
+  const setGridData = (updater: string[][] | ((prev: string[][]) => string[][])) => {
+    setSheets(prevSheets =>
+      prevSheets.map(sheet => {
+        if (sheet.id === activeSheetId) {
+          const nextData = typeof updater === "function" ? updater(sheet.data) : updater;
+          return { ...sheet, data: nextData };
+        }
+        return sheet;
+      })
+    );
+  };
+
+  const handleAddSheet = () => {
+    const newId = `sheet-${Date.now()}`;
+    const newName = `Sheet ${sheets.length + 1}`;
+    const emptyData = Array.from({ length: 15 }, () => Array(8).fill(""));
+    setSheets(prev => [...prev, { id: newId, name: newName, data: emptyData }]);
+    setActiveSheetId(newId);
+    addToast(`Added ${newName}`, "success");
+  };
+
+  const handleDeleteSheet = (id: string) => {
+    if (sheets.length <= 1) {
+      addToast("Cannot delete the only remaining sheet", "warning");
+      return;
+    }
+    const nextSheets = sheets.filter(s => s.id !== id);
+    setSheets(nextSheets);
+    if (activeSheetId === id) {
+      setActiveSheetId(nextSheets[0].id);
+    }
+    addToast("Sheet removed", "info");
+  };
+
+  // Excel Grid Dimension Modal State
+  const [isGridModalOpen, setIsGridModalOpen] = useState(false);
+  const [modalRows, setModalRows] = useState(15);
+  const [modalCols, setModalCols] = useState(8);
+
+  const handleConfigureGridDimensions = () => {
+    setModalRows(gridData.length);
+    setModalCols(gridData[0]?.length || 8);
+    setIsGridModalOpen(true);
+  };
 
   // Excel chart config
-  const [chartXCol, setChartXCol] = useState(1); // Label column
-  const [chartYCol, setChartYCol] = useState(4); // Value column
+  const [chartXCol, setChartXCol] = useState(0); // Label column
+  const [chartYCol, setChartYCol] = useState(1); // Value column
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
 
   // Excel bulk member importer config
-  const [importNameCol, setImportNameCol] = useState(1);
-  const [importEmailCol, setImportEmailCol] = useState(2);
+  const [importNameCol, setImportNameCol] = useState(0);
+  const [importEmailCol, setImportEmailCol] = useState(1);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
 
   // Excel dynamic calculation, sorting and formatting states
-  const [selectedCalcCol, setSelectedCalcCol] = useState(4); // Default to Contribution (RWF) index 4
+  const [selectedCalcCol, setSelectedCalcCol] = useState(0);
   
   interface HighlightRule {
     columnIdx: number;
@@ -160,7 +208,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
   }
 
   const [highlightRule, setHighlightRule] = useState<HighlightRule>({
-    columnIdx: 4,
+    columnIdx: 0,
     type: "none",
     minVal: 0,
     maxVal: 100000,
@@ -180,18 +228,21 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
         try {
           const parsed = JSON.parse(doc.content || "[]");
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setGridData(parsed);
+            setSheets([{ id: "sheet-1", name: "Sheet 1", data: parsed }]);
+            setActiveSheetId("sheet-1");
           }
         } catch (e) {
           console.error("Error parsing spreadsheet data:", e);
         }
       } else {
-        setWordContent(doc.content || "");
+        const text = doc.content || "";
+        setWordPages([text]);
+        setActivePageIndex(0);
         if (editorRef.current) {
-          editorRef.current.innerHTML = doc.content || "";
+          editorRef.current.innerHTML = text;
         }
         setIsLetter(!!doc.is_letter);
-        setShowBrandedHeader(doc.show_header !== false);
+        setShowBrandedHeader(!!doc.show_header);
       }
     } else {
       setDocName("");
@@ -200,8 +251,13 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
       setSelectedRecipients([]);
       setIsLetter(false);
       setSendToAll(false);
-      setShowBrandedHeader(true);
-      setWordContent("");
+      setShowBrandedHeader(false);
+      setShowRefBar(false);
+      setShowSignatoryFooter(false);
+      setWordPages([""]);
+      setActivePageIndex(0);
+      setSheets([{ id: "sheet-1", name: "Sheet 1", data: Array.from({ length: 15 }, () => Array(8).fill("")) }]);
+      setActiveSheetId("sheet-1");
       if (editorRef.current) {
         editorRef.current.innerHTML = "";
       }
@@ -212,13 +268,17 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
   const execCmd = (command: string, value: string = "") => {
     document.execCommand(command, false, value);
     if (editorRef.current) {
-      setWordContent(editorRef.current.innerHTML);
+      const nextPages = [...wordPages];
+      nextPages[activePageIndex] = editorRef.current.innerHTML;
+      setWordPages(nextPages);
     }
   };
 
   const handleEditorInput = () => {
     if (editorRef.current) {
-      setWordContent(editorRef.current.innerHTML);
+      const nextPages = [...wordPages];
+      nextPages[activePageIndex] = editorRef.current.innerHTML;
+      setWordPages(nextPages);
     }
   };
 
@@ -251,7 +311,9 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
           .split("\n")
           .map((line) => `<p>${line.trim() ? line : "<br>"}</p>`)
           .join("");
-        setWordContent(formatted);
+        const nextPages = [...wordPages];
+        nextPages[activePageIndex] = formatted;
+        setWordPages(nextPages);
         if (editorRef.current) {
           editorRef.current.innerHTML = formatted;
         }
@@ -582,9 +644,12 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
     setIsSaving(true);
     try {
+      if (editorRef.current) {
+        wordPages[activePageIndex] = editorRef.current.innerHTML;
+      }
       const contentString = fileType === "excel" 
         ? JSON.stringify(gridData) 
-        : (editorRef.current ? editorRef.current.innerHTML : wordContent);
+        : wordPages.join("\n--- PAGE BREAK ---\n");
       
       const mimeType = fileType === "excel" ? "application/json" : "text/html";
       const fileUrl = `data:${mimeType};base64,${btoa(unescape(encodeURIComponent(contentString)))}`;
@@ -1010,6 +1075,69 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
             {fileType === "word" && (
               <div className="w-full max-w-5xl flex flex-col gap-4 flex-1 transition-all duration-200">
                 
+                {/* PAGE NAVIGATION TABS */}
+                <div className="flex items-center justify-between bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-2.5 shadow-3xs">
+                  <div className="flex items-center gap-1.5 overflow-x-auto">
+                    {wordPages.map((_, pIdx) => (
+                      <button
+                        key={pIdx}
+                        type="button"
+                        onClick={() => {
+                          const nextPages = [...wordPages];
+                          if (editorRef.current) nextPages[activePageIndex] = editorRef.current.innerHTML;
+                          setWordPages(nextPages);
+                          setActivePageIndex(pIdx);
+                          if (editorRef.current) editorRef.current.innerHTML = nextPages[pIdx] || "";
+                        }}
+                        className={`px-3.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          activePageIndex === pIdx
+                            ? "bg-[#156c45] text-white shadow-3xs"
+                            : "bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700"
+                        }`}
+                      >
+                        Page {pIdx + 1}
+                      </button>
+                    ))}
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextPages = [...wordPages];
+                          if (editorRef.current) nextPages[activePageIndex] = editorRef.current.innerHTML;
+                          nextPages.push("");
+                          setWordPages(nextPages);
+                          const newIdx = nextPages.length - 1;
+                          setActivePageIndex(newIdx);
+                          if (editorRef.current) editorRef.current.innerHTML = "";
+                          addToast(`Added Page ${newIdx + 1}`, "success");
+                        }}
+                        className="px-3 py-1 rounded-lg border border-dashed border-gray-300 dark:border-slate-700 text-gray-500 hover:border-[#156c45] hover:text-[#156c45] text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Add Page</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {!readOnly && wordPages.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (wordPages.length <= 1) return;
+                        const nextPages = wordPages.filter((_, idx) => idx !== activePageIndex);
+                        setWordPages(nextPages);
+                        const nextIdx = Math.max(0, activePageIndex - 1);
+                        setActivePageIndex(nextIdx);
+                        if (editorRef.current) editorRef.current.innerHTML = nextPages[nextIdx] || "";
+                        addToast("Page removed", "info");
+                      }}
+                      className="text-xs text-red-500 hover:underline font-bold px-2 py-1 cursor-pointer"
+                    >
+                      Delete Page
+                    </button>
+                  )}
+                </div>
+
                 {/* PAPER CANVAS */}
                 <div className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-sm p-4 sm:p-8 md:p-12 flex flex-col min-h-[580px] flex-1">
                   {/* Cooperative Branded Header */}
@@ -1032,10 +1160,12 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   )}
 
                   {/* Date & Reference Area */}
-                  <div className="flex justify-between text-xs font-mono text-[#4a6357] dark:text-slate-400 mb-6 shrink-0 select-none">
-                    <span>Ref: COOP/DOC-{Math.floor(1000 + Math.random() * 9000)}</span>
-                    <span>Date: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-                  </div>
+                  {showRefBar && (
+                    <div className="flex justify-between text-xs font-mono text-[#4a6357] dark:text-slate-400 mb-6 shrink-0 select-none">
+                      <span>Ref: COOP/DOC-{Math.floor(1000 + Math.random() * 9000)}</span>
+                      <span>Date: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                    </div>
+                  )}
 
                   {/* Dynamic letter info panel in view mode */}
                   {viewingDoc?.is_letter && (
@@ -1058,36 +1188,38 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   />
 
                   {/* DIGITAL SIGNATURE & VERIFICATION SECTION */}
-                  <div className="mt-8 pt-6 border-t border-gray-200 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 select-none">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-slate-300">
-                        <CheckCircle className="h-4 w-4 text-[#156c45]" />
-                        <span>Verified Digital Author:</span>
-                      </div>
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {activeMember?.user?.full_name || "Official Signatory"}
-                      </p>
-                      <p className="text-xs text-gray-400 capitalize">
-                        {activeMember?.role ? activeMember.role.replace("_", " ") : "Authorized Representative"} • {activeOrg?.name || "Impacto"}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-1.5">
-                      <div className="h-16 w-44 border-b-2 border-gray-400 dark:border-slate-600 flex items-center justify-center bg-gray-50/50 dark:bg-slate-800/30 rounded-t-lg relative group">
-                        <span className="font-serif italic text-lg text-gray-800 dark:text-slate-200 select-none">
-                          {activeMember?.user?.full_name || "Signatory"}
-                        </span>
-                        <div className="absolute right-1 top-1">
-                          <span className="text-[8px] bg-emerald-100 dark:bg-emerald-950 text-[#156c45] font-bold px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
-                            E-SIGNED
-                          </span>
+                  {showSignatoryFooter && (
+                    <div className="mt-8 pt-6 border-t border-gray-200 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 select-none">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-slate-300">
+                          <CheckCircle className="h-4 w-4 text-[#156c45]" />
+                          <span>Verified Digital Author:</span>
                         </div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {activeMember?.user?.full_name || "Official Signatory"}
+                        </p>
+                        <p className="text-xs text-gray-400 capitalize">
+                          {activeMember?.role ? activeMember.role.replace("_", " ") : "Authorized Representative"} • {activeOrg?.name || "Impacto"}
+                        </p>
                       </div>
-                      <span className="text-[10px] text-gray-400 font-mono">
-                        Document Version Secured & Timestamped
-                      </span>
+
+                      <div className="flex flex-col items-end gap-1.5">
+                        <div className="h-16 w-44 border-b-2 border-gray-400 dark:border-slate-600 flex items-center justify-center bg-gray-50/50 dark:bg-slate-800/30 rounded-t-lg relative group">
+                          <span className="font-serif italic text-lg text-gray-800 dark:text-slate-200 select-none">
+                            {activeMember?.user?.full_name || "Signatory"}
+                          </span>
+                          <div className="absolute right-1 top-1">
+                            <span className="text-[8px] bg-emerald-100 dark:bg-emerald-950 text-[#156c45] font-bold px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                              E-SIGNED
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-gray-400 font-mono">
+                          Document Version Secured & Timestamped
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1108,6 +1240,13 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                         Add Row
                       </button>
                       <button 
+                        onClick={() => deleteRow(gridData.length - 1)} 
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-xs font-bold text-red-600 transition"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Remove Last Row
+                      </button>
+                      <button 
                         onClick={addColumn} 
                         className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-xs font-bold text-gray-700 dark:text-slate-300 transition"
                       >
@@ -1120,6 +1259,13 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                         Remove Last Column
+                      </button>
+                      <button 
+                        onClick={handleConfigureGridDimensions}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 rounded-lg text-xs font-bold text-[#156c45] dark:text-emerald-400 transition"
+                      >
+                        <Settings2 className="h-3.5 w-3.5" />
+                        Configure Dimensions
                       </button>
 
                       <div className="h-5 w-px bg-gray-200 dark:bg-slate-800 mx-1" />
@@ -1182,7 +1328,6 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                               />
                             </th>
                           ))}
-                          {!readOnly && <th className="p-2.5 text-center w-12 font-bold">Actions</th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -1213,16 +1358,6 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                                   </td>
                                 );
                               })}
-                              {!readOnly && (
-                                <td className="p-2 text-center">
-                                  <button 
-                                    onClick={() => deleteRow(realRowIdx)}
-                                    className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </td>
-                              )}
                             </tr>
                           );
                         })}
@@ -1242,6 +1377,57 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                       <Download className="h-3 w-3 text-emerald-600" />
                       Download Spreadsheet CSV
                     </button>
+                  </div>
+
+                  {/* Multi-Sheet Tabs Bar */}
+                  <div className="px-4 py-2 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex items-center justify-between gap-2 overflow-x-auto shrink-0">
+                    <div className="flex items-center gap-1.5">
+                      {sheets.map(sheet => (
+                        <div key={sheet.id} className="flex items-center">
+                          <button
+                            type="button"
+                            onClick={() => setActiveSheetId(sheet.id)}
+                            className={`px-3.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                              activeSheetId === sheet.id
+                                ? "bg-[#156c45] text-white shadow-3xs"
+                                : "bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700"
+                            }`}
+                          >
+                            <span>{sheet.name}</span>
+                            {!readOnly && sheets.length > 1 && (
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteSheet(sheet.id);
+                                }}
+                                className="hover:text-red-300 ml-1 font-mono cursor-pointer"
+                              >
+                                x
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          onClick={handleAddSheet}
+                          className="px-3 py-1 rounded-lg border border-dashed border-gray-300 dark:border-slate-700 text-gray-500 hover:border-[#156c45] hover:text-[#156c45] text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Add Sheet</span>
+                        </button>
+                      )}
+                    </div>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        onClick={handleConfigureGridDimensions}
+                        className="px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-[#156c45] text-xs font-bold transition cursor-pointer"
+                      >
+                        Configure Grid
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1508,7 +1694,39 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                     <div>
                       <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block">Include Branded Header</span>
                       <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight">
-                        Display the official cooperative letterhead banner and reference metadata at the top of the canvas.
+                        Display the official cooperative letterhead banner at the top of the canvas.
+                      </span>
+                    </div>
+                  </label>
+
+                  {/* Reference & Date Bar Toggle */}
+                  <label className={`flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs ${showRefBar ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
+                    <input 
+                      type="checkbox" 
+                      checked={showRefBar}
+                      onChange={(e) => setShowRefBar(e.target.checked)}
+                      className="mt-1 rounded border-gray-350 text-[#156c45] focus:ring-[#156c45] h-4 w-4 shrink-0 accent-[#156c45]"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block">Include Reference & Date Bar</span>
+                      <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight">
+                        Display reference number and formal date bar on the document.
+                      </span>
+                    </div>
+                  </label>
+
+                  {/* Signatory Footer Toggle */}
+                  <label className={`flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs ${showSignatoryFooter ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
+                    <input 
+                      type="checkbox" 
+                      checked={showSignatoryFooter}
+                      onChange={(e) => setShowSignatoryFooter(e.target.checked)}
+                      className="mt-1 rounded border-gray-350 text-[#156c45] focus:ring-[#156c45] h-4 w-4 shrink-0 accent-[#156c45]"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block">Include Signatory & Timestamp Footer</span>
+                      <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight">
+                        Display verified digital author signature and cryptographic timestamp block at the bottom.
                       </span>
                     </div>
                   </label>
@@ -1885,6 +2103,80 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
           )}
         </div>
       </div>
+
+      {/* MODAL FOR SPREADSHEET DIMENSION SETUP */}
+      {isGridModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-xl overflow-hidden flex flex-col animate-in fade-in duration-150">
+            <div className="p-4 border-b bg-gray-50 dark:bg-slate-950/40 flex items-center justify-between select-none shrink-0">
+              <span className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-1.5">
+                <Settings2 className="h-4 w-4 text-[#156c45]" /> Configure Sheet Dimensions
+              </span>
+              <button 
+                onClick={() => setIsGridModalOpen(false)} 
+                className="p-1 hover:bg-gray-150 dark:hover:bg-slate-800 rounded-lg text-gray-400 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-5 flex flex-col gap-4 text-xs">
+              <p className="text-gray-500 dark:text-slate-400 select-none">
+                Specify the exact number of rows and columns to generate for this spreadsheet:
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Rows</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={modalRows}
+                    onChange={(e) => setModalRows(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    className="w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-2 font-bold focus:ring-1 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Columns</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={modalCols}
+                    onChange={(e) => setModalCols(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    className="w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-2 font-bold focus:ring-1 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsGridModalOpen(false)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rowCount = Math.max(1, modalRows);
+                    const colCount = Math.max(1, modalCols);
+                    const newGrid = Array.from({ length: rowCount }, (_, r) =>
+                      Array.from({ length: colCount }, (_, c) => gridData[r]?.[c] || "")
+                    );
+                    setGridData(newGrid);
+                    setIsGridModalOpen(false);
+                    addToast(`Grid configured to ${rowCount} rows x ${colCount} columns`, "success");
+                  }}
+                  className="px-4 py-1.5 rounded-lg text-xs font-bold bg-[#156c45] hover:bg-[#125939] text-white transition cursor-pointer"
+                >
+                  Apply Dimensions
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL FOR BULK COOPERATIVE MEMBER MAPPING & REVIEW */}
       {isBulkImportOpen && (

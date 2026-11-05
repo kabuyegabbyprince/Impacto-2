@@ -3,6 +3,7 @@ import { WaitRoomView } from "../components/WaitRoomView";
 import { DynamicAttendanceGrid } from "../components/DynamicAttendanceGrid";
 import { EventScheduleCalendar } from "../components/EventScheduleCalendar";
 import { ChatVideoMeetModal } from "../components/ChatVideoMeetModal";
+import { MeetingHistoryModal } from "../components/MeetingHistoryModal";
 import { getTaskDeadlineNotice, useTaskProgressSync } from "../hooks/useTaskProgressSync";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -88,7 +89,7 @@ import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
 import { useCurrencyStore } from "../store/currencyStore";
 import { OrganizationVerificationModal } from "../components/OrganizationVerificationModal";
-import { Goal, GoalTask, Event as ImpactEvent, EventTask, NewsPost, Meeting, ChatChannel, Document } from "../types";
+import { Goal, GoalTask, Event as ImpactEvent, EventTask, NewsPost, Meeting, ChatChannel, Document, LiveMeetHistoryRecord, HostedMeetInfo } from "../types";
 import { RealtimeTaskCountdown } from "../components/RealtimeTaskCountdown";
 import {
   useEvents,
@@ -2353,11 +2354,135 @@ export const ChatRoom: React.FC = () => {
   const createPollMutation = useCreatePoll();
 
   const [openMeetModal, setOpenMeetModal] = useState(false);
+  const [openStartMeetingPrompt, setOpenStartMeetingPrompt] = useState(false);
+  const [meetingTitleToStart, setMeetingTitleToStart] = useState("");
+  const [openMeetingHistoryModal, setOpenMeetingHistoryModal] = useState(false);
+  const [openMeetingWaitRoomModal, setOpenMeetingWaitRoomModal] = useState(false);
+  const [isMeetingPublic, setIsMeetingPublic] = useState(true);
+
+  // Synchronized Organization-Wide Hosted Meeting State
+  const [activeHostedMeet, setActiveHostedMeet] = useState<HostedMeetInfo | null>(() => {
+    try {
+      const raw = localStorage.getItem(`impacto_active_hosted_meet_${activeOrg?.id || "default"}`);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return null;
+  });
+
+  useEffect(() => {
+    if (!openMeetingWaitRoomModal || !activeHostedMeet) return;
+    const channelName = activeHostedMeet.channelName || "general";
+    const bc = new BroadcastChannel(`impacto_call_${activeOrg?.id || "org"}_${channelName.toLowerCase().trim()}`);
+    bc.onmessage = (ev) => {
+      if (ev.data?.type === "ADMIT_PEER" && ev.data.userId === user?.id) {
+        setOpenMeetingWaitRoomModal(false);
+        setMeetingTitleToStart(activeHostedMeet.meetingTitle);
+        setOpenMeetModal(true);
+        addToast("Admission approved by host. Entering meet...", "success");
+      } else if (ev.data?.type === "DECLINE_PEER" && ev.data.userId === user?.id) {
+        setOpenMeetingWaitRoomModal(false);
+        addToast("Admission request declined by host.", "error");
+      }
+    };
+    return () => {
+      bc.close();
+    };
+  }, [openMeetingWaitRoomModal, activeHostedMeet, user?.id, activeOrg?.id]);
+
+  useEffect(() => {
+    const orgId = activeOrg?.id || "default";
+    const bc = new BroadcastChannel(`impacto_org_meet_bus_${orgId}`);
+    bc.onmessage = (ev) => {
+      if (ev.data?.type === "HOSTED_MEET_ACTIVE" && ev.data.meet) {
+        setActiveHostedMeet(ev.data.meet);
+      } else if (ev.data?.type === "HOSTED_MEET_ENDED") {
+        setActiveHostedMeet(null);
+      }
+    };
+    return () => {
+      bc.close();
+    };
+  }, [activeOrg?.id]);
+
+  const handleHostedMeetEnded = () => {
+    localStorage.removeItem(`impacto_active_hosted_meet_${activeOrg?.id || "default"}`);
+    try {
+      const bc = new BroadcastChannel(`impacto_org_meet_bus_${activeOrg?.id || "default"}`);
+      bc.postMessage({ type: "HOSTED_MEET_ENDED" });
+      bc.close();
+    } catch (e) {}
+    setActiveHostedMeet(null);
+  };
+
+  const [meetingHistory, setMeetingHistory] = useState<LiveMeetHistoryRecord[]>(() => {
+    try {
+      const raw = localStorage.getItem(`impacto_meeting_history_${activeOrg?.id || "default"}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+
+    const initialSeed: LiveMeetHistoryRecord[] = [
+      {
+        id: "meet-seed-1",
+        meetingTitle: "Quarterly Agropastoral Governance Review",
+        channelName: "General",
+        orgId: activeOrg?.id || "default",
+        startedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+        endedAt: new Date(Date.now() - 3600000 * 1.5).toISOString(),
+        durationSeconds: 1800,
+        durationFormatted: "30:00",
+        participants: [
+          { peerId: "p-admin", userId: user?.id || "admin", name: user?.full_name || "Supervisory Chair", role: "Supervisory Board", isMe: true },
+          { peerId: "p-treasurer", userId: "u-treasurer", name: "Operations Lead", role: "Treasurer" }
+        ],
+        documentsUsed: [
+          { id: "doc-1", name: "2025 Reserve Fund Allocation Strategy.pdf", category: "Finance" },
+          { id: "doc-2", name: "Cooperative Harvest Quota Schedule.docx", category: "Operations" }
+        ],
+        notes: [
+          { id: "n-1", title: "Approve 20% allocation to cold chain storage facilities", assignee: "Treasurer", status: "completed", time: "10:14 AM" },
+          { id: "n-2", title: "Audit district grain deposit vouchers by next Monday", assignee: "Operations Lead", status: "open", time: "10:25 AM" }
+        ],
+        chatMessages: [
+          { id: "m-1", sender: "Operations Lead", text: "Reserve fund quota matches approved ledger figures.", time: "10:18 AM" },
+          { id: "m-2", sender: "Supervisory Chair", text: "Verified. Minutes and attendance archived.", time: "10:28 AM" }
+        ],
+        recordedBy: user?.full_name || "Supervisory Chair"
+      }
+    ];
+    return initialSeed;
+  });
+
+  const handleDeleteMeeting = (id: string) => {
+    setMeetingHistory(prev => {
+      const next = prev.filter(m => m.id !== id);
+      try {
+        localStorage.setItem(`impacto_meeting_history_${activeOrg?.id || "default"}`, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+    addToast("Meeting record removed", "info");
+  };
+
+  const handleClearAllMeetings = () => {
+    setMeetingHistory([]);
+    try {
+      localStorage.removeItem(`impacto_meeting_history_${activeOrg?.id || "default"}`);
+    } catch (e) {}
+    addToast("All meeting history cleared", "info");
+  };
+
+  const handleMeetingEnded = (record: LiveMeetHistoryRecord) => {
+    setMeetingHistory(prev => [record, ...prev.filter(r => r.id !== record.id)]);
+    addToast(`Meeting "${record.meetingTitle}" saved to history`, "success");
+  };
+
   const { data: dbDocs } = useV2Documents(activeOrg?.id);
   const documents = (dbDocs || []) as Document[];
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
 
   const [typedMessage, setTypedMessage] = useState("");
 
@@ -3020,6 +3145,39 @@ export const ChatRoom: React.FC = () => {
 
               {/* Right Action Buttons */}
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 max-w-full overflow-x-auto no-scrollbar whitespace-nowrap">
+                {/* Active hosted meeting in organization: unified direct join */}
+                {activeHostedMeet && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const isHostOrAdmin = user?.id === activeHostedMeet.hostId || activeMember?.role === "org_admin";
+                      if (activeHostedMeet.isPublic || isHostOrAdmin) {
+                        setMeetingTitleToStart(activeHostedMeet.meetingTitle);
+                        setOpenMeetModal(true);
+                        addToast(`Joined ongoing meet: ${activeHostedMeet.meetingTitle}`, "success");
+                      } else {
+                        setOpenMeetingWaitRoomModal(true);
+                        try {
+                          const bc = new BroadcastChannel(`impacto_call_${activeOrg?.id || "org"}_${activeHostedMeet.channelName.toLowerCase().trim()}`);
+                          bc.postMessage({
+                            type: "REQUEST_ADMISSION",
+                            userId: user?.id,
+                            userName: user?.full_name || "Member",
+                            role: activeMember?.role || "Member"
+                          });
+                          bc.close();
+                        } catch (e) {}
+                        addToast("Sent to meeting waiting room. Awaiting host admission.", "info");
+                      }
+                    }}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 h-8 sm:h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white"
+                    title={`Hosted meeting: ${activeHostedMeet.meetingTitle} (hosted by ${activeHostedMeet.hostName})`}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-white animate-ping" />
+                    <span>Join Ongoing Meet ({activeHostedMeet.meetingTitle})</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
@@ -3029,7 +3187,15 @@ export const ChatRoom: React.FC = () => {
                       addToast("Live Video Meetings require Growth or Pro tier", "info");
                       return;
                     }
-                    setOpenMeetModal(true);
+                    // Redirect to active hosted meeting if already running in organization
+                    if (activeHostedMeet) {
+                      setMeetingTitleToStart(activeHostedMeet.meetingTitle);
+                      setOpenMeetModal(true);
+                      addToast(`Redirected into hosted meet: ${activeHostedMeet.meetingTitle}`, "info");
+                      return;
+                    }
+                    setMeetingTitleToStart(activeChannel?.name ? `${activeChannel.name} Sync` : "Live Sync");
+                    setOpenStartMeetingPrompt(true);
                   }}
                   className={`inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 h-8 sm:h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer ${
                     !isVideoAllowed
@@ -3087,9 +3253,21 @@ export const ChatRoom: React.FC = () => {
                   )}
                 </div>
 
-                <Badge color={activeChannel.is_private ? "amber" : "blue"} className="shrink-0 hidden xs:inline-flex">
-                  {activeChannel.is_private ? "Staff Only" : "Active Feed"}
-                </Badge>
+                {/* Replaced target span with History button */}
+                <button
+                  type="button"
+                  onClick={() => setOpenMeetingHistoryModal(true)}
+                  className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 h-8 sm:h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
+                  title="View recorded meetings, documents presented, and meeting notes"
+                >
+                  <History className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                  <span>History</span>
+                  {meetingHistory.length > 0 && (
+                    <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                      {meetingHistory.length}
+                    </span>
+                  )}
+                </button>
               </div>
             </div>
 
@@ -3758,15 +3936,158 @@ export const ChatRoom: React.FC = () => {
         </Modal>
       )}
 
+      {/* Start Meeting Naming Modal */}
+      {openStartMeetingPrompt && (
+        <Modal
+          open={openStartMeetingPrompt}
+          onClose={() => setOpenStartMeetingPrompt(false)}
+          title="Start Live Video Meeting"
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!meetingTitleToStart.trim()) return;
+              const newHostedMeet: HostedMeetInfo = {
+                meetingId: `meet-${Date.now()}`,
+                meetingTitle: meetingTitleToStart.trim(),
+                channelName: activeChannel?.name || "General",
+                channelId: activeChannel?.id,
+                orgId: activeOrg?.id || "default",
+                hostId: user?.id || "host",
+                hostName: user?.full_name || "Host",
+                startedAt: new Date().toISOString(),
+                isPublic: isMeetingPublic
+              };
+              try {
+                localStorage.setItem(`impacto_active_hosted_meet_${activeOrg?.id || "default"}`, JSON.stringify(newHostedMeet));
+                const bc = new BroadcastChannel(`impacto_org_meet_bus_${activeOrg?.id || "default"}`);
+                bc.postMessage({ type: "HOSTED_MEET_ACTIVE", meet: newHostedMeet });
+                bc.close();
+              } catch (err) {}
+              setActiveHostedMeet(newHostedMeet);
+              setOpenStartMeetingPrompt(false);
+              setOpenMeetModal(true);
+            }}
+            className="flex flex-col gap-4 text-xs"
+          >
+            <div>
+              <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                Meeting Topic or Name
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Weekly Harvest Planning, Q3 Financial Review..."
+                value={meetingTitleToStart}
+                onChange={(e) => setMeetingTitleToStart(e.target.value)}
+                autoFocus
+                required
+                className="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-slate-900 dark:text-white outline-none focus:border-emerald-500"
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                This meeting name will be displayed at the top of the call and recorded in the meeting history.
+              </p>
+            </div>
+
+            {/* Public vs Admin Confirmation Checkbox */}
+            <label className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isMeetingPublic}
+                onChange={(e) => setIsMeetingPublic(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              />
+              <div>
+                <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs">Allow everyone to join automatically (Public)</span>
+                <span className="text-[10px] text-slate-500 block leading-tight mt-0.5">If checked, members auto-join directly. If unchecked, members wait in a waiting room for host/admin admission.</span>
+              </div>
+            </label>
+
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400 space-y-1">
+              <p className="font-semibold text-slate-800 dark:text-slate-200">
+                Live Session Features:
+              </p>
+              <p>• Only members who click Join will be onboarded to the meet.</p>
+              <p>• Host / Admin can remove any participant or admit waiting members.</p>
+              <p>• Present documents from the Documents module to all participants simultaneously.</p>
+              <p>• Automatic history archival of all notes, docs used, and attendees upon completion.</p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setOpenStartMeetingPrompt(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white transition shadow-sm flex items-center gap-1.5 cursor-pointer"
+              >
+                <Video className="h-4 w-4" />
+                <span>Join & Launch Meet</span>
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Meeting Waiting Room Modal for Non-Public Joins */}
+      {openMeetingWaitRoomModal && (
+        <Modal
+          open={openMeetingWaitRoomModal}
+          onClose={() => setOpenMeetingWaitRoomModal(false)}
+          title="Meeting Waiting Room"
+        >
+          <div className="flex flex-col items-center text-center p-6 gap-4">
+            <div className="h-16 w-16 rounded-3xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center animate-pulse">
+              <Clock className="h-8 w-8" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base text-slate-900 dark:text-white">Awaiting Host Admission</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm">
+                You are in the waiting room for <strong className="text-slate-800 dark:text-slate-200">{activeHostedMeet?.meetingTitle}</strong>. The host or administrator will admit you shortly.
+              </p>
+            </div>
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenMeetingWaitRoomModal(false);
+                  addToast("Left waiting room", "info");
+                }}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition cursor-pointer"
+              >
+                Cancel & Leave
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* 4. Live Multi-Person Video Meet Modal with Shared Docs & Live Chat */}
       <ChatVideoMeetModal
         open={openMeetModal}
         onClose={() => setOpenMeetModal(false)}
-        channelName={activeChannel?.name || "General"}
+        channelName={activeHostedMeet?.channelName || activeChannel?.name || "General"}
+        meetingTitle={meetingTitleToStart}
         activeOrg={activeOrg}
         activeMember={activeMember}
         members={orgMembers || []}
         documents={documents}
+        onMeetingEnded={handleMeetingEnded}
+        hostedMeetInfo={activeHostedMeet}
+        onHostedMeetEnded={handleHostedMeetEnded}
+      />
+
+      {/* 5. Meeting History Modal */}
+      <MeetingHistoryModal
+        open={openMeetingHistoryModal}
+        onClose={() => setOpenMeetingHistoryModal(false)}
+        meetings={meetingHistory}
+        onDeleteMeeting={handleDeleteMeeting}
+        onClearAllMeetings={handleClearAllMeetings}
+        channelName={activeChannel?.name}
       />
     </div>
   );

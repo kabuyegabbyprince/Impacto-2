@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { getOrgSubscriptionLifecycle } from "../lib/subscriptionMatrix";
 import {
   Building2,
   Plus,
@@ -24,7 +26,8 @@ import {
   Timer,
   Maximize2,
   HelpCircle,
-  DollarSign
+  DollarSign,
+  Lock
 } from "lucide-react";
 import { RentableSpace, SpaceBookingRequest, EventTask, Event as ImpactEvent } from "../types";
 import { useCurrencyStore } from "../store/currencyStore";
@@ -468,6 +471,35 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
   const pendingRequestsCount = useMemo(() => {
     return requests.filter((r) => r.status === "pending").length;
   }, [requests]);
+
+  const navigate = useNavigate();
+  const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
+  const isProPlan = lifecycle.effectiveTier === "pro" || lifecycle.effectiveTier === "enterprise";
+
+  if (!isProPlan) {
+    return (
+      <div className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 rounded-2xl p-6 sm:p-8 shadow-xs flex flex-col items-center text-center max-w-2xl mx-auto my-4 space-y-4">
+        <div className="h-14 w-14 rounded-2xl bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-3xs">
+          <Lock className="h-7 w-7" />
+        </div>
+        <div>
+          <h3 className="text-lg font-extrabold text-slate-950 dark:text-white">
+            Host External Events & Facility Space Lending requires Pro Plan
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-md mx-auto leading-relaxed">
+            Monetizing organization venues, listing rooms/boardrooms on the public portal, and managing external facility reservations is available exclusively on the Pro and Enterprise plans.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate("/dashboard/settings?tab=subscription")}
+          className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs sm:text-sm transition shadow-xs cursor-pointer inline-flex items-center gap-2"
+        >
+          <span>Upgrade to Pro Plan →</span>
+        </button>
+      </div>
+    );
+  }
 
   // If "We have space to rent" is NOT enabled yet, show onboarding banner
   if (!hasRentableSpaces) {

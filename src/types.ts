@@ -324,6 +324,56 @@ export interface ActionItem {
   status: "open" | "in_progress" | "completed";
 }
 
+export interface HostedMeetInfo {
+  meetingId: string;
+  meetingTitle: string;
+  channelName: string;
+  channelId?: string;
+  orgId: string;
+  hostId: string;
+  hostName: string;
+  startedAt: string;
+  isPublic?: boolean;
+}
+
+export interface LiveMeetHistoryRecord {
+  id: string;
+  meetingTitle: string;
+  channelName: string;
+  channelId?: string;
+  orgId: string;
+  startedAt: string;
+  endedAt: string;
+  durationSeconds: number;
+  durationFormatted: string;
+  participants: Array<{
+    peerId: string;
+    userId: string;
+    name: string;
+    role: string;
+    isMe?: boolean;
+  }>;
+  documentsUsed: Array<{
+    id: string;
+    name: string;
+    category?: string;
+  }>;
+  notes: Array<{
+    id: string;
+    title: string;
+    assignee: string;
+    status: "open" | "completed";
+    time: string;
+  }>;
+  chatMessages: Array<{
+    id: string;
+    sender: string;
+    text: string;
+    time: string;
+  }>;
+  recordedBy: string;
+}
+
 export interface NewsPost {
   id: string;
   org_id: string;
@@ -694,6 +744,7 @@ export interface Document {
   is_letter?: boolean;
   show_header?: boolean;
   is_private?: boolean;
+  category?: string;
 }
 
 export interface DocumentAcknowledgement {
