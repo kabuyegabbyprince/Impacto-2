@@ -63,6 +63,7 @@ import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "../components/MoMo
 import { cleanMerchantCode, cleanPhoneNumber } from "../components/UssdPaymentHelper";
 import { useCreateDonation } from "../hooks/useImpactoData";
 import { resolveFileUrl } from "../lib/storageService";
+import { canAccessFeature } from "../lib/subscriptionMatrix";
 import html2canvas from "html2canvas";
 
 /**
@@ -231,6 +232,14 @@ export const PublicOrgPage: React.FC = () => {
     org?.has_rentable_spaces ||
     (org?.id && localStorage.getItem(`org_has_rentable_spaces_${org.id}`) === "true")
   );
+  const isEventHostingProAllowed = org ? canAccessFeature(org, "event_listings").allowed : false;
+  const isEventHostingAllowed = Boolean(
+    (org as any)?.allow_hosting_events ??
+    (org?.id && localStorage.getItem(`org_allow_hosting_events_${org.id}`) === "true") ??
+    hasRentableSpaces
+  );
+  const showTrackReservationButton = isEventHostingProAllowed && isEventHostingAllowed;
+
   const showSpaceCalendar = Boolean(
     org?.show_space_calendar_publicly ?? org?.show_calendar_publicly ?? true
   );
@@ -927,14 +936,16 @@ export const PublicOrgPage: React.FC = () => {
 
             {/* Right side: Action Buttons Island (Clean: Share + Join Organization + Track Reservation) */}
             <div className="bg-white dark:bg-slate-900 border border-gray-200/80 dark:border-slate-800 rounded-2xl p-1.5 sm:p-2 shadow-sm flex flex-wrap items-center gap-2 shrink-0 self-start md:self-end">
-              <button
-                onClick={() => setOpenTrackModal(true)}
-                className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                title="Track your reservation status and complete payments"
-              >
-                <Search className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                <span>Track Reservation & Pay</span>
-              </button>
+              {showTrackReservationButton && (
+                <button
+                  onClick={() => setOpenTrackModal(true)}
+                  className="px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  title="Track your reservation status and complete payments"
+                >
+                  <Search className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Track Reservation & Pay</span>
+                </button>
+              )}
 
               <button
                 onClick={handleShare}

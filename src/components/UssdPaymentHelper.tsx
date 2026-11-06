@@ -141,9 +141,12 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
   // Determine active columns count for clean responsive grid
   const activeCount = (cleanNum ? 1 : 0) + (cleanMCode ? 1 : 0) + (cleanAirtel ? 1 : 0);
 
+  if (!hasAnyPayment) {
+    return null;
+  }
+
   return (
     <div className={`w-full min-w-0 box-sizing-border-box space-y-3 ${className}`}>
-      {hasAnyPayment ? (
         <div className="w-full min-w-0 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 sm:p-4 space-y-3 bg-slate-50/50 dark:bg-slate-900/50">
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
             <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
@@ -354,24 +357,6 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
             Dial the USSD string directly on your mobile device and authorize the transaction with your secret PIN.
           </p>
         </div>
-      ) : (
-        <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 space-y-2 text-xs">
-          <p className="font-semibold text-slate-900 dark:text-slate-100">Payment details not yet configured</p>
-          <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-            This organization has not set up mobile money payment numbers yet.
-          </p>
-          <div className="pt-1">
-            <button
-              type="button"
-              onClick={handleAdminRequestClick}
-              disabled={isRequestingAdmin || adminRequestSent}
-              className="px-3.5 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold rounded-lg text-xs transition cursor-pointer"
-            >
-              {adminRequestSent ? "Notification sent" : "Notify administrator"}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

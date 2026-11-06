@@ -28,12 +28,18 @@ import {
   UserX,
   Edit3,
   Trash2,
-  Search
+  Search,
+  Download,
+  Table,
+  BookOpen,
+  Copy,
+  Eye
 } from "lucide-react";
 import { OrgMember, Document, LiveMeetHistoryRecord, HostedMeetInfo } from "../types";
 import { useAuthStore } from "../store/authStore";
 import { useToast } from "./Toast";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { MockDB } from "../lib/mockData";
 
 interface ChatVideoMeetModalProps {
   open: boolean;
@@ -190,8 +196,8 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
 
   const isLeavingRef = useRef(false);
 
-  const [micOn, setMicOn] = useState(true);
-  const [videoOn, setVideoOn] = useState(true);
+  const [micOn, setMicOn] = useState(false);
+  const [videoOn, setVideoOn] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
   const [sidePanel, setSidePanel] = useState<"chat" | "docs" | "participants" | "agenda" | null>(null);
@@ -206,7 +212,6 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   // Streams & WebRTC connections
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const [cameraError, setCameraError] = useState<string | null>(null);
 
   // Remote participants map: key = peerId
   const [remotePeers, setRemotePeers] = useState<Record<string, PeerParticipant>>({});
@@ -249,52 +254,33 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
 
   // Shared Document during call
   const [sharedDoc, setSharedDoc] = useState<Document | null>(null);
+  const [viewingDoc, setViewingDoc] = useState<Document | null>(null);
+  const activeDisplayDoc = sharedDoc || viewingDoc;
   const [docsUsedInMeeting, setDocsUsedInMeeting] = useState<Document[]>([]);
   const [docSearchQuery, setDocSearchQuery] = useState("");
 
-  // Standard and organization documents available to select and present
+  // Restore persisted in-call chat messages
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const stored = localStorage.getItem(`impacto_meet_chat_${activeOrg?.id || "default"}`);
+      if (stored) {
+        setCallMessages(JSON.parse(stored));
+      } else {
+        setCallMessages([]);
+      }
+    } catch (e) {
+      setCallMessages([]);
+    }
+  }, [open, activeOrg?.id]);
+
+  // Organization documents stored for this organization (no static mock documents)
   const availableDocs = useMemo<Document[]>(() => {
-    const list: Document[] = [...(documents || [])];
-
-    const standardGovernanceDocs: Document[] = [
-      {
-        id: "doc-charter-std",
-        org_id: activeOrg?.id || "org-1",
-        name: "Cooperative Charter & Internal Governance Bylaws.pdf",
-        category: "Governance",
-        requires_acknowledgement: false,
-        content: `COOPERATIVE CHARTER & INTERNAL GOVERNANCE BYLAWS\n\nArticle 1: Organizational Purpose and Democratic Quorum\nThe cooperative operates under shared community authority. All statutory resolutions require verified member attendance and recorded quorum before binding effect.\n\nArticle 2: Financial Prudence & Reserve Allocations\nAt least 15% of annual operating surpluses must be directed toward the statutory contingency reserve fund. Space lending and asset sharing must be logged digitally with time-bound approvals.\n\nArticle 3: Meeting Protocols & Electronic Voting\nVirtual and hybrid meetings conducted via WebRTC comply with official audit requirements provided that the roster of present members and minutes are archived simultaneously.`,
-        created_at: new Date().toISOString(),
-        uploader_name: "Supervisory Board"
-      },
-      {
-        id: "doc-harvest-std",
-        org_id: activeOrg?.id || "org-1",
-        name: "Quarterly Agropastoral Quota & Harvest Schedule.docx",
-        category: "Operations",
-        requires_acknowledgement: false,
-        content: `QUARTERLY AGROPASTORAL QUOTA & HARVEST ALLOCATION\n\n1. Production Targets by Sector:\n- Sector North: 450 metric tons grain reserve\n- Sector Central: 320 metric tons cold storage harvest\n- Sector South: 180 metric tons seed multiplication\n\n2. Logistics & Facility Distribution:\nAll cooperative warehouses open 06:06 to 18:00 daily. Incoming shipments require digital receipt reconciliation prior to weight certificate issuance.\n\n3. Reserve Fund Subsidies:\nApproved fuel and transport subsidies will be disbursed following supervisory committee audit on Monday.`,
-        created_at: new Date().toISOString(),
-        uploader_name: "Operations Lead"
-      },
-      {
-        id: "doc-budget-std",
-        org_id: activeOrg?.id || "org-1",
-        name: "Annual Reserve Fund Budget & Audit Report.pdf",
-        category: "Finance",
-        requires_acknowledgement: false,
-        content: `ANNUAL RESERVE FUND BUDGET & EXPENDITURE REPORT\n\nExecutive Financial Summary:\nTotal Assets under Administration: 84,500,000 RWF\nStatutory Reserve Balance: 24,100,000 RWF\nEmergency Facility Maintenance Allocation: 6,800,000 RWF\n\nRecommendations for General Assembly:\n1. Reaffirm dividend retention policy of 12% for facility modernization.\n2. Authorize digital payment gateway integration for automated dues tracking.\n3. Approve external audit committee mandate for the upcoming financial cycle.`,
-        created_at: new Date().toISOString(),
-        uploader_name: "Treasurer"
-      }
-    ];
-
-    standardGovernanceDocs.forEach(std => {
-      if (!list.some(d => d.name === std.name || d.id === std.id)) {
-        list.push(std);
-      }
-    });
-
+    const list: Document[] = (documents || []).filter(d => !d.org_id || d.org_id === activeOrg?.id);
+    if (list.length === 0 && activeOrg?.id) {
+      const stored = MockDB.getDocuments().filter((d: any) => d.org_id === activeOrg.id) as Document[];
+      return stored;
+    }
     return list;
   }, [documents, activeOrg?.id]);
 
@@ -307,13 +293,34 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   const [newAgendaTitle, setNewAgendaTitle] = useState("");
   const [newAgendaAssignee, setNewAgendaAssignee] = useState("");
 
-  // Elapsed timer
+  // Elapsed timer & Hardware permission prompt on join
   useEffect(() => {
     if (!open) {
       setElapsedSeconds(0);
       return;
     }
     playMeetingChime("join");
+
+    // Automatically request both camera and microphone permission on join
+    const requestHardwarePermissions = async () => {
+      try {
+        if (navigator.mediaDevices?.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          setLocalStream(stream);
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = stream;
+          }
+          setMicOn(true);
+          setVideoOn(true);
+          addToast("Camera and microphone permission granted", "success");
+        }
+      } catch (err: any) {
+        console.warn("Hardware permission prompt error:", err);
+        addToast("Camera or microphone access was denied or unavailable by browser. You can still participate in text chat and read documents.", "info");
+      }
+    };
+    requestHardwarePermissions();
+
     const interval = setInterval(() => {
       setElapsedSeconds(prev => prev + 1);
     }, 1000);
@@ -326,39 +333,14 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   }, [elapsedSeconds]);
 
-  // Acquire local media stream
+  // Clean up any hardware tracks on leave/unmount
   useEffect(() => {
-    let stream: MediaStream | null = null;
-    if (open) {
-      setCameraError(null);
-      navigator.mediaDevices?.getUserMedia({ video: true, audio: true })
-        .then(s => {
-          stream = s;
-          setLocalStream(s);
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = s;
-          }
-        })
-        .catch(err => {
-          console.warn("Camera/mic permission fallback:", err);
-          navigator.mediaDevices?.getUserMedia({ audio: true })
-            .then(audioOnlyStream => {
-              stream = audioOnlyStream;
-              setLocalStream(audioOnlyStream);
-              setCameraError("Audio only active (Webcam not detected).");
-            })
-            .catch(() => {
-              setCameraError("Camera & Mic in simulated mode (Permissions not granted).");
-            });
-        });
-    }
-
     return () => {
-      if (stream) {
-        stream.getTracks().forEach(t => t.stop());
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
       }
     };
-  }, [open]);
+  }, [localStream]);
 
   // Handle local microphone volume & active speaking detection
   useEffect(() => {
@@ -435,12 +417,22 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     });
   }, [localStream]);
 
+  const micOnRef = useRef(micOn);
+  micOnRef.current = micOn;
+  const videoOnRef = useRef(videoOn);
+  videoOnRef.current = videoOn;
+  const handRaisedRef = useRef(handRaised);
+  handRaisedRef.current = handRaised;
+  const callMessagesRef = useRef(callMessages);
+  callMessagesRef.current = callMessages;
+  const sharedDocRef = useRef(sharedDoc);
+  sharedDocRef.current = sharedDoc;
+
   // WebRTC Signaling & Real-time multi-peer presence
   useEffect(() => {
     if (!open) return;
 
-    const effectiveChannel = (hostedMeetInfo?.channelName || channelName || "general").toLowerCase().trim();
-    const channelIdentifier = `impacto_call_${activeOrg?.id || "org"}_${effectiveChannel}`;
+    const channelIdentifier = `impacto_call_org_${activeOrg?.id || "default"}`;
     const broadcast = new BroadcastChannel(channelIdentifier);
     broadcastChannelRef.current = broadcast;
 
@@ -528,8 +520,8 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             name: msg.name,
             role: msg.role,
             isMe: false,
-            mic: msg.mic ?? true,
-            video: msg.video ?? true,
+            mic: msg.mic ?? false,
+            video: msg.video ?? false,
             speaking: false,
             handRaised: false
           }
@@ -543,10 +535,31 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
           userId: user?.id || "guest",
           name: user?.full_name || "Member",
           role: activeMember?.role || "Member",
-          mic: micOn,
-          video: videoOn,
-          handRaised
+          mic: micOnRef.current,
+          video: videoOnRef.current,
+          handRaised: handRaisedRef.current
         });
+
+        // Send full chat history to newcomer
+        if (callMessagesRef.current.length > 0) {
+          broadcastSignalingMessage({
+            type: "SYNC_CHAT_HISTORY",
+            fromPeerId: myPeerId,
+            toPeerId: msg.fromPeerId,
+            messages: callMessagesRef.current
+          });
+        }
+
+        // Send active document presentation to newcomer if any
+        if (sharedDocRef.current) {
+          broadcastSignalingMessage({
+            type: "SYNC_SHARED_DOC",
+            fromPeerId: myPeerId,
+            toPeerId: msg.fromPeerId,
+            doc: sharedDocRef.current,
+            presenterName: user?.full_name || "Presenter"
+          });
+        }
 
         // Initiate WebRTC handshake with newcomer
         createPeerConnection(msg.fromPeerId, true);
@@ -559,13 +572,28 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             name: msg.name,
             role: msg.role,
             isMe: false,
-            mic: msg.mic ?? true,
-            video: msg.video ?? true,
+            mic: msg.mic ?? false,
+            video: msg.video ?? false,
             speaking: false,
             handRaised: !!msg.handRaised
           }
         }));
         createPeerConnection(msg.fromPeerId, false);
+      } else if (msg.type === "SYNC_CHAT_HISTORY" && (msg.toPeerId === myPeerId || !msg.toPeerId)) {
+        if (Array.isArray(msg.messages) && msg.messages.length > 0) {
+          setCallMessages(prev => {
+            const merged = [...prev];
+            msg.messages.forEach((m: MeetMessage) => {
+              if (!merged.some(e => e.id === m.id)) {
+                merged.push(m);
+              }
+            });
+            try {
+              localStorage.setItem(`impacto_meet_chat_${activeOrg?.id || "default"}`, JSON.stringify(merged));
+            } catch (e) {}
+            return merged;
+          });
+        }
       } else if (msg.type === "PEER_LEFT") {
         const targetId = msg.fromPeerId;
         if (peerConnectionsRef.current[targetId]) {
@@ -631,7 +659,11 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       } else if (msg.type === "NEW_CHAT_MESSAGE" && msg.data) {
         setCallMessages(prev => {
           if (prev.some(m => m.id === msg.data.id)) return prev;
-          return [...prev, msg.data];
+          const updated = [...prev, msg.data];
+          try {
+            localStorage.setItem(`impacto_meet_chat_${activeOrg?.id || "default"}`, JSON.stringify(updated));
+          } catch (e) {}
+          return updated;
         });
       } else if (msg.type === "NEW_AGENDA" && msg.data) {
         setAgendaPoints(prev => {
@@ -684,9 +716,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       userId: user?.id || "guest",
       name: user?.full_name || "You",
       role: activeMember?.role || "Member",
-      mic: micOn,
-      video: videoOn,
-      handRaised
+      mic: micOnRef.current,
+      video: videoOnRef.current,
+      handRaised: handRaisedRef.current
     });
 
     return () => {
@@ -699,7 +731,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       Object.values(peerConnectionsRef.current).forEach((pc: RTCPeerConnection) => pc.close());
       peerConnectionsRef.current = {};
     };
-  }, [open, activeOrg?.id, channelName, myPeerId, user, activeMember, micOn, videoOn, handRaised]);
+  }, [open, activeOrg?.id, myPeerId, user, activeMember]);
 
   // Sync state changes (mic, video, hand, speaking) to peers
   useEffect(() => {
@@ -726,53 +758,112 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   }, [localStream]);
 
   // Toggle Microphone
-  const handleToggleMic = () => {
-    const nextState = !micOn;
-    setMicOn(nextState);
-    playMeetingChime(nextState ? "unmute" : "mute");
-    if (localStream) {
-      localStream.getAudioTracks().forEach(track => {
-        track.enabled = nextState;
-      });
+  const handleToggleMic = async () => {
+    if (micOn) {
+      setMicOn(false);
+      playMeetingChime("mute");
+      if (localStream) {
+        localStream.getAudioTracks().forEach(track => {
+          track.enabled = false;
+        });
+      }
+      addToast("Microphone muted", "info");
+    } else {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          addToast("Your browser does not support microphone access.", "error");
+          return;
+        }
+        let stream = localStream;
+        const existingAudio = stream?.getAudioTracks() || [];
+        if (existingAudio.length > 0) {
+          existingAudio.forEach(t => {
+            t.enabled = true;
+          });
+        } else {
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const newAudioTrack = audioStream.getAudioTracks()[0];
+          if (stream) {
+            stream.addTrack(newAudioTrack);
+          } else {
+            stream = new MediaStream([newAudioTrack]);
+            setLocalStream(stream);
+          }
+          Object.values(peerConnectionsRef.current).forEach((pc: RTCPeerConnection) => {
+            try {
+              pc.addTrack(newAudioTrack, stream!);
+            } catch (e) {}
+          });
+        }
+        setMicOn(true);
+        playMeetingChime("unmute");
+        addToast("Microphone active", "success");
+      } catch (err: any) {
+        setMicOn(false);
+        console.warn("Microphone permission error:", err);
+        addToast("Microphone permission was blocked or denied by browser. Please click the camera/mic icon in your address bar to allow permissions.", "error");
+      }
     }
-    addToast(nextState ? "Microphone active" : "Microphone muted", "info");
   };
 
   // Toggle Video Camera
   const handleToggleVideo = async () => {
-    const nextState = !videoOn;
-    setVideoOn(nextState);
-
-    if (localStream) {
-      localStream.getVideoTracks().forEach(track => {
-        track.enabled = nextState;
-      });
-    }
-
-    if (nextState && (!localStream || localStream.getVideoTracks().length === 0)) {
+    if (videoOn) {
+      setVideoOn(false);
+      if (localStream) {
+        localStream.getVideoTracks().forEach(track => {
+          track.enabled = false;
+          track.stop();
+          localStream.removeTrack(track);
+        });
+      }
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
+      addToast("Camera turned off", "info");
+    } else {
       try {
-        const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: micOn });
-        setLocalStream(s);
-        setCameraError(null);
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = s;
+        if (!navigator.mediaDevices?.getUserMedia) {
+          addToast("Your browser does not support camera access.", "error");
+          return;
         }
-      } catch (e: any) {
-        setCameraError("Camera unavailable. Using profile avatar.");
+        const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const newVideoTrack = videoStream.getVideoTracks()[0];
+        let stream = localStream;
+        if (stream) {
+          stream.addTrack(newVideoTrack);
+        } else {
+          stream = new MediaStream([newVideoTrack]);
+          setLocalStream(stream);
+        }
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
+        Object.values(peerConnectionsRef.current).forEach((pc: RTCPeerConnection) => {
+          try {
+            const senders = pc.getSenders();
+            const sender = senders.find(s => s.track?.kind === "video");
+            if (sender) {
+              sender.replaceTrack(newVideoTrack).catch(() => {});
+            } else {
+              pc.addTrack(newVideoTrack, stream!);
+            }
+          } catch (e) {}
+        });
+        setVideoOn(true);
+        addToast("Camera video active", "success");
+      } catch (err: any) {
+        setVideoOn(false);
+        console.warn("Camera permission error:", err);
+        addToast("Camera permission was blocked or denied by browser. Please click the camera/mic icon in your address bar to allow permissions.", "error");
       }
     }
-
-    addToast(nextState ? "Camera video active" : "Camera turned off", "info");
   };
 
   // Toggle Screen Share
   const handleToggleScreenShare = async () => {
     if (screenSharing) {
       setScreenSharing(false);
-      try {
-        const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: micOn });
-        setLocalStream(s);
-      } catch (e) {}
       addToast("Screen sharing stopped", "info");
     } else {
       try {
@@ -812,13 +903,19 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     if (!inputMessage.trim()) return;
 
     const newMsg: MeetMessage = {
-      id: `msg-${Date.now()}`,
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       sender: user?.full_name || "You",
       text: inputMessage.trim(),
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     };
 
-    setCallMessages(prev => [...prev, newMsg]);
+    setCallMessages(prev => {
+      const updated = [...prev, newMsg];
+      try {
+        localStorage.setItem(`impacto_meet_chat_${activeOrg?.id || "default"}`, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     setInputMessage("");
 
     try {
@@ -828,6 +925,15 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         data: newMsg
       });
     } catch (e) {}
+  };
+
+  const handleOpenDocReadMode = (doc: Document) => {
+    setViewingDoc(doc);
+    addToast(`Opened "${doc.name}" in Read Mode`, "info");
+  };
+
+  const handleCloseReadMode = () => {
+    setViewingDoc(null);
   };
 
   const handleCreateAgendaPoint = (e: React.FormEvent) => {
@@ -1001,6 +1107,73 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       const existing: LiveMeetHistoryRecord[] = existingStr ? JSON.parse(existingStr) : [];
       const updated = [record, ...existing.filter(e => e.id !== record.id)];
       localStorage.setItem(storageKey, JSON.stringify(updated));
+
+      // Asynchronously persist to Supabase meeting_sessions database if configured
+      if (isSupabaseConfigured) {
+        Promise.resolve(
+          supabase
+            .from("meeting_sessions")
+            .insert({
+              id: record.id,
+              org_id: record.orgId,
+              meeting_title: record.meetingTitle,
+              channel_name: record.channelName,
+              started_at: record.startedAt,
+              ended_at: record.endedAt,
+              duration_seconds: record.durationSeconds,
+              duration_formatted: record.durationFormatted,
+              recorded_by: record.recordedBy
+            })
+        )
+          .then(async (res: any) => {
+            if (res?.error) {
+              console.warn("Supabase meeting_sessions insert error:", res.error);
+              return;
+            }
+            if (record.participants.length > 0) {
+              await supabase.from("meeting_participants").insert(
+                record.participants.map(p => ({
+                  session_id: record.id,
+                  peer_id: p.peerId,
+                  user_id: p.userId,
+                  name: p.name,
+                  role: p.role,
+                  is_me: p.isMe
+                }))
+              );
+            }
+            if (record.documentsUsed.length > 0) {
+              await supabase.from("meeting_documents").insert(
+                record.documentsUsed.map(d => ({
+                  session_id: record.id,
+                  doc_id: d.id,
+                  name: d.name,
+                  category: d.category
+                }))
+              );
+            }
+            if (record.notes.length > 0) {
+              await supabase.from("meeting_notes").insert(
+                record.notes.map(n => ({
+                  session_id: record.id,
+                  title: n.title,
+                  assignee: n.assignee,
+                  status: n.status
+                }))
+              );
+            }
+            if (record.chatMessages.length > 0) {
+              await supabase.from("meeting_chat_messages").insert(
+                record.chatMessages.map(m => ({
+                  session_id: record.id,
+                  sender: m.sender,
+                  text: m.text
+                }))
+              );
+            }
+          })
+          .catch(err => console.warn("Supabase meeting session sync failed:", err));
+      }
     } catch (e) {
       console.error("Failed to store meeting history", e);
     }
@@ -1009,8 +1182,14 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       onMeetingEnded(record);
     }
 
-    if (onHostedMeetEnded) {
-      onHostedMeetEnded();
+    const isMeetingHost = hostedMeetInfo?.hostId === user?.id || isAdmin;
+    if (isMeetingHost) {
+      try {
+        localStorage.removeItem(`impacto_meet_chat_${activeOrg?.id || "default"}`);
+      } catch (e) {}
+      if (onHostedMeetEnded) {
+        onHostedMeetEnded();
+      }
     }
 
     onClose();
@@ -1073,7 +1252,10 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
               ref={el => {
                 if (el && p.stream && el.srcObject !== p.stream) {
                   el.srcObject = p.stream;
-                  el.play().catch(() => {});
+                  const playPromise = el.play();
+                  if (playPromise && typeof (playPromise as any).catch === "function") {
+                    (playPromise as any).catch(() => {});
+                  }
                 }
               }}
             />
@@ -1147,6 +1329,23 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              const meetingUrl = `${window.location.origin}/dashboard?joinMeet=${activeOrg?.id || "default"}`;
+              navigator.clipboard.writeText(meetingUrl).then(() => {
+                addToast("Permanent meeting link copied to clipboard", "success");
+              }).catch(() => {
+                addToast("Failed to copy link", "error");
+              });
+            }}
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#282a2d] hover:bg-[#3c4043] text-xs font-medium text-[#e3e3e3] border border-[#3c4043] transition cursor-pointer"
+            title="Copy meeting link to share with organization members"
+          >
+            <Copy className="h-3.5 w-3.5 text-[#81c995]" />
+            <span>Copy Link</span>
+          </button>
+
           <div className="flex items-center gap-1.5 text-xs font-mono text-[#9aa0a6]">
             <Clock className="h-3.5 w-3.5" />
             <span>{formattedDuration}</span>
@@ -1168,75 +1367,189 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         
         {/* VIDEO GRID STAGE */}
         <div className="flex-1 flex flex-col p-3 sm:p-5 overflow-y-auto min-h-0">
-          {sharedDoc ? (
-            /* Split View: Shared Document + Participant filmstrip (Simultaneous for all attendees) */
+          {activeDisplayDoc ? (
+            /* Split View: Active Document (Read Mode / Presentation) + Participant filmstrip */
             <div className="flex-1 flex flex-col gap-3 min-h-0">
               <div className="flex-1 bg-[#1e1f20] border border-[#2d2e31] rounded-2xl p-5 overflow-y-auto text-xs text-[#e3e3e3] shadow-md flex flex-col gap-3">
-                <div className="flex items-center justify-between border-b border-[#2d2e31] pb-3 text-xs">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-[#133020] text-[#81c995] border border-[#1e4620]">
-                      <FileText className="h-4 w-4" />
+                    <div className="flex items-center justify-between border-b border-[#2d2e31] pb-3 text-xs flex-wrap gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`p-2 rounded-xl ${sharedDoc ? "bg-[#133020] text-[#81c995] border border-[#1e4620]" : "bg-[#1e293b] text-sky-400 border border-sky-800"}`}>
+                          {sharedDoc ? <FileText className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />}
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            {sharedDoc ? (
+                              <>
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#81c995] animate-ping" />
+                                <span className="text-[#81c995]">Simultaneously Presenting to All Participants</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                                <span className="text-sky-400">Read Mode (Viewing in Meeting)</span>
+                              </>
+                            )}
+                          </span>
+                          <h4 className="font-bold text-sm text-white mt-0.5">{activeDisplayDoc.name}</h4>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-[#9aa0a6] font-mono hidden md:inline">
+                          {activeDisplayDoc.category || "General Document"}
+                        </span>
+                        <select
+                          value={activeDisplayDoc.id}
+                          onChange={(e) => {
+                            const target = availableDocs.find(d => d.id === e.target.value);
+                            if (target) {
+                              if (sharedDoc) {
+                                handleSelectDoc(target);
+                              } else {
+                                setViewingDoc(target);
+                              }
+                            }
+                          }}
+                          className="bg-[#282a2d] border border-[#3c4043] text-xs text-white rounded-lg px-2 py-1 outline-none focus:border-[#81c995] cursor-pointer max-w-[150px] sm:max-w-[200px] truncate"
+                          title="Select document from current documents list"
+                        >
+                          {availableDocs.map(d => (
+                            <option key={d.id} value={d.id} className="bg-[#1e1f20] text-white">
+                              {d.name}
+                            </option>
+                          ))}
+                        </select>
+
+                        {!sharedDoc && viewingDoc && (
+                          <button
+                            type="button"
+                            onClick={() => handleSelectDoc(viewingDoc)}
+                            className="px-2.5 py-1 rounded-lg bg-[#81c995] hover:bg-[#68b67f] text-xs font-bold text-[#121316] transition flex items-center gap-1 cursor-pointer"
+                            title="Broadcast this document to all meeting participants"
+                          >
+                            <Share2 className="h-3 w-3" />
+                            <span>Present to All</span>
+                          </button>
+                        )}
+
+                        {sharedDoc ? (
+                          <button
+                            type="button"
+                            onClick={handleStopPresentingDoc}
+                            className="px-2.5 py-1 rounded-lg bg-[#282a2d] hover:bg-rose-500/20 hover:text-rose-300 text-xs font-semibold text-[#e3e3e3] border border-[#3c4043] transition cursor-pointer"
+                          >
+                            Stop Presenting
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleCloseReadMode}
+                            className="px-2.5 py-1 rounded-lg bg-[#282a2d] hover:bg-slate-700 text-xs font-semibold text-[#e3e3e3] border border-[#3c4043] transition cursor-pointer flex items-center gap-1"
+                          >
+                            <X className="h-3 w-3" />
+                            <span>Exit Reader</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-[#81c995] uppercase tracking-wider block flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#81c995] animate-ping" />
-                        Simultaneously Presenting to All Participants
-                      </span>
-                      <h4 className="font-bold text-sm text-white mt-0.5">{sharedDoc.name}</h4>
+
+                    <div className="flex-1 text-xs leading-relaxed text-[#c4c7c5] whitespace-pre-wrap select-text overflow-y-auto max-h-[500px]">
+                      {(() => {
+                        if (!activeDisplayDoc.content && !activeDisplayDoc.file_url) {
+                          return (
+                            <div className="p-8 text-center flex flex-col items-center justify-center gap-2 text-slate-400">
+                              <FileText className="h-10 w-10 text-emerald-500 opacity-60" />
+                              <h4 className="font-bold text-white text-sm">{activeDisplayDoc.name}</h4>
+                              <p className="text-xs text-slate-400">Official document stored in organization registry.</p>
+                            </div>
+                          );
+                        }
+
+                        // 1. Spreadsheet JSON array
+                        if (activeDisplayDoc.file_type === "excel" || (activeDisplayDoc.content && activeDisplayDoc.content.trim().startsWith("["))) {
+                          try {
+                            const grid: string[][] = JSON.parse(activeDisplayDoc.content);
+                            if (Array.isArray(grid) && grid.length > 0) {
+                              return (
+                                <div className="overflow-x-auto border border-[#3c4043] rounded-xl bg-[#121316]">
+                                  <table className="w-full text-left text-xs border-collapse">
+                                    <thead>
+                                      <tr className="bg-[#282a2d] border-b border-[#3c4043] text-white">
+                                        <th className="p-2 border-r border-[#3c4043] text-center w-8 text-[10px] font-mono">#</th>
+                                        {grid[0]?.map((col, idx) => (
+                                          <th key={idx} className="p-2 border-r border-[#3c4043] font-bold text-[11px] uppercase tracking-wider">
+                                            {col || `Col ${idx + 1}`}
+                                          </th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {grid.slice(1).map((row, rIdx) => (
+                                        <tr key={rIdx} className="border-b border-[#2d2e31] hover:bg-[#1e1f20]">
+                                          <td className="p-2 border-r border-[#3c4043] text-center font-mono text-[10px] text-[#9aa0a6]">
+                                            {rIdx + 1}
+                                          </td>
+                                          {row.map((cell, cIdx) => (
+                                            <td key={cIdx} className="p-2 border-r border-[#3c4043] text-[#e3e3e3]">
+                                              {cell}
+                                            </td>
+                                          ))}
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              );
+                            }
+                          } catch (e) {}
+                        }
+
+                        // 2. HTML formatted document
+                        if (activeDisplayDoc.content && /<[a-z][\s\S]*>/i.test(activeDisplayDoc.content)) {
+                          return (
+                            <div
+                              className="prose prose-invert max-w-none text-xs leading-relaxed text-[#e3e3e3]"
+                              dangerouslySetInnerHTML={{ __html: activeDisplayDoc.content }}
+                            />
+                          );
+                        }
+
+                        // 3. Plain text document
+                        if (activeDisplayDoc.content && activeDisplayDoc.content.trim()) {
+                          return (
+                            <div className="whitespace-pre-wrap leading-relaxed text-xs text-[#e3e3e3] font-sans">
+                              {activeDisplayDoc.content}
+                            </div>
+                          );
+                        }
+
+                        // 4. File URL with download button
+                        return (
+                          <div className="p-6 bg-[#282a2d] rounded-2xl border border-[#3c4043] flex flex-col items-center justify-center text-center gap-3">
+                            <FileText className="h-10 w-10 text-[#81c995]" />
+                            <div>
+                              <h4 className="font-bold text-sm text-white">{activeDisplayDoc.name}</h4>
+                              <p className="text-xs text-[#9aa0a6] mt-0.5">
+                                {activeDisplayDoc.category || "Official Document"} • Uploaded by {activeDisplayDoc.uploader_name || "Admin"}
+                              </p>
+                            </div>
+                            {activeDisplayDoc.file_url && (
+                              <a
+                                href={activeDisplayDoc.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-4 py-2 rounded-xl bg-[#81c995] text-[#121316] font-bold text-xs hover:bg-[#68b67f] transition flex items-center gap-1.5"
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                                <span>Download & Review File</span>
+                              </a>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-[#9aa0a6] font-mono hidden md:inline">
-                      {sharedDoc.category || "General Document"}
-                    </span>
-                    <select
-                      value={sharedDoc.id}
-                      onChange={(e) => {
-                        const target = availableDocs.find(d => d.id === e.target.value);
-                        if (target) handleSelectDoc(target);
-                      }}
-                      className="bg-[#282a2d] border border-[#3c4043] text-xs text-white rounded-lg px-2 py-1 outline-none focus:border-[#81c995] cursor-pointer max-w-[150px] sm:max-w-[200px] truncate"
-                      title="Select document from current documents list"
-                    >
-                      {availableDocs.map(d => (
-                        <option key={d.id} value={d.id} className="bg-[#1e1f20] text-white">
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={handleStopPresentingDoc}
-                      className="px-2.5 py-1 rounded-lg bg-[#282a2d] hover:bg-rose-500/20 hover:text-rose-300 text-xs font-semibold text-[#e3e3e3] border border-[#3c4043] transition cursor-pointer"
-                    >
-                      Stop Presenting
-                    </button>
-                  </div>
-                </div>
 
-                <div className="flex-1 text-xs leading-relaxed text-[#c4c7c5] whitespace-pre-wrap select-text">
-                  {sharedDoc.content ? (
-                    <div dangerouslySetInnerHTML={{ __html: sharedDoc.content }} />
-                  ) : (
-                    <div className="space-y-3 font-normal">
-                      <p className="font-bold text-white text-sm">
-                        COOPERATIVE RESOLUTION & EXECUTIVE MINUTES
-                      </p>
-                      <p>
-                        Executive committee resolution on quarterly performance targets, agropastoral harvest allocations, and facility space schedules.
-                      </p>
-                      <p>
-                        1. <strong>Quorum Verification:</strong> Verified by the supervisory board with live attendance recorded digitally.
-                      </p>
-                      <p>
-                        2. <strong>Facility Usage:</strong> All cooperative community rooms maintain active schedules to prevent overlapping reservations.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Attendee Video Strip under doc */}
+                  {/* Attendee Video Strip under doc */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 h-32 shrink-0">
                 {allParticipants.map(p => (
                   <div
@@ -1581,15 +1894,32 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  {availableDocs
-                    .filter(d => {
+                  {availableDocs.length === 0 ? (
+                    <div className="p-6 text-center text-[#9aa0a6] rounded-xl bg-[#282a2d]/50 border border-[#3c4043] flex flex-col items-center justify-center">
+                      <FileText className="h-8 w-8 text-[#5f6368] mb-2" />
+                      <p className="text-xs font-semibold text-white">No documents stored</p>
+                      <p className="text-[11px] text-[#9aa0a6] mt-1">
+                        Create or upload documents in the Document Office to share them live during meetings.
+                      </p>
+                    </div>
+                  ) : availableDocs.filter(d => {
                       if (!docSearchQuery.trim()) return true;
                       const q = docSearchQuery.toLowerCase();
                       return d.name.toLowerCase().includes(q) || (d.category && d.category.toLowerCase().includes(q));
-                    })
-                    .map(d => {
-                      const isCurrentlyActive = sharedDoc?.id === d.id;
-                      return (
+                    }).length === 0 ? (
+                    <div className="p-6 text-center text-[#9aa0a6] rounded-xl bg-[#282a2d]/30 border border-[#3c4043]">
+                      <p className="text-xs font-medium">No matching documents found</p>
+                    </div>
+                  ) : (
+                    availableDocs
+                      .filter(d => {
+                        if (!docSearchQuery.trim()) return true;
+                        const q = docSearchQuery.toLowerCase();
+                        return d.name.toLowerCase().includes(q) || (d.category && d.category.toLowerCase().includes(q));
+                      })
+                      .map(d => {
+                        const isCurrentlyActive = sharedDoc?.id === d.id;
+                        return (
                         <div
                           key={d.id}
                           className={`p-3 rounded-xl border text-left text-xs transition flex flex-col gap-2 ${
@@ -1610,31 +1940,52 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                             )}
                           </div>
 
-                          <div className="flex items-center justify-between pt-1 border-t border-[#3c4043]/60">
+                          <div className="flex items-center justify-between pt-1 border-t border-[#3c4043]/60 gap-1.5 flex-wrap">
                             <span className="text-[10px] text-[#9aa0a6]">
                               By {d.uploader_name || "Admin"}
                             </span>
-                            {isCurrentlyActive ? (
+                            <div className="flex items-center gap-1.5">
+                              {/* Open in Read Mode for all attendees */}
                               <button
                                 type="button"
-                                onClick={handleStopPresentingDoc}
-                                className="px-2.5 py-1 rounded-lg bg-[#282a2d] hover:bg-rose-500/30 text-rose-300 text-[11px] font-semibold transition cursor-pointer"
+                                onClick={() => handleOpenDocReadMode(d)}
+                                className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition flex items-center gap-1 cursor-pointer ${
+                                  viewingDoc?.id === d.id && !isCurrentlyActive
+                                    ? "bg-[#1e293b] text-sky-400 border border-sky-600"
+                                    : "bg-[#282a2d] hover:bg-[#3c4043] text-[#e3e3e3]"
+                                }`}
+                                title="Open this document in reader mode"
                               >
-                                Stop Presenting
+                                <BookOpen className="h-3 w-3" />
+                                <span>{viewingDoc?.id === d.id && !isCurrentlyActive ? "Reading" : "Read Mode"}</span>
                               </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleSelectDoc(d)}
-                                className="px-2.5 py-1 rounded-lg bg-[#81c995] hover:bg-[#68b67f] text-[#121316] text-[11px] font-bold transition cursor-pointer"
-                              >
-                                Present to All
-                              </button>
-                            )}
+
+                              {/* Present to Everyone */}
+                              {isCurrentlyActive ? (
+                                <button
+                                  type="button"
+                                  onClick={handleStopPresentingDoc}
+                                  className="px-2 py-1 rounded-lg bg-[#282a2d] hover:bg-rose-500/30 text-rose-300 text-[11px] font-semibold transition cursor-pointer"
+                                >
+                                  Stop
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectDoc(d)}
+                                  className="px-2 py-1 rounded-lg bg-[#81c995] hover:bg-[#68b67f] text-[#121316] text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                                  title="Broadcast this document to everyone in the meeting"
+                                >
+                                  <Share2 className="h-3 w-3" />
+                                  <span>Present</span>
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
-                    })}
+                    })
+                  )}
                 </div>
               </div>
             )}

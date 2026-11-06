@@ -47,6 +47,7 @@ import {
   Asset,
   Referral,
   Promoter,
+  LiveMeetHistoryRecord,
 } from "../types";
 import { recordSystemAuditEvent } from "../lib/auditLogger";
 
@@ -1621,6 +1622,104 @@ export function useUpdateMeeting() {
     },
   });
 }
+
+export function useMeetingSessions(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["meeting_sessions", orgId],
+    queryFn: async (): Promise<LiveMeetHistoryRecord[]> => {
+      if (!orgId) return [];
+      let dbRecords: LiveMeetHistoryRecord[] = [];
+
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sessions, error } = await supabase
+            .from("meeting_sessions")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("started_at", { ascending: false });
+
+          if (!error && sessions && sessions.length > 0) {
+            const sessionIds = sessions.map((s: any) => s.id);
+            const [
+              { data: participants },
+              { data: documents },
+              { data: notes },
+              { data: chatMessages }
+            ] = await Promise.all([
+              supabase.from("meeting_participants").select("*").in("session_id", sessionIds),
+              supabase.from("meeting_documents").select("*").in("session_id", sessionIds),
+              supabase.from("meeting_notes").select("*").in("session_id", sessionIds),
+              supabase.from("meeting_chat_messages").select("*").in("session_id", sessionIds)
+            ]);
+
+            dbRecords = sessions.map((s: any) => ({
+              id: s.id,
+              meetingTitle: s.meeting_title,
+              channelName: s.channel_name,
+              orgId: s.org_id,
+              startedAt: s.started_at,
+              endedAt: s.ended_at,
+              durationSeconds: s.duration_seconds || 0,
+              durationFormatted: s.duration_formatted || "00:00",
+              recordedBy: s.recorded_by || "Admin",
+              participants: (participants || [])
+                .filter((p: any) => p.session_id === s.id)
+                .map((p: any) => ({
+                  peerId: p.peer_id,
+                  userId: p.user_id,
+                  name: p.name,
+                  role: p.role,
+                  isMe: p.is_me
+                })),
+              documentsUsed: (documents || [])
+                .filter((d: any) => d.session_id === s.id)
+                .map((d: any) => ({
+                  id: d.doc_id || d.id,
+                  name: d.name,
+                  category: d.category || "General"
+                })),
+              notes: (notes || [])
+                .filter((n: any) => n.session_id === s.id)
+                .map((n: any) => ({
+                  id: n.id,
+                  title: n.title,
+                  assignee: n.assignee || "Member",
+                  status: (n.status === "completed" ? "completed" : "open") as "completed" | "open",
+                  time: n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "12:00 PM"
+                })),
+              chatMessages: (chatMessages || [])
+                .filter((m: any) => m.session_id === s.id)
+                .map((m: any) => ({
+                  id: m.id,
+                  sender: m.sender,
+                  text: m.text,
+                  time: new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                }))
+            }));
+          }
+        } catch (dbErr) {
+          console.warn("Supabase fetch meeting_sessions error:", dbErr);
+        }
+      }
+
+      let localRecords: LiveMeetHistoryRecord[] = [];
+      try {
+        const raw = localStorage.getItem(`impacto_meeting_history_${orgId}`);
+        if (raw) {
+          localRecords = JSON.parse(raw);
+        }
+      } catch (e) {}
+
+      const map = new Map<string, LiveMeetHistoryRecord>();
+      localRecords.forEach(r => map.set(r.id, r));
+      dbRecords.forEach(r => map.set(r.id, r));
+
+      return Array.from(map.values()).sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+    },
+    enabled: !!orgId,
+  });
+}
+
 
 // ==========================================
 // 5. NEWS / BLOG POSTS HOOKS

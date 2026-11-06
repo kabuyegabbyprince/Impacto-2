@@ -359,6 +359,13 @@ export const OrganizationSettingsPage: React.FC = () => {
   const [showGoalsPublicly, setShowGoalsPublicly] = useState(activeOrg?.show_goals_publicly ?? true);
   const [showImpactPublicly, setShowImpactPublicly] = useState(activeOrg?.show_impact_publicly ?? true);
   const [showCalendarPublicly, setShowCalendarPublicly] = useState(activeOrg?.show_calendar_publicly ?? true);
+  const [allowHostingEvents, setAllowHostingEvents] = useState<boolean>(() => {
+    if (activeOrg?.id) {
+      const stored = localStorage.getItem(`org_allow_hosting_events_${activeOrg.id}`);
+      if (stored !== null) return stored === "true";
+    }
+    return Boolean((activeOrg as any)?.allow_hosting_events ?? true);
+  });
 
   // Members Dashboard Style Form
   const [dashboardTheme, setDashboardTheme] = useState<"light" | "dark" | "custom">(activeOrg?.dashboard_theme || "light");
@@ -464,6 +471,12 @@ export const OrganizationSettingsPage: React.FC = () => {
       setShowGoalsPublicly(activeOrg.show_goals_publicly ?? true);
       setShowImpactPublicly(activeOrg.show_impact_publicly ?? true);
       setShowCalendarPublicly(activeOrg.show_calendar_publicly ?? true);
+      const storedHosting = activeOrg.id ? localStorage.getItem(`org_allow_hosting_events_${activeOrg.id}`) : null;
+      if (storedHosting !== null) {
+        setAllowHostingEvents(storedHosting === "true");
+      } else {
+        setAllowHostingEvents(Boolean((activeOrg as any)?.allow_hosting_events ?? true));
+      }
       setDashboardTheme(activeOrg.dashboard_theme || "light");
       setDashboardLogo(activeOrg.dashboard_logo || "");
       setMarketplaceEnabled(activeOrg.marketplace_enabled ?? true);
@@ -525,6 +538,9 @@ export const OrganizationSettingsPage: React.FC = () => {
   const handleSavePublicSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      if (activeOrg?.id) {
+        localStorage.setItem(`org_allow_hosting_events_${activeOrg.id}`, String(allowHostingEvents));
+      }
       const updated = await updateMutation.mutateAsync({
         id: activeOrg?.id || "",
         slug,
@@ -538,9 +554,10 @@ export const OrganizationSettingsPage: React.FC = () => {
         public_page_enabled: publicPageEnabled,
         show_goals_publicly: showGoalsPublicly,
         show_impact_publicly: showImpactPublicly,
-        show_calendar_publicly: showCalendarPublicly
+        show_calendar_publicly: showCalendarPublicly,
+        allow_hosting_events: allowHostingEvents
       });
-      setActiveOrg(updated, useOrgStore.getState().activeMember);
+      setActiveOrg({ ...updated, allow_hosting_events: allowHostingEvents } as any, useOrgStore.getState().activeMember);
       addToast("Organization profile page configuration successfully synced live!", "success");
     } catch (err: any) {
       console.error(err);
@@ -1202,6 +1219,17 @@ export const OrganizationSettingsPage: React.FC = () => {
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" className="sr-only peer" checked={showCalendarPublicly} onChange={(e) => setShowCalendarPublicly(e.target.checked)} />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-[var(--org-primary)]"></div>
+                </label>
+              </div>
+
+              <div className="p-3 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-gray-800 dark:text-slate-200">Allow Event Hosting & Facility Reservations</span>
+                  <span className="text-xs text-gray-500">Enable community members and public visitors to book events, reserve facilities, and track reservations online.</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={allowHostingEvents} onChange={(e) => setAllowHostingEvents(e.target.checked)} />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-[var(--org-primary)]"></div>
                 </label>
               </div>

@@ -151,7 +151,8 @@ import {
   useCheckIn,
   useCheckOut,
   useMeetingAttendance,
-  useSaveMeetingAttendance
+  useSaveMeetingAttendance,
+  useMeetingSessions
 } from "../hooks/useImpactoData";
 import { Button, Input, Card, Badge, Avatar, ProgressBar, EmptyState, Modal, Table } from "../components/ui";
 import { MockDB } from "../lib/mockData";
@@ -2371,8 +2372,7 @@ export const ChatRoom: React.FC = () => {
 
   useEffect(() => {
     if (!openMeetingWaitRoomModal || !activeHostedMeet) return;
-    const channelName = activeHostedMeet.channelName || "general";
-    const bc = new BroadcastChannel(`impacto_call_${activeOrg?.id || "org"}_${channelName.toLowerCase().trim()}`);
+    const bc = new BroadcastChannel(`impacto_call_org_${activeOrg?.id || "default"}`);
     bc.onmessage = (ev) => {
       if (ev.data?.type === "ADMIT_PEER" && ev.data.userId === user?.id) {
         setOpenMeetingWaitRoomModal(false);
@@ -2391,6 +2391,31 @@ export const ChatRoom: React.FC = () => {
 
   useEffect(() => {
     const orgId = activeOrg?.id || "default";
+
+    const syncMeet = () => {
+      try {
+        const raw = localStorage.getItem(`impacto_active_hosted_meet_${orgId}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          setActiveHostedMeet(parsed);
+        } else {
+          setActiveHostedMeet(null);
+        }
+      } catch (e) {
+        setActiveHostedMeet(null);
+      }
+    };
+
+    syncMeet();
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === `impacto_active_hosted_meet_${orgId}`) {
+        syncMeet();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    const interval = setInterval(syncMeet, 1000);
+
     const bc = new BroadcastChannel(`impacto_org_meet_bus_${orgId}`);
     bc.onmessage = (ev) => {
       if (ev.data?.type === "HOSTED_MEET_ACTIVE" && ev.data.meet) {
@@ -2400,9 +2425,29 @@ export const ChatRoom: React.FC = () => {
       }
     };
     return () => {
+      window.removeEventListener("storage", handleStorage);
+      clearInterval(interval);
       bc.close();
     };
   }, [activeOrg?.id]);
+
+  // Handle direct meeting links via query param ?joinMeet=orgId or ?meet=orgId
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const joinMeetOrg = params.get("joinMeet") || params.get("meet");
+      if (joinMeetOrg && activeHostedMeet && !openMeetModal && !openMeetingWaitRoomModal) {
+        const isHostOrAdmin = user?.id === activeHostedMeet.hostId || activeMember?.role === "org_admin";
+        if (activeHostedMeet.isPublic || isHostOrAdmin) {
+          setMeetingTitleToStart(activeHostedMeet.meetingTitle);
+          setOpenMeetModal(true);
+          addToast(`Connected to meeting: ${activeHostedMeet.meetingTitle}`, "success");
+        } else {
+          setOpenMeetingWaitRoomModal(true);
+        }
+      }
+    } catch (e) {}
+  }, [activeHostedMeet, openMeetModal, openMeetingWaitRoomModal, user?.id, activeMember?.role]);
 
   const handleHostedMeetEnded = () => {
     localStorage.removeItem(`impacto_active_hosted_meet_${activeOrg?.id || "default"}`);
@@ -2454,6 +2499,19 @@ export const ChatRoom: React.FC = () => {
     ];
     return initialSeed;
   });
+
+  const { data: fetchedMeetingSessions } = useMeetingSessions(activeOrg?.id);
+
+  useEffect(() => {
+    if (fetchedMeetingSessions && fetchedMeetingSessions.length > 0) {
+      setMeetingHistory(prev => {
+        const map = new Map<string, LiveMeetHistoryRecord>();
+        prev.forEach(r => map.set(r.id, r));
+        fetchedMeetingSessions.forEach(r => map.set(r.id, r));
+        return Array.from(map.values()).sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+      });
+    }
+  }, [fetchedMeetingSessions]);
 
   const handleDeleteMeeting = (id: string) => {
     setMeetingHistory(prev => {
@@ -3145,11 +3203,17 @@ export const ChatRoom: React.FC = () => {
 
               {/* Right Action Buttons */}
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 max-w-full overflow-x-auto no-scrollbar whitespace-nowrap">
-                {/* Active hosted meeting in organization: unified direct join */}
-                {activeHostedMeet && (
+                {/* Meet Button: turns into 'Join Meet' when meeting is initiated in organization */}
+                {activeHostedMeet ? (
                   <button
                     type="button"
                     onClick={() => {
+                      if (!isVideoAllowed) {
+                        setUpgradeModalFeature("video");
+                        setShowPollUpgradeModal(true);
+                        addToast("Live Video Meetings require Growth or Pro tier", "info");
+                        return;
+                      }
                       const isHostOrAdmin = user?.id === activeHostedMeet.hostId || activeMember?.role === "org_admin";
                       if (activeHostedMeet.isPublic || isHostOrAdmin) {
                         setMeetingTitleToStart(activeHostedMeet.meetingTitle);
@@ -3158,7 +3222,7 @@ export const ChatRoom: React.FC = () => {
                       } else {
                         setOpenMeetingWaitRoomModal(true);
                         try {
-                          const bc = new BroadcastChannel(`impacto_call_${activeOrg?.id || "org"}_${activeHostedMeet.channelName.toLowerCase().trim()}`);
+                          const bc = new BroadcastChannel(`impacto_call_org_${activeOrg?.id || "default"}`);
                           bc.postMessage({
                             type: "REQUEST_ADMISSION",
                             userId: user?.id,
@@ -3174,45 +3238,38 @@ export const ChatRoom: React.FC = () => {
                     title={`Hosted meeting: ${activeHostedMeet.meetingTitle} (hosted by ${activeHostedMeet.hostName})`}
                   >
                     <span className="h-2 w-2 rounded-full bg-white animate-ping" />
-                    <span>Join Ongoing Meet ({activeHostedMeet.meetingTitle})</span>
+                    <span>Join Meet ({activeHostedMeet.meetingTitle})</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isVideoAllowed) {
+                        setUpgradeModalFeature("video");
+                        setShowPollUpgradeModal(true);
+                        addToast("Live Video Meetings require Growth or Pro tier", "info");
+                        return;
+                      }
+                      setMeetingTitleToStart(activeChannel?.name ? `${activeChannel.name} Sync` : "Live Sync");
+                      setOpenStartMeetingPrompt(true);
+                    }}
+                    className={`inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 h-8 sm:h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer ${
+                      !isVideoAllowed
+                        ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
+                        : "bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
+                    }`}
+                    title={!isVideoAllowed ? "Upgrade to Growth or Pro to start live video meetings" : "Launch live multi-person video meeting with collaborative doc sharing and in-call chat"}
+                  >
+                    {!isVideoAllowed ? <Lock className="h-3.5 w-3.5 text-amber-500 shrink-0" /> : <Video className="h-3.5 w-3.5 shrink-0" />}
+                    <span className="hidden md:inline">Start Live Meet</span>
+                    <span className="md:hidden">Meet</span>
+                    {!isVideoAllowed && (
+                      <span className="hidden lg:inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-400">
+                        Growth
+                      </span>
+                    )}
                   </button>
                 )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isVideoAllowed) {
-                      setUpgradeModalFeature("video");
-                      setShowPollUpgradeModal(true);
-                      addToast("Live Video Meetings require Growth or Pro tier", "info");
-                      return;
-                    }
-                    // Redirect to active hosted meeting if already running in organization
-                    if (activeHostedMeet) {
-                      setMeetingTitleToStart(activeHostedMeet.meetingTitle);
-                      setOpenMeetModal(true);
-                      addToast(`Redirected into hosted meet: ${activeHostedMeet.meetingTitle}`, "info");
-                      return;
-                    }
-                    setMeetingTitleToStart(activeChannel?.name ? `${activeChannel.name} Sync` : "Live Sync");
-                    setOpenStartMeetingPrompt(true);
-                  }}
-                  className={`inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 h-8 sm:h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer ${
-                    !isVideoAllowed
-                      ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
-                      : "bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
-                  }`}
-                  title={!isVideoAllowed ? "Upgrade to Growth or Pro to start live video meetings" : "Launch live multi-person video meeting with collaborative doc sharing and in-call chat"}
-                >
-                  {!isVideoAllowed ? <Lock className="h-3.5 w-3.5 text-amber-500 shrink-0" /> : <Video className="h-3.5 w-3.5 shrink-0" />}
-                  <span className="hidden md:inline">Start Live Meet</span>
-                  <span className="md:hidden">Meet</span>
-                  {!isVideoAllowed && (
-                    <span className="hidden lg:inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-400">
-                      Growth
-                    </span>
-                  )}
-                </button>
 
                 <div className="relative group shrink-0">
                   <button

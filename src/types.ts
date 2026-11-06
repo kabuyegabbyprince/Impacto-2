@@ -76,6 +76,7 @@ export interface Organization {
   show_calendar_publicly?: boolean;
   // Rentable spaces & Public event calendar booking
   has_rentable_spaces?: boolean;
+  allow_hosting_events?: boolean;
   rentable_spaces?: RentableSpace[];
   show_space_calendar_publicly?: boolean;
   // Members dashboard settings
