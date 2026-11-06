@@ -19,8 +19,8 @@ async function startServer() {
   const portArg = getCliArg("--port");
   const hostArg = getCliArg("--host");
 
-  const PORT = Number(process.env.PORT || portArg || 3000);
-  const HOST = process.env.HOST || hostArg || "0.0.0.0";
+  const PORT = Number(portArg || process.env.PORT || 3000);
+  const HOST = hostArg || process.env.HOST || "0.0.0.0";
 
   // JSON parsing with high limit for base64 file uploads
   app.use(express.json({ limit: "50mb" }));

@@ -497,12 +497,11 @@ export const MemberGoalTasksView: React.FC<MemberGoalTasksViewProps> = ({
 
             <div>
               <label className="block font-bold text-slate-700 dark:text-slate-200 mb-1">
-                Explanation & Delivery Notes (How did you do this?)
+                Explanation & Delivery Notes (Optional)
               </label>
               <textarea
-                required
                 rows={4}
-                placeholder="Explain the actions taken, milestones completed, receipts obtained, or blockers faced..."
+                placeholder="Optional: Explain the actions taken, milestones completed, receipts obtained, or blockers faced..."
                 value={modalComment}
                 onChange={(e) => setModalComment(e.target.value)}
                 className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-3 outline-none focus:ring-2 focus:ring-emerald-500"

@@ -1059,13 +1059,16 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     }
     setLocalStream(null);
 
-    // Compile meeting history record
+    // Compile meeting history record with deterministic session ID to prevent duplicates when multiple members leave
     const duration = elapsedSeconds;
     const startedTime = new Date(Date.now() - duration * 1000).toISOString();
     const endedTime = new Date().toISOString();
+    const sanitizedTitle = (meetingName || `${channelName} Live Meeting`).toLowerCase().replace(/[^a-z0-9]/g, "_");
+    const sessionHourKey = new Date(startedTime).toISOString().slice(0, 13);
+    const stableSessionId = hostedMeetInfo?.id || `meet_session_${activeOrg?.id || "default"}_${sanitizedTitle}_${sessionHourKey}`;
 
     const record: LiveMeetHistoryRecord = {
-      id: `meet-${Date.now()}`,
+      id: stableSessionId,
       meetingTitle: meetingName || `${channelName} Live Meeting`,
       channelName: channelName || "General",
       orgId: activeOrg?.id || "default",
@@ -1105,25 +1108,33 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       const storageKey = `impacto_meeting_history_${activeOrg?.id || "default"}`;
       const existingStr = localStorage.getItem(storageKey);
       const existing: LiveMeetHistoryRecord[] = existingStr ? JSON.parse(existingStr) : [];
-      const updated = [record, ...existing.filter(e => e.id !== record.id)];
+      const isSameSession = (e: LiveMeetHistoryRecord) =>
+        e.id === record.id ||
+        (e.meetingTitle === record.meetingTitle &&
+          Math.abs(new Date(e.startedAt).getTime() - new Date(record.startedAt).getTime()) < 900000);
+
+      const updated = [record, ...existing.filter(e => !isSameSession(e))];
       localStorage.setItem(storageKey, JSON.stringify(updated));
 
-      // Asynchronously persist to Supabase meeting_sessions database if configured
+      // Asynchronously persist to Supabase meeting_sessions database if configured using upsert
       if (isSupabaseConfigured) {
         Promise.resolve(
           supabase
             .from("meeting_sessions")
-            .insert({
-              id: record.id,
-              org_id: record.orgId,
-              meeting_title: record.meetingTitle,
-              channel_name: record.channelName,
-              started_at: record.startedAt,
-              ended_at: record.endedAt,
-              duration_seconds: record.durationSeconds,
-              duration_formatted: record.durationFormatted,
-              recorded_by: record.recordedBy
-            })
+            .upsert(
+              {
+                id: record.id,
+                org_id: record.orgId,
+                meeting_title: record.meetingTitle,
+                channel_name: record.channelName,
+                started_at: record.startedAt,
+                ended_at: record.endedAt,
+                duration_seconds: record.durationSeconds,
+                duration_formatted: record.durationFormatted,
+                recorded_by: record.recordedBy
+              },
+              { onConflict: "id" }
+            )
         )
           .then(async (res: any) => {
             if (res?.error) {

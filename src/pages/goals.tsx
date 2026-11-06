@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useLocalTranslation } from "../locales/additional-translations";
 import { useOrgStore } from "../store/orgStore";
-import { useGoals, useCreateGoal, useUpdateGoal, useDeleteGoal, useMembers } from "../hooks/useImpactoData";
+import { useGoals, useCreateGoal, useUpdateGoal, useDeleteGoal, useMembers, useBroadcastNotification } from "../hooks/useImpactoData";
 import { Card, Button, Input, Badge, EmptyState, Modal } from "../components/ui";
 import { 
   Plus, 
@@ -42,6 +42,7 @@ import { MemberGoalTasksView } from "../components/MemberGoalTasksView";
 export const GoalsPage: React.FC = () => {
   const { t } = useLocalTranslation();
   const { activeOrg, activeMember } = useOrgStore();
+  const broadcastNotificationMutation = useBroadcastNotification();
   const canManageGoals = activeMember?.role && activeMember.role !== "member";
 
   const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
@@ -394,6 +395,17 @@ export const GoalsPage: React.FC = () => {
     };
 
     setAdvancedTasks((prev) => [...prev, newTask]);
+
+    if (activeOrg?.id) {
+      broadcastNotificationMutation.mutate({
+        org_id: activeOrg.id,
+        sent_by: activeMember?.user_id || "00000000-0000-0000-0000-000000000000",
+        recipient_group: "Assigned Members",
+        recipient_count: newTask.assigned_to_member_ids?.length || 1,
+        body_text: `Task Assignment: You have been assigned the subtask "${newTask.title}" under Goal "${goalTitle.trim() || "Strategic Goal"}".`,
+      });
+    }
+
     setDraftTaskTitle("");
     setDraftTaskDescription("");
     setDraftTaskMemberIds([]);

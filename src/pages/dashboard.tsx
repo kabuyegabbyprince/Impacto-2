@@ -5,6 +5,7 @@ import { EventScheduleCalendar } from "../components/EventScheduleCalendar";
 import { ChatVideoMeetModal } from "../components/ChatVideoMeetModal";
 import { MeetingHistoryModal } from "../components/MeetingHistoryModal";
 import { getTaskDeadlineNotice, useTaskProgressSync } from "../hooks/useTaskProgressSync";
+import { MyTasksWorkspaceModal } from "../components/MyTasksWorkspaceModal";
 
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -310,6 +311,13 @@ export const DashboardHome: React.FC = () => {
   const { t } = useLocalTranslation();
   const { user } = useAuthStore();
   const { activeOrg, activeMember } = useOrgStore();
+  const { formatAmount } = useCurrencyStore();
+  const { addToast } = useToast();
+  const navigate = useNavigate();
+
+  const [isMyTasksOpen, setIsMyTasksOpen] = useState(false);
+  const [pendingPwResetCount, setPendingPwResetCount] = useState(0);
+  const broadcastNotificationMutation = useBroadcastNotification();
 
   // If non-admin user is in pending or rejected status, display the Wait Room
   if (!user?.is_superadmin && (activeMember?.role as string) !== "org_admin") {
@@ -325,11 +333,6 @@ export const DashboardHome: React.FC = () => {
   const typedMember = activeMember as any;
   const isAdmin = activeMember?.role === "org_admin" || activeMember?.role === "manager" || activeMember?.role === "accountant";
   const isAccountant = activeMember?.role === "accountant";
-  const { formatAmount } = useCurrencyStore();
-  const { addToast } = useToast();
-  const navigate = useNavigate();
-
-  const [pendingPwResetCount, setPendingPwResetCount] = useState(0);
 
   useEffect(() => {
     if (!activeOrg?.id || !isAdmin) return;
@@ -1975,6 +1978,16 @@ export const DashboardHome: React.FC = () => {
           members={members || []}
         />
       )}
+
+      {/* My Tasks Workspace Modal */}
+      <MyTasksWorkspaceModal
+        isOpen={isMyTasksOpen}
+        onClose={() => setIsMyTasksOpen(false)}
+        events={events || []}
+        goals={goals || []}
+        currentMember={activeMember}
+        activeOrg={activeOrg}
+      />
     </div>
   );
 };
@@ -2502,13 +2515,24 @@ export const ChatRoom: React.FC = () => {
 
   const { data: fetchedMeetingSessions } = useMeetingSessions(activeOrg?.id);
 
+  const isDuplicateMeetingSession = (r1: LiveMeetHistoryRecord, r2: LiveMeetHistoryRecord) =>
+    r1.id === r2.id ||
+    (r1.meetingTitle === r2.meetingTitle &&
+      Math.abs(new Date(r1.startedAt).getTime() - new Date(r2.startedAt).getTime()) < 900000);
+
   useEffect(() => {
     if (fetchedMeetingSessions && fetchedMeetingSessions.length > 0) {
       setMeetingHistory(prev => {
-        const map = new Map<string, LiveMeetHistoryRecord>();
-        prev.forEach(r => map.set(r.id, r));
-        fetchedMeetingSessions.forEach(r => map.set(r.id, r));
-        return Array.from(map.values()).sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+        const merged: LiveMeetHistoryRecord[] = [...prev];
+        fetchedMeetingSessions.forEach(incoming => {
+          const idx = merged.findIndex(existing => isDuplicateMeetingSession(existing, incoming));
+          if (idx !== -1) {
+            merged[idx] = incoming;
+          } else {
+            merged.push(incoming);
+          }
+        });
+        return merged.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
       });
     }
   }, [fetchedMeetingSessions]);
@@ -2533,7 +2557,13 @@ export const ChatRoom: React.FC = () => {
   };
 
   const handleMeetingEnded = (record: LiveMeetHistoryRecord) => {
-    setMeetingHistory(prev => [record, ...prev.filter(r => r.id !== record.id)]);
+    setMeetingHistory(prev => {
+      const next = [record, ...prev.filter(r => !isDuplicateMeetingSession(r, record))];
+      try {
+        localStorage.setItem(`impacto_meeting_history_${activeOrg?.id || "default"}`, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
     addToast(`Meeting "${record.meetingTitle}" saved to history`, "success");
   };
 
@@ -6807,12 +6837,44 @@ const _unusedOldImpactTracker = () => {
 // ==========================================
 export const EventsCalendar: React.FC = () => {
   const { activeOrg, activeMember } = useOrgStore();
+  const { user } = useAuthStore();
   const { addToast } = useToast();
   const { t } = useLocalTranslation();
   const navigate = useNavigate();
   const { data, refetch } = useEvents(activeOrg?.id);
   const events = (data || []) as ImpactEvent[];
+  const { data: goals } = useGoals(activeOrg?.id);
+  const broadcastNotificationMutation = useBroadcastNotification();
+  const [isMyTasksOpen, setIsMyTasksOpen] = useState(false);
   const createMutation = useCreateEvent();
+
+  const myAssignedTasks = React.useMemo(() => {
+    if (!events) return [];
+    const list: Array<{ task: EventTask; event: ImpactEvent }> = [];
+    events.forEach((ev) => {
+      (ev.tasks || []).forEach((t) => {
+        const isAssigned =
+          (activeMember?.id && t.assigned_to_member_id === activeMember.id) ||
+          (t.assigned_to_member_ids?.includes(activeMember?.id || "")) ||
+          (activeMember?.user?.full_name && t.assigned_to_name && t.assigned_to_name.toLowerCase().includes(activeMember.user.full_name.toLowerCase()));
+        if (isAssigned) list.push({ task: t, event: ev });
+      });
+    });
+    return list;
+  }, [events, activeMember]);
+
+  const myAssignedGoalTasks = React.useMemo(() => {
+    if (!goals || !activeMember?.id) return [];
+    const list: { goal: Goal; task: GoalTask }[] = [];
+    goals.forEach((g) => {
+      (g.tasks || []).forEach((t) => {
+        if (t.assigned_to_member_id === activeMember.id || t.assigned_to_member_ids?.includes(activeMember.id)) {
+          list.push({ goal: g, task: t });
+        }
+      });
+    });
+    return list;
+  }, [goals, activeMember?.id]);
 
   const [openAddModal, setOpenAddModal] = useState(false);
   const [title, setTitle] = useState("");
@@ -6887,6 +6949,17 @@ export const EventsCalendar: React.FC = () => {
       }
       return updated;
     });
+
+    // Dispatch task assignment notification
+    if (activeOrg?.id) {
+      broadcastNotificationMutation.mutate({
+        org_id: activeOrg.id,
+        sent_by: user?.id || "00000000-0000-0000-0000-000000000000",
+        recipient_group: "Assigned Members",
+        recipient_count: assignedIds.length || 1,
+        body_text: `Task Assignment: You have been assigned the task "${todoTitle.trim()}" for Event "${selectedEvent?.title || title || "Community Event"}".`,
+      });
+    }
     setTodoTitle("");
     setTodoDueDate("");
     setTodoMemberIds([]);
@@ -7462,6 +7535,15 @@ export const EventsCalendar: React.FC = () => {
           <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-0.5">{t("dashboard_labels.events_board_subtitle")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            icon={<CheckSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
+            onClick={() => setIsMyTasksOpen(true)}
+            className="font-bold border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 hover:bg-emerald-100 dark:bg-emerald-950/30 cursor-pointer"
+          >
+            My Tasks ({myAssignedTasks.length + myAssignedGoalTasks.length})
+          </Button>
           {isAdmin && (
             <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setOpenAddModal(true)}>
               Event Plan
@@ -7892,6 +7974,16 @@ export const EventsCalendar: React.FC = () => {
           </Button>
         </form>
       </Modal>
+
+      {/* My Tasks Workspace Modal */}
+      <MyTasksWorkspaceModal
+        isOpen={isMyTasksOpen}
+        onClose={() => setIsMyTasksOpen(false)}
+        events={events || []}
+        goals={goals || []}
+        currentMember={activeMember}
+        activeOrg={activeOrg}
+      />
     </div>
   );
 };
