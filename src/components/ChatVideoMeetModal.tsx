@@ -53,6 +53,7 @@ interface ChatVideoMeetModalProps {
   onMeetingEnded?: (record: LiveMeetHistoryRecord) => void;
   hostedMeetInfo?: HostedMeetInfo | null;
   onHostedMeetEnded?: () => void;
+  guestUser?: { id: string; full_name: string; role: string } | null;
 }
 
 interface MeetMessage {
@@ -165,10 +166,24 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   documents,
   onMeetingEnded,
   hostedMeetInfo,
-  onHostedMeetEnded
+  onHostedMeetEnded,
+  guestUser
 }) => {
   const { user } = useAuthStore();
   const { addToast } = useToast();
+
+  const effectiveUser = useMemo(() => {
+    if (user) return user;
+    if (guestUser) {
+      return {
+        id: guestUser.id,
+        full_name: guestUser.full_name,
+        email: `${guestUser.id}@guest.local`,
+        role: guestUser.role
+      } as any;
+    }
+    return null;
+  }, [user, guestUser]);
 
   const [meetingName, setMeetingName] = useState<string>(
     hostedMeetInfo?.meetingTitle || meetingTitle || `${channelName} Live Meeting`
@@ -186,13 +201,13 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   }, [hostedMeetInfo, meetingTitle, channelName]);
 
   const myPeerId = useMemo(() => {
-    return user?.id || `peer-${Math.random().toString(36).substring(2, 9)}`;
-  }, [user]);
+    return effectiveUser?.id || `peer-${Math.random().toString(36).substring(2, 9)}`;
+  }, [effectiveUser]);
 
   const isAdmin = useMemo(() => {
-    const role = (activeMember?.role || "").toLowerCase();
-    return role === "admin" || role === "owner" || role === "lead" || user?.id === activeOrg?.owner_id;
-  }, [activeMember, user, activeOrg]);
+    const role = (activeMember?.role || guestUser?.role || "").toLowerCase();
+    return role === "admin" || role === "owner" || role === "lead" || effectiveUser?.id === activeOrg?.owner_id;
+  }, [activeMember, guestUser, effectiveUser, activeOrg]);
 
   const isLeavingRef = useRef(false);
 
@@ -217,6 +232,19 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   const [remotePeers, setRemotePeers] = useState<Record<string, PeerParticipant>>({});
   const peerConnectionsRef = useRef<Record<string, RTCPeerConnection>>({});
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  // Unified broadcast function across BroadcastChannel and real WebSocket
+  const broadcastSignalingMessage = useCallback((msg: any) => {
+    try {
+      broadcastChannelRef.current?.postMessage(msg);
+    } catch (e) {}
+    try {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify(msg));
+      }
+    } catch (e) {}
+  }, []);
 
   // In-call chat messages (starts clean with zero default messages)
   const [callMessages, setCallMessages] = useState<MeetMessage[]>([]);
@@ -232,23 +260,19 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
 
   const handleAdmitPeer = (userId: string, userName: string) => {
     setPendingAdmissions(prev => prev.filter(p => p.userId !== userId));
-    try {
-      broadcastChannelRef.current?.postMessage({
-        type: "ADMIT_PEER",
-        userId
-      });
-    } catch (e) {}
+    broadcastSignalingMessage({
+      type: "ADMIT_PEER",
+      userId
+    });
     addToast(`Admitted ${userName} to the meeting.`, "success");
   };
 
   const handleDeclinePeer = (userId: string, userName: string) => {
     setPendingAdmissions(prev => prev.filter(p => p.userId !== userId));
-    try {
-      broadcastChannelRef.current?.postMessage({
-        type: "DECLINE_PEER",
-        userId
-      });
-    } catch (e) {}
+    broadcastSignalingMessage({
+      type: "DECLINE_PEER",
+      userId
+    });
     addToast(`Declined admission for ${userName}.`, "info");
   };
 
@@ -293,33 +317,13 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   const [newAgendaTitle, setNewAgendaTitle] = useState("");
   const [newAgendaAssignee, setNewAgendaAssignee] = useState("");
 
-  // Elapsed timer & Hardware permission prompt on join
+  // Elapsed timer on join (camera and microphone default OFF)
   useEffect(() => {
     if (!open) {
       setElapsedSeconds(0);
       return;
     }
     playMeetingChime("join");
-
-    // Automatically request both camera and microphone permission on join
-    const requestHardwarePermissions = async () => {
-      try {
-        if (navigator.mediaDevices?.getUserMedia) {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-          setLocalStream(stream);
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = stream;
-          }
-          setMicOn(true);
-          setVideoOn(true);
-          addToast("Camera and microphone permission granted", "success");
-        }
-      } catch (err: any) {
-        console.warn("Hardware permission prompt error:", err);
-        addToast("Camera or microphone access was denied or unavailable by browser. You can still participate in text chat and read documents.", "info");
-      }
-    };
-    requestHardwarePermissions();
 
     const interval = setInterval(() => {
       setElapsedSeconds(prev => prev + 1);
@@ -432,15 +436,10 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   useEffect(() => {
     if (!open) return;
 
-    const channelIdentifier = `impacto_call_org_${activeOrg?.id || "default"}`;
+    const orgId = activeOrg?.id || "default";
+    const channelIdentifier = `impacto_call_org_${orgId}`;
     const broadcast = new BroadcastChannel(channelIdentifier);
     broadcastChannelRef.current = broadcast;
-
-    const broadcastSignalingMessage = (msg: any) => {
-      try {
-        broadcast.postMessage(msg);
-      } catch (e) {}
-    };
 
     // Helper: Create peer connection for a remote peer
     const createPeerConnection = (targetPeerId: string, isInitiator: boolean) => {
@@ -451,11 +450,16 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       const pc = new RTCPeerConnection(ICE_SERVERS);
       peerConnectionsRef.current[targetPeerId] = pc;
 
-      // Add local tracks to connection
-      if (localStream) {
+      // Add local tracks to connection, or add transceivers if mic/camera are OFF
+      if (localStream && localStream.getTracks().length > 0) {
         localStream.getTracks().forEach(track => {
           pc.addTrack(track, localStream);
         });
+      } else {
+        try {
+          pc.addTransceiver("audio", { direction: "sendrecv" });
+          pc.addTransceiver("video", { direction: "sendrecv" });
+        } catch (e) {}
       }
 
       // Handle ICE Candidates
@@ -506,10 +510,63 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       return pc;
     };
 
-    // Handle incoming signaling & presence messages
-    broadcast.onmessage = async (event) => {
-      const msg = event.data;
+    // Shared handler for incoming signaling & presence messages
+    const handleIncomingSignaling = async (msg: any) => {
       if (!msg || msg.fromPeerId === myPeerId) return;
+
+      if (msg.type === "ROOM_SNAPSHOT") {
+        if (Array.isArray(msg.peers)) {
+          msg.peers.forEach((peer: any) => {
+            if (peer.peerId !== myPeerId) {
+              setRemotePeers(prev => ({
+                ...prev,
+                [peer.peerId]: {
+                  peerId: peer.peerId,
+                  userId: peer.userId,
+                  name: peer.name,
+                  role: peer.role,
+                  isMe: false,
+                  mic: peer.mic ?? false,
+                  video: peer.video ?? false,
+                  speaking: peer.speaking ?? false,
+                  handRaised: !!peer.handRaised
+                }
+              }));
+              createPeerConnection(peer.peerId, true);
+            }
+          });
+        }
+        if (Array.isArray(msg.chatMessages) && msg.chatMessages.length > 0) {
+          setCallMessages(prev => {
+            const merged = [...prev];
+            msg.chatMessages.forEach((m: MeetMessage) => {
+              if (!merged.some(e => e.id === m.id)) {
+                merged.push(m);
+              }
+            });
+            return merged;
+          });
+        }
+        if (msg.sharedDoc) {
+          setSharedDoc(msg.sharedDoc);
+          setDocsUsedInMeeting(prev => {
+            if (prev.some(d => d.id === msg.sharedDoc.id)) return prev;
+            return [...prev, msg.sharedDoc];
+          });
+        }
+        if (Array.isArray(msg.agendaPoints) && msg.agendaPoints.length > 0) {
+          setAgendaPoints(prev => {
+            const merged = [...prev];
+            msg.agendaPoints.forEach((p: AgendaPoint) => {
+              if (!merged.some(e => e.id === p.id)) {
+                merged.push(p);
+              }
+            });
+            return merged;
+          });
+        }
+        return;
+      }
 
       if (msg.type === "PEER_JOINED") {
         setRemotePeers(prev => ({
@@ -532,9 +589,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
           type: "PEER_PRESENCE",
           fromPeerId: myPeerId,
           toPeerId: msg.fromPeerId,
-          userId: user?.id || "guest",
-          name: user?.full_name || "Member",
-          role: activeMember?.role || "Member",
+          userId: effectiveUser?.id || "guest",
+          name: effectiveUser?.full_name || "Member",
+          role: activeMember?.role || guestUser?.role || "Member",
           mic: micOnRef.current,
           video: videoOnRef.current,
           handRaised: handRaisedRef.current
@@ -557,7 +614,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             fromPeerId: myPeerId,
             toPeerId: msg.fromPeerId,
             doc: sharedDocRef.current,
-            presenterName: user?.full_name || "Presenter"
+            presenterName: effectiveUser?.full_name || "Presenter"
           });
         }
 
@@ -597,7 +654,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       } else if (msg.type === "PEER_LEFT") {
         const targetId = msg.fromPeerId;
         if (peerConnectionsRef.current[targetId]) {
-          peerConnectionsRef.current[targetId].close();
+          try {
+            peerConnectionsRef.current[targetId].close();
+          } catch (e) {}
           delete peerConnectionsRef.current[targetId];
         }
         setRemotePeers(prev => {
@@ -709,13 +768,47 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       }
     };
 
-    // Announce my arrival into the call room
+    broadcast.onmessage = (event) => {
+      handleIncomingSignaling(event.data);
+    };
+
+    // WebSocket connection for real cross-device network communication
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws/meet?orgId=${encodeURIComponent(orgId)}&peerId=${encodeURIComponent(myPeerId)}&userId=${encodeURIComponent(effectiveUser?.id || "guest")}&name=${encodeURIComponent(effectiveUser?.full_name || "Member")}&role=${encodeURIComponent(activeMember?.role || guestUser?.role || "Member")}`;
+
+    let ws: WebSocket | null = null;
+    try {
+      ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+      ws.onmessage = async (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          await handleIncomingSignaling(msg);
+        } catch (e) {}
+      };
+      ws.onopen = () => {
+        broadcastSignalingMessage({
+          type: "PEER_JOINED",
+          fromPeerId: myPeerId,
+          userId: effectiveUser?.id || "guest",
+          name: effectiveUser?.full_name || "You",
+          role: activeMember?.role || guestUser?.role || "Member",
+          mic: micOnRef.current,
+          video: videoOnRef.current,
+          handRaised: handRaisedRef.current
+        });
+      };
+    } catch (e) {
+      console.warn("WebSocket meet connection failed, falling back to BroadcastChannel:", e);
+    }
+
+    // Announce my arrival into the local call room
     broadcastSignalingMessage({
       type: "PEER_JOINED",
       fromPeerId: myPeerId,
-      userId: user?.id || "guest",
-      name: user?.full_name || "You",
-      role: activeMember?.role || "Member",
+      userId: effectiveUser?.id || "guest",
+      name: effectiveUser?.full_name || "You",
+      role: activeMember?.role || guestUser?.role || "Member",
       mic: micOnRef.current,
       video: videoOnRef.current,
       handRaised: handRaisedRef.current
@@ -727,27 +820,31 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         type: "PEER_LEFT",
         fromPeerId: myPeerId
       });
+      if (ws) {
+        try {
+          ws.close();
+        } catch (e) {}
+        wsRef.current = null;
+      }
       broadcast.close();
       Object.values(peerConnectionsRef.current).forEach((pc: RTCPeerConnection) => pc.close());
       peerConnectionsRef.current = {};
     };
-  }, [open, activeOrg?.id, myPeerId, user, activeMember]);
+  }, [open, activeOrg?.id, myPeerId, effectiveUser, activeMember, guestUser, isAdmin, broadcastSignalingMessage]);
 
   // Sync state changes (mic, video, hand, speaking) to peers
   useEffect(() => {
-    if (!open || !broadcastChannelRef.current) return;
-    try {
-      broadcastChannelRef.current.postMessage({
-        type: "PEER_STATE_UPDATE",
-        fromPeerId: myPeerId,
-        name: user?.full_name || "You",
-        mic: micOn,
-        video: videoOn,
-        handRaised,
-        speaking: isSpeaking
-      });
-    } catch (e) {}
-  }, [open, micOn, videoOn, handRaised, isSpeaking, myPeerId, user]);
+    if (!open) return;
+    broadcastSignalingMessage({
+      type: "PEER_STATE_UPDATE",
+      fromPeerId: myPeerId,
+      name: effectiveUser?.full_name || "You",
+      mic: micOn,
+      video: videoOn,
+      handRaised,
+      speaking: isSpeaking
+    });
+  }, [open, micOn, videoOn, handRaised, isSpeaking, myPeerId, effectiveUser, broadcastSignalingMessage]);
 
   // Callback ref for local video element
   const handleLocalVideoRef = useCallback((el: HTMLVideoElement | null) => {
@@ -824,10 +921,22 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     } else {
       try {
         if (!navigator.mediaDevices?.getUserMedia) {
-          addToast("Your browser does not support camera access.", "error");
+          addToast("Your browser or device does not support camera access.", "error");
           return;
         }
-        const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        let videoStream: MediaStream | null = null;
+        try {
+          videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } } });
+        } catch (e1) {
+          try {
+            videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          } catch (e2) {
+            throw e2;
+          }
+        }
+        if (!videoStream || videoStream.getVideoTracks().length === 0) {
+          throw new Error("No video tracks found");
+        }
         const newVideoTrack = videoStream.getVideoTracks()[0];
         let stream = localStream;
         if (stream) {
@@ -854,8 +963,8 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         addToast("Camera video active", "success");
       } catch (err: any) {
         setVideoOn(false);
-        console.warn("Camera permission error:", err);
-        addToast("Camera permission was blocked or denied by browser. Please click the camera/mic icon in your address bar to allow permissions.", "error");
+        console.warn("Camera permission/device error:", err);
+        addToast("Camera access was denied or unavailable on this device. Please check browser permissions and ensure no other app is using the camera.", "error");
       }
     }
   };
@@ -904,7 +1013,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
 
     const newMsg: MeetMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      sender: user?.full_name || "You",
+      sender: effectiveUser?.full_name || "You",
       text: inputMessage.trim(),
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     };
@@ -918,13 +1027,11 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     });
     setInputMessage("");
 
-    try {
-      broadcastChannelRef.current?.postMessage({
-        type: "NEW_CHAT_MESSAGE",
-        fromPeerId: myPeerId,
-        data: newMsg
-      });
-    } catch (e) {}
+    broadcastSignalingMessage({
+      type: "NEW_CHAT_MESSAGE",
+      fromPeerId: myPeerId,
+      data: newMsg
+    });
   };
 
   const handleOpenDocReadMode = (doc: Document) => {
@@ -945,7 +1052,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       title: newAgendaTitle.trim(),
       assignee: newAgendaAssignee.trim() || "Lead Officer",
       status: "open",
-      author: user?.full_name || "Host",
+      author: effectiveUser?.full_name || "Host",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     };
 
@@ -954,13 +1061,11 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     setNewAgendaAssignee("");
     addToast("New action point recorded in meeting minutes", "success");
 
-    try {
-      broadcastChannelRef.current?.postMessage({
-        type: "NEW_AGENDA",
-        fromPeerId: myPeerId,
-        data: newPoint
-      });
-    } catch (e) {}
+    broadcastSignalingMessage({
+      type: "NEW_AGENDA",
+      fromPeerId: myPeerId,
+      data: newPoint
+    });
   };
 
   const handleToggleAgendaStatus = (id: string) => {
@@ -982,14 +1087,12 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       return [...prev, doc];
     });
 
-    try {
-      broadcastChannelRef.current?.postMessage({
-        type: "SYNC_SHARED_DOC",
-        fromPeerId: myPeerId,
-        doc: doc,
-        presenterName: user?.full_name || "Presenter"
-      });
-    } catch (e) {}
+    broadcastSignalingMessage({
+      type: "SYNC_SHARED_DOC",
+      fromPeerId: myPeerId,
+      doc: doc,
+      presenterName: effectiveUser?.full_name || "Presenter"
+    });
 
     addToast(`Presenting ${doc.name} to everyone`, "info");
     setCallMessages(prev => [
@@ -997,7 +1100,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       {
         id: `msg-doc-${Date.now()}`,
         sender: "System",
-        text: `Shared document set to "${doc.name}" by ${user?.full_name || "Presenter"}`,
+        text: `Shared document set to "${doc.name}" by ${effectiveUser?.full_name || "Presenter"}`,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       }
     ]);
@@ -1005,13 +1108,11 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
 
   const handleStopPresentingDoc = () => {
     setSharedDoc(null);
-    try {
-      broadcastChannelRef.current?.postMessage({
-        type: "STOP_SHARED_DOC",
-        fromPeerId: myPeerId,
-        presenterName: user?.full_name || "Presenter"
-      });
-    } catch (e) {}
+    broadcastSignalingMessage({
+      type: "STOP_SHARED_DOC",
+      fromPeerId: myPeerId,
+      presenterName: effectiveUser?.full_name || "Presenter"
+    });
     addToast("Document presentation ended", "info");
   };
 
@@ -1023,15 +1124,13 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     const confirmed = window.confirm(`Remove ${targetName} from the meeting?`);
     if (!confirmed) return;
 
-    try {
-      broadcastChannelRef.current?.postMessage({
-        type: "KICK_PEER",
-        fromPeerId: myPeerId,
-        targetPeerId,
-        targetName,
-        kickedBy: user?.full_name || "Administrator"
-      });
-    } catch (e) {}
+    broadcastSignalingMessage({
+      type: "KICK_PEER",
+      fromPeerId: myPeerId,
+      targetPeerId,
+      targetName,
+      kickedBy: effectiveUser?.full_name || "Administrator"
+    });
 
     if (peerConnectionsRef.current[targetPeerId]) {
       try {
@@ -1061,16 +1160,16 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
 
     // Compile meeting history record with deterministic session ID to prevent duplicates when multiple members leave
     const duration = elapsedSeconds;
-    const startedTime = new Date(Date.now() - duration * 1000).toISOString();
+    const startedTime = hostedMeetInfo?.startedAt || new Date(Date.now() - duration * 1000).toISOString();
     const endedTime = new Date().toISOString();
     const sanitizedTitle = (meetingName || `${channelName} Live Meeting`).toLowerCase().replace(/[^a-z0-9]/g, "_");
-    const sessionHourKey = new Date(startedTime).toISOString().slice(0, 13);
-    const stableSessionId = hostedMeetInfo?.id || `meet_session_${activeOrg?.id || "default"}_${sanitizedTitle}_${sessionHourKey}`;
+    const stableSessionId = hostedMeetInfo?.meetingId || (hostedMeetInfo as any)?.id || `meet_session_${activeOrg?.id || "default"}_${sanitizedTitle}`;
 
     const record: LiveMeetHistoryRecord = {
       id: stableSessionId,
       meetingTitle: meetingName || `${channelName} Live Meeting`,
       channelName: channelName || "General",
+      channelId: hostedMeetInfo?.channelId,
       orgId: activeOrg?.id || "default",
       startedAt: startedTime,
       endedAt: endedTime,
@@ -1101,7 +1200,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         text: m.text,
         time: m.time
       })),
-      recordedBy: user?.full_name || "Admin"
+      recordedBy: effectiveUser?.full_name || "Admin"
     };
 
     try {
@@ -1110,8 +1209,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       const existing: LiveMeetHistoryRecord[] = existingStr ? JSON.parse(existingStr) : [];
       const isSameSession = (e: LiveMeetHistoryRecord) =>
         e.id === record.id ||
+        (hostedMeetInfo?.meetingId && e.id === hostedMeetInfo.meetingId) ||
         (e.meetingTitle === record.meetingTitle &&
-          Math.abs(new Date(e.startedAt).getTime() - new Date(record.startedAt).getTime()) < 900000);
+          Math.abs(new Date(e.startedAt).getTime() - new Date(startedTime).getTime()) < 1800000);
 
       const updated = [record, ...existing.filter(e => !isSameSession(e))];
       localStorage.setItem(storageKey, JSON.stringify(updated));
@@ -1212,9 +1312,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     const list: PeerParticipant[] = [
       {
         peerId: myPeerId,
-        userId: user?.id || "me",
-        name: user?.full_name || "You",
-        role: activeMember?.role || "Host",
+        userId: effectiveUser?.id || "me",
+        name: effectiveUser?.full_name || "You",
+        role: activeMember?.role || guestUser?.role || "Host",
         isMe: true,
         mic: micOn,
         video: videoOn,
@@ -1230,7 +1330,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     });
 
     return list;
-  }, [myPeerId, user, activeMember, micOn, videoOn, isSpeaking, handRaised, localStream, remotePeers]);
+  }, [myPeerId, effectiveUser, activeMember, guestUser, micOn, videoOn, isSpeaking, handRaised, localStream, remotePeers]);
 
   // Compute adaptive Google Meet grid layout class
   const gridLayoutClass = useMemo(() => {
@@ -1343,9 +1443,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
           <button
             type="button"
             onClick={() => {
-              const meetingUrl = `${window.location.origin}/dashboard?joinMeet=${activeOrg?.id || "default"}`;
+              const meetingUrl = `${window.location.origin}/meet?org=${activeOrg?.id || "default"}`;
               navigator.clipboard.writeText(meetingUrl).then(() => {
-                addToast("Permanent meeting link copied to clipboard", "success");
+                addToast("Universal meeting link copied to clipboard", "success");
               }).catch(() => {
                 addToast("Failed to copy link", "error");
               });

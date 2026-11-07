@@ -36,6 +36,7 @@ import { useOrgStore } from "../store/orgStore";
 import { useToast } from "./Toast";
 import { useCreateEvent, useMembers, useBroadcastNotification } from "../hooks/useImpactoData";
 import { MockDB } from "../lib/mockData";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
 
 export const PRESET_ROOM_IMAGES = [
   {
@@ -153,7 +154,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
   }, [hasRentableSpaces, showSpaceCalendarPublicly, spaces, requests, orgId]);
 
   // Sync with orgStore when master settings change
-  const handleToggleSpaceRental = (enable: boolean) => {
+  const handleToggleSpaceRental = async (enable: boolean) => {
     setHasRentableSpaces(enable);
     localStorage.setItem(`org_has_rentable_spaces_${orgId}`, String(enable));
     if (activeOrg) {
@@ -167,15 +168,30 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
       const allOrgs = MockDB.getOrgs();
       const updatedOrgs = allOrgs.map((o) => (o.id === activeOrg.id ? updatedOrg : o));
       MockDB.saveOrgs(updatedOrgs);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase
+            .from("organizations")
+            .update({
+              has_rentable_spaces: enable,
+              show_space_calendar_publicly: showSpaceCalendarPublicly,
+              rentable_spaces: spaces
+            })
+            .eq("id", activeOrg.id);
+        } catch (err) {
+          console.warn("Supabase organization rentable spaces sync notice:", err);
+        }
+      }
     }
     if (enable) {
-      addToast("Space rental enabled for this organization! You can now log your rooms.", "success");
+      addToast("Space rental enabled for this organization across all devices!", "success");
     } else {
       addToast("Space rental disabled.", "info");
     }
   };
 
-  const handleTogglePublicCalendar = (enable: boolean) => {
+  const handleTogglePublicCalendar = async (enable: boolean) => {
     setShowSpaceCalendarPublicly(enable);
     localStorage.setItem(`org_show_space_calendar_${orgId}`, String(enable));
     if (activeOrg) {
@@ -187,6 +203,17 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
       const allOrgs = MockDB.getOrgs();
       const updatedOrgs = allOrgs.map((o) => (o.id === activeOrg.id ? updatedOrg : o));
       MockDB.saveOrgs(updatedOrgs);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase
+            .from("organizations")
+            .update({ show_space_calendar_publicly: enable })
+            .eq("id", activeOrg.id);
+        } catch (err) {
+          console.warn("Supabase organization public calendar sync notice:", err);
+        }
+      }
     }
     addToast(enable ? "Calendar is now visible on public page!" : "Calendar hidden from public page.", "info");
   };

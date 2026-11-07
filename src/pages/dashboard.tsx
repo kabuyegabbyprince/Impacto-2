@@ -2385,7 +2385,30 @@ export const ChatRoom: React.FC = () => {
 
   useEffect(() => {
     if (!openMeetingWaitRoomModal || !activeHostedMeet) return;
-    const bc = new BroadcastChannel(`impacto_call_org_${activeOrg?.id || "default"}`);
+    const orgId = activeOrg?.id || "default";
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws/meet?orgId=${encodeURIComponent(orgId)}&peerId=wait-${user?.id}&userId=${encodeURIComponent(user?.id || "guest")}&name=${encodeURIComponent(user?.full_name || "Member")}&role=Waiting`;
+    let ws: WebSocket | null = null;
+    try {
+      ws = new WebSocket(wsUrl);
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === "ADMIT_PEER" && msg.userId === user?.id) {
+            setOpenMeetingWaitRoomModal(false);
+            setMeetingTitleToStart(activeHostedMeet.meetingTitle);
+            setOpenMeetModal(true);
+            addToast("Admission approved by host. Entering meet...", "success");
+          } else if (msg.type === "DECLINE_PEER" && msg.userId === user?.id) {
+            setOpenMeetingWaitRoomModal(false);
+            addToast("Admission request declined by host.", "error");
+          }
+        } catch (e) {}
+      };
+    } catch (e) {}
+
+    const bc = new BroadcastChannel(`impacto_call_org_${orgId}`);
     bc.onmessage = (ev) => {
       if (ev.data?.type === "ADMIT_PEER" && ev.data.userId === user?.id) {
         setOpenMeetingWaitRoomModal(false);
@@ -2398,6 +2421,9 @@ export const ChatRoom: React.FC = () => {
       }
     };
     return () => {
+      if (ws) {
+        try { ws.close(); } catch (e) {}
+      }
       bc.close();
     };
   }, [openMeetingWaitRoomModal, activeHostedMeet, user?.id, activeOrg?.id]);
@@ -2405,7 +2431,18 @@ export const ChatRoom: React.FC = () => {
   useEffect(() => {
     const orgId = activeOrg?.id || "default";
 
-    const syncMeet = () => {
+    const syncMeet = async () => {
+      try {
+        const res = await fetch(`/api/meet/active?orgId=${encodeURIComponent(orgId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.activeMeet) {
+            setActiveHostedMeet(data.activeMeet);
+            return;
+          }
+        }
+      } catch (e) {}
+
       try {
         const raw = localStorage.getItem(`impacto_active_hosted_meet_${orgId}`);
         if (raw) {
@@ -2427,7 +2464,7 @@ export const ChatRoom: React.FC = () => {
       }
     };
     window.addEventListener("storage", handleStorage);
-    const interval = setInterval(syncMeet, 1000);
+    const interval = setInterval(syncMeet, 2000);
 
     const bc = new BroadcastChannel(`impacto_org_meet_bus_${orgId}`);
     bc.onmessage = (ev) => {
@@ -2463,9 +2500,17 @@ export const ChatRoom: React.FC = () => {
   }, [activeHostedMeet, openMeetModal, openMeetingWaitRoomModal, user?.id, activeMember?.role]);
 
   const handleHostedMeetEnded = () => {
-    localStorage.removeItem(`impacto_active_hosted_meet_${activeOrg?.id || "default"}`);
+    const orgId = activeOrg?.id || "default";
+    localStorage.removeItem(`impacto_active_hosted_meet_${orgId}`);
     try {
-      const bc = new BroadcastChannel(`impacto_org_meet_bus_${activeOrg?.id || "default"}`);
+      fetch("/api/meet/end", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgId })
+      }).catch(() => {});
+    } catch (e) {}
+    try {
+      const bc = new BroadcastChannel(`impacto_org_meet_bus_${orgId}`);
       bc.postMessage({ type: "HOSTED_MEET_ENDED" });
       bc.close();
     } catch (e) {}
@@ -3261,6 +3306,23 @@ export const ChatRoom: React.FC = () => {
                           });
                           bc.close();
                         } catch (e) {}
+
+                        try {
+                          const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+                          const wsUrl = `${protocol}//${window.location.host}/ws/meet?orgId=${encodeURIComponent(activeOrg?.id || "default")}&peerId=wait-${user?.id}&userId=${encodeURIComponent(user?.id || "guest")}&name=${encodeURIComponent(user?.full_name || "Member")}&role=${encodeURIComponent(activeMember?.role || "Member")}`;
+                          const ws = new WebSocket(wsUrl);
+                          ws.onopen = () => {
+                            ws.send(JSON.stringify({
+                              type: "REQUEST_ADMISSION",
+                              userId: user?.id,
+                              userName: user?.full_name || "Member",
+                              role: activeMember?.role || "Member"
+                            }));
+                            setTimeout(() => {
+                              try { ws.close(); } catch (e) {}
+                            }, 1200);
+                          };
+                        } catch (e) {}
                         addToast("Sent to meeting waiting room. Awaiting host admission.", "info");
                       }
                     }}
@@ -4050,6 +4112,13 @@ export const ChatRoom: React.FC = () => {
                 const bc = new BroadcastChannel(`impacto_org_meet_bus_${activeOrg?.id || "default"}`);
                 bc.postMessage({ type: "HOSTED_MEET_ACTIVE", meet: newHostedMeet });
                 bc.close();
+              } catch (err) {}
+              try {
+                fetch("/api/meet/start", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ orgId: activeOrg?.id || "default", meet: newHostedMeet })
+                }).catch(() => {});
               } catch (err) {}
               setActiveHostedMeet(newHostedMeet);
               setOpenStartMeetingPrompt(false);

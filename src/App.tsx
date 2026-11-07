@@ -23,6 +23,7 @@ import {
 
 import { CertificateVerifyPage } from "./pages/CertificateVerifyPage";
 import { PublicOrgPage } from "./pages/PublicOrgPage";
+import { MeetRoomPage } from "./pages/MeetRoomPage";
 
 // Active Dashboard & Governance Modules (from src/dash)
 import {
@@ -169,6 +170,8 @@ export default function App() {
             <Route path="/landing" element={<LandingExternalRedirect />} />
             <Route path="/verify" element={<CertificateVerifyPage />} />
             <Route path="/verify/:code" element={<CertificateVerifyPage />} />
+            <Route path="/meet" element={<MeetRoomPage />} />
+            <Route path="/meet/:orgId" element={<MeetRoomPage />} />
 
             {/* Public Organization Showcase / Portal Routes */}
             <Route path="/org/:slug" element={<PublicOrgPage />} />

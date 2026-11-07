@@ -1,9 +1,11 @@
 import "dotenv/config";
 import express from "express";
+import http from "http";
 import path from "path";
 import apiRouter from "./server/routes/index";
 import { spaFallbackMiddleware } from "./server/middleware/spaFallback";
 import { setupViteOrStaticMiddleware } from "./server/middleware/viteMiddleware";
+import { setupMeetWebSocketServer } from "./server/services/meetSocketService";
 
 function getCliArg(flag: string): string | undefined {
   const index = process.argv.indexOf(flag);
@@ -37,11 +39,14 @@ async function startServer() {
   // Connect Vite middleware in dev or static dist in production
   await setupViteOrStaticMiddleware(app);
 
-  let currentServer: ReturnType<typeof app.listen> | null = null;
+  const httpServer = http.createServer(app);
+  setupMeetWebSocketServer(httpServer);
+
+  let currentServer: http.Server | null = null;
 
   const tryListen = (attemptsLeft = 5, delayMs = 1000): Promise<void> => {
     return new Promise((resolve, reject) => {
-      const server = app.listen(PORT, HOST, () => {
+      const server = httpServer.listen(PORT, HOST, () => {
         console.log(`[Impacto Monolith Server] running on http://${HOST}:${PORT}`);
         currentServer = server;
         resolve();

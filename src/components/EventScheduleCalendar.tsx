@@ -448,13 +448,6 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
             >
               <Building2 className="h-3.5 w-3.5 shrink-0" />
               <span>Host External Event</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 ${
-                hasRentableSpaces
-                  ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
-                  : "bg-slate-200 dark:bg-slate-700 text-slate-500"
-              }`}>
-                {spaces.length}
-              </span>
             </button>
           )}
           <button
