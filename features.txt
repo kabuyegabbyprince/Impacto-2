@@ -1,0 +1,52 @@
+=====================================================================
+IMPACTO COOPERATIVE & ORGANIZATION MANAGEMENT PLATFORM - FEATURES MANUAL
+=====================================================================
+
+1. MULTI-TENANT WORKSPACE & SUBSCRIPTION TIERS
+   - Description: Supports multiple organizations, cooperatives, and NGOs with tailored subscription tiers (Free, Growth, Pro, Pro+).
+   - How it works: Organization subscription features (such as video meetings, polls, and rentable spaces) are dynamically gated and verified across devices using synchronized database state in Supabase and server API endpoints.
+
+2. UNIFIED REAL-TIME MULTI-PERSON VIDEO MEET ROOMS
+   - Description: High-performance video conferencing built specifically for team syncs and remote governance.
+   - How it works: 
+     * WebSocket Signaling: Operates over a server-authoritative WebSocket server mounted on `/ws/meet` (port 3000), supporting cross-device and cross-network video/audio communication.
+     * Unified Room Sync: When any member starts a meeting, the organization dashboard dynamically switches from "Start Live Meet" to "Join Meet" for all members.
+     * Admission Control: Supports public auto-join or host-managed waiting rooms with real-time Admit/Decline approval popups.
+     * Default OFF Hardware: Microphones and cameras start OFF by default and prompt for browser permissions only upon explicit user interaction.
+     * Direct Guest Link: Provides a universal join link (`/meet?org=...`) allowing external guests to enter their name, check hardware availability, and join the room.
+     * Document Presentation & Minutes: Presenters can share organization documents in real-time, record minutes, and assign action items.
+     * Session Persistence: Automatically queries Supabase (`meeting_participants`) for active session tokens to enable seamless auto-rejoining if a connection drops.
+
+3. ORGANIZATION EVENTS, ATTENDANCE & FACILITY SPACE LENDING
+   - Description: Comprehensive event scheduling, calendar matrix, and rentable space management.
+   - How it works:
+     * Interactive Calendar: Features monthly calendar navigation with Rwandan national public holidays and scheduled events.
+     * Host External Events & Space Lending: Organizations can list rooms/spaces with capacity, hourly rates, and amenities. Members and external visitors can book space occupancy.
+     * Database Sync: Space catalog and booking requests are synchronized across devices via Supabase and server APIs.
+
+4. GOALS, TASK DELEGATION & MY TASKS WORKSPACE
+   - Description: Goal tracking and multi-member task assignment with instant member notifications.
+   - How it works:
+     * Task Assignment & Progress: Admins can assign tasks within goals and events to specific members.
+     * Real-Time Notifications: Assigned members receive instant toast notifications and bell dropdown updates.
+     * My Tasks Hub: Members can view and work on their assigned tasks, update progress percentages, and optionally attach activity notes.
+
+5. COLLABORATIVE TEAM CHAT & CHANNELS
+   - Description: Secure messaging channels for organizational communication.
+   - How it works:
+     * Real-Time Sync: Powered by Supabase real-time subscriptions and polling fallback.
+     * Rich Media & Voice Memos: Supports text messages, file attachments, and simulated voice memo recordings.
+
+6. DOCUMENT MANAGEMENT & PRESENTATION
+   - Description: Centralized document repository for cooperative governance.
+   - How it works: Upload, categorize, and read documents in full-screen mode or present them directly to participants during live video meetings.
+
+7. MEMBER FEE DUES & PAYMENT APPROVAL WORKFLOW
+   - Description: Transparent tracking of membership dues and subscription payments.
+   - How it works: Members submit payment references via MoMo, Airtel, or bank transfer. Accountants review, verify, and approve/reject proofs, immediately triggering status update notifications.
+
+8. HARDWARE AVAILABILITY & ERROR BOUNDARY RESILIENCE
+   - Description: Robust hardware checking and crash recovery.
+   - How it works:
+     * Hardware Availability Indicator: Displays real-time status of camera and microphone availability in pre-join screens.
+     * Meet Error Boundary (`MeetErrorBoundary`): Catches media stream initialization or connection failures, presenting an "Attempt Reconnect & Request Permissions" recovery button.

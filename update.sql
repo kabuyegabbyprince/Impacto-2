@@ -177,3 +177,77 @@ BEGIN
 EXCEPTION
   WHEN OTHERS THEN NULL;
 END $$;
+
+-- =====================================================================
+-- 7. Tasks & Task Checklists Tables DDL with Foreign Keys & Timestamps
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS public.tasks (
+  id TEXT PRIMARY KEY,
+  goal_id TEXT REFERENCES public.goals(id) ON DELETE CASCADE,
+  event_id TEXT REFERENCES public.events(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  deadline TIMESTAMPTZ,
+  is_completed BOOLEAN DEFAULT false,
+  progress NUMERIC DEFAULT 0,
+  status TEXT DEFAULT 'todo' CHECK (status IN ('todo', 'pending', 'in_progress', 'completed')),
+  assigned_to_member_id TEXT,
+  assigned_to_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.task_checklists (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL REFERENCES public.tasks(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  is_completed BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indices
+CREATE INDEX IF NOT EXISTS idx_tasks_goal ON public.tasks(goal_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_event ON public.tasks(event_id);
+CREATE INDEX IF NOT EXISTS idx_task_checklists_task ON public.task_checklists(task_id);
+
+-- RLS & Policies
+ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.task_checklists ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'tasks' AND policyname = 'allow_all_tasks') THEN
+    CREATE POLICY allow_all_tasks ON public.tasks FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'task_checklists' AND policyname = 'allow_all_task_checklists') THEN
+    CREATE POLICY allow_all_task_checklists ON public.task_checklists FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+END $$;
+
+GRANT ALL ON TABLE public.tasks TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.task_checklists TO anon, authenticated, service_role;
+
+-- Realtime Publication for tasks and task_checklists
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+      AND schemaname = 'public' 
+      AND tablename = 'tasks'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+      AND schemaname = 'public' 
+      AND tablename = 'task_checklists'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.task_checklists;
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END $$;
+

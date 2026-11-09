@@ -1,31 +1,35 @@
-# Implementation Plan - Event Gating & Unified Meeting Flow
+# Task Assignment & Cascading Progress Implementation Plan
 
-## 1. User Review Requirements & Scope
-- **Public Page Event Reservation & Pay Button**: Gated to appear only when the organization has enabled event hosting and holds a Pro/Growth subscription tier.
-- **Pro Tier Restrictions**: Event hosting and live video meetings require Pro/Growth subscription tiers.
-- **Unified Meeting Flow**:
-  - Host starts meet via "Start Live Meet".
-  - All other members see the button switch to "Join Meet" for the active meeting.
-  - Joining places participants into the exact same WebRTC / BroadcastChannel room (no parallel rooms), enabling live audio (mic) and video (camera) streaming.
-  - Meeting records are saved to meeting history upon completion.
-- **Organization Document Sharing**:
-  - Meeting document sharing uses real organization documents stored in the database instead of static mock documents.
-  - Shared documents can be viewed and read by all participants simultaneously.
+## Overview
+Implement a robust task management system where tasks contain interactive subtask checklists (to-do items with checkboxes) and overall deadlines. Completing individual checkboxes automatically calculates task progress proportionally, which cascades upward to update the progress of parent goals and events.
 
-## 2. Proposed Changes
-### A. Public Page & Event Gating (`src/pages/public.tsx` or similar)
-- Check organization subscription tier (`subscription_tier` / `events_enabled`) before rendering the reservation and payment button on public landing/event pages.
+---
 
-### B. Meeting State & Dashboard Integration (`src/pages/dashboard.tsx` & `src/components/ChatVideoMeetModal.tsx`)
-- Ensure the active hosted meeting state syncs organization-wide.
-- Make the chat/dashboard header button toggle between "Start Live Meet" and "Join Meet" correctly.
-- Unify WebRTC signaling channel name to guarantee a single meeting room per organization channel.
+## 1. Data Model & Architecture
+- **Task Entity**:
+  - `id`: Unique identifier
+  - `title`: Task title
+  - `deadline`: Overall task due date
+  - `todos`: Array of subtasks (`{ id: string; text: string; completed: boolean }`)
+  - `progress`: Computed percentage (`(completed_todos / total_todos) * 100`)
+  - `status`: `'todo' | 'in_progress' | 'completed'`
+  - `assigned_to_member_ids`: Array of member IDs
+- **Cascading Aggregation**:
+  - Parent Goal or Event progress = Average or weighted sum of all child task progress percentages.
 
-### C. Organization Documents in Meeting (`src/components/ChatVideoMeetModal.tsx`)
-- Replace static fallback documents with actual organization documents (`documents` prop passed from `dashboard.tsx`).
-- Ensure document selection and presentation broadcast live to all participants in the meeting room.
+---
 
-## 3. Verification Plan
-- Compile applet with `compile_applet`.
-- Run linter with `lint_applet`.
-- Verify zero emojis in all modified files.
+## 2. User Experience & Workflow
+1. **Task Creation Modal**:
+   - Define task title, assignee(s), overall deadline, and add multiple checklist to-do items.
+2. **My Tasks & Event/Goal Boards**:
+   - Interactive checkboxes for each subtask. Checking/unchecking instantly re-calculates task progress and syncs to Supabase and local store.
+3. **Cascading Indicators**:
+   - Visual progress bars showing progress cascading from subtask checkboxes -> task progress -> goal/event achievement.
+
+---
+
+## 3. Implementation Steps
+1. Update TypeScript interfaces in `src/types.ts` to support subtask checklist items (`todos?: Array<{ id: string; text: string; completed: boolean }>`) on `EventTask` and `GoalTask`.
+2. Update task management UI components (`MyTasksWorkspaceModal`, `EventScheduleCalendar`, `goals.tsx`) to render interactive subtask checklists and update progress automatically.
+3. Verify persistence and notification dispatch upon task assignment.

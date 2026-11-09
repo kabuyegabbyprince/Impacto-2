@@ -2503,6 +2503,7 @@ export function useUpdateGoalTask() {
       taskId,
       progress,
       status,
+      todos,
       comment,
       member,
       orgId,
@@ -2511,6 +2512,7 @@ export function useUpdateGoalTask() {
       taskId: string;
       progress: number;
       status: "todo" | "in_progress" | "completed";
+      todos?: Array<{ id: string; text: string; completed: boolean }>;
       comment?: string;
       member: { id: string; name: string; role?: string };
       orgId: string;
@@ -2562,6 +2564,7 @@ export function useUpdateGoalTask() {
         ...existingTask,
         progress,
         status,
+        todos: todos !== undefined ? todos : existingTask.todos,
         comments: updatedComments,
         last_comment: comment && comment.trim() ? comment.trim() : existingTask.last_comment,
         completed_at: status === "completed" ? (existingTask.completed_at || new Date().toISOString()) : undefined,

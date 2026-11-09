@@ -147,6 +147,32 @@ export const MemberGoalTasksView: React.FC<MemberGoalTasksViewProps> = ({
     });
   };
 
+  const handleToggleTodo = async (goal: Goal, task: GoalTask, todoId: string) => {
+    const currentTodos = task.todos || [];
+    const updatedTodos = currentTodos.map(td =>
+      td.id === todoId ? { ...td, completed: !td.completed } : td
+    );
+    const completedCount = updatedTodos.filter(td => td.completed).length;
+    const newProgress = updatedTodos.length > 0 ? Math.round((completedCount / updatedTodos.length) * 100) : task.progress;
+    const newStatus: "todo" | "in_progress" | "completed" =
+      newProgress >= 100 ? "completed" : newProgress > 0 ? "in_progress" : "todo";
+
+    await updateTaskMutation.mutateAsync({
+      goalId: goal.id,
+      taskId: task.id,
+      progress: newProgress,
+      status: newStatus,
+      todos: updatedTodos,
+      comment: `Toggled subtask checklist item`,
+      member: {
+        id: currentMember?.id || "member",
+        name: currentMember?.user?.full_name || currentMember?.role || "Member",
+        role: currentMember?.role,
+      },
+      orgId,
+    });
+  };
+
   const handleSaveModalUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeTaskModal) return;
@@ -299,6 +325,36 @@ export const MemberGoalTasksView: React.FC<MemberGoalTasksViewProps> = ({
                     <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60 mt-2 leading-relaxed whitespace-pre-wrap">
                       {task.description}
                     </p>
+                  )}
+
+                  {/* Subtask To-Do Checklist with Checkboxes */}
+                  {task.todos && task.todos.length > 0 && (
+                    <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase font-mono text-slate-500 dark:text-slate-400">
+                          Task Checklist ({task.todos.filter(t => t.completed).length}/{task.todos.length} Done)
+                        </span>
+                        <span className="text-[10px] font-mono text-emerald-600 font-bold">
+                          {Math.round((task.todos.filter(t => t.completed).length / task.todos.length) * 100)}%
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 pt-0.5">
+                        {task.todos.map((todo) => (
+                          <label key={todo.id} className="flex items-center gap-2 cursor-pointer text-xs group">
+                            <input
+                              type="checkbox"
+                              checked={todo.completed}
+                              onChange={() => handleToggleTodo(goal, task, todo.id)}
+                              disabled={updateTaskMutation.isPending}
+                              className="rounded accent-emerald-600 h-3.5 w-3.5 cursor-pointer shrink-0"
+                            />
+                            <span className={`transition ${todo.completed ? "line-through text-slate-400 dark:text-slate-500" : "text-slate-800 dark:text-slate-200 group-hover:text-emerald-700 dark:group-hover:text-emerald-300"}`}>
+                              {todo.text}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   )}
 
                   {/* Deadline Reminder Alert Badge */}

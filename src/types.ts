@@ -201,6 +201,7 @@ export interface EventTask {
   created_at?: string;
   estimated_time?: string; // e.g. "2 hours", "45 mins"
   estimated_duration_minutes?: number;
+  todos?: Array<{ id: string; text: string; completed: boolean }>;
 }
 
 export interface RentableSpace {
@@ -451,6 +452,7 @@ export interface GoalTask {
   last_comment?: string;
   completed_at?: string;
   created_at: string;
+  todos?: Array<{ id: string; text: string; completed: boolean }>;
 }
 
 export interface Goal {
