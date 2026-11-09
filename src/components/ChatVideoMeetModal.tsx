@@ -54,6 +54,11 @@ interface ChatVideoMeetModalProps {
   hostedMeetInfo?: HostedMeetInfo | null;
   onHostedMeetEnded?: () => void;
   guestUser?: { id: string; full_name: string; role: string } | null;
+  initialMic?: boolean;
+  initialVideo?: boolean;
+  initialScreenShare?: boolean;
+  initialScreenStream?: MediaStream | null;
+  initialLocalStream?: MediaStream | null;
 }
 
 interface MeetMessage {
@@ -91,6 +96,7 @@ interface PeerParticipant {
   video: boolean;
   speaking: boolean;
   handRaised: boolean;
+  deafened?: boolean;
   stream?: MediaStream;
 }
 
@@ -167,7 +173,12 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   onMeetingEnded,
   hostedMeetInfo,
   onHostedMeetEnded,
-  guestUser
+  guestUser,
+  initialMic,
+  initialVideo,
+  initialScreenShare,
+  initialScreenStream,
+  initialLocalStream
 }) => {
   const { user } = useAuthStore();
   const { addToast } = useToast();
@@ -211,9 +222,10 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
 
   const isLeavingRef = useRef(false);
 
-  const [micOn, setMicOn] = useState(false);
-  const [videoOn, setVideoOn] = useState(false);
-  const [screenSharing, setScreenSharing] = useState(false);
+  const [micOn, setMicOn] = useState(initialMic !== undefined ? initialMic : false);
+  const [videoOn, setVideoOn] = useState(initialVideo !== undefined ? initialVideo : false);
+  const [screenSharing, setScreenSharing] = useState(initialScreenShare || false);
+  const [isDeafened, setIsDeafened] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
   const [sidePanel, setSidePanel] = useState<"chat" | "docs" | "participants" | "agenda" | null>(null);
 
@@ -225,7 +237,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
 
   // Streams & WebRTC connections
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(initialScreenStream || initialLocalStream || null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // Remote participants map: key = peerId
@@ -674,13 +686,23 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
               mic: msg.mic !== undefined ? msg.mic : prev[msg.fromPeerId].mic,
               video: msg.video !== undefined ? msg.video : prev[msg.fromPeerId].video,
               handRaised: msg.handRaised !== undefined ? msg.handRaised : prev[msg.fromPeerId].handRaised,
-              speaking: msg.speaking !== undefined ? msg.speaking : prev[msg.fromPeerId].speaking
+              speaking: msg.speaking !== undefined ? msg.speaking : prev[msg.fromPeerId].speaking,
+              deafened: msg.deafened !== undefined ? msg.deafened : prev[msg.fromPeerId].deafened
             }
           };
         });
         if (msg.handRaised) {
           playMeetingChime("hand");
           addToast(`${msg.name || "A participant"} raised their hand`, "info");
+        }
+      } else if (msg.type === "REMOTE_MUTE_PEER" && msg.targetPeerId === myPeerId) {
+        if (micOn) {
+          setMicOn(false);
+          if (localStream) {
+            localStream.getAudioTracks().forEach(t => { t.enabled = false; });
+          }
+          playMeetingChime("mute");
+          addToast("You were muted by the meeting host", "info");
         }
       } else if (msg.type === "SIGNAL_OFFER" && msg.toPeerId === myPeerId) {
         const pc = createPeerConnection(msg.fromPeerId, false);
@@ -832,7 +854,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     };
   }, [open, activeOrg?.id, myPeerId, effectiveUser, activeMember, guestUser, isAdmin, broadcastSignalingMessage]);
 
-  // Sync state changes (mic, video, hand, speaking) to peers
+  // Sync state changes (mic, video, hand, speaking, deafened) to peers
   useEffect(() => {
     if (!open) return;
     broadcastSignalingMessage({
@@ -842,9 +864,10 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       mic: micOn,
       video: videoOn,
       handRaised,
-      speaking: isSpeaking
+      speaking: isSpeaking,
+      deafened: isDeafened
     });
-  }, [open, micOn, videoOn, handRaised, isSpeaking, myPeerId, effectiveUser, broadcastSignalingMessage]);
+  }, [open, micOn, videoOn, handRaised, isSpeaking, isDeafened, myPeerId, effectiveUser, broadcastSignalingMessage]);
 
   // Callback ref for local video element
   const handleLocalVideoRef = useCallback((el: HTMLVideoElement | null) => {
@@ -972,22 +995,62 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   // Toggle Screen Share
   const handleToggleScreenShare = async () => {
     if (screenSharing) {
+      if (localStream) {
+        localStream.getVideoTracks().forEach(t => t.stop());
+      }
       setScreenSharing(false);
+      setLocalStream(null);
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
       addToast("Screen sharing stopped", "info");
     } else {
       try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        if (!navigator.mediaDevices?.getDisplayMedia) {
+          addToast("Screen sharing is not supported by your device/browser.", "error");
+          return;
+        }
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        const screenTrack = screenStream.getVideoTracks()[0];
         setLocalStream(screenStream);
         setScreenSharing(true);
         setVideoOn(true);
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = screenStream;
+        }
+        Object.values(peerConnectionsRef.current).forEach((pc: RTCPeerConnection) => {
+          try {
+            const senders = pc.getSenders();
+            const sender = senders.find(s => s.track?.kind === "video");
+            if (sender) {
+              sender.replaceTrack(screenTrack).catch(() => {});
+            } else {
+              pc.addTrack(screenTrack, screenStream);
+            }
+          } catch (e) {}
+        });
         addToast("Sharing live screen to call", "success");
         screenStream.getVideoTracks()[0].onended = () => {
           setScreenSharing(false);
+          addToast("Screen sharing ended", "info");
         };
       } catch (e) {
         console.warn("Screen share cancelled", e);
       }
     }
+  };
+
+  // Toggle Deafen (mute/unmute incoming call audio)
+  const handleToggleDeafen = () => {
+    const nextDeafened = !isDeafened;
+    setIsDeafened(nextDeafened);
+    const audioVideos = document.querySelectorAll("video, audio");
+    audioVideos.forEach((el: any) => {
+      if (el !== localVideoRef.current) {
+        el.muted = nextDeafened;
+      }
+    });
+    addToast(nextDeafened ? "Deafened: all incoming meeting audio is muted" : "Undeafened: meeting audio restored", "info");
   };
 
   // Toggle Raise Hand
@@ -1320,6 +1383,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         video: videoOn,
         speaking: isSpeaking,
         handRaised,
+        deafened: isDeafened,
         stream: localStream || undefined
       }
     ];
@@ -1330,7 +1394,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     });
 
     return list;
-  }, [myPeerId, effectiveUser, activeMember, guestUser, micOn, videoOn, isSpeaking, handRaised, localStream, remotePeers]);
+  }, [myPeerId, effectiveUser, activeMember, guestUser, micOn, videoOn, isSpeaking, handRaised, isDeafened, localStream, remotePeers]);
 
   // Compute adaptive Google Meet grid layout class
   const gridLayoutClass = useMemo(() => {
@@ -1910,21 +1974,64 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {p.handRaised && <Hand className="h-3.5 w-3.5 text-[#fbbc04]" />}
-                      {p.mic ? (
-                        <Mic className="h-3.5 w-3.5 text-[#81c995]" />
-                      ) : (
-                        <MicOff className="h-3.5 w-3.5 text-[#f28b82]" />
-                      )}
+
+                      {/* Microphone Status Indicator */}
+                      <span
+                        className={`p-1 rounded-md flex items-center justify-center ${
+                          p.mic ? "text-[#81c995] bg-[#133020]" : "text-[#f28b82] bg-[#371e1d]"
+                        }`}
+                        title={p.mic ? `${p.name}'s microphone is ON` : `${p.name} is MUTED`}
+                      >
+                        {p.mic ? <Mic className="h-3.5 w-3.5" /> : <MicOff className="h-3.5 w-3.5" />}
+                      </span>
+
+                      {/* Deafened / Audio Output Indicator */}
+                      <span
+                        className={`p-1 rounded-md flex items-center justify-center ${
+                          p.deafened ? "text-[#f28b82] bg-[#371e1d]" : "text-[#81c995] bg-[#133020]"
+                        }`}
+                        title={p.deafened ? `${p.name} is DEAFENED (speakers muted)` : `${p.name} is LISTENING (sound on)`}
+                      >
+                        {p.deafened ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+                      </span>
+
+                      {/* Camera Status Indicator */}
+                      <span
+                        className={`p-1 rounded-md flex items-center justify-center ${
+                          p.video ? "text-[#81c995] bg-[#133020]" : "text-[#f28b82] bg-[#371e1d]"
+                        }`}
+                        title={p.video ? `${p.name}'s camera is ON` : `${p.name}'s camera is DISABLED`}
+                      >
+                        {p.video ? <Video className="h-3.5 w-3.5" /> : <VideoOff className="h-3.5 w-3.5" />}
+                      </span>
+
+                      {/* Host Actions for Remote Peer */}
                       {isAdmin && !p.isMe && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveParticipant(p.peerId, p.name)}
-                          className="px-2 py-1 rounded bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 border border-rose-500/30 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
-                          title={`Remove ${p.name} from meeting`}
-                        >
-                          <UserX className="h-3 w-3" />
-                          <span>Remove</span>
-                        </button>
+                        <div className="flex items-center gap-1 ml-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              broadcastSignalingMessage({
+                                type: "REMOTE_MUTE_PEER",
+                                targetPeerId: p.peerId
+                              });
+                              addToast(`Mute command sent to ${p.name}`, "info");
+                            }}
+                            className="p-1 rounded bg-[#3c4043] hover:bg-[#4a4d52] text-[#f28b82] transition cursor-pointer"
+                            title={`Remotely mute ${p.name}`}
+                          >
+                            <MicOff className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveParticipant(p.peerId, p.name)}
+                            className="px-2 py-1 rounded bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 border border-rose-500/30 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                            title={`Remove ${p.name} from meeting`}
+                          >
+                            <UserX className="h-3 w-3" />
+                            <span>Remove</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -2273,6 +2380,20 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             title={videoOn ? "Turn off camera" : "Turn on camera"}
           >
             {videoOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+          </button>
+
+          {/* Deafen / Mute Sound Toggle */}
+          <button
+            type="button"
+            onClick={handleToggleDeafen}
+            className={`h-11 w-11 rounded-full flex items-center justify-center transition cursor-pointer ${
+              isDeafened
+                ? "bg-[#ea4335] hover:bg-[#d93025] text-white"
+                : "bg-[#3c4043] hover:bg-[#474a4d] text-white"
+            }`}
+            title={isDeafened ? "Undeafen (unmute incoming audio)" : "Deafen (mute incoming audio)"}
+          >
+            {isDeafened ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
           </button>
 
           {/* Screen Share */}

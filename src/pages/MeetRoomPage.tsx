@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useSearchParams, useParams, useNavigate } from "react-router-dom";
-import { Video, Mic, MicOff, VideoOff, Users, Clock, ShieldCheck, ArrowRight, ArrowLeft } from "lucide-react";
+import { Video, Mic, MicOff, VideoOff, Users, Clock, ShieldCheck, ArrowRight, ArrowLeft, Monitor } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
 import { useOrganizations, useMembers, useV2Documents } from "../hooks/useImpactoData";
@@ -39,9 +39,13 @@ export const MeetRoomPage: React.FC = () => {
   const [guestName, setGuestName] = useState("");
   const [guestUser, setGuestUser] = useState<{ id: string; full_name: string; role: string } | null>(null);
 
-  // Pre-join audio/video preview toggles
+  // Pre-join audio/video preview toggles & streams
   const [previewMic, setPreviewMic] = useState(false);
   const [previewVideo, setPreviewVideo] = useState(false);
+  const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // Hardware availability status for visual indicator
   const [hardwareStatus, setHardwareStatus] = useState<{ camera: boolean; microphone: boolean; checked: boolean }>({
@@ -190,6 +194,152 @@ export const MeetRoomPage: React.FC = () => {
       bc.close();
     };
   }, [waitingForAdmission, user?.id, guestUser?.id, orgIdFromParam, guestName, addToast]);
+
+  // Sync preview stream to video element
+  useEffect(() => {
+    if (previewVideoRef.current) {
+      if (isScreenSharing && screenStream) {
+        previewVideoRef.current.srcObject = screenStream;
+      } else if (previewVideo && previewStream) {
+        previewVideoRef.current.srcObject = previewStream;
+      } else {
+        previewVideoRef.current.srcObject = null;
+      }
+    }
+  }, [previewVideo, previewStream, isScreenSharing, screenStream]);
+
+  // Clean up streams on unmount
+  useEffect(() => {
+    return () => {
+      if (previewStream) {
+        previewStream.getTracks().forEach(t => t.stop());
+      }
+      if (screenStream) {
+        screenStream.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [previewStream, screenStream]);
+
+  // Toggle Microphone for Local Stream
+  const handleTogglePreviewMic = async () => {
+    if (previewMic) {
+      if (previewStream) {
+        previewStream.getAudioTracks().forEach(t => {
+          t.enabled = false;
+        });
+      }
+      setPreviewMic(false);
+      addToast("Microphone muted", "info");
+    } else {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          addToast("Microphone not supported on this device", "error");
+          return;
+        }
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioTrack = audioStream.getAudioTracks()[0];
+        if (previewStream) {
+          previewStream.addTrack(audioTrack);
+        } else {
+          setPreviewStream(audioStream);
+        }
+        setPreviewMic(true);
+        addToast("Microphone active", "success");
+      } catch (e) {
+        addToast("Microphone permission denied or unavailable", "error");
+      }
+    }
+  };
+
+  // Toggle Camera for Local Stream
+  const handleTogglePreviewVideo = async () => {
+    if (previewVideo) {
+      if (previewStream) {
+        previewStream.getVideoTracks().forEach(t => {
+          t.stop();
+          previewStream.removeTrack(t);
+        });
+      }
+      if (previewVideoRef.current && !isScreenSharing) {
+        previewVideoRef.current.srcObject = null;
+      }
+      setPreviewVideo(false);
+      addToast("Camera disabled", "info");
+    } else {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          addToast("Camera not supported on this device", "error");
+          return;
+        }
+        const videoStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        const videoTrack = videoStream.getVideoTracks()[0];
+        let stream = previewStream;
+        if (stream) {
+          stream.getVideoTracks().forEach(t => {
+            t.stop();
+            stream!.removeTrack(t);
+          });
+          stream.addTrack(videoTrack);
+        } else {
+          stream = new MediaStream([videoTrack]);
+          setPreviewStream(stream);
+        }
+        if (previewVideoRef.current && !isScreenSharing) {
+          previewVideoRef.current.srcObject = stream;
+        }
+        setPreviewVideo(true);
+        addToast("Camera enabled and streaming", "success");
+      } catch (e) {
+        addToast("Camera permission denied or camera already in use", "error");
+      }
+    }
+  };
+
+  // Share Screen via browser getDisplayMedia API
+  const handleShareScreen = async () => {
+    if (isScreenSharing) {
+      if (screenStream) {
+        screenStream.getTracks().forEach(t => t.stop());
+      }
+      setScreenStream(null);
+      setIsScreenSharing(false);
+      if (previewVideoRef.current) {
+        previewVideoRef.current.srcObject = previewVideo && previewStream ? previewStream : null;
+      }
+      addToast("Screen sharing stopped", "info");
+    } else {
+      try {
+        if (!navigator.mediaDevices?.getDisplayMedia) {
+          addToast("Screen sharing is not supported by your browser.", "error");
+          return;
+        }
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true
+        });
+        setScreenStream(stream);
+        setIsScreenSharing(true);
+        if (previewVideoRef.current) {
+          previewVideoRef.current.srcObject = stream;
+        }
+        stream.getVideoTracks()[0].onended = () => {
+          setScreenStream(null);
+          setIsScreenSharing(false);
+          if (previewVideoRef.current) {
+            previewVideoRef.current.srcObject = previewVideo && previewStream ? previewStream : null;
+          }
+          addToast("Screen sharing ended", "info");
+        };
+        addToast("Screen stream captured via getDisplayMedia! Ready to broadcast to meeting.", "success");
+      } catch (err: any) {
+        if (err.name !== "NotAllowedError") {
+          addToast("Failed to start screen capture", "error");
+        }
+      }
+    }
+  };
 
   const handleJoinClick = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -413,6 +563,91 @@ export const MeetRoomPage: React.FC = () => {
               </p>
             </div>
 
+            {/* Live Media Preview Viewport */}
+            <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-[#121316] border border-[#2d2e31] flex items-center justify-center shadow-inner">
+              {(isScreenSharing || previewVideo) ? (
+                <video
+                  ref={previewVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`w-full h-full object-cover ${isScreenSharing ? "object-contain bg-black" : "-scale-x-100"}`}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-[#9aa0a6] gap-2 p-4 text-center">
+                  <div className="h-12 w-12 rounded-full bg-[#282a2d] flex items-center justify-center text-[#5f6368]">
+                    <VideoOff className="h-6 w-6" />
+                  </div>
+                  <span className="text-xs font-medium">Camera and screen share are turned off</span>
+                  <span className="text-[11px] text-[#5f6368]">Turn on camera or share screen below to preview before joining</span>
+                </div>
+              )}
+
+              {/* Status Badges Overlay */}
+              <div className="absolute top-2.5 left-2.5 flex flex-wrap items-center gap-1.5">
+                {isScreenSharing && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-500/90 text-white flex items-center gap-1 shadow">
+                    <Monitor className="h-3 w-3" />
+                    <span>Screen Share Active</span>
+                  </span>
+                )}
+                {previewVideo && !isScreenSharing && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#133020]/90 text-[#81c995] border border-[#1e4620] flex items-center gap-1 shadow">
+                    <Video className="h-3 w-3" />
+                    <span>Camera Live</span>
+                  </span>
+                )}
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow ${
+                  previewMic ? "bg-[#133020]/90 text-[#81c995] border border-[#1e4620]" : "bg-[#ea4335]/90 text-white"
+                }`}>
+                  {previewMic ? <Mic className="h-3 w-3" /> : <MicOff className="h-3 w-3" />}
+                  <span>{previewMic ? "Mic Active" : "Mic Muted"}</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Local Stream Controls: Mute Microphone, Disable Camera, and Share Screen */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={handleTogglePreviewMic}
+                className={`py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+                  previewMic
+                    ? "bg-[#3c4043] text-white hover:bg-[#474a4d] border border-emerald-500/40"
+                    : "bg-[#ea4335]/20 text-[#f28b82] border border-[#ea4335]/30 hover:bg-[#ea4335]/30"
+                }`}
+              >
+                {previewMic ? <Mic className="h-4 w-4 text-[#81c995]" /> : <MicOff className="h-4 w-4 text-[#f28b82]" />}
+                <span>{previewMic ? "Mute Microphone" : "Microphone On"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleTogglePreviewVideo}
+                className={`py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+                  previewVideo
+                    ? "bg-[#3c4043] text-white hover:bg-[#474a4d] border border-emerald-500/40"
+                    : "bg-[#ea4335]/20 text-[#f28b82] border border-[#ea4335]/30 hover:bg-[#ea4335]/30"
+                }`}
+              >
+                {previewVideo ? <Video className="h-4 w-4 text-[#81c995]" /> : <VideoOff className="h-4 w-4 text-[#f28b82]" />}
+                <span>{previewVideo ? "Disable Camera" : "Turn Camera On"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleShareScreen}
+                className={`py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+                  isScreenSharing
+                    ? "bg-sky-500/20 text-sky-300 border border-sky-500/40 hover:bg-sky-500/30"
+                    : "bg-[#282a2d] hover:bg-[#3c4043] text-[#e3e3e3] border border-[#3c4043]"
+                }`}
+              >
+                <Monitor className={`h-4 w-4 ${isScreenSharing ? "text-sky-400" : "text-[#9aa0a6]"}`} />
+                <span>{isScreenSharing ? "Stop Sharing" : "Share Screen"}</span>
+              </button>
+            </div>
+
             {/* Join Button */}
             <div className="flex flex-col gap-2 pt-2">
               <button
@@ -440,14 +675,55 @@ export const MeetRoomPage: React.FC = () => {
             </div>
 
             {user && (
-              <button
-                type="button"
-                onClick={() => handleCreateNewMeet(`${targetOrg.name} Live Sync`, true)}
-                className="px-5 py-2.5 rounded-xl bg-[#81c995] hover:bg-[#a8dab5] text-[#0d2818] font-bold text-xs transition cursor-pointer flex items-center gap-2"
-              >
-                <Video className="h-4 w-4" />
-                <span>Start Meeting Now</span>
-              </button>
+              <div className="w-full flex flex-col gap-3 pt-2">
+                <div className="grid grid-cols-3 gap-1.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={handleTogglePreviewMic}
+                    className={`p-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 border transition cursor-pointer ${
+                      previewMic
+                        ? "bg-[#133020] text-[#81c995] border-[#1e4620]"
+                        : "bg-[#282a2d] text-[#9aa0a6] border-[#3c4043]"
+                    }`}
+                  >
+                    {previewMic ? <Mic className="h-3 w-3" /> : <MicOff className="h-3 w-3" />}
+                    <span>{previewMic ? "Mic On" : "Muted"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleTogglePreviewVideo}
+                    className={`p-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 border transition cursor-pointer ${
+                      previewVideo
+                        ? "bg-[#133020] text-[#81c995] border-[#1e4620]"
+                        : "bg-[#282a2d] text-[#9aa0a6] border-[#3c4043]"
+                    }`}
+                  >
+                    {previewVideo ? <Video className="h-3 w-3" /> : <VideoOff className="h-3 w-3" />}
+                    <span>{previewVideo ? "Cam On" : "Cam Off"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleShareScreen}
+                    className={`p-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 border transition cursor-pointer ${
+                      isScreenSharing
+                        ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
+                        : "bg-[#282a2d] text-[#9aa0a6] border-[#3c4043]"
+                    }`}
+                  >
+                    <Monitor className="h-3 w-3" />
+                    <span>{isScreenSharing ? "Screen On" : "Screen"}</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleCreateNewMeet(`${targetOrg.name} Live Sync`, true)}
+                  className="w-full py-3 rounded-xl bg-[#81c995] hover:bg-[#a8dab5] text-[#0d2818] font-bold text-xs transition cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Video className="h-4 w-4" />
+                  <span>Start Meeting Now</span>
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -466,6 +742,11 @@ export const MeetRoomPage: React.FC = () => {
           documents={dbDocs as any}
           hostedMeetInfo={activeMeet}
           guestUser={guestUser || undefined}
+          initialMic={previewMic}
+          initialVideo={previewVideo}
+          initialScreenShare={isScreenSharing}
+          initialScreenStream={screenStream}
+          initialLocalStream={isScreenSharing ? screenStream : previewStream}
           onHostedMeetEnded={() => {
             setActiveMeet(null);
             setInCall(false);

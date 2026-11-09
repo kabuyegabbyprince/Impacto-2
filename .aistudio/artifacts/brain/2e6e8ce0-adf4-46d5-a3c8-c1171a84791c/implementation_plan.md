@@ -1,35 +1,40 @@
-# Task Assignment & Cascading Progress Implementation Plan
+# Implementation Plan: Unified Single Communication Room for Live Meetings
 
 ## Overview
-Implement a robust task management system where tasks contain interactive subtask checklists (to-do items with checkboxes) and overall deadlines. Completing individual checkboxes automatically calculates task progress proportionally, which cascades upward to update the progress of parent goals and events.
+This document outlines the architecture and execution plan to establish a single, universal, server-authoritative persistent communication room for live video meets, real-time chat, collaborative documents, and action items that synchronizes seamlessly across all user devices and browsers.
 
 ---
 
-## 1. Data Model & Architecture
-- **Task Entity**:
-  - `id`: Unique identifier
-  - `title`: Task title
-  - `deadline`: Overall task due date
-  - `todos`: Array of subtasks (`{ id: string; text: string; completed: boolean }`)
-  - `progress`: Computed percentage (`(completed_todos / total_todos) * 100`)
-  - `status`: `'todo' | 'in_progress' | 'completed'`
-  - `assigned_to_member_ids`: Array of member IDs
-- **Cascading Aggregation**:
-  - Parent Goal or Event progress = Average or weighted sum of all child task progress percentages.
+## Architecture & Components
+
+### 1. Server-Authoritative Signaling & WebSocket Core (`server/services/meetSocketService.ts`)
+- **Central Room Hub**: Maintains active meeting state per organization/workspace in memory and persists session logs in Supabase.
+- **Signaling Protocol**: Relays WebRTC SDP offers, answers, and ICE candidates between peers (`JOIN_ROOM`, `OFFER`, `ANSWER`, `ICECANDIDATE`, `MUTE_TOGGLE`, `VIDEO_TOGGLE`, `HAND_RAISE`, `CHAT_MESSAGE`, `SHARE_DOC`, `REQUEST_ADMISSION`, `ADMIT_PEER`, `DECLINE_PEER`, `KICK_PEER`).
+
+### 2. Database Persistence & Cross-Device Sync (`db.sql` & `update.sql`)
+- **`meeting_sessions`**: Stores active and historical meeting metadata (title, channel, duration, host, timestamp).
+- **`meeting_participants`**: Persists participant records and join timestamps for automatic drop recovery and cross-device session history.
+- **`meeting_chat_messages` & `meeting_notes`**: Real-time persisted chat logs and collaborative meeting minutes/action items.
+
+### 3. Client Video & Media Management (`src/pages/MeetRoomPage.tsx` & `ChatVideoMeetModal.tsx`)
+- **Hardware Permission Flow**: Automatic hardware detection (`navigator.mediaDevices.enumerateDevices` & `getUserMedia`) with fallback error boundaries and manual "Test Hardware" triggers.
+- **Waiting Room & Admission Control**: Non-host participants enter a waiting room queue requiring host admission (`ADMIT_PEER` / `DECLINE_PEER`).
+- **Participant Moderation**: Hosts can view the active participant list, remove disruptive participants, or invite organization members to join instantly.
+- **Session Auto-Rejoin**: Queries Supabase `meeting_participants` on load to automatically reconnect users to dropped sessions within a 15-minute window without re-prompting for hardware permissions.
 
 ---
 
-## 2. User Experience & Workflow
-1. **Task Creation Modal**:
-   - Define task title, assignee(s), overall deadline, and add multiple checklist to-do items.
-2. **My Tasks & Event/Goal Boards**:
-   - Interactive checkboxes for each subtask. Checking/unchecking instantly re-calculates task progress and syncs to Supabase and local store.
-3. **Cascading Indicators**:
-   - Visual progress bars showing progress cascading from subtask checkboxes -> task progress -> goal/event achievement.
+## Step-by-Step Implementation Roadmap
 
----
+1. **Phase 1: Signaling & WebSocket Relay Stabilization**
+   - Ensure WebSocket upgrade handler (`/ws/meet`) handles multi-peer mesh connections reliably across mobile and desktop browsers.
+   - Implement heartbeat pings to prevent idle timeout disconnects.
 
-## 3. Implementation Steps
-1. Update TypeScript interfaces in `src/types.ts` to support subtask checklist items (`todos?: Array<{ id: string; text: string; completed: boolean }>`) on `EventTask` and `GoalTask`.
-2. Update task management UI components (`MyTasksWorkspaceModal`, `EventScheduleCalendar`, `goals.tsx`) to render interactive subtask checklists and update progress automatically.
-3. Verify persistence and notification dispatch upon task assignment.
+2. **Phase 2: Persistent Supabase Database Schema Sync**
+   - Execute migrations for `meeting_sessions`, `meeting_participants`, `meeting_documents`, and `meeting_notes` with real-time replication enabled (`supabase_realtime`).
+
+3. **Phase 3: Unified Room UI & Moderation Controls**
+   - Enhance `ChatVideoMeetModal.tsx` with unified video grid, screen sharing, real-time chat, live document collaboration, and participant management (Admit, Remove, Invite).
+
+4. **Phase 4: Cross-Device Verification**
+   - Test simultaneous multi-device connection (Desktop + Smartphone) to verify synchronized video/audio streaming, chat relay, and checklist-driven task updates.
