@@ -38,6 +38,13 @@ export function getActiveHostedMeet(orgId: string): HostedMeetInfo | null {
   return activeMeets.get(orgId) || null;
 }
 
+export function getAnyActiveMeet(): HostedMeetInfo | null {
+  for (const meet of activeMeets.values()) {
+    if (meet) return meet;
+  }
+  return null;
+}
+
 export function setActiveHostedMeet(orgId: string, meet: HostedMeetInfo): void {
   activeMeets.set(orgId, meet);
   broadcastToOrg(orgId, {

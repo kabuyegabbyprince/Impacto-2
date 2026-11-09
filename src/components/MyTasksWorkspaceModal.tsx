@@ -179,6 +179,50 @@ export const MyTasksWorkspaceModal: React.FC<MyTasksWorkspaceModalProps> = ({
     }
   };
 
+  const handleToggleTodo = async (
+    item: { type: "event" | "goal"; parentId: string; parentTitle: string; task: EventTask | GoalTask },
+    todoId: string
+  ) => {
+    const currentTodos = item.task.todos || [];
+    const updatedTodos = currentTodos.map(td =>
+      td.id === todoId ? { ...td, completed: !td.completed } : td
+    );
+    const completedCount = updatedTodos.filter(td => td.completed).length;
+    const newProgress = updatedTodos.length > 0 ? Math.round((completedCount / updatedTodos.length) * 100) : item.task.progress;
+
+    try {
+      if (item.type === "goal") {
+        await syncGoalTaskProgress(
+          item.parentId,
+          item.task.id,
+          newProgress,
+          { id: memberId, name: memberName, role: currentMember?.role },
+          `Toggled checklist subtask item`
+        );
+      } else {
+        const targetEvent = events.find(e => e.id === item.parentId);
+        if (targetEvent) {
+          const updatedTasks = (targetEvent.tasks || []).map(t => {
+            if (t.id === item.task.id) {
+              return {
+                ...t,
+                progress: newProgress,
+                status: (newProgress >= 100 ? "completed" : newProgress > 0 ? "in_progress" : "pending") as any,
+                todos: updatedTodos,
+                reported_at: new Date().toISOString()
+              };
+            }
+            return t;
+          });
+          await syncEventTaskProgress(targetEvent.id, updatedTasks);
+        }
+      }
+      addToast("Subtask checklist updated", "success");
+    } catch (e: any) {
+      addToast(e?.message || "Failed to update checklist", "error");
+    }
+  };
+
   const handleSaveTaskUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTaskModal) return;
@@ -323,6 +367,36 @@ export const MyTasksWorkspaceModal: React.FC<MyTasksWorkspaceModalProps> = ({
                       </p>
                     )}
                   </div>
+
+                  {/* Subtask To-Do Checklist with Checkboxes */}
+                  {item.task.todos && item.task.todos.length > 0 && (
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase font-mono text-slate-500 dark:text-slate-400">
+                          Task Checklist ({item.task.todos.filter(t => t.completed).length}/{item.task.todos.length} Done)
+                        </span>
+                        <span className="text-[10px] font-mono text-emerald-600 font-bold">
+                          {Math.round((item.task.todos.filter(t => t.completed).length / item.task.todos.length) * 100)}%
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 pt-0.5">
+                        {item.task.todos.map((todo) => (
+                          <label key={todo.id} className="flex items-center gap-2 cursor-pointer text-xs group">
+                            <input
+                              type="checkbox"
+                              checked={todo.completed}
+                              onChange={() => handleToggleTodo(item, todo.id)}
+                              disabled={isLoading}
+                              className="rounded accent-emerald-600 h-3.5 w-3.5 cursor-pointer shrink-0"
+                            />
+                            <span className={`transition ${todo.completed ? "line-through text-slate-400 dark:text-slate-500" : "text-slate-800 dark:text-slate-200 group-hover:text-emerald-700 dark:group-hover:text-emerald-300"}`}>
+                              {todo.text}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {deadlineNotice && (
                     <div className={`p-2 rounded-lg text-[11px] font-semibold border ${deadlineNotice.colorClass}`}>

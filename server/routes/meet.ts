@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import {
   getActiveHostedMeet,
+  getAnyActiveMeet,
   setActiveHostedMeet,
   endActiveHostedMeet,
   broadcastToOrg,
@@ -12,7 +13,10 @@ const meetRouter = Router();
 // GET /api/meet/active?orgId=...
 meetRouter.get("/active", (req: Request, res: Response) => {
   const orgId = (req.query.orgId as string) || "default";
-  const activeMeet = getActiveHostedMeet(orgId);
+  let activeMeet = getActiveHostedMeet(orgId);
+  if (!activeMeet) {
+    activeMeet = getAnyActiveMeet();
+  }
   res.json({ activeMeet });
 });
 

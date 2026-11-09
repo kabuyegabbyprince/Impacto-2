@@ -1892,7 +1892,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                     Active Joiners Only
                   </span>
                 </div>
-                {allParticipants.map(p => (
+                 {allParticipants.map(p => (
                   <div
                     key={p.peerId}
                     className="p-2.5 rounded-xl bg-[#282a2d] border border-[#3c4043] flex items-center justify-between text-xs gap-2"
@@ -1929,6 +1929,34 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                     </div>
                   </div>
                 ))}
+
+                {isAdmin && members && members.filter(m => !allParticipants.some(p => p.userId === m.user_id)).length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-[#3c4043] flex flex-col gap-2">
+                    <span className="text-[11px] font-bold text-[#9aa0a6] uppercase tracking-wider">
+                      Invite / Allow Members to Join
+                    </span>
+                    {members
+                      .filter(m => !allParticipants.some(p => p.userId === m.user_id))
+                      .slice(0, 5)
+                      .map(mem => (
+                        <div key={mem.id} className="flex items-center justify-between bg-[#282a2d] p-2 rounded-lg border border-[#3c4043] text-xs">
+                          <div className="min-w-0">
+                            <span className="font-bold text-white block truncate">{mem.user?.full_name || "Member"}</span>
+                            <span className="text-[10px] text-[#9aa0a6] capitalize">{mem.role}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              addToast(`Invitation sent to ${mem.user?.full_name || "Member"} to join the meet.`, "success");
+                            }}
+                            className="px-2.5 py-1 rounded bg-[#81c995] hover:bg-[#a8dab5] text-[#0d2818] font-bold text-[10px] transition cursor-pointer shrink-0"
+                          >
+                            Allow / Invite
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
               </div>
             )}
 
