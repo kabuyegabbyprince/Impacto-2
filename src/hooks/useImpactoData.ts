@@ -1814,6 +1814,67 @@ export function useClearAllMeetingSessions() {
   });
 }
 
+/**
+ * Supabase database function / mutation to track and update meeting status (active, completed, cancelled)
+ */
+export function useUpdateMeetingStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ meetingId, status, orgId }: { meetingId: string; status: string; orgId: string }) => {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("meetings")
+          .update({ status, updated_at: new Date().toISOString() })
+          .eq("id", meetingId)
+          .select()
+          .maybeSingle();
+        if (error) throw error;
+        return data;
+      }
+      return { id: meetingId, status };
+    },
+    onSuccess: (_, { orgId }) => {
+      queryClient.invalidateQueries({ queryKey: ["meetings", orgId] });
+      queryClient.invalidateQueries({ queryKey: ["meeting_sessions", orgId] });
+    }
+  });
+}
+
+/**
+ * Real-time subscription hook for ChatRoom and DashboardHome components to listen for meeting status changes
+ */
+export function useMeetingStatusRealtime(orgId: string | undefined, onStatusChange?: (payload: any) => void) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!orgId || !isSupabaseConfigured) return;
+
+    const channel = supabase
+      .channel(`meeting_status_rt_${orgId}_${Math.random().toString(36).substring(2, 9)}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "meetings",
+          filter: `org_id=eq.${orgId}`
+        },
+        (payload) => {
+          queryClient.invalidateQueries({ queryKey: ["meetings", orgId] });
+          queryClient.invalidateQueries({ queryKey: ["meeting_sessions", orgId] });
+          if (onStatusChange) {
+            onStatusChange(payload);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [orgId, queryClient, onStatusChange]);
+}
+
 
 // ==========================================
 // 5. NEWS / BLOG POSTS HOOKS

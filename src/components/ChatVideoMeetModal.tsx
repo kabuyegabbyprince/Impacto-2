@@ -552,19 +552,44 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         });
       };
 
-      // If initiator, create and send Offer
+      // If initiator, create and send Offer with ICE gathering validation & retry fallback
       if (isInitiator) {
-        pc.createOffer()
-          .then(offer => pc.setLocalDescription(offer))
-          .then(() => {
+        const attemptOffer = async (retryCount = 0) => {
+          try {
+            if (pc.signalingState === "closed") return;
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            // Wait for ICE candidate gathering or timeout after 1.5s
+            await new Promise<void>((resolve) => {
+              if (pc.iceGatheringState === "complete") {
+                resolve();
+                return;
+              }
+              const checkState = () => {
+                if (pc.iceGatheringState === "complete" || pc.iceGatheringState === "gathering") {
+                  pc.removeEventListener("icegatheringstatechange", checkState);
+                  resolve();
+                }
+              };
+              pc.addEventListener("icegatheringstatechange", checkState);
+              setTimeout(resolve, 1500);
+            });
+
             broadcastSignalingMessage({
               type: "SIGNAL_OFFER",
               fromPeerId: myPeerId,
               toPeerId: targetPeerId,
               sdp: pc.localDescription
             });
-          })
-          .catch(err => console.warn("[WebRTC] Error creating offer:", err));
+          } catch (err) {
+            console.warn(`[WebRTC] Offer generation attempt ${retryCount + 1} failed:`, err);
+            if (retryCount < 2 && pc.signalingState !== "closed") {
+              setTimeout(() => attemptOffer(retryCount + 1), 800 * (retryCount + 1));
+            }
+          }
+        };
+        attemptOffer();
       }
 
       return pc;
@@ -2464,7 +2489,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       </div>
 
       {/* GOOGLE MEET FLOATING BOTTOM CONTROLS DOCK */}
-      <div className="h-20 px-4 sm:px-8 border-t border-[#2d2e31] bg-[#1a1b1e] flex items-center justify-between gap-4 shrink-0">
+      <div className="h-20 px-2 sm:px-8 border-t border-[#2d2e31] bg-[#1a1b1e] flex items-center justify-between gap-2 sm:gap-4 shrink-0 overflow-x-auto scrollbar-none">
         
         {/* Left Side: Meeting details & Audio Wave Indicator */}
         <div className="hidden sm:flex items-center gap-3 min-w-[200px]">
