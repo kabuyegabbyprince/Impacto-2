@@ -2495,15 +2495,15 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         </div>
 
         {/* Center: Google Meet Circular Control Buttons */}
-        <div className="flex items-center gap-3 mx-auto">
+        <div className="flex items-center gap-2 sm:gap-3 mx-auto flex-wrap justify-center">
           {/* Microphone Toggle */}
           <button
             type="button"
             onClick={handleToggleMic}
-            className={`h-11 w-11 rounded-full flex items-center justify-center transition cursor-pointer ${
+            className={`h-11 w-11 sm:h-12 sm:w-12 rounded-full flex items-center justify-center transition cursor-pointer shrink-0 ${
               micOn
                 ? "bg-[#3c4043] hover:bg-[#474a4d] text-white"
-                : "bg-[#ea4335] hover:bg-[#d93025] text-white"
+                : "bg-[#ea4335] hover:bg-[#d93025] text-white shadow-lg"
             }`}
             title={micOn ? "Turn off microphone" : "Turn on microphone"}
           >
@@ -2514,10 +2514,10 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
           <button
             type="button"
             onClick={handleToggleVideo}
-            className={`h-11 w-11 rounded-full flex items-center justify-center transition cursor-pointer ${
+            className={`h-11 w-11 sm:h-12 sm:w-12 rounded-full flex items-center justify-center transition cursor-pointer shrink-0 ${
               videoOn
                 ? "bg-[#3c4043] hover:bg-[#474a4d] text-white"
-                : "bg-[#ea4335] hover:bg-[#d93025] text-white"
+                : "bg-[#ea4335] hover:bg-[#d93025] text-white shadow-lg"
             }`}
             title={videoOn ? "Turn off camera" : "Turn on camera"}
           >
@@ -2528,9 +2528,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
           <button
             type="button"
             onClick={handleToggleDeafen}
-            className={`h-11 w-11 rounded-full flex items-center justify-center transition cursor-pointer ${
+            className={`h-11 w-11 sm:h-12 sm:w-12 rounded-full flex items-center justify-center transition cursor-pointer shrink-0 ${
               isDeafened
-                ? "bg-[#ea4335] hover:bg-[#d93025] text-white"
+                ? "bg-[#ea4335] hover:bg-[#d93025] text-white shadow-lg"
                 : "bg-[#3c4043] hover:bg-[#474a4d] text-white"
             }`}
             title={isDeafened ? "Undeafen (unmute incoming audio)" : "Deafen (mute incoming audio)"}
@@ -2542,9 +2542,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
           <button
             type="button"
             onClick={handleToggleScreenShare}
-            className={`h-11 w-11 rounded-full flex items-center justify-center transition cursor-pointer ${
+            className={`h-11 w-11 sm:h-12 sm:w-12 rounded-full flex items-center justify-center transition cursor-pointer shrink-0 ${
               screenSharing
-                ? "bg-[#81c995] text-[#121316]"
+                ? "bg-[#81c995] text-[#121316] shadow-lg"
                 : "bg-[#3c4043] hover:bg-[#474a4d] text-white"
             }`}
             title={screenSharing ? "Stop presenting" : "Present now"}
@@ -2556,9 +2556,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
           <button
             type="button"
             onClick={handleToggleHand}
-            className={`h-11 w-11 rounded-full flex items-center justify-center transition cursor-pointer ${
+            className={`h-11 w-11 sm:h-12 sm:w-12 rounded-full flex items-center justify-center transition cursor-pointer shrink-0 ${
               handRaised
-                ? "bg-[#fbbc04] text-[#202124]"
+                ? "bg-[#fbbc04] text-[#202124] shadow-lg"
                 : "bg-[#3c4043] hover:bg-[#474a4d] text-white"
             }`}
             title={handRaised ? "Lower hand" : "Raise hand"}
@@ -2570,7 +2570,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
           <button
             type="button"
             onClick={handleLeaveCall}
-            className="h-11 px-6 rounded-full bg-[#ea4335] hover:bg-[#d93025] text-white font-medium text-xs flex items-center gap-2 transition cursor-pointer shadow-md"
+            className="h-11 px-5 sm:h-12 sm:px-6 rounded-full bg-[#ea4335] hover:bg-[#d93025] text-white font-medium text-xs flex items-center gap-2 transition cursor-pointer shadow-md shrink-0"
             title="Leave call"
           >
             <PhoneOff className="h-5 w-5" />
