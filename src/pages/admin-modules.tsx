@@ -365,12 +365,14 @@ export const MembersManagement: React.FC = () => {
   const isTrial = activeOrg?.subscription_status === "trial" || !activeOrg?.subscription_status;
   const orgTier = activeOrg?.subscription_tier || "trial";
   const currentLimit = isTrial 
-    ? 50 
-    : orgTier === "starter" 
-      ? 100 
-      : orgTier === "growth" 
-        ? 500 
-        : Infinity;
+    ? Infinity 
+    : orgTier === "free"
+      ? 30
+      : orgTier === "starter" 
+        ? 100 
+        : orgTier === "growth" 
+          ? 500 
+          : Infinity;
 
   const isOverLimit = activeMembersCount >= currentLimit;
 
@@ -2416,8 +2418,8 @@ export const LedgerBookkeeping: React.FC = () => {
                           className="w-full text-sm rounded-lg border bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700 px-3 py-2.5 text-stone-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-[var(--org-primary)]"
                         >
                           <option value="">-- Choose Member --</option>
-                          {members?.map(m => (
-                            <option key={m.id} value={m.id}>{m.user?.full_name} ({m.member_number || "No ID"})</option>
+                          {members?.map((m, idx) => (
+                            <option key={`adm-mem-${m.id}-${idx}`} value={m.id}>{m.user?.full_name} ({m.member_number || "No ID"})</option>
                           ))}
                         </select>
                       </div>
@@ -2564,8 +2566,8 @@ export const LedgerBookkeeping: React.FC = () => {
                           className="w-full text-sm rounded-lg border bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700 px-3 py-2.5 text-stone-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-[var(--org-primary)]"
                         >
                           <option value="">-- Choose Member --</option>
-                          {members?.map(m => (
-                            <option key={m.id} value={m.id}>{m.user?.full_name} ({m.member_number || "No ID"})</option>
+                          {members?.map((m, idx) => (
+                            <option key={`edit-mem-${m.id}-${idx}`} value={m.id}>{m.user?.full_name} ({m.member_number || "No ID"})</option>
                           ))}
                         </select>
                       </div>
@@ -2722,8 +2724,8 @@ export const LedgerBookkeeping: React.FC = () => {
                     className="w-full text-sm rounded-lg border bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700 px-3 py-2.5 text-stone-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-[var(--org-primary)]"
                   >
                     <option value="">-- Choose Member --</option>
-                    {members?.map(m => (
-                      <option key={m.id} value={m.id}>{m.user?.full_name} ({m.member_number || "No ID"})</option>
+                    {members?.map((m, idx) => (
+                      <option key={`share-mem-${m.id}-${idx}`} value={m.id}>{m.user?.full_name} ({m.member_number || "No ID"})</option>
                     ))}
                   </select>
                 </div>
@@ -3599,7 +3601,12 @@ export const AnnualReports: React.FC = () => {
   };
 
   return (
-    <PlanGatedView requiredTier="pro" featureName="Annual Report PDF Compiler & Audit Tools">
+    <PlanGatedView
+      requiredTier="pro"
+      featureKey="advanced_ledger_reports"
+      featureName="Annual Report PDF Compiler & Audit Tools"
+      customMessage="Annual legal compliance reports and PDF audit compilers are available on the Pro Plan ($25/mo). Upgrade to the Pro Plan to compile RCA compliance reports, export printable audits, and analyze metrics."
+    >
       <div className="flex flex-col gap-6 select-none font-sans w-full animate-in">
       
       {/* Header Block with Sub-tabs */}

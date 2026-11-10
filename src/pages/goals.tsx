@@ -38,6 +38,7 @@ import { getOrgSubscriptionLifecycle } from "../lib/subscriptionMatrix";
 import { GoalProgressCharts } from "../components/GoalProgressCharts";
 import { RealtimeTaskCountdown } from "../components/RealtimeTaskCountdown";
 import { MemberGoalTasksView } from "../components/MemberGoalTasksView";
+import { PlanGatedView } from "../components/PlanGatedView";
 
 export const GoalsPage: React.FC = () => {
   const { t } = useLocalTranslation();
@@ -556,7 +557,13 @@ export const GoalsPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-8 space-y-8 select-none font-sans">
+    <PlanGatedView
+      requiredTier="pro"
+      featureKey="goals_tracker"
+      featureName="Strategic Goals & Milestone Progress"
+      customMessage="Strategic Goals management and organizational progress tracking are available on the Pro Plan ($25/mo). Upgrade to the Pro Plan to establish organization milestones, track periodic metrics, and assign delegated tasks."
+    >
+      <div className="w-full max-w-6xl mx-auto px-4 py-8 space-y-8 select-none font-sans">
       {/* Top Banner & Title Header - Clean Modern Design */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 md:p-8 shadow-xs relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -1206,8 +1213,8 @@ export const GoalsPage: React.FC = () => {
                         {members.length === 0 ? (
                           <option disabled value="">No members found in organization</option>
                         ) : (
-                          members.map((m) => (
-                            <option key={m.id} value={m.id}>
+                          members.map((m, idx) => (
+                            <option key={`goal-mem-${m.id}-${idx}`} value={m.id}>
                               {m.user?.full_name || "Member"} ({m.role})
                             </option>
                           ))
@@ -1215,11 +1222,11 @@ export const GoalsPage: React.FC = () => {
                       </select>
                       {draftTaskMemberIds.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mt-1.5">
-                          {draftTaskMemberIds.map((id) => {
+                          {draftTaskMemberIds.map((id, idx) => {
                             const m = members.find((mem) => mem.id === id);
                             return (
                               <span
-                                key={id}
+                                key={`goal-assignee-${id}-${idx}`}
                                 className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold flex items-center gap-1"
                               >
                                 <span>{m?.user?.full_name || "Member"}</span>
@@ -1428,6 +1435,7 @@ export const GoalsPage: React.FC = () => {
           </form>
         </Modal>
       )}
-    </div>
+      </div>
+    </PlanGatedView>
   );
 };

@@ -82,7 +82,7 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierDefinition> = {
   },
   growth: {
     id: "growth",
-    name: "Growth Plan (Default Trial)",
+    name: "Growth Plan",
     priceUsd: 10,
     priceRwfApprox: 13500,
     memberLimit: 500,
@@ -91,7 +91,7 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierDefinition> = {
     badgeColor: "emerald",
     tagline: "Expanded operational power for established cooperatives",
     coreFeatures: [
-      "Up to 500 active members (30-Day Free Trial included)",
+      "Up to 500 active members",
       "5 GB high-speed cloud storage",
       "Event Attendance & Check-in",
       "Excel Attendance & Dues Data Export",
@@ -105,7 +105,7 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierDefinition> = {
   },
   pro: {
     id: "pro",
-    name: "Pro Plan",
+    name: "Pro Plan (Default 30-Day Free Trial)",
     priceUsd: 25,
     priceRwfApprox: 33750,
     memberLimit: Infinity,
@@ -114,10 +114,11 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierDefinition> = {
     badgeColor: "purple",
     tagline: "Unlimited scale, automated finance, marketplace & encryption",
     coreFeatures: [
-      "Unlimited active members (No cap)",
+      "Unlimited active members (30-Day Free Trial upon sign-up)",
       "Unlimited cloud storage for files, media & receipts",
       "Automated Certificate Generation & Public Verification",
       "Asset & Equipment Inventory Tracker",
+      "Strategic Goals Tracker & Periodic Milestone Tasks",
       "Advanced Financial Ledger Reports & Charts",
       "Mobile Money Live Gateway (MTN & Airtel MoMo)",
       "Public Cooperative Marketplace & Storefront",
@@ -389,10 +390,10 @@ export function getOrgSubscriptionLifecycle(
 ): OrgLifecycleStatus {
   const now = Date.now();
   if (!org) {
-    const defaultDef = SUBSCRIPTION_TIERS.growth;
+    const defaultDef = SUBSCRIPTION_TIERS.pro;
     return {
-      tier: "growth",
-      effectiveTier: "growth",
+      tier: "pro",
+      effectiveTier: "pro",
       tierDef: defaultDef,
       isTrial: true,
       isInGracePeriod: false,
@@ -408,11 +409,11 @@ export function getOrgSubscriptionLifecycle(
       subscriptionEndsAt: null,
       activePackages: [],
       bonusMemberSlots: 0,
-      baseMemberLimit: 500,
-      memberLimit: 500,
-      storageLimitMB: 5000,
-      storageLimitBytes: 5000 * 1024 * 1024,
-      storageLimit: "5 GB",
+      baseMemberLimit: Infinity,
+      memberLimit: Infinity,
+      storageLimitMB: Infinity,
+      storageLimitBytes: Infinity,
+      storageLimit: "Unlimited",
       activeMemberCount,
       storageBytesUsed,
       isMemberLimitExceeded: false,
@@ -423,8 +424,8 @@ export function getOrgSubscriptionLifecycle(
       isLocked: false,
       isExpired: false,
       isGracePeriod: false,
-      statusLabel: "Growth Plan (30-Day Trial)",
-      badgeColor: "emerald"
+      statusLabel: "Pro Plan (30-Day Free Trial)",
+      badgeColor: "purple"
     };
   }
 
@@ -433,10 +434,10 @@ export function getOrgSubscriptionLifecycle(
   const tierStr = (org.subscription_tier || (org as any).subscription_plan || "").toLowerCase();
   if (tierStr.includes("enterprise") || tierStr.includes("pro") || tierStr.includes("vip")) rawTier = "pro";
   else if (tierStr.includes("growth")) rawTier = "growth";
-  else if (tierStr.includes("trial")) rawTier = "growth";
+  else if (tierStr.includes("trial") || org.subscription_status === "trial") rawTier = "pro"; // Organization sign-up free trial is Pro Plan!
   else if (tierStr.includes("starter")) rawTier = "starter";
   else if (tierStr.includes("free")) rawTier = "free";
-  else rawTier = org.subscription_status === "active" ? "growth" : "free";
+  else rawTier = org.subscription_status === "active" ? "pro" : "free";
 
   const createdTime = org.created_at ? new Date(org.created_at).getTime() : now;
   const elapsedMs = Math.max(0, now - createdTime);
@@ -472,7 +473,7 @@ export function getOrgSubscriptionLifecycle(
       isSubscriptionExpired = true;
     }
   } else {
-    // 30-Day Growth Free Trial
+    // 30-Day Pro Free Trial
     if (elapsedMs < trialMs) {
       isTrial = true;
       trialDaysRemaining = Math.max(0, Math.ceil((trialMs - elapsedMs) / (1000 * 3600 * 24)));
@@ -493,9 +494,9 @@ export function getOrgSubscriptionLifecycle(
   } else if (hasPaidEndDate || (isExplicitActive && !isTrialExpired && !isSubscriptionExpired)) {
     effectiveTier = rawTier;
   } else if (isTrial || isInGracePeriod) {
-    effectiveTier = "growth";
+    effectiveTier = "pro"; // 30-Day Free Trial is Pro Plan
   } else if (isTrialExpired || isSubscriptionExpired) {
-    // FINISHED 30-DAY TRIAL -> SENT TO FREE PLAN (NOT STARTER PLAN)
+    // FINISHED 30-DAY TRIAL -> SENT TO FREE PLAN
     effectiveTier = "free";
   } else {
     effectiveTier = "free";
@@ -524,21 +525,21 @@ export function getOrgSubscriptionLifecycle(
   let headlineWarning: string | undefined;
 
   if (isTrial) {
-    statusLabel = `Growth Trial (${trialDaysRemaining}d remaining)`;
-    badgeColor = trialDaysRemaining <= 5 ? "amber" : "emerald";
+    statusLabel = `Pro Trial (${trialDaysRemaining}d remaining)`;
+    badgeColor = trialDaysRemaining <= 5 ? "amber" : "purple";
   } else if (isInGracePeriod) {
     statusLabel = `Grace Period (${graceDaysRemaining}d left)`;
     badgeColor = "amber";
-    headlineWarning = `3-Day Grace Period active (${graceDaysRemaining} days remaining). Upgrade to Growth or your workspace will transition to the Free Plan.`;
+    headlineWarning = `3-Day Grace Period active (${graceDaysRemaining} days remaining). Upgrade to Pro or your workspace will transition to the Free Plan.`;
   } else if (isReadOnlyMode) {
     statusLabel = "Free Plan (Safe Read-Only Mode)";
     badgeColor = "amber";
-    headlineWarning = `Your organization exceeds the Free Plan member quota (${activeMemberCount}/${memberLimit} members). Excess records are preserved in read-only mode safely without deletion. Upgrade to Growth ($10/mo) for 500 members.`;
+    headlineWarning = `Your organization exceeds the Free Plan member quota (${activeMemberCount}/${memberLimit} members). Excess records are preserved in read-only mode safely without deletion. Upgrade to Pro ($25/mo) for unlimited capacity.`;
   } else if (effectiveTier === "free") {
     statusLabel = "Free Plan";
     badgeColor = "gray";
     if (isTrialExpired) {
-      headlineWarning = "Your 30-day Growth trial has finished. Your organization is now operating on the Free Plan. Upgrade anytime to unlock advanced Growth or Pro features.";
+      headlineWarning = "Your 30-day Pro trial has finished. Your organization is now operating on the Free Plan. Upgrade anytime to unlock advanced Pro or Growth features.";
     }
   } else if (effectiveTier === "starter") {
     statusLabel = `Starter Plan (${subscriptionDaysRemaining}d active)`;
@@ -674,7 +675,7 @@ export function canAccessFeature(
     task_assignment: "growth",
     dues_charges: "free",
     payment_proofs: "free",
-    goals_tracker: "free",
+    goals_tracker: "pro",
     chat_polls: "growth",
     qr_attendance: "starter",
     excel_export: "growth",

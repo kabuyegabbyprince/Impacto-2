@@ -156,8 +156,9 @@ export const MeetRoomPage: React.FC = () => {
     const effectiveUserId = user?.id || guestUser?.id;
     if (!effectiveUserId) return;
 
+    const targetRoomOrgId = activeMeet?.orgId || orgIdFromParam;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws/meet?orgId=${encodeURIComponent(orgIdFromParam)}&peerId=wait-${effectiveUserId}&userId=${encodeURIComponent(effectiveUserId)}&name=${encodeURIComponent(user?.full_name || guestName)}&role=Waiting`;
+    const wsUrl = `${protocol}//${window.location.host}/ws/meet?orgId=${encodeURIComponent(targetRoomOrgId)}&peerId=wait-${effectiveUserId}&userId=${encodeURIComponent(effectiveUserId)}&name=${encodeURIComponent(user?.full_name || guestName)}&role=Waiting`;
     
     let ws: WebSocket | null = null;
     try {
@@ -177,7 +178,7 @@ export const MeetRoomPage: React.FC = () => {
       };
     } catch (e) {}
 
-    const bc = new BroadcastChannel(`impacto_call_org_${orgIdFromParam}`);
+    const bc = new BroadcastChannel(`impacto_call_org_${targetRoomOrgId}`);
     bc.onmessage = (ev) => {
       if (ev.data?.type === "ADMIT_PEER" && ev.data.userId === effectiveUserId) {
         setWaitingForAdmission(false);
@@ -193,7 +194,7 @@ export const MeetRoomPage: React.FC = () => {
       if (ws) ws.close();
       bc.close();
     };
-  }, [waitingForAdmission, user?.id, guestUser?.id, orgIdFromParam, guestName, addToast]);
+  }, [waitingForAdmission, user?.id, guestUser?.id, orgIdFromParam, activeMeet?.orgId, guestName, addToast]);
 
   // Sync preview stream to video element
   useEffect(() => {
@@ -368,10 +369,11 @@ export const MeetRoomPage: React.FC = () => {
       setInCall(true);
     } else {
       setWaitingForAdmission(true);
+      const targetRoomOrgId = activeMeet?.orgId || orgIdFromParam;
       // Dispatch admission request to room
       try {
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = `${protocol}//${window.location.host}/ws/meet?orgId=${encodeURIComponent(orgIdFromParam)}&peerId=wait-${effectiveUserId}&userId=${encodeURIComponent(effectiveUserId)}&name=${encodeURIComponent(effectiveName)}&role=Guest`;
+        const wsUrl = `${protocol}//${window.location.host}/ws/meet?orgId=${encodeURIComponent(targetRoomOrgId)}&peerId=wait-${effectiveUserId}&userId=${encodeURIComponent(effectiveUserId)}&name=${encodeURIComponent(effectiveName)}&role=Guest`;
         const tempWs = new WebSocket(wsUrl);
         tempWs.onopen = () => {
           tempWs.send(
@@ -386,7 +388,7 @@ export const MeetRoomPage: React.FC = () => {
       } catch (err) {}
 
       try {
-        const bc = new BroadcastChannel(`impacto_call_org_${orgIdFromParam}`);
+        const bc = new BroadcastChannel(`impacto_call_org_${targetRoomOrgId}`);
         bc.postMessage({
           type: "REQUEST_ADMISSION",
           userId: effectiveUserId,
@@ -736,7 +738,7 @@ export const MeetRoomPage: React.FC = () => {
           onClose={() => setInCall(false)}
           channelName={activeMeet?.channelName || "General"}
           meetingTitle={activeMeet?.meetingTitle || "Live Meeting"}
-          activeOrg={targetOrg}
+          activeOrg={activeMeet?.orgId ? { ...targetOrg, id: activeMeet.orgId } : targetOrg}
           activeMember={activeMember || (guestUser as any) || undefined}
           members={orgMembers as any}
           documents={dbDocs as any}

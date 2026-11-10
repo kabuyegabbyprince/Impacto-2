@@ -30,6 +30,7 @@ import { useCurrencyStore } from "../store/currencyStore";
 import { useAssets, useCreateAsset, useUpdateAsset, useDeleteAsset, useMembers } from "../hooks/useImpactoData";
 import { Button, Input, Card, Badge, Modal, EmptyState } from "../components/ui";
 import { useToast } from "../components/Toast";
+import { PlanGatedView } from "../components/PlanGatedView";
 import { Asset } from "../types";
 
 export const AssetManagementPage: React.FC = () => {
@@ -353,7 +354,13 @@ export const AssetManagementPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-16">
+    <PlanGatedView
+      requiredTier="pro"
+      featureKey="asset_tracker"
+      featureName="Asset and Stock Management"
+      customMessage="Asset and Stock Management is available on the Pro Plan ($25/mo). Upgrade to the Pro Plan to track physical equipment, warehouse stock, custody assignments, and depreciation logs."
+    >
+      <div className="space-y-6 pb-16">
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
         <div>
@@ -1011,6 +1018,7 @@ export const AssetManagementPage: React.FC = () => {
           </div>
         </div>
       </Modal>
-    </div>
+      </div>
+    </PlanGatedView>
   );
 };

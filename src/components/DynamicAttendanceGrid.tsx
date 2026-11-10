@@ -452,7 +452,7 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
 
                   return (
                     <tr
-                      key={m.id}
+                      key={`grid-member-${m.id}-${idx}`}
                       className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors group"
                     >
                       {/* Sticky Left Member Info Row Header */}

@@ -1626,11 +1626,11 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                           return (m.user?.full_name || "").toLowerCase().includes(q) ||
                             (m.user?.email || "").toLowerCase().includes(q);
                         })
-                        .map(member => {
+                        .map((member, idx) => {
                           const isChecked = selectedRecipients.includes(member.id);
                           return (
                             <div 
-                              key={member.id}
+                              key={`recip-${member.id}-${idx}`}
                               onClick={() => handleToggleRecipient(member.id)}
                               className="flex items-center justify-between p-1.5 hover:bg-white dark:hover:bg-slate-800 rounded-md cursor-pointer transition select-none"
                             >
@@ -1866,11 +1866,11 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                                 return (m.user?.full_name || "").toLowerCase().includes(q) ||
                                   (m.user?.email || "").toLowerCase().includes(q);
                               })
-                              .map((member) => {
+                              .map((member, idx) => {
                                 const isChecked = selectedRecipients.includes(member.id);
                                 return (
                                   <div 
-                                    key={member.id}
+                                    key={`recip-doc-${member.id}-${idx}`}
                                     onClick={() => handleToggleRecipient(member.id)}
                                     className="flex items-center justify-between p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg cursor-pointer transition select-none"
                                   >

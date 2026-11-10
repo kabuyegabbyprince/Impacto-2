@@ -55,7 +55,13 @@ meetRouter.post("/end", (req: Request, res: Response) => {
 
 // POST /api/meet/signal (HTTP fallback for signal relaying)
 meetRouter.post("/signal", (req: Request, res: Response) => {
-  const { orgId, message } = req.body;
+  let { orgId, message } = req.body;
+  if (!orgId || orgId === "default") {
+    const anyMeet = getAnyActiveMeet();
+    if (anyMeet) {
+      orgId = anyMeet.orgId;
+    }
+  }
   if (orgId && message) {
     broadcastToOrg(orgId, message);
   }

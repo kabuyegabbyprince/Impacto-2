@@ -39,7 +39,8 @@ export const PlanGatedView: React.FC<PlanGatedViewProps> = ({
   const { activeOrg } = useOrgStore();
   const { formatAmount, convertToRWF } = useCurrencyStore();
 
-  // Evaluate feature access
+  // Evaluate feature access based on authoritative lifecycle effectiveTier
+  const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
   const tierRank: Record<string, number> = {
     free: 1,
     starter: 2,
@@ -47,7 +48,7 @@ export const PlanGatedView: React.FC<PlanGatedViewProps> = ({
     pro: 4,
     enterprise: 4
   };
-  const currentOrgTier = (activeOrg?.subscription_tier || "free").toLowerCase();
+  const currentOrgTier = (lifecycle.effectiveTier || "free").toLowerCase();
   const currentRank = tierRank[currentOrgTier] || 1;
   const targetReqTier = (requiredTier || "growth").toLowerCase();
   const targetReqRank = tierRank[targetReqTier] || 3;
@@ -63,7 +64,6 @@ export const PlanGatedView: React.FC<PlanGatedViewProps> = ({
     return <>{children}</>;
   }
 
-  const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
   const targetTier = accessResult.requiredTier || requiredTier;
   const tierDetails = getTierDefinition(targetTier as string);
 

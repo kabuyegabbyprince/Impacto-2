@@ -123,11 +123,22 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
 
   wss.on("connection", (ws: WebSocket, request: any) => {
     const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
-    const orgId = url.searchParams.get("orgId") || "default";
+    let orgId = url.searchParams.get("orgId") || "default";
+    if (orgId === "default") {
+      const anyMeet = getAnyActiveMeet();
+      if (anyMeet) {
+        orgId = anyMeet.orgId;
+      }
+    }
     const peerId = url.searchParams.get("peerId") || `peer-${Math.random().toString(36).substring(2, 9)}`;
     const userId = url.searchParams.get("userId") || "guest";
     const name = decodeURIComponent(url.searchParams.get("name") || "Guest");
     const role = decodeURIComponent(url.searchParams.get("role") || "Member");
+
+    (ws as any).isAlive = true;
+    ws.on("pong", () => {
+      (ws as any).isAlive = true;
+    });
 
     if (!roomPeers.has(orgId)) {
       roomPeers.set(orgId, new Map());
@@ -340,6 +351,23 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
     ws.on("error", () => {
       peers.delete(peerId);
     });
+  });
+
+  const pingInterval = setInterval(() => {
+    wss.clients.forEach((client) => {
+      const extWs = client as any;
+      if (extWs.isAlive === false) {
+        return client.terminate();
+      }
+      extWs.isAlive = false;
+      try {
+        client.ping();
+      } catch (e) {}
+    });
+  }, 25000);
+
+  wss.on("close", () => {
+    clearInterval(pingInterval);
   });
 
   return wss;

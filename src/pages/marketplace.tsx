@@ -12,6 +12,7 @@ import { Card, Input, Button, Badge, ImageUploadInput } from "../components/ui";
 import { ResolvedImage } from "../components/ResolvedMedia";
 import { useToast } from "../components/Toast";
 import { ShoppingBag, Star, Plus, Shield, MessageSquare, AlertCircle, Phone, Mail, User } from "lucide-react";
+import { PlanGatedView } from "../components/PlanGatedView";
 
 import { Organization } from "../types";
 
@@ -126,7 +127,7 @@ export const OrganizationMarketplace: React.FC<MarketplaceProps> = ({
     p.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  return (
+  const marketplaceContent = (
     <div className="space-y-6 md:space-y-8 container mx-auto max-w-7xl px-4 py-6 font-sans select-none" id="marketplace-container">
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
@@ -406,5 +407,20 @@ export const OrganizationMarketplace: React.FC<MarketplaceProps> = ({
         </div>
       )}
     </div>
+  );
+
+  if (isPublic) {
+    return marketplaceContent;
+  }
+
+  return (
+    <PlanGatedView
+      requiredTier="pro"
+      featureKey="public_marketplace"
+      featureName="Cooperative Marketplace & Storefront"
+      customMessage="The Cooperative Marketplace and storefront management are available on the Pro Plan ($25/mo). Upgrade to the Pro Plan to publish trade goods, manage inbound buyer leads, and showcase products."
+    >
+      {marketplaceContent}
+    </PlanGatedView>
   );
 };

@@ -2149,13 +2149,13 @@ export const OrgPicker: React.FC = () => {
     // Plan limit checking to prevent self-block out
     const activeOrgMembers = members.filter(m => m.org_id === orgId && m.status === "active").length;
     const isTrial = org ? (org.subscription_status === "trial" || !org.subscription_status) : true;
-    const orgTier = org ? (org.subscription_tier || "growth") : "growth";
+    const orgTier = org ? (org.subscription_tier || "pro") : "pro";
     const currentLimit = isTrial 
-      ? 250 
+      ? Infinity 
       : (orgTier === "free" || orgTier === "starter") 
         ? 30 
         : orgTier === "growth" 
-          ? 250 
+          ? 500 
           : Infinity;
 
     const wouldExceed = activeOrgMembers >= currentLimit;

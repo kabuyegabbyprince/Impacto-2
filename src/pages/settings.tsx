@@ -1739,6 +1739,9 @@ export const OrganizationSettingsPage: React.FC = () => {
         {/* Subscription pricing structures & Workplace Packages */}
         {activeTab === "subscription" && canAccessSubscription && (() => {
           const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
+          const isFreeCurrent = lifecycle.effectiveTier === "free" && !lifecycle.isTrial;
+          const isGrowthCurrent = !lifecycle.isExpired && lifecycle.effectiveTier === "growth";
+          const isProCurrent = !lifecycle.isExpired && (lifecycle.effectiveTier === "pro" || lifecycle.effectiveTier === "enterprise");
 
           return (
             <div className="flex flex-col gap-6 w-full animate-in fade-in">
@@ -1762,15 +1765,15 @@ export const OrganizationSettingsPage: React.FC = () => {
                           type="button"
                           onClick={() =>
                             handleOpenSubscriptionCheckout(
-                              activeOrg?.subscription_tier === "pro" || activeOrg?.subscription_tier === "enterprise"
-                                ? "Pro Plan - $25/month"
-                                : "Growth Plan - $10/month"
+                              activeOrg?.subscription_tier === "growth"
+                                ? "Growth Plan - $10/month"
+                                : "Pro Plan - $25/month"
                             )
                           }
                           className="text-amber-600 dark:text-amber-400 font-bold uppercase hover:underline cursor-pointer inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800"
                           title="Click to buy back and re-activate your last used plan"
                         >
-                          {activeOrg?.subscription_tier || "Growth"} (Expired - Click to Buy Back)
+                          {activeOrg?.subscription_tier === "growth" ? "Growth" : "Pro"} (Expired - Click to Buy Back)
                         </button>
                       </>
                     ) : (
@@ -1797,17 +1800,17 @@ export const OrganizationSettingsPage: React.FC = () => {
                     <div>
                       <span className="font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wide text-[11px]">Free Trial Window:</span>
                       <p className="text-slate-700 dark:text-slate-300 mt-0.5">
-                        You have <strong className="text-amber-800 dark:text-amber-400 font-bold">{daysLeft} days left</strong> in your 30-day Growth trial period. After 30 days, your workspace transitions automatically to the Free Plan.
+                        You have <strong className="text-amber-800 dark:text-amber-400 font-bold">{daysLeft} days left</strong> in your 30-day Pro trial period. After 30 days, your workspace transitions automatically to the Free Plan.
                       </p>
                     </div>
                   </div>
                   <Button 
                     size="sm" 
-                    onClick={() => handleOpenSubscriptionCheckout("Growth Plan - $10/month")}
+                    onClick={() => handleOpenSubscriptionCheckout("Pro Plan - $25/month")}
                     className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs px-3.5 py-1.5 rounded-xl shrink-0"
                   >
-                    <Zap className="h-3.5 w-3.5 mr-1" />
-                    Upgrade to Growth →
+                    <Crown className="h-3.5 w-3.5 mr-1" />
+                    Activate Pro Plan ($25/mo) →
                   </Button>
                 </div>
               )}
@@ -1827,11 +1830,15 @@ export const OrganizationSettingsPage: React.FC = () => {
                   </div>
                   <Button 
                     size="sm" 
-                    onClick={() => handleOpenSubscriptionCheckout("Growth Plan - $10/month")}
+                    onClick={() => handleOpenSubscriptionCheckout(
+                      activeOrg?.subscription_tier === "growth"
+                        ? "Growth Plan - $10/month"
+                        : "Pro Plan - $25/month"
+                    )}
                     className="bg-[#156c45] hover:opacity-90 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl shrink-0 shadow-3xs"
                   >
-                    <Zap className="h-3.5 w-3.5 mr-1" />
-                    Upgrade to Growth →
+                    <Crown className="h-3.5 w-3.5 mr-1" />
+                    Upgrade to Pro ($25/mo) →
                   </Button>
                 </div>
               )}
@@ -1848,14 +1855,14 @@ export const OrganizationSettingsPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   {/* Free Plan */}
                   <div className={`rounded-xl p-5 flex flex-col justify-between transition border ${
-                    lifecycle.effectiveTier === "free" && !lifecycle.isTrial
+                    isFreeCurrent
                       ? "border-emerald-500 bg-white dark:bg-slate-900 shadow-sm ring-1 ring-emerald-500/30"
                       : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
                   }`}>
                     <div>
                       <div className="flex justify-between items-center mb-3">
                         <span className="text-xs uppercase font-bold text-slate-400 font-mono">FREE</span>
-                        {lifecycle.effectiveTier === "free" && !lifecycle.isTrial ? (
+                        {isFreeCurrent ? (
                           <Badge color="green">Current Plan</Badge>
                         ) : (
                           <Badge color="gray">Free Mode</Badge>
@@ -1873,7 +1880,7 @@ export const OrganizationSettingsPage: React.FC = () => {
                       </ul>
                     </div>
                     <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800">
-                      {lifecycle.effectiveTier === "free" && !lifecycle.isTrial ? (
+                      {isFreeCurrent ? (
                         <div className="w-full text-center py-2 px-3 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30">
                           ✓ Current Plan
                         </div>
@@ -1887,7 +1894,7 @@ export const OrganizationSettingsPage: React.FC = () => {
 
                   {/* Growth Plan */}
                   <div className={`rounded-xl p-5 flex flex-col justify-between transition border-2 ${
-                    activeOrg?.subscription_status === "active" && (activeOrg?.subscription_tier === "growth" || (activeOrg as any)?.subscription_tier === "trial")
+                    isGrowthCurrent
                       ? "border-emerald-600 bg-white dark:bg-slate-900 shadow-sm ring-1 ring-emerald-500/20"
                       : "bg-white dark:bg-slate-900 border-emerald-600/80 dark:border-emerald-500/80 shadow-xs"
                   }`}>
@@ -1907,13 +1914,16 @@ export const OrganizationSettingsPage: React.FC = () => {
                       </ul>
                     </div>
                     <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800">
-                      {activeOrg?.subscription_status === "active" && activeOrg?.subscription_tier === "growth" ? (
+                      {isGrowthCurrent ? (
                         <div className="w-full text-center py-2 px-3 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30">
                           ✓ Current Plan
                         </div>
                       ) : (
-                        <Button className="w-full text-xs font-bold py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs" onClick={() => handleOpenSubscriptionCheckout("Growth Plan - $10/month")}>
-                          {lifecycle.isExpired && activeOrg?.subscription_tier === "growth" ? "Buy Back Growth ($10/mo)" : "Choose Growth ($10/mo)"}
+                        <Button
+                          className="w-full text-xs font-bold py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer"
+                          onClick={() => handleOpenSubscriptionCheckout("Growth Plan - $10/month")}
+                        >
+                          {lifecycle.isExpired && activeOrg?.subscription_tier === "growth" ? "Re-purchase Growth ($10/mo)" : "Choose Growth ($10/mo)"}
                         </Button>
                       )}
                     </div>
@@ -1921,7 +1931,7 @@ export const OrganizationSettingsPage: React.FC = () => {
 
                   {/* Pro Plan */}
                   <div className={`rounded-xl p-5 flex flex-col justify-between text-white transition border ${
-                    activeOrg?.subscription_status === "active" && (activeOrg?.subscription_tier === "enterprise" || (activeOrg as any)?.subscription_tier === "pro")
+                    isProCurrent
                       ? "border-amber-400 bg-slate-900 shadow-sm ring-1 ring-amber-400/30"
                       : "bg-slate-900 border-slate-800"
                   }`}>
@@ -1930,24 +1940,36 @@ export const OrganizationSettingsPage: React.FC = () => {
                         <span className="text-xs uppercase font-bold text-amber-400 font-mono">PRO</span>
                         <Crown className="h-4 w-4 text-amber-400" />
                       </div>
-                      <h4 className="text-2xl font-bold font-display text-white">
-                        $25 <span className="text-xs font-normal text-slate-400">/ mo ({formatAmount(convertToRWF(25, "USD"))})</span>
-                      </h4>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-3xl font-extrabold font-display text-white tracking-tight">$25</span>
+                        <span className="text-xs font-normal text-slate-400">/ mo ({formatAmount(convertToRWF(25, "USD"))})</span>
+                      </div>
                       <ul className="text-xs text-slate-200 space-y-2 mt-4">
                         <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> Unlimited members & storage</li>
                         <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> Automated digital certificates</li>
                         <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> Hardware & asset registry</li>
                         <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> Priority hotline support</li>
+                        <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> Strategic Goals & Milestone Progress</li>
+                        <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> Cooperative Marketplace & Storefront</li>
+                        <li className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-amber-400 shrink-0" /> Annual Audit & Legal Compliance Reports</li>
                       </ul>
                     </div>
                     <div className="mt-5 pt-3 border-t border-slate-800">
-                      {activeOrg?.subscription_status === "active" && (activeOrg?.subscription_tier === "enterprise" || (activeOrg as any)?.subscription_tier === "pro") ? (
+                      {isProCurrent ? (
                         <div className="w-full text-center py-2 px-3 rounded-lg text-xs font-semibold text-amber-300 bg-amber-950/40">
                           ✓ Current Plan
                         </div>
                       ) : (
-                        <Button className="w-full text-xs font-bold py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950" onClick={() => handleOpenSubscriptionCheckout("Pro Plan - $25/month")}>
-                          {lifecycle.isExpired && (activeOrg?.subscription_tier === "pro" || activeOrg?.subscription_tier === "enterprise") ? "Buy Back Pro ($25/mo)" : "Upgrade to Pro ($25/mo)"}
+                        <Button
+                          className="w-full text-xs font-bold py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                          onClick={() => handleOpenSubscriptionCheckout("Pro Plan - $25/month")}
+                        >
+                          <Crown className="h-3.5 w-3.5 text-slate-950" />
+                          <span>
+                            {lifecycle.isExpired && (activeOrg?.subscription_tier === "pro" || activeOrg?.subscription_tier === "enterprise" || (activeOrg as any)?.subscription_tier === "trial")
+                              ? "Re-purchase Pro ($25/mo)"
+                              : "Choose Pro ($25/mo)"}
+                          </span>
                         </Button>
                       )}
                     </div>

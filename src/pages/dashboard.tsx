@@ -153,7 +153,9 @@ import {
   useCheckOut,
   useMeetingAttendance,
   useSaveMeetingAttendance,
-  useMeetingSessions
+  useMeetingSessions,
+  useDeleteMeetingSession,
+  useClearAllMeetingSessions
 } from "../hooks/useImpactoData";
 import { Button, Input, Card, Badge, Avatar, ProgressBar, EmptyState, Modal, Table } from "../components/ui";
 import { MockDB } from "../lib/mockData";
@@ -2517,45 +2519,18 @@ export const ChatRoom: React.FC = () => {
     setActiveHostedMeet(null);
   };
 
+  const deleteMeetingMutation = useDeleteMeetingSession();
+  const clearAllMeetingsMutation = useClearAllMeetingSessions();
+
   const [meetingHistory, setMeetingHistory] = useState<LiveMeetHistoryRecord[]>(() => {
     try {
       const raw = localStorage.getItem(`impacto_meeting_history_${activeOrg?.id || "default"}`);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {}
-
-    const initialSeed: LiveMeetHistoryRecord[] = [
-      {
-        id: "meet-seed-1",
-        meetingTitle: "Quarterly Agropastoral Governance Review",
-        channelName: "General",
-        orgId: activeOrg?.id || "default",
-        startedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-        endedAt: new Date(Date.now() - 3600000 * 1.5).toISOString(),
-        durationSeconds: 1800,
-        durationFormatted: "30:00",
-        participants: [
-          { peerId: "p-admin", userId: user?.id || "admin", name: user?.full_name || "Supervisory Chair", role: "Supervisory Board", isMe: true },
-          { peerId: "p-treasurer", userId: "u-treasurer", name: "Operations Lead", role: "Treasurer" }
-        ],
-        documentsUsed: [
-          { id: "doc-1", name: "2025 Reserve Fund Allocation Strategy.pdf", category: "Finance" },
-          { id: "doc-2", name: "Cooperative Harvest Quota Schedule.docx", category: "Operations" }
-        ],
-        notes: [
-          { id: "n-1", title: "Approve 20% allocation to cold chain storage facilities", assignee: "Treasurer", status: "completed", time: "10:14 AM" },
-          { id: "n-2", title: "Audit district grain deposit vouchers by next Monday", assignee: "Operations Lead", status: "open", time: "10:25 AM" }
-        ],
-        chatMessages: [
-          { id: "m-1", sender: "Operations Lead", text: "Reserve fund quota matches approved ledger figures.", time: "10:18 AM" },
-          { id: "m-2", sender: "Supervisory Chair", text: "Verified. Minutes and attendance archived.", time: "10:28 AM" }
-        ],
-        recordedBy: user?.full_name || "Supervisory Chair"
-      }
-    ];
-    return initialSeed;
+    return [];
   });
 
   const { data: fetchedMeetingSessions } = useMeetingSessions(activeOrg?.id);
@@ -2566,39 +2541,45 @@ export const ChatRoom: React.FC = () => {
       Math.abs(new Date(r1.startedAt).getTime() - new Date(r2.startedAt).getTime()) < 900000);
 
   useEffect(() => {
-    if (fetchedMeetingSessions && fetchedMeetingSessions.length > 0) {
-      setMeetingHistory(prev => {
-        const merged: LiveMeetHistoryRecord[] = [...prev];
-        fetchedMeetingSessions.forEach(incoming => {
-          const idx = merged.findIndex(existing => isDuplicateMeetingSession(existing, incoming));
-          if (idx !== -1) {
-            merged[idx] = incoming;
-          } else {
-            merged.push(incoming);
-          }
-        });
-        return merged.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
-      });
+    if (fetchedMeetingSessions !== undefined) {
+      setMeetingHistory(fetchedMeetingSessions);
     }
   }, [fetchedMeetingSessions]);
 
-  const handleDeleteMeeting = (id: string) => {
-    setMeetingHistory(prev => {
-      const next = prev.filter(m => m.id !== id);
-      try {
-        localStorage.setItem(`impacto_meeting_history_${activeOrg?.id || "default"}`, JSON.stringify(next));
-      } catch (e) {}
-      return next;
-    });
-    addToast("Meeting record removed", "info");
+  const handleDeleteMeeting = async (id: string) => {
+    setMeetingHistory(prev => prev.filter(m => m.id !== id));
+    try {
+      const storageKey = `impacto_meeting_history_${activeOrg?.id || "default"}`;
+      const existingStr = localStorage.getItem(storageKey);
+      if (existingStr) {
+        const next = JSON.parse(existingStr).filter((m: any) => m.id !== id);
+        localStorage.setItem(storageKey, JSON.stringify(next));
+      }
+    } catch (e) {}
+
+    try {
+      await deleteMeetingMutation.mutateAsync({
+        orgId: activeOrg?.id || "default",
+        meetingId: id
+      });
+      addToast("Meeting record removed permanently from database", "info");
+    } catch (err) {
+      addToast("Meeting record removed", "info");
+    }
   };
 
-  const handleClearAllMeetings = () => {
+  const handleClearAllMeetings = async () => {
     setMeetingHistory([]);
     try {
       localStorage.removeItem(`impacto_meeting_history_${activeOrg?.id || "default"}`);
     } catch (e) {}
-    addToast("All meeting history cleared", "info");
+
+    try {
+      await clearAllMeetingsMutation.mutateAsync(activeOrg?.id || "default");
+      addToast("All meeting history cleared permanently from database", "info");
+    } catch (err) {
+      addToast("All meeting history cleared", "info");
+    }
   };
 
   const handleMeetingEnded = (record: LiveMeetHistoryRecord) => {
@@ -2609,7 +2590,7 @@ export const ChatRoom: React.FC = () => {
       } catch (e) {}
       return next;
     });
-    addToast(`Meeting "${record.meetingTitle}" saved to history`, "success");
+    addToast(`Meeting "${record.meetingTitle}" saved to database history`, "success");
   };
 
   const { data: dbDocs } = useV2Documents(activeOrg?.id);
@@ -3780,10 +3761,10 @@ export const ChatRoom: React.FC = () => {
               <label className="text-xs font-semibold text-gray-700">Select which members must join this group</label>
               <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2.5 flex flex-col gap-2 bg-slate-50/50 dark:bg-slate-900">
                 {orgMembers && orgMembers.length > 0 ? (
-                  orgMembers.map((m) => {
+                  orgMembers.map((m, idx) => {
                     const isChecked = selectedMemberIds.includes(m.id);
                     return (
-                      <label key={m.id} className="flex items-center gap-2 text-xs font-semibold cursor-pointer text-gray-800 dark:text-gray-200">
+                      <label key={`org-mem-${m.id}-${idx}`} className="flex items-center gap-2 text-xs font-semibold cursor-pointer text-gray-800 dark:text-gray-200">
                         <input
                           type="checkbox"
                           checked={isChecked}
@@ -7416,19 +7397,19 @@ export const EventsCalendar: React.FC = () => {
                       }}
                       className="w-full h-20 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white font-medium shadow-xs"
                     >
-                      {orgMembers?.map((m) => (
-                        <option key={m.id} value={m.id}>
+                      {orgMembers?.map((m, idx) => (
+                        <option key={`todo-opt-${m.id}-${idx}`} value={m.id}>
                           {m.user?.full_name || m.user?.email || "Member"} ({m.role})
                         </option>
                       ))}
                     </select>
                     {todoMemberIds.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-1.5">
-                        {todoMemberIds.map((id) => {
+                        {todoMemberIds.map((id, idx) => {
                           const m = orgMembers?.find((mem) => mem.id === id);
                           return (
                             <span
-                              key={id}
+                              key={`todo-badge-${id}-${idx}`}
                               className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold flex items-center gap-1"
                             >
                               <span>{m?.user?.full_name || "Member"}</span>
@@ -7892,11 +7873,11 @@ export const EventsCalendar: React.FC = () => {
                       orgMembers
                         .filter((m) => m.status === "active")
                         .filter((m) => m.user?.full_name?.toLowerCase().includes(attendanceSearch.toLowerCase()))
-                        .map((m) => {
+                        .map((m, idx) => {
                           const isPresent = attendanceList?.some((a) => a.member_id === m.id);
                           return (
                             <label
-                              key={m.id}
+                              key={`attend-mem-${m.id}-${idx}`}
                               className={`flex items-center justify-between p-2 rounded-lg transition-colors ${
                                 !isAllowed
                                   ? "cursor-not-allowed opacity-75"

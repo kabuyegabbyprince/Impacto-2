@@ -1631,6 +1631,38 @@ export function useMeetingSessions(orgId: string | undefined) {
       let dbRecords: LiveMeetHistoryRecord[] = [];
 
       if (isSupabaseConfigured) {
+        // 1. Fetch from altered meetings table (single-table JSONB native structure)
+        try {
+          const { data: meetingsData, error: meetErr } = await supabase
+            .from("meetings")
+            .select("*")
+            .eq("org_id", orgId)
+            .order("created_at", { ascending: false });
+
+          if (!meetErr && meetingsData && meetingsData.length > 0) {
+            meetingsData.forEach((m: any) => {
+              if (m.participants || m.channel_name || m.meeting_title || m.duration_seconds || m.location_type === "online") {
+                dbRecords.push({
+                  id: m.id,
+                  meetingTitle: m.meeting_title || m.title || "Meeting Session",
+                  channelName: m.channel_name || "General",
+                  orgId: m.org_id,
+                  startedAt: m.started_at || m.date_time || m.created_at,
+                  endedAt: m.ended_at || m.date_time || m.created_at,
+                  durationSeconds: m.duration_seconds || (m.duration ? m.duration * 60 : 0),
+                  durationFormatted: m.duration_formatted || "30:00",
+                  recordedBy: m.recorded_by || "Admin",
+                  participants: Array.isArray(m.participants) ? m.participants : [],
+                  documentsUsed: Array.isArray(m.documents_used) ? m.documents_used : [],
+                  notes: Array.isArray(m.notes) ? m.notes : [],
+                  chatMessages: Array.isArray(m.chat_messages) ? m.chat_messages : []
+                });
+              }
+            });
+          }
+        } catch (e) {}
+
+        // 2. Also check meeting_sessions table if present
         try {
           const { data: sessions, error } = await supabase
             .from("meeting_sessions")
@@ -1652,53 +1684,70 @@ export function useMeetingSessions(orgId: string | undefined) {
               supabase.from("meeting_chat_messages").select("*").in("session_id", sessionIds)
             ]);
 
-            dbRecords = sessions.map((s: any) => ({
-              id: s.id,
-              meetingTitle: s.meeting_title,
-              channelName: s.channel_name,
-              orgId: s.org_id,
-              startedAt: s.started_at,
-              endedAt: s.ended_at,
-              durationSeconds: s.duration_seconds || 0,
-              durationFormatted: s.duration_formatted || "00:00",
-              recordedBy: s.recorded_by || "Admin",
-              participants: (participants || [])
-                .filter((p: any) => p.session_id === s.id)
-                .map((p: any) => ({
-                  peerId: p.peer_id,
-                  userId: p.user_id,
-                  name: p.name,
-                  role: p.role,
-                  isMe: p.is_me
-                })),
-              documentsUsed: (documents || [])
-                .filter((d: any) => d.session_id === s.id)
-                .map((d: any) => ({
-                  id: d.doc_id || d.id,
-                  name: d.name,
-                  category: d.category || "General"
-                })),
-              notes: (notes || [])
-                .filter((n: any) => n.session_id === s.id)
-                .map((n: any) => ({
-                  id: n.id,
-                  title: n.title,
-                  assignee: n.assignee || "Member",
-                  status: (n.status === "completed" ? "completed" : "open") as "completed" | "open",
-                  time: n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "12:00 PM"
-                })),
-              chatMessages: (chatMessages || [])
-                .filter((m: any) => m.session_id === s.id)
-                .map((m: any) => ({
-                  id: m.id,
-                  sender: m.sender,
-                  text: m.text,
-                  time: new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                }))
-            }));
+            sessions.forEach((s: any) => {
+              if (!dbRecords.some(r => r.id === s.id)) {
+                dbRecords.push({
+                  id: s.id,
+                  meetingTitle: s.meeting_title,
+                  channelName: s.channel_name,
+                  orgId: s.org_id,
+                  startedAt: s.started_at,
+                  endedAt: s.ended_at,
+                  durationSeconds: s.duration_seconds || 0,
+                  durationFormatted: s.duration_formatted || "00:00",
+                  recordedBy: s.recorded_by || "Admin",
+                  participants: (participants || [])
+                    .filter((p: any) => p.session_id === s.id)
+                    .map((p: any) => ({
+                      peerId: p.peer_id,
+                      userId: p.user_id,
+                      name: p.name,
+                      role: p.role,
+                      isMe: p.is_me
+                    })),
+                  documentsUsed: (documents || [])
+                    .filter((d: any) => d.session_id === s.id)
+                    .map((d: any) => ({
+                      id: d.doc_id || d.id,
+                      name: d.name,
+                      category: d.category || "General"
+                    })),
+                  notes: (notes || [])
+                    .filter((n: any) => n.session_id === s.id)
+                    .map((n: any) => ({
+                      id: n.id,
+                      title: n.title,
+                      assignee: n.assignee || "Member",
+                      status: (n.status === "completed" ? "completed" : "open") as "completed" | "open",
+                      time: n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "12:00 PM"
+                    })),
+                  chatMessages: (chatMessages || [])
+                    .filter((m: any) => m.session_id === s.id)
+                    .map((m: any) => ({
+                      id: m.id,
+                      sender: m.sender,
+                      text: m.text,
+                      time: new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                    }))
+                });
+              }
+            });
           }
         } catch (dbErr) {
           console.warn("Supabase fetch meeting_sessions error:", dbErr);
+        }
+
+        if (dbRecords.length > 0) {
+          try {
+            localStorage.setItem(`impacto_meeting_history_${orgId}`, JSON.stringify(dbRecords));
+          } catch (e) {}
+          return dbRecords.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+        } else {
+          // Explicitly clear local cache if database is empty
+          try {
+            localStorage.removeItem(`impacto_meeting_history_${orgId}`);
+          } catch (e) {}
+          return [];
         }
       }
 
@@ -1710,13 +1759,58 @@ export function useMeetingSessions(orgId: string | undefined) {
         }
       } catch (e) {}
 
-      const map = new Map<string, LiveMeetHistoryRecord>();
-      localRecords.forEach(r => map.set(r.id, r));
-      dbRecords.forEach(r => map.set(r.id, r));
-
-      return Array.from(map.values()).sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+      return localRecords.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
     },
     enabled: !!orgId,
+  });
+}
+
+export function useDeleteMeetingSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orgId, meetingId }: { orgId: string; meetingId: string }) => {
+      if (isSupabaseConfigured) {
+        await Promise.allSettled([
+          supabase.from("meetings").delete().eq("id", meetingId),
+          supabase.from("meeting_sessions").delete().eq("id", meetingId)
+        ]);
+      }
+      try {
+        const key = `impacto_meeting_history_${orgId}`;
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const list = JSON.parse(raw).filter((m: any) => m.id !== meetingId);
+          localStorage.setItem(key, JSON.stringify(list));
+        }
+      } catch (e) {}
+      return meetingId;
+    },
+    onSuccess: (_, { orgId }) => {
+      queryClient.invalidateQueries({ queryKey: ["meeting_sessions", orgId] });
+      queryClient.invalidateQueries({ queryKey: ["meetings", orgId] });
+    }
+  });
+}
+
+export function useClearAllMeetingSessions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (orgId: string) => {
+      if (isSupabaseConfigured) {
+        await Promise.allSettled([
+          supabase.from("meetings").delete().eq("org_id", orgId),
+          supabase.from("meeting_sessions").delete().eq("org_id", orgId)
+        ]);
+      }
+      try {
+        localStorage.removeItem(`impacto_meeting_history_${orgId}`);
+      } catch (e) {}
+      return orgId;
+    },
+    onSuccess: (_, orgId) => {
+      queryClient.invalidateQueries({ queryKey: ["meeting_sessions", orgId] });
+      queryClient.invalidateQueries({ queryKey: ["meetings", orgId] });
+    }
   });
 }
 

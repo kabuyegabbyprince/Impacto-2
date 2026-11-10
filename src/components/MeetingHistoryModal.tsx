@@ -356,7 +356,7 @@ export const MeetingHistoryModal: React.FC<MeetingHistoryModalProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                     {selectedMeeting.participants.map((p, idx) => (
                       <div
-                        key={p.peerId || idx}
+                        key={`${p.peerId || p.userId || "peer"}-${idx}`}
                         className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 flex items-center gap-3 text-xs"
                       >
                         <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs shrink-0">
@@ -391,7 +391,7 @@ export const MeetingHistoryModal: React.FC<MeetingHistoryModalProps> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       {selectedMeeting.documentsUsed.map((doc, idx) => (
                         <div
-                          key={doc.id || idx}
+                          key={`${doc.id || "doc"}-${idx}`}
                           className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-emerald-50/30 dark:bg-emerald-950/20 flex items-center justify-between gap-3 text-xs"
                         >
                           <div className="flex items-center gap-3 min-w-0">
@@ -433,7 +433,7 @@ export const MeetingHistoryModal: React.FC<MeetingHistoryModalProps> = ({
                     <div className="flex flex-col gap-2">
                       {selectedMeeting.notes.map((note, idx) => (
                         <div
-                          key={note.id || idx}
+                          key={`${note.id || "note"}-${idx}`}
                           className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 flex flex-col gap-1 text-xs"
                         >
                           <div className="flex items-start justify-between gap-2">
@@ -479,7 +479,7 @@ export const MeetingHistoryModal: React.FC<MeetingHistoryModalProps> = ({
 
                     <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 max-h-48 overflow-y-auto flex flex-col gap-2.5 text-xs">
                       {selectedMeeting.chatMessages.map((m, idx) => (
-                        <div key={m.id || idx} className="flex flex-col gap-0.5">
+                        <div key={`${m.id || "msg"}-${idx}`} className="flex flex-col gap-0.5">
                           <div className="flex items-center justify-between text-[10px] text-slate-400">
                             <span className="font-bold text-slate-700 dark:text-slate-300">{m.sender}</span>
                             <span>{m.time}</span>
