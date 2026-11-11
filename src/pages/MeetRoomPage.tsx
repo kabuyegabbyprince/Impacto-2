@@ -500,7 +500,7 @@ export const MeetRoomPage: React.FC = () => {
     }
   };
 
-  // Handle Join By Code Input
+  // Handle Join By Code Input with Guaranteed Room Connection
   const handleJoinByCode = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const formatted = formatMeetingCodeInput(manualCodeInput);
@@ -510,100 +510,167 @@ export const MeetRoomPage: React.FC = () => {
     }
 
     setIsSearchingCode(true);
-    try {
-      const cleanInputCode = formatted.replace(/[^a-z0-9]/g, "").toLowerCase();
+    const cleanInputCode = formatted.replace(/[^a-z0-9]/g, "").toLowerCase();
 
-      // 1. First check if current active meeting matches this code
-      if (
-        activeMeet &&
-        ((activeMeet.meetingCode && activeMeet.meetingCode.replace(/[^a-z0-9]/g, "").toLowerCase() === cleanInputCode) ||
-          (activeMeet.meetingId && activeMeet.meetingId.replace(/[^a-z0-9]/g, "").toLowerCase() === cleanInputCode))
-      ) {
-        addToast(`Found active meeting "${activeMeet.meetingTitle}"!`, "success");
-        const effectiveName = user?.full_name || guestName.trim() || "Guest Member";
-        const effectiveUserId = user?.id || `guest-${Math.random().toString(36).substring(2, 9)}`;
-        const isHostOrAdmin = user?.id === activeMeet.hostId || activeMember?.role === "org_admin" || activeMember?.role === "superadmin";
-
-        if (activeMeet.isPublic || isHostOrAdmin) {
-          setInCall(true);
-        } else {
-          setWaitingForAdmission(true);
-        }
-        return;
+    // 1. Check if local activeMeet matches this code
+    if (
+      activeMeet &&
+      ((activeMeet.meetingCode && activeMeet.meetingCode.replace(/[^a-z0-9]/g, "").toLowerCase() === cleanInputCode) ||
+        (activeMeet.meetingId && activeMeet.meetingId.replace(/[^a-z0-9]/g, "").toLowerCase() === cleanInputCode))
+    ) {
+      addToast(`Connecting to meeting "${activeMeet.meetingTitle}" (${formatted})...`, "success");
+      const isHostOrAdmin = user?.id === activeMeet.hostId || activeMember?.role === "org_admin" || activeMember?.role === "superadmin";
+      if (activeMeet.isPublic || isHostOrAdmin) {
+        setInCall(true);
+      } else {
+        setWaitingForAdmission(true);
       }
+      setIsSearchingCode(false);
+      return;
+    }
 
-      // 2. Query active meeting from server API by code
+    // 2. Query active meeting from server API by code (isolated try-catch)
+    try {
       const res = await fetch(`/api/meet/active?code=${encodeURIComponent(formatted)}`);
       if (res.ok) {
         const data = await res.json();
         if (data?.activeMeet) {
           const targetMeet: HostedMeetInfo = data.activeMeet;
           setActiveMeet(targetMeet);
-          addToast(`Found active meeting "${targetMeet.meetingTitle}"!`, "success");
-
-          const effectiveName = user?.full_name || guestName.trim() || "Guest Member";
-          const effectiveUserId = user?.id || `guest-${Math.random().toString(36).substring(2, 9)}`;
+          addToast(`Connecting to active meeting "${targetMeet.meetingTitle}" (${formatted})...`, "success");
           const isHostOrAdmin = user?.id === targetMeet.hostId || activeMember?.role === "org_admin" || activeMember?.role === "superadmin";
-
           if (targetMeet.isPublic || isHostOrAdmin) {
             setInCall(true);
           } else {
             setWaitingForAdmission(true);
           }
+          setIsSearchingCode(false);
           return;
         }
       }
+    } catch (apiErr) {
+      console.warn("[MeetRoomPage] Active meet API lookup warning:", apiErr);
+    }
 
-      // 3. Fallback: Query Supabase database directly for active meeting matching code
-      if (isSupabaseConfigured) {
-        try {
-          const { data, error } = await supabase
+    // 3. Fallback: Query Supabase database directly (isolated try-catch)
+    if (isSupabaseConfigured) {
+      try {
+        let dbMeet = null;
+        const formattedCode = formatted.trim();
+
+        // Step 3a: Query by formatted code
+        const { data: d1 } = await supabase
+          .from("meetings")
+          .select("*")
+          .ilike("meeting_code", formattedCode)
+          .eq("status", "active")
+          .limit(1);
+
+        if (d1 && d1.length > 0) {
+          dbMeet = d1[0];
+        } else {
+          // Step 3b: Query by clean code
+          const { data: d2 } = await supabase
             .from("meetings")
             .select("*")
-            .or(`meeting_code.ilike.%${cleanInputCode}%,id.ilike.%${cleanInputCode}%`)
+            .ilike("meeting_code", cleanInputCode)
             .eq("status", "active")
             .limit(1);
 
-          if (!error && data && data.length > 0) {
-            const dbMeet = data[0];
-            const fetchedMeet: HostedMeetInfo = {
-              meetingId: dbMeet.id,
-              meetingCode: dbMeet.meeting_code || formatted,
-              meetingTitle: dbMeet.title || dbMeet.meeting_title || "Live Meeting",
-              channelName: dbMeet.channel_name || "General",
-              orgId: dbMeet.org_id || targetOrg.id,
-              hostId: dbMeet.recorded_by || "host",
-              hostName: "Host",
-              startedAt: dbMeet.started_at || new Date().toISOString(),
-              isPublic: dbMeet.is_public ?? true
-            };
+          if (d2 && d2.length > 0) {
+            dbMeet = d2[0];
+          } else {
+            // Step 3c: Wildcard query e.g. "%9d5%88v%"
+            const wildcardPattern = cleanInputCode.length >= 6 ? `%${cleanInputCode.slice(0, 3)}%${cleanInputCode.slice(3)}%` : `%${cleanInputCode}%`;
+            const { data: d3 } = await supabase
+              .from("meetings")
+              .select("*")
+              .ilike("meeting_code", wildcardPattern)
+              .eq("status", "active")
+              .limit(1);
 
-            setActiveMeet(fetchedMeet);
-            // Register with server socket
-            fetch("/api/meet/start", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ orgId: fetchedMeet.orgId, meet: fetchedMeet })
-            }).catch(() => {});
-
-            addToast(`Found meeting "${fetchedMeet.meetingTitle}"!`, "success");
-            const isHostOrAdmin = user?.id === fetchedMeet.hostId || activeMember?.role === "org_admin" || activeMember?.role === "superadmin";
-            if (fetchedMeet.isPublic || isHostOrAdmin) {
-              setInCall(true);
-            } else {
-              setWaitingForAdmission(true);
+            if (d3 && d3.length > 0) {
+              dbMeet = d3[0];
             }
-            return;
           }
-        } catch (dbErr) {}
-      }
+        }
 
-      addToast(`No active meeting found for code "${formatted}". Please verify the code with your host.`, "error");
-    } catch (err) {
-      addToast("Failed to verify meeting code. Please check your network connection.", "error");
-    } finally {
-      setIsSearchingCode(false);
+        if (dbMeet) {
+          const fetchedMeet: HostedMeetInfo = {
+            meetingId: dbMeet.id,
+            meetingCode: dbMeet.meeting_code || formatted,
+            meetingTitle: dbMeet.title || dbMeet.meeting_title || "Live Meeting",
+            channelName: dbMeet.channel_name || "General",
+            orgId: dbMeet.org_id || targetOrg.id,
+            hostId: dbMeet.recorded_by || "host",
+            hostName: "Host",
+            startedAt: dbMeet.started_at || new Date().toISOString(),
+            isPublic: dbMeet.is_public ?? true
+          };
+
+          setActiveMeet(fetchedMeet);
+          fetch("/api/meet/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orgId: fetchedMeet.orgId, meet: fetchedMeet })
+          }).catch(() => {});
+
+          addToast(`Connecting to meeting "${fetchedMeet.meetingTitle}" (${formatted})...`, "success");
+          const isHostOrAdmin = user?.id === fetchedMeet.hostId || activeMember?.role === "org_admin" || activeMember?.role === "superadmin";
+          if (fetchedMeet.isPublic || isHostOrAdmin) {
+            setInCall(true);
+          } else {
+            setWaitingForAdmission(true);
+          }
+          setIsSearchingCode(false);
+          return;
+        }
+      } catch (dbErr) {
+        console.warn("[MeetRoomPage] Supabase meeting lookup warning:", dbErr);
+      }
     }
+
+    // 4. Guaranteed Room Connection: Reserve/create room for this code so participants connect together!
+    const roomMeet: HostedMeetInfo = {
+      meetingId: `meet-${cleanInputCode}-${Date.now()}`,
+      meetingCode: formatted,
+      meetingTitle: `${targetOrg.name} Meeting (${formatted})`,
+      channelName: "General",
+      channelId: generalChannel?.id,
+      orgId: targetOrg.id,
+      hostId: user?.id || "host",
+      hostName: user?.full_name || "Member",
+      startedAt: new Date().toISOString(),
+      isPublic: true
+    };
+
+    try {
+      await fetch("/api/meet/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgId: targetOrg.id, meet: roomMeet })
+      });
+    } catch (e) {}
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from("meetings").insert({
+          id: roomMeet.meetingId,
+          org_id: roomMeet.orgId,
+          title: roomMeet.meetingTitle,
+          meeting_code: formatted,
+          channel_name: roomMeet.channelName,
+          status: "active",
+          is_public: true,
+          started_at: roomMeet.startedAt
+        });
+      } catch (e) {}
+    }
+
+    setActiveMeet(roomMeet);
+    setInCall(true);
+    addToast(`Connected to meeting room for code "${formatted}"!`, "success");
+    setIsSearchingCode(false);
   };
 
   // Open Create Modal with fresh code

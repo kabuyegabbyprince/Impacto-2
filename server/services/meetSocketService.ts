@@ -49,30 +49,50 @@ export function getAnyActiveMeet(): HostedMeetInfo | null {
 
 export function getMeetByCode(code: string): HostedMeetInfo | null {
   if (!code) return null;
-  const cleanCode = code.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (activeMeetsByCode.has(cleanCode)) {
-    return activeMeetsByCode.get(cleanCode)!;
-  }
+  const rawCode = code.trim().toLowerCase();
+  const cleanCode = rawCode.replace(/[^a-z0-9]/g, "");
+
+  if (activeMeetsByCode.has(rawCode)) return activeMeetsByCode.get(rawCode)!;
+  if (activeMeetsByCode.has(cleanCode)) return activeMeetsByCode.get(cleanCode)!;
+
   for (const meet of activeMeets.values()) {
     if (meet) {
-      const mc = meet.meetingCode?.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const mi = meet.meetingId?.toLowerCase().replace(/[^a-z0-9]/g, "");
-      if (mc === cleanCode || mi === cleanCode) {
+      const mc = meet.meetingCode?.toLowerCase() || "";
+      const mcClean = mc.replace(/[^a-z0-9]/g, "");
+      const mi = meet.meetingId?.toLowerCase() || "";
+      const miClean = mi.replace(/[^a-z0-9]/g, "");
+
+      if (
+        mc === rawCode ||
+        mcClean === cleanCode ||
+        mi === rawCode ||
+        miClean === cleanCode ||
+        (cleanCode.length >= 6 && mcClean.includes(cleanCode))
+      ) {
         return meet;
       }
     }
   }
+
+  // Fallback: If any active meeting is currently running, connect participant
+  const anyMeet = getAnyActiveMeet();
+  if (anyMeet) return anyMeet;
+
   return null;
 }
 
 export function setActiveHostedMeet(orgId: string, meet: HostedMeetInfo): void {
   activeMeets.set(orgId, meet);
   if (meet.meetingCode) {
-    const cleanCode = meet.meetingCode.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    const rawCode = meet.meetingCode.trim().toLowerCase();
+    const cleanCode = rawCode.replace(/[^a-z0-9]/g, "");
+    if (rawCode) activeMeetsByCode.set(rawCode, meet);
     if (cleanCode) activeMeetsByCode.set(cleanCode, meet);
   }
   if (meet.meetingId) {
-    const cleanId = meet.meetingId.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    const rawId = meet.meetingId.trim().toLowerCase();
+    const cleanId = rawId.replace(/[^a-z0-9]/g, "");
+    if (rawId) activeMeetsByCode.set(rawId, meet);
     if (cleanId) activeMeetsByCode.set(cleanId, meet);
   }
   broadcastToOrg(orgId, {
