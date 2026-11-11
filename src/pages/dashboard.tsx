@@ -3504,11 +3504,78 @@ export const ChatRoom: React.FC = () => {
                         ) : isPoll ? (
                           <PollMessageComponent message={m} currentUserId={activeMember?.user_id || ""} />
                         ) : (
-                          /* Regular message bubble */
-                          <div className={`p-3 rounded-2xl text-xs font-medium leading-relaxed shadow-sm ${
-                            isMe ? "bg-[var(--org-primary)] text-white rounded-tr-none" : "bg-gray-100 border border-gray-200 text-gray-900 rounded-tl-none dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+                          /* Regular message bubble with auto-detected meeting code CTA button & access restriction checks */
+                          <div className={`p-3.5 rounded-2xl text-xs font-medium leading-relaxed shadow-sm ${
+                            isMe ? "bg-[var(--org-primary)] text-white rounded-tr-none" : "bg-white border border-slate-200 text-slate-900 rounded-tl-none dark:bg-slate-800 dark:border-slate-700 dark:text-white"
                           }`}>
-                            {m.text}
+                            <div className="whitespace-pre-wrap">{m.text}</div>
+
+                            {(() => {
+                              const codeMatch = m.text?.match(/\b([a-z0-9]{3}-[a-z0-9]{3})\b/i);
+                              const detectedCode = codeMatch ? codeMatch[1].toLowerCase() : null;
+                              const isAnnouncement = m.text?.includes("Live Meeting Started:") || m.text?.includes("Meeting Code:") || m.text?.includes("/meet?");
+
+                              if (!detectedCode && !isAnnouncement) return null;
+
+                              return (
+                                <div className="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-700/60 flex flex-col gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const codeToQuery = detectedCode || (m.text.match(/code=([a-z0-9]{3}-[a-z0-9]{3})/i)?.[1]);
+
+                                      if (codeToQuery) {
+                                        try {
+                                          const res = await fetch(`/api/meet/active?code=${encodeURIComponent(codeToQuery)}`);
+                                          if (res.ok) {
+                                            const data = await res.json();
+                                            const meet = data?.activeMeet;
+                                            if (meet) {
+                                              const isHostOrAdmin =
+                                                user?.id === meet.hostId ||
+                                                activeMember?.role === "org_admin" ||
+                                                activeMember?.role === "superadmin";
+
+                                              // Check Access Restriction: Private vs Public
+                                              if (meet.isPublic === false && !isHostOrAdmin) {
+                                                addToast(
+                                                  `Meeting (${codeToQuery}) is PRIVATE and requires host admission. Entering waiting room...`,
+                                                  "info"
+                                                );
+                                                navigate(`/meet?org=${meet.orgId || activeOrg?.id || "default"}&code=${codeToQuery}`);
+                                                return;
+                                              }
+
+                                              // Public meeting or Host/Admin: direct join into live session
+                                              setActiveHostedMeet(meet);
+                                              setOpenMeetModal(true);
+                                              addToast(`Joining live meeting "${meet.meetingTitle}" (${codeToQuery})`, "success");
+                                              return;
+                                            }
+                                          }
+                                        } catch (err) {}
+                                      }
+
+                                      // Fallback if meeting is not currently active or link-based
+                                      if (codeToQuery) {
+                                        navigate(`/meet?org=${activeOrg?.id || "default"}&code=${codeToQuery}`);
+                                      } else {
+                                        setOpenMeetModal(true);
+                                      }
+                                    }}
+                                    className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-between gap-2 transition shadow-sm cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Video className="h-4 w-4 animate-pulse text-emerald-200" />
+                                      <span>Join Live Meeting</span>
+                                    </div>
+                                    <span className="font-mono bg-emerald-800/80 px-2 py-0.5 rounded text-[11px] font-bold tracking-wider text-emerald-100">
+                                      {detectedCode || "Link"}
+                                    </span>
+                                  </button>
+                                </div>
+                              );
+                            })()}
                           </div>
                         )}
                       </div>
