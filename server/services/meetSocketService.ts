@@ -30,6 +30,7 @@ interface ConnectedPeer {
 
 // In-memory server-authoritative state
 const activeMeets = new Map<string, HostedMeetInfo>();
+const activeMeetsByCode = new Map<string, HostedMeetInfo>();
 const roomPeers = new Map<string, Map<string, ConnectedPeer>>();
 const roomChat = new Map<string, any[]>();
 const roomSharedDocs = new Map<string, any>();
@@ -49,12 +50,14 @@ export function getAnyActiveMeet(): HostedMeetInfo | null {
 export function getMeetByCode(code: string): HostedMeetInfo | null {
   if (!code) return null;
   const cleanCode = code.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (activeMeetsByCode.has(cleanCode)) {
+    return activeMeetsByCode.get(cleanCode)!;
+  }
   for (const meet of activeMeets.values()) {
     if (meet) {
-      if (meet.meetingCode && meet.meetingCode.toLowerCase().replace(/[^a-z0-9]/g, "") === cleanCode) {
-        return meet;
-      }
-      if (meet.meetingId && meet.meetingId.toLowerCase().replace(/[^a-z0-9]/g, "") === cleanCode) {
+      const mc = meet.meetingCode?.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const mi = meet.meetingId?.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (mc === cleanCode || mi === cleanCode) {
         return meet;
       }
     }
@@ -64,6 +67,14 @@ export function getMeetByCode(code: string): HostedMeetInfo | null {
 
 export function setActiveHostedMeet(orgId: string, meet: HostedMeetInfo): void {
   activeMeets.set(orgId, meet);
+  if (meet.meetingCode) {
+    const cleanCode = meet.meetingCode.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (cleanCode) activeMeetsByCode.set(cleanCode, meet);
+  }
+  if (meet.meetingId) {
+    const cleanId = meet.meetingId.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (cleanId) activeMeetsByCode.set(cleanId, meet);
+  }
   broadcastToOrg(orgId, {
     type: "HOSTED_MEET_ACTIVE",
     meet
@@ -71,6 +82,15 @@ export function setActiveHostedMeet(orgId: string, meet: HostedMeetInfo): void {
 }
 
 export function endActiveHostedMeet(orgId: string): void {
+  const existing = activeMeets.get(orgId);
+  if (existing) {
+    if (existing.meetingCode) {
+      activeMeetsByCode.delete(existing.meetingCode.trim().toLowerCase().replace(/[^a-z0-9]/g, ""));
+    }
+    if (existing.meetingId) {
+      activeMeetsByCode.delete(existing.meetingId.trim().toLowerCase().replace(/[^a-z0-9]/g, ""));
+    }
+  }
   activeMeets.delete(orgId);
   roomSharedDocs.delete(orgId);
   roomChat.delete(orgId);

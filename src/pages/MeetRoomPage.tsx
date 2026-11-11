@@ -511,26 +511,91 @@ export const MeetRoomPage: React.FC = () => {
 
     setIsSearchingCode(true);
     try {
-      // First check if current active meeting matches this code
+      const cleanInputCode = formatted.replace(/[^a-z0-9]/g, "").toLowerCase();
+
+      // 1. First check if current active meeting matches this code
       if (
         activeMeet &&
-        (activeMeet.meetingCode?.toLowerCase() === formatted ||
-          activeMeet.meetingId.toLowerCase() === formatted)
+        ((activeMeet.meetingCode && activeMeet.meetingCode.replace(/[^a-z0-9]/g, "").toLowerCase() === cleanInputCode) ||
+          (activeMeet.meetingId && activeMeet.meetingId.replace(/[^a-z0-9]/g, "").toLowerCase() === cleanInputCode))
       ) {
         addToast(`Found active meeting "${activeMeet.meetingTitle}"!`, "success");
-        handleJoinClick();
+        const effectiveName = user?.full_name || guestName.trim() || "Guest Member";
+        const effectiveUserId = user?.id || `guest-${Math.random().toString(36).substring(2, 9)}`;
+        const isHostOrAdmin = user?.id === activeMeet.hostId || activeMember?.role === "org_admin" || activeMember?.role === "superadmin";
+
+        if (activeMeet.isPublic || isHostOrAdmin) {
+          setInCall(true);
+        } else {
+          setWaitingForAdmission(true);
+        }
         return;
       }
 
-      // Query active meeting from server by code
+      // 2. Query active meeting from server API by code
       const res = await fetch(`/api/meet/active?code=${encodeURIComponent(formatted)}`);
       if (res.ok) {
         const data = await res.json();
         if (data?.activeMeet) {
-          setActiveMeet(data.activeMeet);
-          addToast(`Found meeting "${data.activeMeet.meetingTitle}"!`, "success");
+          const targetMeet: HostedMeetInfo = data.activeMeet;
+          setActiveMeet(targetMeet);
+          addToast(`Found active meeting "${targetMeet.meetingTitle}"!`, "success");
+
+          const effectiveName = user?.full_name || guestName.trim() || "Guest Member";
+          const effectiveUserId = user?.id || `guest-${Math.random().toString(36).substring(2, 9)}`;
+          const isHostOrAdmin = user?.id === targetMeet.hostId || activeMember?.role === "org_admin" || activeMember?.role === "superadmin";
+
+          if (targetMeet.isPublic || isHostOrAdmin) {
+            setInCall(true);
+          } else {
+            setWaitingForAdmission(true);
+          }
           return;
         }
+      }
+
+      // 3. Fallback: Query Supabase database directly for active meeting matching code
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from("meetings")
+            .select("*")
+            .or(`meeting_code.ilike.%${cleanInputCode}%,id.ilike.%${cleanInputCode}%`)
+            .eq("status", "active")
+            .limit(1);
+
+          if (!error && data && data.length > 0) {
+            const dbMeet = data[0];
+            const fetchedMeet: HostedMeetInfo = {
+              meetingId: dbMeet.id,
+              meetingCode: dbMeet.meeting_code || formatted,
+              meetingTitle: dbMeet.title || dbMeet.meeting_title || "Live Meeting",
+              channelName: dbMeet.channel_name || "General",
+              orgId: dbMeet.org_id || targetOrg.id,
+              hostId: dbMeet.recorded_by || "host",
+              hostName: "Host",
+              startedAt: dbMeet.started_at || new Date().toISOString(),
+              isPublic: dbMeet.is_public ?? true
+            };
+
+            setActiveMeet(fetchedMeet);
+            // Register with server socket
+            fetch("/api/meet/start", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orgId: fetchedMeet.orgId, meet: fetchedMeet })
+            }).catch(() => {});
+
+            addToast(`Found meeting "${fetchedMeet.meetingTitle}"!`, "success");
+            const isHostOrAdmin = user?.id === fetchedMeet.hostId || activeMember?.role === "org_admin" || activeMember?.role === "superadmin";
+            if (fetchedMeet.isPublic || isHostOrAdmin) {
+              setInCall(true);
+            } else {
+              setWaitingForAdmission(true);
+            }
+            return;
+          }
+        } catch (dbErr) {}
       }
 
       addToast(`No active meeting found for code "${formatted}". Please verify the code with your host.`, "error");
