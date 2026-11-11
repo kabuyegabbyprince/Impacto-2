@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import {
   getActiveHostedMeet,
   getAnyActiveMeet,
+  getMeetByCode,
   setActiveHostedMeet,
   endActiveHostedMeet,
   broadcastToOrg,
@@ -10,9 +11,18 @@ import {
 
 const meetRouter = Router();
 
-// GET /api/meet/active?orgId=...
+// GET /api/meet/active?orgId=...&code=...
 meetRouter.get("/active", (req: Request, res: Response) => {
   const orgId = (req.query.orgId as string) || "default";
+  const code = (req.query.code as string)?.trim();
+
+  if (code) {
+    const matched = getMeetByCode(code);
+    if (matched) {
+      return res.json({ activeMeet: matched });
+    }
+  }
+
   let activeMeet = getActiveHostedMeet(orgId);
   if (!activeMeet) {
     activeMeet = getAnyActiveMeet();
@@ -29,6 +39,7 @@ meetRouter.post("/start", (req: Request, res: Response) => {
   }
   const hostedMeet: HostedMeetInfo = {
     meetingId: meet.meetingId || `meet-${Date.now()}`,
+    meetingCode: meet.meetingCode,
     meetingTitle: meet.meetingTitle || "Live Meeting",
     channelName: meet.channelName || "General",
     channelId: meet.channelId,

@@ -33,7 +33,8 @@ import {
   Table,
   BookOpen,
   Copy,
-  Eye
+  Eye,
+  Minus
 } from "lucide-react";
 import { OrgMember, Document, LiveMeetHistoryRecord, HostedMeetInfo } from "../types";
 import { useAuthStore } from "../store/authStore";
@@ -212,6 +213,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     hostedMeetInfo?.meetingTitle || meetingTitle || `${channelName} Live Meeting`
   );
   const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
 
   useEffect(() => {
     if (hostedMeetInfo?.meetingTitle) {
@@ -1578,6 +1580,96 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
 
   if (!open) return null;
 
+  if (isMinimized) {
+    return (
+      <div className="fixed bottom-6 right-6 z-50 bg-[#1a1b1e]/95 backdrop-blur-md border border-[#3c4043] rounded-2xl shadow-2xl p-3.5 flex items-center gap-3 animate-in slide-in-from-bottom-4 text-white font-sans">
+        {/* Dedicated audio elements for all remote peers to guarantee continuous voice communication */}
+        <div className="hidden" aria-hidden="true">
+          {(Object.values(remotePeers) as PeerParticipant[]).map((p: PeerParticipant, idx: number) => {
+            if (!p.stream || p.isMe || p.peerId === myPeerId) return null;
+            return (
+              <audio
+                key={`remote-audio-min-${p.peerId}-${idx}`}
+                autoPlay
+                playsInline
+                ref={(el) => {
+                  if (el && p.stream && el.srcObject !== p.stream) {
+                    el.srcObject = p.stream;
+                    const playPromise = el.play();
+                    if (playPromise && typeof (playPromise as any).catch === "function") {
+                      (playPromise as any).catch(() => {});
+                    }
+                  }
+                }}
+              />
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#81c995] animate-pulse shrink-0" />
+          <div className="flex flex-col min-w-0">
+            <span className="font-bold text-xs text-white truncate max-w-[150px]">
+              {meetingName}
+            </span>
+            <span className="text-[10px] text-[#9aa0a6] font-mono">
+              Code: <strong className="text-[#81c995]">{hostedMeetInfo?.meetingCode || "Active"}</strong> • {allParticipants.length} in call
+            </span>
+          </div>
+        </div>
+
+        <div className="h-6 w-px bg-[#3c4043]" />
+
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={handleToggleMic}
+            className={`p-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              micOn
+                ? "bg-[#3c4043] text-white hover:bg-[#4a4d52]"
+                : "bg-[#ea4335]/20 text-[#f28b82] border border-[#ea4335]/30"
+            }`}
+            title={micOn ? "Mute Microphone" : "Unmute Microphone"}
+          >
+            {micOn ? <Mic className="h-4 w-4 text-[#81c995]" /> : <MicOff className="h-4 w-4 text-[#f28b82]" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleToggleVideo}
+            className={`p-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              videoOn
+                ? "bg-[#3c4043] text-white hover:bg-[#4a4d52]"
+                : "bg-[#ea4335]/20 text-[#f28b82] border border-[#ea4335]/30"
+            }`}
+            title={videoOn ? "Turn Camera Off" : "Turn Camera On"}
+          >
+            {videoOn ? <Video className="h-4 w-4 text-[#81c995]" /> : <VideoOff className="h-4 w-4 text-[#f28b82]" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsMinimized(false)}
+            className="p-2 rounded-xl bg-[#81c995] hover:bg-[#a8dab5] text-[#0d2818] font-bold transition cursor-pointer flex items-center gap-1 text-xs shadow-sm"
+            title="Maximize meeting back to full screen"
+          >
+            <Maximize2 className="h-4 w-4" />
+            <span className="hidden sm:inline font-bold">Expand</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleLeaveCall}
+            className="p-2 rounded-xl bg-[#ea4335] hover:bg-[#f28b82] text-white font-bold transition cursor-pointer"
+            title="Leave Meeting"
+          >
+            <PhoneOff className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-[#121316] text-[#e3e3e3] flex flex-col overflow-hidden select-none animate-in fade-in duration-200 font-sans">
       
@@ -1670,13 +1762,32 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          {hostedMeetInfo?.meetingCode && (
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#282a2d] border border-[#3c4043] text-xs font-mono">
+              <span className="text-[#9aa0a6] text-[10px] uppercase font-sans font-semibold">Code:</span>
+              <span className="text-white font-bold tracking-wider">{hostedMeetInfo.meetingCode}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(hostedMeetInfo.meetingCode!);
+                  addToast(`Meeting code ${hostedMeetInfo.meetingCode} copied to clipboard`, "success");
+                }}
+                className="p-1 rounded hover:bg-[#3c4043] text-[#9aa0a6] hover:text-white transition cursor-pointer"
+                title="Copy meeting code"
+              >
+                <Copy className="h-3 w-3 text-[#81c995]" />
+              </button>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => {
               const targetOrgId = hostedMeetInfo?.orgId || activeOrg?.id || "default";
-              const meetingUrl = `${window.location.origin}/meet?org=${targetOrgId}`;
+              const codeParam = hostedMeetInfo?.meetingCode ? `&code=${encodeURIComponent(hostedMeetInfo.meetingCode)}` : "";
+              const meetingUrl = `${window.location.origin}/meet?org=${targetOrgId}${codeParam}`;
               navigator.clipboard.writeText(meetingUrl).then(() => {
-                addToast("Universal meeting link copied to clipboard", "success");
+                addToast("Meeting link copied to clipboard", "success");
               }).catch(() => {
                 addToast("Failed to copy link", "error");
               });
@@ -1692,6 +1803,15 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             <Clock className="h-3.5 w-3.5" />
             <span>{formattedDuration}</span>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsMinimized(true)}
+            className="p-1.5 rounded-full hover:bg-[#2d2e31] text-[#9aa0a6] hover:text-white transition cursor-pointer"
+            title="Minimize meeting to access system and read docs"
+          >
+            <Minus className="h-5 w-5" />
+          </button>
 
           <button
             type="button"

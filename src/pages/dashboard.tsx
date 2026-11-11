@@ -91,6 +91,7 @@ import { useOrgStore } from "../store/orgStore";
 import { useCurrencyStore } from "../store/currencyStore";
 import { OrganizationVerificationModal } from "../components/OrganizationVerificationModal";
 import { Goal, GoalTask, Event as ImpactEvent, EventTask, NewsPost, Meeting, ChatChannel, Document, LiveMeetHistoryRecord, HostedMeetInfo } from "../types";
+import { generateMeetingCode } from "./MeetRoomPage";
 import { RealtimeTaskCountdown } from "../components/RealtimeTaskCountdown";
 import {
   useEvents,
@@ -2372,6 +2373,8 @@ export const ChatRoom: React.FC = () => {
   const [openMeetModal, setOpenMeetModal] = useState(false);
   const [openStartMeetingPrompt, setOpenStartMeetingPrompt] = useState(false);
   const [meetingTitleToStart, setMeetingTitleToStart] = useState("");
+  const [meetingCodeToStart, setMeetingCodeToStart] = useState("");
+  const [autoBroadcastToGeneral, setAutoBroadcastToGeneral] = useState(true);
   const [openMeetingHistoryModal, setOpenMeetingHistoryModal] = useState(false);
   const [openMeetingWaitRoomModal, setOpenMeetingWaitRoomModal] = useState(false);
   const [isMeetingPublic, setIsMeetingPublic] = useState(true);
@@ -3324,6 +3327,8 @@ export const ChatRoom: React.FC = () => {
                         return;
                       }
                       setMeetingTitleToStart(activeChannel?.name ? `${activeChannel.name} Sync` : "Live Sync");
+                      setMeetingCodeToStart(generateMeetingCode());
+                      setAutoBroadcastToGeneral(true);
                       setOpenStartMeetingPrompt(true);
                     }}
                     className={`inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 h-8 sm:h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer ${
@@ -4074,11 +4079,13 @@ export const ChatRoom: React.FC = () => {
           title="Start Live Video Meeting"
         >
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               if (!meetingTitleToStart.trim()) return;
+              const code = meetingCodeToStart || generateMeetingCode();
               const newHostedMeet: HostedMeetInfo = {
                 meetingId: `meet-${Date.now()}`,
+                meetingCode: code,
                 meetingTitle: meetingTitleToStart.trim(),
                 channelName: activeChannel?.name || "General",
                 channelId: activeChannel?.id,
@@ -4101,6 +4108,63 @@ export const ChatRoom: React.FC = () => {
                   body: JSON.stringify({ orgId: activeOrg?.id || "default", meet: newHostedMeet })
                 }).catch(() => {});
               } catch (err) {}
+
+              // Auto-broadcast code & join link into General Chat group
+              if (autoBroadcastToGeneral && user) {
+                const genChan = (channels || []).find(
+                  (c) => c.name.toLowerCase() === "general" || c.channel_type === "general"
+                ) || channels?.[0] || activeChannel;
+
+                if (genChan?.id) {
+                  const joinUrl = `${window.location.origin}/meet?org=${activeOrg?.id || "default"}&code=${code}`;
+                  const broadcastText = `Live Meeting Started: "${meetingTitleToStart.trim()}"\nMeeting Code: ${code}\nJoin Link: ${joinUrl}`;
+
+                  try {
+                    await sendMutation.mutateAsync({
+                      channelId: genChan.id,
+                      senderId: user.id,
+                      senderName: user.full_name,
+                      text: broadcastText,
+                      message_type: "text"
+                    });
+                    addToast(`Meeting code ${code} broadcasted to #${genChan.name || "General"} chat`, "success");
+                  } catch (chatErr) {}
+
+                  try {
+                    const chatBc = new BroadcastChannel(`impacto_chat_bus_${activeOrg?.id || "default"}`);
+                    chatBc.postMessage({
+                      type: "NEW_MESSAGE",
+                      channelId: genChan.id,
+                      message: {
+                        id: `msg-meet-${Date.now()}`,
+                        channel_id: genChan.id,
+                        sender_id: user.id,
+                        sender_name: user.full_name,
+                        text: broadcastText,
+                        created_at: new Date().toISOString()
+                      }
+                    });
+                    chatBc.close();
+                  } catch (bcErr) {}
+                }
+              }
+
+              // Persist meeting record in Supabase DB if available
+              if (isSupabaseConfigured) {
+                try {
+                  await supabase.from("meetings").insert({
+                    id: newHostedMeet.meetingId,
+                    org_id: newHostedMeet.orgId,
+                    title: newHostedMeet.meetingTitle,
+                    meeting_code: code,
+                    channel_name: newHostedMeet.channelName,
+                    status: "active",
+                    is_public: isMeetingPublic,
+                    started_at: newHostedMeet.startedAt
+                  });
+                } catch (dbErr) {}
+              }
+
               setActiveHostedMeet(newHostedMeet);
               setOpenStartMeetingPrompt(false);
               setOpenMeetModal(true);
@@ -4124,6 +4188,38 @@ export const ChatRoom: React.FC = () => {
                 This meeting name will be displayed at the top of the call and recorded in the meeting history.
               </p>
             </div>
+
+            {/* Generated Unique Meeting Code Display */}
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Generated Meeting Code</span>
+                <span className="text-base font-mono font-bold text-emerald-600 dark:text-emerald-400 tracking-widest block">
+                  {meetingCodeToStart || "xxx-xxx"}
+                </span>
+                <span className="text-[10px] text-slate-500">Unique identifier for org members to join</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMeetingCodeToStart(generateMeetingCode())}
+                className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[11px] transition cursor-pointer"
+              >
+                Regenerate
+              </button>
+            </div>
+
+            {/* Auto-broadcast toggle checkbox */}
+            <label className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={autoBroadcastToGeneral}
+                onChange={(e) => setAutoBroadcastToGeneral(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 accent-emerald-600 cursor-pointer"
+              />
+              <div>
+                <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs">Auto-send code & join link to General Chat</span>
+                <span className="text-[10px] text-slate-500 block leading-tight mt-0.5">Automatically posts the code <strong className="font-mono text-slate-700 dark:text-slate-300">{meetingCodeToStart}</strong> into `#general` so all organization members get notified instantly.</span>
+              </div>
+            </label>
 
             {/* Public vs Admin Confirmation Checkbox */}
             <label className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 cursor-pointer select-none">

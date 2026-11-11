@@ -1,6 +1,0 @@
-{
-  "summary":  "Implementation plan for a unified, persistent single communication room for live meetings with cross-device WebRTC signaling, Supabase persistence, waiting room admission, chat, document sharing, and session auto-rejoin.",
-  "updatedAt":  "2026-11-09T15:17:42.486609240Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}

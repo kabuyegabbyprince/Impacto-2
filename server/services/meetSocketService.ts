@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from "ws";
 
 export interface HostedMeetInfo {
   meetingId: string;
+  meetingCode?: string;
   meetingTitle: string;
   channelName: string;
   channelId?: string;
@@ -41,6 +42,22 @@ export function getActiveHostedMeet(orgId: string): HostedMeetInfo | null {
 export function getAnyActiveMeet(): HostedMeetInfo | null {
   for (const meet of activeMeets.values()) {
     if (meet) return meet;
+  }
+  return null;
+}
+
+export function getMeetByCode(code: string): HostedMeetInfo | null {
+  if (!code) return null;
+  const cleanCode = code.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  for (const meet of activeMeets.values()) {
+    if (meet) {
+      if (meet.meetingCode && meet.meetingCode.toLowerCase().replace(/[^a-z0-9]/g, "") === cleanCode) {
+        return meet;
+      }
+      if (meet.meetingId && meet.meetingId.toLowerCase().replace(/[^a-z0-9]/g, "") === cleanCode) {
+        return meet;
+      }
+    }
   }
   return null;
 }

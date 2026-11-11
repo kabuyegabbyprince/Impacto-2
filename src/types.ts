@@ -328,6 +328,7 @@ export interface ActionItem {
 
 export interface HostedMeetInfo {
   meetingId: string;
+  meetingCode?: string;
   meetingTitle: string;
   channelName: string;
   channelId?: string;
