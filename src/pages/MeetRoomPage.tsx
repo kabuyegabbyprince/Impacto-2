@@ -817,6 +817,30 @@ export const MeetRoomPage: React.FC = () => {
             <span className="w-2.5 h-2.5 rounded-full bg-[#81c995] animate-pulse" />
             <span className="font-bold text-sm text-white">{targetOrg.name}</span>
           </div>
+          {/* Real-time Connection Status Indicator in MeetRoomPage */}
+          <div className="hidden sm:flex items-center gap-1.5 ml-2">
+            {inCall ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#81c995] bg-[#133020] px-2.5 py-0.5 rounded-full border border-[#1e4620]">
+                <span className="w-2 h-2 rounded-full bg-[#81c995] animate-pulse" />
+                <span>Connected</span>
+              </span>
+            ) : isSearchingCode ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                <span>Connecting...</span>
+              </span>
+            ) : activeMeet ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span>Ready to Join</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#9aa0a6] bg-[#282a2d] px-2.5 py-0.5 rounded-full border border-[#3c4043]">
+                <span className="w-2 h-2 rounded-full bg-[#5f6368]" />
+                <span>Idle</span>
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-3">

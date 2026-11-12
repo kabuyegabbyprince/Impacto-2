@@ -256,6 +256,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   const [localStream, setLocalStream] = useState<MediaStream | null>(initialScreenStream || initialLocalStream || null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
 
+  // Connection status indicator state: "connecting" | "connected" | "disconnected"
+  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
+
   // Remote participants map: key = peerId
   const [remotePeers, setRemotePeers] = useState<Record<string, PeerParticipant>>({});
   const peerConnectionsRef = useRef<Record<string, RTCPeerConnection>>({});
@@ -512,9 +515,26 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       const pc = new RTCPeerConnection(ICE_SERVERS);
       peerConnectionsRef.current[targetPeerId] = pc;
 
+      // Track WebRTC peer connection states
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "connected") {
+          setConnectionStatus("connected");
+        } else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+          // If no other peer is connected, set status
+          const anyConnected = Object.values(peerConnectionsRef.current).some(
+            (c) => (c as RTCPeerConnection).connectionState === "connected"
+          );
+          if (!anyConnected) {
+            setConnectionStatus("disconnected");
+          }
+        }
+      };
+
       // Automatic ICE restart if connection fails across mobile/NAT networks
       pc.oniceconnectionstatechange = () => {
-        if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
+        if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+          setConnectionStatus("connected");
+        } else if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
           try {
             (pc as any).restartIce?.();
           } catch (e) {}
@@ -929,6 +949,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         wsRef.current = ws;
 
         ws.onopen = () => {
+          setConnectionStatus("connecting");
           broadcastSignalingMessage({
             type: "PEER_JOINED",
             fromPeerId: myPeerId,
@@ -950,12 +971,14 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
 
         ws.onclose = () => {
           wsRef.current = null;
+          setConnectionStatus("disconnected");
           if (!isUnmounted) {
             reconnectTimeout = setTimeout(connectNetworkSocket, 2000);
           }
         };
 
         ws.onerror = () => {
+          setConnectionStatus("disconnected");
           try {
             ws.close();
           } catch (e) {}
@@ -1773,10 +1796,24 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
               | #{channelName}
             </span>
           </div>
-          <span className="hidden md:inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#81c995] bg-[#133020] px-2.5 py-0.5 rounded-full border border-[#1e4620]">
-            <Radio className="h-3 w-3 animate-pulse text-[#81c995]" />
-            <span>Simultaneous WebRTC</span>
-          </span>
+
+          {/* Real-time Connection Status Indicator Badge */}
+          {connectionStatus === "connected" ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#81c995] bg-[#133020] px-2.5 py-0.5 rounded-full border border-[#1e4620]">
+              <span className="w-2 h-2 rounded-full bg-[#81c995] animate-pulse" />
+              <span>Connected</span>
+            </span>
+          ) : connectionStatus === "connecting" ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              <span>Connecting...</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-rose-400 bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/30">
+              <span className="w-2 h-2 rounded-full bg-rose-400" />
+              <span>Disconnected</span>
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
