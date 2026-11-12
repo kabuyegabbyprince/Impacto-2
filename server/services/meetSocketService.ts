@@ -180,13 +180,26 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
 
   wss.on("connection", (ws: WebSocket, request: any) => {
     const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
+    const roomIdParam = url.searchParams.get("roomId");
+    const meetingCodeParam = url.searchParams.get("meetingCode");
     let orgId = url.searchParams.get("orgId") || "default";
-    if (orgId === "default") {
+
+    // Unify roomKey: if roomId or meetingCode is specified, route into roomKey
+    let targetRoomKey = orgId;
+    if (roomIdParam && roomIdParam.trim()) {
+      targetRoomKey = roomIdParam.trim();
+    } else if (meetingCodeParam && meetingCodeParam.trim()) {
+      targetRoomKey = `meet_${meetingCodeParam.trim().toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+    } else if (orgId === "default") {
       const anyMeet = getAnyActiveMeet();
       if (anyMeet) {
+        targetRoomKey = anyMeet.meetingCode
+          ? `meet_${anyMeet.meetingCode.toLowerCase().replace(/[^a-z0-9]/g, "")}`
+          : anyMeet.orgId;
         orgId = anyMeet.orgId;
       }
     }
+
     const peerId = url.searchParams.get("peerId") || `peer-${Math.random().toString(36).substring(2, 9)}`;
     const userId = url.searchParams.get("userId") || "guest";
     const name = decodeURIComponent(url.searchParams.get("name") || "Guest");
@@ -197,10 +210,10 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
       (ws as any).isAlive = true;
     });
 
-    if (!roomPeers.has(orgId)) {
-      roomPeers.set(orgId, new Map());
+    if (!roomPeers.has(targetRoomKey)) {
+      roomPeers.set(targetRoomKey, new Map());
     }
-    const peers = roomPeers.get(orgId)!;
+    const peers = roomPeers.get(targetRoomKey)!;
 
     const peerInfo: ConnectedPeer = {
       ws,
@@ -208,7 +221,7 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
       userId,
       name,
       role,
-      orgId,
+      orgId: targetRoomKey,
       isHost: activeMeets.get(orgId)?.hostId === userId,
       mic: false,
       video: false,
@@ -233,9 +246,9 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
         isMe: false
       }));
 
-    const currentChat = roomChat.get(orgId) || [];
-    const currentDoc = roomSharedDocs.get(orgId) || null;
-    const currentAgenda = roomAgenda.get(orgId) || [];
+    const currentChat = roomChat.get(targetRoomKey) || roomChat.get(orgId) || [];
+    const currentDoc = roomSharedDocs.get(targetRoomKey) || roomSharedDocs.get(orgId) || null;
+    const currentAgenda = roomAgenda.get(targetRoomKey) || roomAgenda.get(orgId) || [];
 
     ws.send(
       JSON.stringify({
@@ -248,9 +261,9 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
       })
     );
 
-    // Announce to all other peers in room
+    // Announce to all other peers in the same room
     broadcastToOrg(
-      orgId,
+      targetRoomKey,
       {
         type: "PEER_JOINED",
         fromPeerId: peerId,
@@ -277,7 +290,7 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
           case "SIGNAL_ANSWER":
           case "SIGNAL_ICE": {
             if (msg.toPeerId) {
-              sendToPeer(orgId, msg.toPeerId, msg);
+              sendToPeer(targetRoomKey, msg.toPeerId, msg);
             }
             break;
           }
@@ -290,44 +303,44 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
               if (msg.handRaised !== undefined) current.handRaised = msg.handRaised;
               if (msg.speaking !== undefined) current.speaking = msg.speaking;
             }
-            broadcastToOrg(orgId, msg, ws);
+            broadcastToOrg(targetRoomKey, msg, ws);
             break;
           }
 
           case "NEW_CHAT_MESSAGE": {
             if (msg.data) {
-              const list = roomChat.get(orgId) || [];
+              const list = roomChat.get(targetRoomKey) || [];
               if (!list.some((m) => m.id === msg.data.id)) {
                 list.push(msg.data);
-                roomChat.set(orgId, list);
+                roomChat.set(targetRoomKey, list);
               }
-              broadcastToOrg(orgId, msg);
+              broadcastToOrg(targetRoomKey, msg);
             }
             break;
           }
 
           case "SYNC_SHARED_DOC": {
             if (msg.doc) {
-              roomSharedDocs.set(orgId, msg.doc);
-              broadcastToOrg(orgId, msg, ws);
+              roomSharedDocs.set(targetRoomKey, msg.doc);
+              broadcastToOrg(targetRoomKey, msg, ws);
             }
             break;
           }
 
           case "STOP_SHARED_DOC": {
-            roomSharedDocs.delete(orgId);
-            broadcastToOrg(orgId, msg, ws);
+            roomSharedDocs.delete(targetRoomKey);
+            broadcastToOrg(targetRoomKey, msg, ws);
             break;
           }
 
           case "NEW_AGENDA": {
             if (msg.data) {
-              const list = roomAgenda.get(orgId) || [];
+              const list = roomAgenda.get(targetRoomKey) || [];
               if (!list.some((p) => p.id === msg.data.id)) {
                 list.push(msg.data);
-                roomAgenda.set(orgId, list);
+                roomAgenda.set(targetRoomKey, list);
               }
-              broadcastToOrg(orgId, msg, ws);
+              broadcastToOrg(targetRoomKey, msg, ws);
             }
             break;
           }
@@ -338,34 +351,34 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
               active.meetingTitle = msg.title;
               activeMeets.set(orgId, active);
             }
-            broadcastToOrg(orgId, msg, ws);
+            broadcastToOrg(targetRoomKey, msg, ws);
             break;
           }
 
           case "REQUEST_ADMISSION": {
             // Forward admission request to host or org admins
-            broadcastToOrg(orgId, msg, ws);
+            broadcastToOrg(targetRoomKey, msg, ws);
             break;
           }
 
           case "ADMIT_PEER": {
             if (msg.userId) {
-              sendToUser(orgId, msg.userId, msg);
+              sendToUser(targetRoomKey, msg.userId, msg);
             }
-            broadcastToOrg(orgId, msg, ws);
+            broadcastToOrg(targetRoomKey, msg, ws);
             break;
           }
 
           case "DECLINE_PEER": {
             if (msg.userId) {
-              sendToUser(orgId, msg.userId, msg);
+              sendToUser(targetRoomKey, msg.userId, msg);
             }
             break;
           }
 
           case "KICK_PEER": {
             if (msg.targetPeerId) {
-              sendToPeer(orgId, msg.targetPeerId, msg);
+              sendToPeer(targetRoomKey, msg.targetPeerId, msg);
               const target = peers.get(msg.targetPeerId);
               if (target) {
                 peers.delete(msg.targetPeerId);
@@ -374,16 +387,16 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
                 } catch (e) {}
               }
             }
-            broadcastToOrg(orgId, msg, ws);
+            broadcastToOrg(targetRoomKey, msg, ws);
             break;
           }
 
           default: {
             // Forward any other signaling messages to target or room
             if (msg.toPeerId) {
-              sendToPeer(orgId, msg.toPeerId, msg);
+              sendToPeer(targetRoomKey, msg.toPeerId, msg);
             } else {
-              broadcastToOrg(orgId, msg, ws);
+              broadcastToOrg(targetRoomKey, msg, ws);
             }
             break;
           }
@@ -395,13 +408,13 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
 
     ws.on("close", () => {
       peers.delete(peerId);
-      broadcastToOrg(orgId, {
+      broadcastToOrg(targetRoomKey, {
         type: "PEER_LEFT",
         fromPeerId: peerId,
         userId
       });
       if (peers.size === 0) {
-        roomPeers.delete(orgId);
+        roomPeers.delete(targetRoomKey);
       }
     });
 

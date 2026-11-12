@@ -263,6 +263,17 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
+  // Room identifier: uniquely groups participants by meeting code (e.g. "meet_9d588v")
+  const roomIdentifier = useMemo(() => {
+    if (hostedMeetInfo?.meetingCode) {
+      return `meet_${hostedMeetInfo.meetingCode.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+    }
+    if (hostedMeetInfo?.meetingId) {
+      return `meet_${hostedMeetInfo.meetingId.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+    }
+    return hostedMeetInfo?.orgId || activeOrg?.id || "default";
+  }, [hostedMeetInfo?.meetingCode, hostedMeetInfo?.meetingId, hostedMeetInfo?.orgId, activeOrg?.id]);
+
   // Unified broadcast function across BroadcastChannel, WebSocket, and HTTP fallback
   const broadcastSignalingMessage = useCallback((msg: any) => {
     try {
@@ -276,14 +287,13 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       }
     } catch (e) {}
     if (!sentWs && (msg.type?.startsWith("SIGNAL_") || msg.type === "PEER_JOINED" || msg.type === "PEER_LEFT")) {
-      const targetOrgId = hostedMeetInfo?.orgId || activeOrg?.id || "default";
       fetch("/api/meet/signal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orgId: targetOrgId, message: msg })
+        body: JSON.stringify({ orgId: roomIdentifier, message: msg })
       }).catch(() => {});
     }
-  }, [hostedMeetInfo?.orgId, activeOrg?.id]);
+  }, [roomIdentifier]);
 
   // In-call chat messages (starts clean with zero default messages)
   const [callMessages, setCallMessages] = useState<MeetMessage[]>([]);
@@ -475,9 +485,8 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   useEffect(() => {
     if (!open) return;
 
-    // Use actual meeting's orgId if hosted, falling back to activeOrg or default
-    const orgId = hostedMeetInfo?.orgId || activeOrg?.id || "default";
-    const channelIdentifier = `impacto_call_org_${orgId}`;
+    // Use roomIdentifier to ensure all clients with the same code or meeting join the exact same signaling channel
+    const channelIdentifier = `impacto_call_room_${roomIdentifier}`;
     const broadcast = new BroadcastChannel(channelIdentifier);
     broadcastChannelRef.current = broadcast;
 
@@ -737,7 +746,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
               }
             });
             try {
-              localStorage.setItem(`impacto_meet_chat_${orgId}`, JSON.stringify(merged));
+              localStorage.setItem(`impacto_meet_chat_${roomIdentifier}`, JSON.stringify(merged));
             } catch (e) {}
             return merged;
           });
@@ -899,7 +908,16 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
 
     // WebSocket connection for real cross-device network communication
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws/meet?orgId=${encodeURIComponent(orgId)}&peerId=${encodeURIComponent(myPeerId)}&userId=${encodeURIComponent(effectiveUser?.id || "guest")}&name=${encodeURIComponent(effectiveUser?.full_name || "Member")}&role=${encodeURIComponent(activeMember?.role || guestUser?.role || "Member")}`;
+    const cleanMeetCode = hostedMeetInfo?.meetingCode?.toLowerCase().replace(/[^a-z0-9]/g, "") || "";
+    const wsUrl = `${protocol}//${window.location.host}/ws/meet?roomId=${encodeURIComponent(
+      roomIdentifier
+    )}&orgId=${encodeURIComponent(hostedMeetInfo?.orgId || activeOrg?.id || "default")}&meetingCode=${encodeURIComponent(
+      cleanMeetCode
+    )}&peerId=${encodeURIComponent(myPeerId)}&userId=${encodeURIComponent(
+      effectiveUser?.id || "guest"
+    )}&name=${encodeURIComponent(effectiveUser?.full_name || "Member")}&role=${encodeURIComponent(
+      activeMember?.role || guestUser?.role || "Member"
+    )}`;
 
     let isUnmounted = false;
     let reconnectTimeout: any = null;
@@ -984,7 +1002,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       });
       peerConnectionsRef.current = {};
     };
-  }, [open, activeOrg?.id, myPeerId, effectiveUser, activeMember, guestUser, isAdmin, broadcastSignalingMessage]);
+  }, [open, roomIdentifier, myPeerId, effectiveUser, activeMember, guestUser, isAdmin, broadcastSignalingMessage, hostedMeetInfo]);
 
   // Sync state changes (mic, video, hand, speaking, deafened) to peers
   useEffect(() => {
