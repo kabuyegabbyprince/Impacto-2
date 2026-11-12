@@ -257,7 +257,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // Connection status indicator state: "connecting" | "connected" | "disconnected"
-  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
+  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected">("connected");
 
   // Remote participants map: key = peerId
   const [remotePeers, setRemotePeers] = useState<Record<string, PeerParticipant>>({});
@@ -949,7 +949,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         wsRef.current = ws;
 
         ws.onopen = () => {
-          setConnectionStatus("connecting");
+          setConnectionStatus("connected");
           broadcastSignalingMessage({
             type: "PEER_JOINED",
             fromPeerId: myPeerId,
