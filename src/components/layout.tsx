@@ -384,127 +384,21 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
               <polygon points="53,48 47,48 50,42" fill="#F59E0B" />
             </svg>
           )}
-          <span className="font-display font-extrabold text-lg tracking-tight text-slate-900 dark:text-white hidden sm:inline">
-            {activeOrg?.name ? activeOrg.name : <>Impact<span className="text-[#156c45] dark:text-emerald-500 font-black">o</span></>}
+          <span className="font-display font-extrabold text-lg tracking-tight text-slate-900 dark:text-white hidden sm:inline-flex items-center gap-1.5">
+            {activeOrg?.name ? (
+              <>
+                <span className="truncate max-w-[180px] md:max-w-[240px]">{activeOrg.name}</span>
+                {activeOrg.verification_status === "verified" && (
+                  <span title="Verified Authentic Organization" className="inline-flex items-center shrink-0">
+                    <CheckCircle2 className="h-5 w-5 fill-emerald-500 text-white dark:fill-emerald-400 dark:text-slate-900" />
+                  </span>
+                )}
+              </>
+            ) : (
+              <>Impact<span className="text-[#156c45] dark:text-emerald-500 font-black">o</span></>
+            )}
           </span>
         </Link>
-
-        {activeOrg && (
-          <div className="hidden xs:flex items-center gap-2 relative">
-            <span className="text-slate-300 dark:text-slate-700 font-light font-sans">/</span>
-
-            {/* FROZEN PHASE: Multi-organization switching disabled. Single organization membership mode.
-                Uncomment this button and the dropdown below to re-enable multi-workspace switching.
-            <button
-              id="tour-org-switcher"
-              data-tour="org-switcher"
-              onClick={() => setOrgSwitcherOpen(!orgSwitcherOpen)}
-              className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-700/70 border border-slate-200/60 dark:border-slate-700/60 transition flex items-center gap-1.5 font-sans cursor-pointer focus:outline-none"
-            >
-              <span className="truncate max-w-[130px]">{activeOrg?.name || "Workspace"}</span>
-              {userMemberships.length > 1 && (
-                <svg className={`h-3 w-3 transition-transform ${orgSwitcherOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              )}
-            </button>
-            */}
-
-            {/* Static Organization Display (Single Organization Phase) */}
-            <div
-              id="tour-org-switcher"
-              data-tour="org-switcher"
-              className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5 font-sans select-none"
-            >
-              <span className="truncate max-w-[140px]">{activeOrg?.name || "Workspace"}</span>
-              {activeOrg?.verification_status === "verified" && (
-                <span title="Verified Authentic Organization" className="inline-flex items-center text-emerald-500">
-                  <CheckCircle2 className="h-3.5 w-3.5 fill-emerald-100 dark:fill-emerald-950 text-emerald-600 dark:text-emerald-400" />
-                </span>
-              )}
-            </div>
-
-            {/* Authenticity Verification Badge */}
-            {activeOrg?.verification_status === "verified" ? (
-              <span
-                className="text-[9px] font-bold px-2 py-0.5 rounded-full select-none font-mono bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-700 flex items-center gap-1 cursor-default"
-                title="Verified Authentic Organization"
-              >
-                <CheckCircle2 className="h-2.5 w-2.5" /> VERIFIED
-              </span>
-            ) : activeMember?.role !== "member" ? (
-              <button
-                type="button"
-                onClick={() => setOpenVerificationModal(true)}
-                className="text-[9px] font-bold px-2 py-0.5 rounded-full select-none font-mono bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700/80 flex items-center gap-1 transition cursor-pointer"
-                title="Organization unverified. Click to submit key-role verification dossier."
-              >
-                <AlertTriangle className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400" />
-                {activeOrg?.verification_status === "pending_review" ? "IN REVIEW" : "UNVERIFIED"}
-              </button>
-            ) : (
-              <span
-                className="text-[9px] font-bold px-2 py-0.5 rounded-full select-none font-mono bg-amber-50 text-amber-800 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700/80 flex items-center gap-1 cursor-default"
-                title={activeOrg?.verification_status === "pending_review" ? "Verification In Review" : "Organization Unverified"}
-              >
-                <AlertTriangle className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400" />
-                {activeOrg?.verification_status === "pending_review" ? "IN REVIEW" : "UNVERIFIED"}
-              </span>
-            )}
-
-            {/* FROZEN PHASE: Multi-organization switcher dropdown menu disabled.
-            {orgSwitcherOpen && userMemberships.length > 1 && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setOrgSwitcherOpen(false)} />
-                <div className="absolute left-3 top-8 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 z-50 text-xs overflow-hidden">
-                  <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-750 font-mono text-[9px] uppercase tracking-wider text-gray-400 font-bold">
-                    Switch Workspace ({userMemberships.length})
-                  </div>
-                  <div className="max-h-60 overflow-y-auto">
-                    {userMemberships.map((row) => {
-                      const org = orgs?.find((o) => o.id === row.org_id) || MockDB.getOrgs().find((o) => o.id === row.org_id);
-                      if (!org) return null;
-                      const isCurrent = org.id === activeOrg.id;
-                      return (
-                        <button
-                          key={row.id}
-                          onClick={() => {
-                            setOrgSwitcherOpen(false);
-                            setActiveOrg(org, row);
-                            addToast(`Switched to workspace: ${org.name}`, "success");
-                            navigate("/dashboard");
-                          }}
-                          className={`w-full text-left px-3.5 py-2.5 flex flex-col gap-0.5 hover:bg-slate-50 dark:hover:bg-slate-700 border-b border-gray-50 dark:border-slate-800/50 last:border-0 transition cursor-pointer ${
-                            isCurrent ? "bg-emerald-50/30 dark:bg-emerald-950/10 text-emerald-600 dark:text-emerald-400 font-bold" : "text-gray-700 dark:text-slate-300"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="truncate max-w-[150px]">{org.name}</span>
-                            {isCurrent && <span className="text-[9px] bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 px-1 py-0.2 rounded font-mono font-bold uppercase scale-90">Active</span>}
-                          </div>
-                          <span className="text-[9px] text-gray-400 font-mono">@{org.slug} • {row.role === "org_admin" ? "Admin" : "Member"}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="p-1 border-t border-gray-100 dark:border-slate-750 bg-slate-50/50 dark:bg-slate-900/10">
-                    <button
-                      onClick={() => {
-                        setOrgSwitcherOpen(false);
-                        clearOrg();
-                        navigate("/org-picker");
-                      }}
-                      className="w-full text-center py-1.5 font-bold hover:text-emerald-600 dark:hover:text-emerald-400 text-[10px] text-gray-500 uppercase tracking-wide flex items-center justify-center gap-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition cursor-pointer"
-                    >
-                      Workspace Directory ➜
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-            */}
-          </div>
-        )}
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
@@ -1108,18 +1002,21 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         const endsAtChanged = dbOrg?.subscription_ends_at !== activeOrg?.subscription_ends_at;
         const tierChanged = dbOrg?.subscription_tier !== activeOrg?.subscription_tier;
         const nameChanged = dbOrg?.name !== activeOrg?.name;
+        const verificationChanged = dbOrg?.verification_status !== activeOrg?.verification_status;
         
-        if (statusChanged || endsAtChanged || tierChanged || nameChanged) {
+        if (statusChanged || endsAtChanged || tierChanged || nameChanged || verificationChanged) {
           setActiveOrg(dbOrg, activeMember);
           if (activeOrg?.subscription_status !== "active" && dbOrg?.subscription_status === "active") {
             addToast(`Your cooperative workspace "${dbOrg?.name || "Workspace"}" has been approved and unlocked in real-time!`, "success");
+          } else if (activeOrg?.verification_status !== "verified" && dbOrg?.verification_status === "verified") {
+            addToast(`"${dbOrg?.name || "Organization"}" is now officially verified!`, "success");
           } else {
             addToast(`Cooperative Workspace workspace configuration updated in real-time.`, "info");
           }
         }
       }
     }
-  }, [platformData?.orgs, activeOrg?.id, activeOrg?.subscription_status, activeOrg?.subscription_ends_at, activeOrg?.subscription_tier, activeOrg?.name, activeMember, setActiveOrg, addToast]);
+  }, [platformData?.orgs, activeOrg?.id, activeOrg?.subscription_status, activeOrg?.subscription_ends_at, activeOrg?.subscription_tier, activeOrg?.name, activeOrg?.verification_status, activeMember, setActiveOrg, addToast]);
   const submitPaymentMutation = useSubmitSubscriptionPayment();
   const supportMutation = useSubmitErrorReport();
 

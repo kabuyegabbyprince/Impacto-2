@@ -1045,13 +1045,11 @@ export const DashboardHome: React.FC = () => {
         </div>
       )}
 
-      {/* Organization Authenticity Status & Verification Card */}
-      {activeOrg && (
+      {/* Organization Authenticity Status & Verification Card (Hidden once organization is verified) */}
+      {activeOrg && activeOrg.verification_status !== "verified" && (
         <div
           className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs transition min-w-0 ${
-            activeOrg.verification_status === "verified"
-              ? "bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60"
-              : activeOrg.verification_status === "pending_review"
+            activeOrg.verification_status === "pending_review"
               ? "bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60"
               : activeOrg.verification_status === "rejected"
               ? "bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/60"
@@ -1061,18 +1059,14 @@ export const DashboardHome: React.FC = () => {
           <div className="flex items-start gap-3 min-w-0">
             <div
               className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${
-                activeOrg.verification_status === "verified"
-                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
-                  : activeOrg.verification_status === "pending_review"
+                activeOrg.verification_status === "pending_review"
                   ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
                   : activeOrg.verification_status === "rejected"
                   ? "bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300"
                   : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
               }`}
             >
-              {activeOrg.verification_status === "verified" ? (
-                <CheckCircle2 className="h-5 w-5 fill-emerald-500 text-white dark:fill-emerald-400 dark:text-slate-900" />
-              ) : activeOrg.verification_status === "pending_review" ? (
+              {activeOrg.verification_status === "pending_review" ? (
                 <Clock className="h-5 w-5 animate-pulse text-amber-600 dark:text-amber-400" />
               ) : activeOrg.verification_status === "rejected" ? (
                 <XCircle className="h-5 w-5 text-rose-600 dark:text-rose-400" />
@@ -1085,11 +1079,7 @@ export const DashboardHome: React.FC = () => {
                 <span className="text-xs font-bold text-slate-900 dark:text-white">
                   Organization Status:
                 </span>
-                {activeOrg.verification_status === "verified" ? (
-                  <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> Verified Organization
-                  </span>
-                ) : activeOrg.verification_status === "pending_review" ? (
+                {activeOrg.verification_status === "pending_review" ? (
                   <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 inline-flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5 text-amber-500 animate-pulse shrink-0" /> Pending Audit
                   </span>
@@ -1104,9 +1094,7 @@ export const DashboardHome: React.FC = () => {
                 )}
               </div>
               <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 max-w-2xl break-words">
-                {activeOrg.verification_status === "verified"
-                  ? `Official Green Tick active and published. Authenticity verified by platform audit (${activeOrg.verified_by || "Platform Auditor"}).`
-                  : activeOrg.verification_status === "pending_review"
+                {activeOrg.verification_status === "pending_review"
                   ? "All required leadership documents submitted. Awaiting system verification by Super Admin."
                   : activeOrg.verification_status === "rejected"
                   ? (isRegularMember
@@ -1125,18 +1113,14 @@ export const DashboardHome: React.FC = () => {
               size="sm"
               onClick={() => setOpenOrgVerifyModal(true)}
               className={`text-xs font-bold py-2 px-3.5 shrink-0 self-start sm:self-center ${
-                activeOrg.verification_status === "verified"
-                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                  : activeOrg.verification_status === "pending_review"
+                activeOrg.verification_status === "pending_review"
                   ? "bg-amber-600 hover:bg-amber-700 text-white"
                   : activeOrg.verification_status === "rejected"
                   ? "bg-rose-600 hover:bg-rose-700 text-white"
                   : "bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white"
               }`}
             >
-              {activeOrg.verification_status === "verified"
-                ? "View Verification Dossier"
-                : activeOrg.verification_status === "pending_review"
+              {activeOrg.verification_status === "pending_review"
                 ? "Check Audit Status"
                 : activeOrg.verification_status === "rejected"
                 ? "Fix & Resubmit Documents →"
@@ -1279,8 +1263,19 @@ export const DashboardHome: React.FC = () => {
       {/* MY ASSIGNED TASKS & DELIVERABLES (ANY ROLE) */}
       {/* ========================================== */}
       {myAssignedTasks.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3.5">
+        <div
+          onClick={() => navigate("/dashboard/events")}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              navigate("/dashboard/events");
+            }
+          }}
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700 rounded-2xl p-5 shadow-xs transition cursor-pointer group"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
                 <CheckSquare className="h-5 w-5" />
@@ -1295,192 +1290,19 @@ export const DashboardHome: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Action items assigned to you. Update your task progress and submit performance reports to advance the event milestone.
+                  Action items assigned to you. Click to view all events, update your task progress, and submit performance reports.
                 </p>
               </div>
             </div>
 
             <Link
               to="/dashboard/events"
-              className="self-start sm:self-center text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 shrink-0"
+              onClick={(e) => e.stopPropagation()}
+              className="self-start sm:self-center text-xs font-bold text-emerald-700 dark:text-emerald-400 group-hover:underline flex items-center gap-1 shrink-0"
             >
               <span>View All Events</span>
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {myAssignedTasks.map(({ task, event }) => {
-              const dueDateObj = task.due_date ? new Date(task.due_date) : new Date(event.date_time);
-              const isOverdue = dueDateObj < new Date() && (task.progress || 0) < 100;
-              const daysDiff = Math.ceil((dueDateObj.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-              const isEditing = editingTaskId === task.id;
-
-              return (
-                <div
-                  key={task.id}
-                  className={`p-4 rounded-xl border flex flex-col justify-between gap-3 transition ${
-                    task.progress >= 100
-                      ? "bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800"
-                      : isOverdue
-                      ? "bg-rose-50/40 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/60"
-                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-200 dark:hover:border-emerald-800"
-                  }`}
-                >
-                  <div className="space-y-2">
-                    {/* Event name & due date planning clock */}
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-[10px] font-mono uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md truncate max-w-[200px]">
-                        Event: {event.title}
-                      </span>
-
-                      {/* Planning Clock Badge */}
-                      {isOverdue ? (
-                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800 text-[10px] font-bold">
-                          <Clock className="h-3 w-3 shrink-0 text-rose-600 animate-pulse" />
-                          <span>Overdue by {Math.abs(daysDiff)}d (Due {dueDateObj.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })})</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-[10px] font-medium">
-                          <Clock className="h-3 w-3 shrink-0 text-slate-400" />
-                          <span>Due {daysDiff === 0 ? "today" : `in ${daysDiff}d`} ({dueDateObj.toLocaleDateString([], { day: "numeric", month: "short" })})</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white leading-snug">
-                      {task.title}
-                    </h4>
-
-                    {/* Progress Bar & Status */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-[11px] font-medium text-slate-500">
-                          Progress Contribution:
-                        </span>
-                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          {task.progress || 0}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${
-                            task.progress >= 100
-                              ? "bg-emerald-500"
-                              : task.progress > 0
-                              ? "bg-emerald-500"
-                              : "bg-slate-300 dark:bg-slate-700"
-                          }`}
-                          style={{ width: `${task.progress || 0}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Performance Report Quote if already submitted */}
-                    {task.performance_report && !isEditing && (
-                      <div className="p-2.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40 text-[11px]">
-                        <span className="font-bold text-emerald-800 dark:text-emerald-300 block text-[10px] uppercase tracking-wider mb-0.5">
-                          My Performance Report ({task.reported_at ? new Date(task.reported_at).toLocaleDateString([], { month: "short", day: "numeric" }) : "Recent"}):
-                        </span>
-                        <p className="text-emerald-900 dark:text-emerald-200 italic">"{task.performance_report}"</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Action or Editing Form */}
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                    {!isEditing ? (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                          task.progress >= 100
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                            : task.progress > 0
-                            ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
-                            : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                        }`}>
-                          {task.progress >= 100 ? "Completed" : task.progress > 0 ? "In Progress" : "Pending"}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingTaskId(task.id);
-                            setTaskProgressVal(task.progress || 0);
-                            setTaskReportText(task.performance_report || "");
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
-                        >
-                          <Edit className="h-3 w-3" />
-                          <span>Update Progress & Report</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-3 pt-1 animate-in">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
-                            Set Progress Percentage:
-                          </label>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {[0, 25, 50, 75, 100].map((val) => (
-                              <button
-                                key={val}
-                                type="button"
-                                onClick={() => setTaskProgressVal(val)}
-                                className={`px-2.5 py-1 rounded-md text-xs font-bold transition cursor-pointer ${
-                                  taskProgressVal === val
-                                    ? "bg-emerald-600 text-white shadow-xs"
-                                    : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
-                                }`}
-                              >
-                                {val}% {val === 100 && "✓"}
-                              </button>
-                            ))}
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="5"
-                            value={taskProgressVal}
-                            onChange={(e) => setTaskProgressVal(Number(e.target.value))}
-                            className="w-full accent-emerald-600 cursor-pointer h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
-                            Performance Report / Work Description:
-                          </label>
-                          <textarea
-                            rows={2}
-                            placeholder="Report on what was accomplished, milestones completed, or any challenges encountered..."
-                            value={taskReportText}
-                            onChange={(e) => setTaskReportText(e.target.value)}
-                            className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-2 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
-                          />
-                        </div>
-
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setEditingTaskId(null)}
-                            className="px-3 py-1 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleSaveMemberTaskProgress(event, task)}
-                            className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
-                          >
-                            Save & Update Event
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
           </div>
         </div>
       )}
