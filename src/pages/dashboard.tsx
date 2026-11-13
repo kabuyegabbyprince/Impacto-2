@@ -84,7 +84,8 @@ import {
   Bell,
   Video,
   MapPin,
-  Check
+  Check,
+  XCircle
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
@@ -392,14 +393,40 @@ export const DashboardHome: React.FC = () => {
   const isRegularMember = activeMember?.role === "member";
   const isOrgAdmin = activeMember?.role === "org_admin" || activeMember?.role === "superadmin" || user?.is_superadmin;
 
-  const handleRemindOfficer = (officer: any) => {
+  const handleRemindOfficer = async (officer: any) => {
     const name = officer.user?.full_name || (officer as any).name || "Officer";
     const phone = officer.phone_number || officer.user?.phone_number || "on record";
+    if (activeOrg?.id) {
+      try {
+        await broadcastNotificationMutation.mutateAsync({
+          org_id: activeOrg.id,
+          recipient_group: officer.role || "officers",
+          body_text: `Verification document reminder for ${name} (${officer.role}): Please submit your passport photo and government ID in Organization Verification.`,
+          recipient_count: 1,
+          sent_by: user?.id || "admin",
+        });
+      } catch (err) {
+        console.warn("[Verification] Officer reminder notice:", err);
+      }
+    }
     setRemindedOfficers((prev) => ({ ...prev, [officer.id]: true }));
     addToast(`Verification document reminder alert dispatched to ${name} (${phone})!`, "success");
   };
 
-  const handleRemindAllOfficers = (pendingOfficers: any[]) => {
+  const handleRemindAllOfficers = async (pendingOfficers: any[]) => {
+    if (activeOrg?.id && pendingOfficers.length > 0) {
+      try {
+        await broadcastNotificationMutation.mutateAsync({
+          org_id: activeOrg.id,
+          recipient_group: "officers",
+          body_text: `Verification document reminder for ${pendingOfficers.length} pending leadership officers: Please submit your passport photo and ID scan in Organization Verification.`,
+          recipient_count: pendingOfficers.length,
+          sent_by: user?.id || "admin",
+        });
+      } catch (err) {
+        console.warn("[Verification] Batch reminder notice:", err);
+      }
+    }
     const newMap = { ...remindedOfficers };
     pendingOfficers.forEach((o) => {
       newMap[o.id] = true;
@@ -1021,21 +1048,25 @@ export const DashboardHome: React.FC = () => {
       {/* Organization Authenticity Status & Verification Card */}
       {activeOrg && (
         <div
-          className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs transition ${
+          className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs transition min-w-0 ${
             activeOrg.verification_status === "verified"
               ? "bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60"
               : activeOrg.verification_status === "pending_review"
               ? "bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60"
+              : activeOrg.verification_status === "rejected"
+              ? "bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/60"
               : "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800"
           }`}
         >
-          <div className="flex items-start gap-3">
+          <div className="flex items-start gap-3 min-w-0">
             <div
               className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${
                 activeOrg.verification_status === "verified"
                   ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
                   : activeOrg.verification_status === "pending_review"
                   ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+                  : activeOrg.verification_status === "rejected"
+                  ? "bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300"
                   : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
               }`}
             >
@@ -1043,12 +1074,14 @@ export const DashboardHome: React.FC = () => {
                 <CheckCircle2 className="h-5 w-5 fill-emerald-500 text-white dark:fill-emerald-400 dark:text-slate-900" />
               ) : activeOrg.verification_status === "pending_review" ? (
                 <Clock className="h-5 w-5 animate-pulse text-amber-600 dark:text-amber-400" />
+              ) : activeOrg.verification_status === "rejected" ? (
+                <XCircle className="h-5 w-5 text-rose-600 dark:text-rose-400" />
               ) : (
                 <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               )}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-bold text-slate-900 dark:text-white">
                   Organization Status:
                 </span>
@@ -1060,17 +1093,25 @@ export const DashboardHome: React.FC = () => {
                   <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 inline-flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5 text-amber-500 animate-pulse shrink-0" /> Pending Audit
                   </span>
+                ) : activeOrg.verification_status === "rejected" ? (
+                  <span className="text-xs font-semibold text-rose-700 dark:text-rose-400 inline-flex items-center gap-1.5">
+                    <XCircle className="h-3.5 w-3.5 text-rose-600 shrink-0" /> Verification Rejected
+                  </span>
                 ) : (
                   <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
                     <span className="h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" /> Unverified
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 max-w-2xl">
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 max-w-2xl break-words">
                 {activeOrg.verification_status === "verified"
                   ? `Official Green Tick active and published. Authenticity verified by platform audit (${activeOrg.verified_by || "Platform Auditor"}).`
                   : activeOrg.verification_status === "pending_review"
                   ? "All required leadership documents submitted. Awaiting system verification by Super Admin."
+                  : activeOrg.verification_status === "rejected"
+                  ? (isRegularMember
+                      ? "Organization verification dossier was returned for updates by platform reviewers."
+                      : `Rejected: ${activeOrg.verification_rejection_reason || "Please review submitted documents and upload clearer copies."}`)
                   : isRegularMember
                   ? "This organization is currently unverified. Only organization administrators and governance officers are required to submit verification documents."
                   : "Action Required: As a leadership officer, please independently submit your passport photo, National ID/Passport, and telephone number to obtain the Green Tick."}
@@ -1088,6 +1129,8 @@ export const DashboardHome: React.FC = () => {
                   ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                   : activeOrg.verification_status === "pending_review"
                   ? "bg-amber-600 hover:bg-amber-700 text-white"
+                  : activeOrg.verification_status === "rejected"
+                  ? "bg-rose-600 hover:bg-rose-700 text-white"
                   : "bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white"
               }`}
             >
@@ -1095,6 +1138,8 @@ export const DashboardHome: React.FC = () => {
                 ? "View Verification Dossier"
                 : activeOrg.verification_status === "pending_review"
                 ? "Check Audit Status"
+                : activeOrg.verification_status === "rejected"
+                ? "Fix & Resubmit Documents →"
                 : isOrgAdmin
                 ? "Manage Verification & Dossier →"
                 : "Submit My Verification Documents →"}
@@ -1105,28 +1150,33 @@ export const DashboardHome: React.FC = () => {
 
       {/* Admin Exclusive: Leadership Officers Verification Progress & Reminders Checklist */}
       {isOrgAdmin && activeOrg && activeOrg.verification_status !== "verified" && (() => {
-        const officerMembers = (members || []).filter((m) => m.role !== "member");
-        const missingOfficers = officerMembers.filter((m) => !m.passport_photo_url || !m.id_document_url);
-        const submittedOfficers = officerMembers.filter((m) => !!m.passport_photo_url && !!m.id_document_url);
-        const requiredTotal = Math.max(officerMembers.length, 2);
-        const progressPercent = Math.min(100, Math.round((submittedOfficers.length / requiredTotal) * 100));
+        const officerMembers = (members || []).filter(
+          (m) => m.role !== "member" && m.status !== "rejected" && m.status !== "suspended"
+        );
+        const mandatoryOfficers = officerMembers.filter(
+          (m) => m.role === "org_admin" || m.role === "superadmin" || m.role === "accountant"
+        );
+        const missingOfficers = mandatoryOfficers.filter((m) => !m.passport_photo_url || !m.id_document_url);
+        const submittedMandatory = mandatoryOfficers.filter((m) => !!m.passport_photo_url && !!m.id_document_url);
+        const requiredTotal = Math.max(mandatoryOfficers.length, 2);
+        const progressPercent = Math.min(100, Math.round((submittedMandatory.length / requiredTotal) * 100));
 
         return (
-          <div className="p-4 sm:p-5 rounded-2xl border bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-800/60 shadow-xs flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3.5 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
+          <div className="p-4 sm:p-5 rounded-2xl border bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-800/60 shadow-xs flex flex-col gap-4 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3.5 dark:border-slate-800 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <div className="h-9 w-9 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
                   <Bell className="h-5 w-5" />
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
                     Leadership Verification Roster & Reminders
                     <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/60 dark:border-amber-900/40">
                       Admin Exclusive View
                     </span>
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Missing documents from any leadership officer prevent the organization from getting verified. Remind pending officers below.
+                    Both Administrator and Accountant must upload documents to queue the organization for verification. Remind pending officers below.
                   </p>
                 </div>
               </div>
@@ -1145,12 +1195,12 @@ export const DashboardHome: React.FC = () => {
 
             {/* Progress Bar */}
             <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 flex flex-col gap-2">
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  <Users className="h-3.5 w-3.5 text-emerald-600" /> Required Officers Submission Progress:
+                  <Users className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> Mandatory Officers Progress (Admin & Accountant):
                 </span>
                 <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                  {submittedOfficers.length} / {requiredTotal} Officers Completed ({progressPercent}%)
+                  {submittedMandatory.length} / {requiredTotal} Officers Completed ({progressPercent}%)
                 </span>
               </div>
               <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
@@ -1169,13 +1219,13 @@ export const DashboardHome: React.FC = () => {
                 return (
                   <div
                     key={officer.id}
-                    className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
+                    className={`p-3.5 rounded-xl border flex flex-wrap items-center justify-between gap-3 min-w-0 ${
                       hasDocs
                         ? "bg-emerald-50/40 dark:bg-emerald-950/10 border-emerald-200/60 dark:border-emerald-800/40"
                         : "bg-amber-50/40 dark:bg-amber-950/10 border-amber-200/70 dark:border-amber-800/50"
                     }`}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div
                         className={`h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
                           hasDocs
@@ -1185,16 +1235,16 @@ export const DashboardHome: React.FC = () => {
                       >
                         {officer.role.substring(0, 2).toUpperCase()}
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white break-words">
                             {officer.user?.full_name || (officer as any).name || "Leadership Officer"}
                           </span>
-                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 uppercase">
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 uppercase shrink-0">
                             {officer.role}
                           </span>
                         </div>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5 break-all">
                           <Phone className="h-3 w-3 text-emerald-600 shrink-0" />
                           {officer.phone_number || officer.user?.phone_number || "No telephone number"}
                         </span>
@@ -6012,7 +6062,7 @@ export const MeetingsMinutes: React.FC = () => {
               />
             </div>
 
-            <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-lg w-full text-left font-mono text-xs text-slate-600 dark:text-slate-300 mb-3 select-all cursor-pointer">
+            <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-lg w-full text-left font-mono text-xs text-slate-600 dark:text-slate-300 mb-3 select-all cursor-pointer min-w-0 overflow-hidden break-all">
               <p className="font-semibold text-slate-500 dark:text-slate-400 text-xs mb-1 font-sans">Access Route Link:</p>
               {window.location.origin + "/@" + activeOrg?.slug + "/checkin?meetId=" + qrModalMeet.id}
             </div>
@@ -7855,9 +7905,9 @@ export const EventsCalendar: React.FC = () => {
     return (
       <PlanGatedView
         featureKey="event_listings"
-        requiredTier="growth"
-        featureName="Event Management & Facility Space Scheduling"
-        customMessage="Community events, task delegation, and facility space bookings require a Growth or Pro plan (or Event Package)."
+        requiredTier="starter"
+        featureName="Events & Interactive Schedule Calendar"
+        customMessage="Community events, attendance tracking, and interactive schedule calendars are available on Starter, Growth, and Pro plans."
       >
         <div />
       </PlanGatedView>

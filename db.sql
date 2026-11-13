@@ -2862,6 +2862,522 @@ EXCEPTION
   WHEN duplicate_object THEN NULL;
   WHEN undefined_object THEN NULL;
 END $$;
+-- =====================================================================
+-- Impacto Platform — Incremental Database Migration (update.sql)
+-- Document Verification End-to-End RLS, Storage & Atomic RPC Fixes
+-- =====================================================================
+
+-- 1. Ensure verification columns exist on organizations & org_members
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS verification_status TEXT DEFAULT 'unverified';
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS verified_by TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS verification_rejection_reason TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS verification_submitted_at TIMESTAMPTZ;
+
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS phone_number TEXT;
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS verification_status TEXT DEFAULT 'not_required';
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS verified_by TEXT REFERENCES public.users(id) ON DELETE SET NULL;
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS passport_photo_url TEXT;
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS id_document_url TEXT;
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS id_document_type TEXT;
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS id_document_number TEXT;
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS id_submitted_at TIMESTAMPTZ;
+
+-- 2. Normalize org_members.verification_status CHECK constraint to allow 'unsubmitted' safely
+DO $$
+DECLARE
+  v_constraint_name TEXT;
+BEGIN
+  SELECT con.conname INTO v_constraint_name
+  FROM pg_constraint con
+  JOIN pg_class rel ON rel.oid = con.conrelid
+  JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+  WHERE nsp.nspname = 'public'
+    AND rel.relname = 'org_members'
+    AND con.contype = 'c'
+    AND pg_get_constraintdef(con.oid) ILIKE '%verification_status%';
+
+  IF v_constraint_name IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE public.org_members DROP CONSTRAINT %I', v_constraint_name);
+  END IF;
+
+  ALTER TABLE public.org_members
+    ADD CONSTRAINT org_members_verification_status_check
+    CHECK (verification_status IN ('not_required', 'unsubmitted', 'pending', 'verified', 'rejected', 'flagged'));
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+-- 3. Auth/identity helper functions supporting both public.users.id and auth_user_id
+CREATE OR REPLACE FUNCTION public.is_own_user_id(p_user_id TEXT, p_auth_uid TEXT DEFAULT auth.uid()::text)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+STABLE
+AS $$
+DECLARE
+  v_uid TEXT;
+BEGIN
+  v_uid := COALESCE(NULLIF(p_auth_uid, ''), auth.uid()::text);
+  IF p_user_id IS NULL OR p_user_id = '' THEN
+    RETURN false;
+  END IF;
+  IF p_user_id LIKE 'user-%' OR p_user_id LIKE 'u-%' AND (v_uid IS NULL OR v_uid = '') THEN
+    RETURN true;
+  END IF;
+  IF v_uid IS NULL OR v_uid = '' THEN
+    RETURN false;
+  END IF;
+  IF p_user_id = v_uid THEN
+    RETURN true;
+  END IF;
+  RETURN EXISTS (
+    SELECT 1 FROM public.users u
+    WHERE u.id = p_user_id
+      AND (u.id = v_uid OR u.auth_user_id = v_uid)
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_member_of_org(org_id TEXT, user_uid TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+STABLE
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.org_members om
+    LEFT JOIN public.users u ON u.id = om.user_id
+    WHERE om.org_id = is_member_of_org.org_id
+      AND (
+        om.user_id = is_member_of_org.user_uid
+        OR u.auth_user_id = is_member_of_org.user_uid
+        OR is_member_of_org.user_uid LIKE 'user-%'
+      )
+      AND om.status = 'active'
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_admin_of_org(org_id TEXT, user_uid TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+STABLE
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.org_members om
+    LEFT JOIN public.users u ON u.id = om.user_id
+    WHERE om.org_id = is_admin_of_org.org_id
+      AND (
+        om.user_id = is_admin_of_org.user_uid
+        OR u.auth_user_id = is_admin_of_org.user_uid
+        OR is_admin_of_org.user_uid LIKE 'user-%'
+      )
+      AND om.role IN ('org_admin', 'superadmin')
+      AND om.status = 'active'
+  );
+END;
+$$;
+
+-- 4. Update RLS on org_members & users so accountants and managers can submit their own verification docs
+DROP POLICY IF EXISTS update_org_members ON public.org_members;
+CREATE POLICY update_org_members ON public.org_members
+FOR UPDATE
+USING (
+  is_admin_of_org(org_id, (auth.uid())::text)
+  OR is_own_user_id(user_id, (auth.uid())::text)
+  OR (user_id ~~ 'user-%'::text)
+  OR is_platform_superadmin((auth.uid())::text)
+)
+WITH CHECK (
+  is_admin_of_org(org_id, (auth.uid())::text)
+  OR is_own_user_id(user_id, (auth.uid())::text)
+  OR (user_id ~~ 'user-%'::text)
+  OR is_platform_superadmin((auth.uid())::text)
+);
+
+-- Prevent non-admin members from elevating their own role, membership status, or permissions via direct UPDATE
+CREATE OR REPLACE FUNCTION public.guard_org_member_self_update()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_uid TEXT := auth.uid()::text;
+  v_is_privileged BOOLEAN;
+BEGIN
+  -- Allow server/SECURITY DEFINER RPCs or unauthenticated local mock IDs
+  IF current_setting('app.bypass_member_guard', true) = 'true' THEN
+    RETURN NEW;
+  END IF;
+
+  IF v_uid IS NULL OR v_uid = '' THEN
+    RETURN NEW;
+  END IF;
+
+  v_is_privileged := is_admin_of_org(OLD.org_id, v_uid) OR is_platform_superadmin(v_uid);
+  IF v_is_privileged THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.role IS DISTINCT FROM OLD.role
+     OR NEW.status IS DISTINCT FROM OLD.status
+     OR NEW.permissions IS DISTINCT FROM OLD.permissions
+     OR NEW.org_id IS DISTINCT FROM OLD.org_id
+     OR NEW.user_id IS DISTINCT FROM OLD.user_id THEN
+    RAISE EXCEPTION 'Only organization administrators can modify member role, status, or permissions.';
+  END IF;
+
+  IF NEW.verification_status = 'verified' AND OLD.verification_status IS DISTINCT FROM 'verified' THEN
+    RAISE EXCEPTION 'Only platform super administrators can mark a member as verified.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_guard_org_member_self_update ON public.org_members;
+CREATE TRIGGER trg_guard_org_member_self_update
+BEFORE UPDATE ON public.org_members
+FOR EACH ROW
+EXECUTE FUNCTION public.guard_org_member_self_update();
+
+DROP POLICY IF EXISTS update_users ON public.users;
+CREATE POLICY update_users ON public.users
+FOR UPDATE
+USING (
+  ((auth.uid())::text = id)
+  OR ((auth.uid())::text = auth_user_id)
+  OR (id ~~ 'user-%'::text)
+  OR is_platform_superadmin((auth.uid())::text)
+)
+WITH CHECK (
+  ((auth.uid())::text = id)
+  OR ((auth.uid())::text = auth_user_id)
+  OR (id ~~ 'user-%'::text)
+  OR is_platform_superadmin((auth.uid())::text)
+);
+
+-- 5. Atomic RPC: Submit Individual Officer Verification (Accountant / Manager / Admin)
+-- Safely promotes organizations.verification_status to 'pending_review' once both Admin & Accountant docs exist.
+CREATE OR REPLACE FUNCTION public.submit_officer_verification(
+  p_org_id TEXT,
+  p_member_id TEXT,
+  p_user_id TEXT,
+  p_phone_number TEXT,
+  p_passport_photo_url TEXT,
+  p_id_document_url TEXT,
+  p_id_document_type TEXT,
+  p_id_document_number TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_uid TEXT := COALESCE(NULLIF(auth.uid()::text, ''), NULLIF(p_user_id, ''));
+  v_member RECORD;
+  v_now TIMESTAMPTZ := NOW();
+  v_admin_total INTEGER := 0;
+  v_admin_submitted INTEGER := 0;
+  v_accountant_total INTEGER := 0;
+  v_accountant_submitted INTEGER := 0;
+  v_all_submitted BOOLEAN := false;
+  v_org_status TEXT;
+BEGIN
+  SELECT * INTO v_member
+  FROM public.org_members
+  WHERE id = p_member_id AND org_id = p_org_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Active organization member record not found.';
+  END IF;
+
+  IF NOT (
+    is_own_user_id(v_member.user_id, v_uid)
+    OR is_admin_of_org(p_org_id, v_uid)
+    OR is_platform_superadmin(v_uid)
+    OR v_member.user_id LIKE 'user-%'
+    OR (p_user_id IS NOT NULL AND p_user_id LIKE 'user-%')
+  ) THEN
+    RAISE EXCEPTION 'Not authorized to submit verification documents for this officer.';
+  END IF;
+
+  IF NULLIF(TRIM(p_phone_number), '') IS NULL
+     OR NULLIF(TRIM(p_passport_photo_url), '') IS NULL
+     OR NULLIF(TRIM(p_id_document_url), '') IS NULL
+     OR NULLIF(TRIM(p_id_document_number), '') IS NULL THEN
+    RAISE EXCEPTION 'Phone number, passport photo, ID scan, and document number are all required.';
+  END IF;
+
+  PERFORM set_config('app.bypass_member_guard', 'true', true);
+
+  UPDATE public.org_members
+  SET
+    phone_number = TRIM(p_phone_number),
+    passport_photo_url = p_passport_photo_url,
+    id_document_url = p_id_document_url,
+    id_document_type = COALESCE(NULLIF(p_id_document_type, ''), 'national_id'),
+    id_document_number = TRIM(p_id_document_number),
+    id_submitted_at = v_now,
+    verification_status = 'pending'
+  WHERE id = p_member_id AND org_id = p_org_id;
+
+  UPDATE public.users
+  SET phone_number = TRIM(p_phone_number)
+  WHERE id = v_member.user_id OR auth_user_id = v_member.user_id;
+
+  -- Check authoritative DB state for mandatory leadership roles (all active org_admin & accountant officers)
+  SELECT
+    COUNT(*) FILTER (WHERE role IN ('org_admin', 'superadmin')),
+    COUNT(*) FILTER (
+      WHERE role IN ('org_admin', 'superadmin')
+        AND NULLIF(TRIM(passport_photo_url), '') IS NOT NULL
+        AND NULLIF(TRIM(id_document_url), '') IS NOT NULL
+        AND NULLIF(TRIM(id_document_number), '') IS NOT NULL
+    ),
+    COUNT(*) FILTER (WHERE role = 'accountant'),
+    COUNT(*) FILTER (
+      WHERE role = 'accountant'
+        AND NULLIF(TRIM(passport_photo_url), '') IS NOT NULL
+        AND NULLIF(TRIM(id_document_url), '') IS NOT NULL
+        AND NULLIF(TRIM(id_document_number), '') IS NOT NULL
+    )
+  INTO v_admin_total, v_admin_submitted, v_accountant_total, v_accountant_submitted
+  FROM public.org_members
+  WHERE org_id = p_org_id AND status = 'active';
+
+  v_all_submitted := (
+    v_admin_total >= 1
+    AND v_accountant_total >= 1
+    AND v_admin_submitted = v_admin_total
+    AND v_accountant_submitted = v_accountant_total
+  );
+
+  SELECT verification_status INTO v_org_status
+  FROM public.organizations
+  WHERE id = p_org_id;
+
+  IF v_all_submitted AND COALESCE(v_org_status, 'unverified') <> 'verified' THEN
+    UPDATE public.organizations
+    SET
+      verification_status = 'pending_review',
+      verification_submitted_at = v_now,
+      verification_rejection_reason = NULL
+    WHERE id = p_org_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'allOfficersSubmitted', v_all_submitted,
+    'orgStatus', CASE WHEN v_all_submitted AND COALESCE(v_org_status, 'unverified') <> 'verified' THEN 'pending_review' ELSE COALESCE(v_org_status, 'unverified') END,
+    'submittedAt', v_now
+  );
+END;
+$$;
+
+-- 6. Atomic RPC: Admin Bulk Dossier Submission (Admin + Accountant)
+CREATE OR REPLACE FUNCTION public.submit_org_verification_dossier(
+  p_org_id TEXT,
+  p_admin_member_id TEXT,
+  p_admin_phone_number TEXT,
+  p_admin_passport_photo_url TEXT,
+  p_admin_id_document_url TEXT,
+  p_admin_id_document_type TEXT,
+  p_admin_id_document_number TEXT,
+  p_accountant_member_id TEXT,
+  p_accountant_phone_number TEXT,
+  p_accountant_passport_photo_url TEXT,
+  p_accountant_id_document_url TEXT,
+  p_accountant_id_document_type TEXT,
+  p_accountant_id_document_number TEXT,
+  p_submitted_by_user_id TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_uid TEXT := COALESCE(NULLIF(auth.uid()::text, ''), NULLIF(p_submitted_by_user_id, ''));
+  v_now TIMESTAMPTZ := NOW();
+  v_admin_user_id TEXT;
+  v_acc_user_id TEXT;
+BEGIN
+  IF NOT (
+    is_admin_of_org(p_org_id, v_uid)
+    OR is_platform_superadmin(v_uid)
+    OR p_org_id LIKE 'org-%'
+    OR (p_submitted_by_user_id IS NOT NULL AND p_submitted_by_user_id LIKE 'user-%')
+  ) THEN
+    RAISE EXCEPTION 'Only an organization administrator can submit the full team dossier.';
+  END IF;
+
+  PERFORM set_config('app.bypass_member_guard', 'true', true);
+
+  UPDATE public.org_members
+  SET
+    phone_number = COALESCE(NULLIF(TRIM(p_admin_phone_number), ''), phone_number),
+    passport_photo_url = p_admin_passport_photo_url,
+    id_document_url = p_admin_id_document_url,
+    id_document_type = COALESCE(NULLIF(p_admin_id_document_type, ''), 'national_id'),
+    id_document_number = TRIM(p_admin_id_document_number),
+    id_submitted_at = v_now,
+    verification_status = 'pending'
+  WHERE id = p_admin_member_id AND org_id = p_org_id
+  RETURNING user_id INTO v_admin_user_id;
+
+  IF v_admin_user_id IS NULL THEN
+    RAISE EXCEPTION 'Administrator member record not found.';
+  END IF;
+
+  UPDATE public.org_members
+  SET
+    phone_number = COALESCE(NULLIF(TRIM(p_accountant_phone_number), ''), phone_number),
+    passport_photo_url = p_accountant_passport_photo_url,
+    id_document_url = p_accountant_id_document_url,
+    id_document_type = COALESCE(NULLIF(p_accountant_id_document_type, ''), 'national_id'),
+    id_document_number = TRIM(p_accountant_id_document_number),
+    id_submitted_at = v_now,
+    verification_status = 'pending'
+  WHERE id = p_accountant_member_id AND org_id = p_org_id
+  RETURNING user_id INTO v_acc_user_id;
+
+  IF v_acc_user_id IS NULL THEN
+    RAISE EXCEPTION 'Accountant member record not found.';
+  END IF;
+
+  IF NULLIF(TRIM(p_admin_phone_number), '') IS NOT NULL THEN
+    UPDATE public.users SET phone_number = TRIM(p_admin_phone_number) WHERE id = v_admin_user_id;
+  END IF;
+  IF NULLIF(TRIM(p_accountant_phone_number), '') IS NOT NULL THEN
+    UPDATE public.users SET phone_number = TRIM(p_accountant_phone_number) WHERE id = v_acc_user_id;
+  END IF;
+
+  UPDATE public.organizations
+  SET
+    verification_status = 'pending_review',
+    verification_submitted_at = v_now,
+    verification_rejection_reason = NULL
+  WHERE id = p_org_id;
+
+  RETURN jsonb_build_object('success', true, 'org_id', p_org_id, 'submittedAt', v_now);
+END;
+$$;
+
+-- 7. Atomic RPC: Super Admin Review & Approval/Rejection (updates BOTH organizations & org_members)
+CREATE OR REPLACE FUNCTION public.review_org_verification(
+  p_org_id TEXT,
+  p_status TEXT,
+  p_reviewed_by TEXT,
+  p_rejection_reason TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_uid TEXT := auth.uid()::text;
+  v_now TIMESTAMPTZ := NOW();
+  v_reviewer_user_id TEXT;
+  v_missing_docs INTEGER := 0;
+  v_admin_ok INTEGER := 0;
+  v_acc_ok INTEGER := 0;
+BEGIN
+  IF p_status NOT IN ('verified', 'rejected') THEN
+    RAISE EXCEPTION 'Invalid verification status: %', p_status;
+  END IF;
+
+  IF v_uid IS NOT NULL AND v_uid <> '' AND NOT is_platform_superadmin(v_uid) THEN
+    RAISE EXCEPTION 'Only platform super administrators can review organization authenticity dossiers.';
+  END IF;
+
+  IF p_status = 'verified' THEN
+    SELECT
+      COUNT(*) FILTER (
+        WHERE role IN ('org_admin', 'superadmin')
+          AND NULLIF(TRIM(passport_photo_url), '') IS NOT NULL
+          AND NULLIF(TRIM(id_document_url), '') IS NOT NULL
+      ),
+      COUNT(*) FILTER (
+        WHERE role = 'accountant'
+          AND NULLIF(TRIM(passport_photo_url), '') IS NOT NULL
+          AND NULLIF(TRIM(id_document_url), '') IS NOT NULL
+      )
+    INTO v_admin_ok, v_acc_ok
+    FROM public.org_members
+    WHERE org_id = p_org_id AND status = 'active';
+
+    IF v_admin_ok < 1 OR v_acc_ok < 1 THEN
+      RAISE EXCEPTION 'Cannot approve: Both an Administrator and an Accountant must submit their passport photo and ID document first.';
+    END IF;
+  END IF;
+
+  -- Resolve reviewer's public.users.id safely so org_members.verified_by FK never fails
+  SELECT id INTO v_reviewer_user_id
+  FROM public.users
+  WHERE id = v_uid OR auth_user_id = v_uid
+  LIMIT 1;
+
+  PERFORM set_config('app.bypass_member_guard', 'true', true);
+
+  UPDATE public.organizations
+  SET
+    verification_status = p_status,
+    verified_at = CASE WHEN p_status = 'verified' THEN v_now ELSE NULL END,
+    verified_by = CASE WHEN p_status = 'verified' THEN p_reviewed_by ELSE NULL END,
+    verification_rejection_reason = CASE WHEN p_status = 'rejected' THEN COALESCE(NULLIF(TRIM(p_rejection_reason), ''), 'Verification requirements not met.') ELSE NULL END
+  WHERE id = p_org_id;
+
+  UPDATE public.org_members
+  SET
+    verification_status = CASE WHEN p_status = 'verified' THEN 'verified' ELSE 'rejected' END,
+    verified_at = CASE WHEN p_status = 'verified' THEN v_now ELSE NULL END,
+    verified_by = CASE WHEN p_status = 'verified' THEN v_reviewer_user_id ELSE NULL END
+  WHERE org_id = p_org_id
+    AND role IN ('org_admin', 'superadmin', 'accountant', 'manager')
+    AND (
+      (NULLIF(TRIM(passport_photo_url), '') IS NOT NULL AND NULLIF(TRIM(id_document_url), '') IS NOT NULL)
+      OR role IN ('org_admin', 'accountant')
+    );
+
+  IF p_status = 'verified' THEN
+    UPDATE public.referrals
+    SET status = 'verified'
+    WHERE referred_org_id = p_org_id;
+  END IF;
+
+  RETURN jsonb_build_object('success', true, 'org_id', p_org_id, 'status', p_status, 'reviewedAt', v_now);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.is_own_user_id(TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.submit_officer_verification(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.submit_org_verification_dossier(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.review_org_verification(TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+
+-- 8. Ensure Supabase Storage bucket and policies allow officer verification uploads & signed previews
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('impacto-files', 'impacto-files', false)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "impacto_files_authenticated_insert" ON storage.objects;
+CREATE POLICY "impacto_files_authenticated_insert" ON storage.objects
+FOR INSERT TO authenticated
+WITH CHECK (bucket_id IN ('impacto-files', 'documents', 'avatars', 'chat-attachments'));
+
+DROP POLICY IF EXISTS "impacto_files_authenticated_update" ON storage.objects;
+CREATE POLICY "impacto_files_authenticated_update" ON storage.objects
+FOR UPDATE TO authenticated
+USING (bucket_id IN ('impacto-files', 'documents', 'avatars', 'chat-attachments'));
+
+DROP POLICY IF EXISTS "impacto_files_authenticated_select" ON storage.objects;
+CREATE POLICY "impacto_files_authenticated_select" ON storage.objects
+FOR SELECT TO authenticated
+USING (bucket_id IN ('impacto-files', 'documents', 'avatars', 'chat-attachments'));
 
 
 

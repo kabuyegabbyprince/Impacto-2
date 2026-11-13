@@ -440,6 +440,14 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
         fromPeerId: peerId,
         userId
       });
+      const remainingActivePeers = Array.from(peers.values()).filter(
+        (p) => !p.peerId.startsWith("wait-")
+      );
+      if (remainingActivePeers.length === 0 && !peerId.startsWith("wait-")) {
+        if (orgId && activeMeets.has(orgId)) {
+          endActiveHostedMeet(orgId);
+        }
+      }
       if (peers.size === 0) {
         roomPeers.delete(targetRoomKey);
       }

@@ -514,6 +514,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                   amountRwf={itemType === "donation" ? undefined : amountRwf}
                   isDonation={itemType === "donation"}
                   itemName={itemName}
+                  compact
                 />
               </div>
 
@@ -845,6 +846,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                 amountRwf={itemType === "donation" ? undefined : amountRwf}
                 isDonation={itemType === "donation"}
                 itemName={itemName}
+                compact
               />
 
               <Input

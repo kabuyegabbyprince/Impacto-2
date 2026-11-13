@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { getOrgSubscriptionLifecycle } from "../lib/subscriptionMatrix";
+import { canAccessFeature } from "../lib/subscriptionMatrix";
 import {
   Building2,
   Plus,
@@ -103,13 +103,13 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
     return stored === "true";
   });
 
-  // Checkbox: "Allow the calendar to public page"
+  // Checkbox: "Allow the calendar to public page" (hidden / unchecked by default)
   const [showSpaceCalendarPublicly, setShowSpaceCalendarPublicly] = useState<boolean>(() => {
     if (activeOrg?.show_space_calendar_publicly !== undefined) {
       return Boolean(activeOrg.show_space_calendar_publicly);
     }
     const stored = localStorage.getItem(`org_show_space_calendar_${orgId}`);
-    return stored !== "false";
+    return stored === "true";
   });
 
   // Rentable Spaces catalog: default empty!
@@ -500,8 +500,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
   }, [requests]);
 
   const navigate = useNavigate();
-  const lifecycle = getOrgSubscriptionLifecycle(activeOrg);
-  const isProPlan = lifecycle.effectiveTier === "pro" || lifecycle.effectiveTier === "enterprise";
+  const isProPlan = canAccessFeature(activeOrg, "host_external_event").allowed;
 
   if (!isProPlan) {
     return (

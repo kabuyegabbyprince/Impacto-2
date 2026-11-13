@@ -232,17 +232,24 @@ export const PublicOrgPage: React.FC = () => {
     org?.has_rentable_spaces ||
     (org?.id && localStorage.getItem(`org_has_rentable_spaces_${org.id}`) === "true")
   );
-  const isEventHostingProAllowed = org ? canAccessFeature(org, "event_listings").allowed : false;
+  const isEventHostingProAllowed = org ? canAccessFeature(org, "host_external_event").allowed : false;
+  const storedAllowHosting = org?.id ? localStorage.getItem(`org_allow_hosting_events_${org.id}`) : null;
   const isEventHostingAllowed = Boolean(
-    (org as any)?.allow_hosting_events ??
-    (org?.id && localStorage.getItem(`org_allow_hosting_events_${org.id}`) === "true") ??
-    hasRentableSpaces
+    (org as any)?.allow_hosting_events !== undefined && (org as any)?.allow_hosting_events !== null
+      ? (org as any).allow_hosting_events
+      : storedAllowHosting !== null
+      ? storedAllowHosting === "true"
+      : hasRentableSpaces
   );
-  const showTrackReservationButton = isEventHostingProAllowed && isEventHostingAllowed;
-
+  const storedShowCal = org?.id ? localStorage.getItem(`org_show_space_calendar_${org.id}`) : null;
   const showSpaceCalendar = Boolean(
-    org?.show_space_calendar_publicly ?? org?.show_calendar_publicly ?? true
+    org?.show_space_calendar_publicly !== undefined && org?.show_space_calendar_publicly !== null
+      ? org.show_space_calendar_publicly
+      : storedShowCal !== null
+      ? storedShowCal === "true"
+      : false
   );
+  const showTrackReservationButton = showSpaceCalendar && isEventHostingProAllowed && isEventHostingAllowed;
 
   const handleSaveRoom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1045,7 +1052,7 @@ export const PublicOrgPage: React.FC = () => {
               )}
             </button>
 
-            {hasRentableSpaces && showSpaceCalendar && (
+            {hasRentableSpaces && showSpaceCalendar && isEventHostingProAllowed && (
               <button
                 onClick={() => setActiveTab("calendar")}
                 className={`pb-3 text-sm font-bold transition-all relative ${
@@ -1428,7 +1435,7 @@ export const PublicOrgPage: React.FC = () => {
               )}
 
               {/* TAB 6: FACILITIES & CALENDAR */}
-              {activeTab === "calendar" && (org?.show_space_calendar_publicly ?? org?.show_calendar_publicly !== false) && (
+              {activeTab === "calendar" && showSpaceCalendar && isEventHostingProAllowed && (
                 <div className="bg-white dark:bg-slate-900 border border-gray-200/80 dark:border-slate-800 rounded-2xl p-6 sm:p-7 shadow-xs flex flex-col gap-6">
                   <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
                     <div>
@@ -1714,37 +1721,37 @@ export const PublicOrgPage: React.FC = () => {
             {/* ==========================================
                 RIGHT COLUMN (Quick Info & MoMo / 35% width)
                 ========================================== */}
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-6 min-w-0">
               {/* Card 1: Quick Info (Single Official Verification Link) */}
-              <div className="bg-white dark:bg-slate-900 border border-gray-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col gap-4">
+              <div className="bg-white dark:bg-slate-900 border border-gray-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col gap-4 min-w-0 overflow-hidden">
                 <h3 className="text-base font-extrabold font-display text-gray-950 dark:text-white">
                   Quick Info
                 </h3>
 
-                <div className="flex flex-col gap-3 text-xs text-gray-700 dark:text-slate-300">
+                <div className="flex flex-col gap-3 text-xs text-gray-700 dark:text-slate-300 min-w-0">
                   {/* Category */}
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <BookOpen className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span className="font-semibold text-gray-900 dark:text-white">
+                    <span className="font-semibold text-gray-900 dark:text-white break-words min-w-0">
                       {org.org_category || "Social Action"}
                     </span>
                   </div>
 
                   {/* Location */}
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <MapPin className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span>
+                    <span className="break-words min-w-0">
                       {org.location_name ||
                         (org.district ? `${org.district}, ${org.country || "Rwanda"}` : "Kigali, Rwanda")}
                     </span>
                   </div>
 
                   {/* Public Slug URL */}
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <Globe className="h-4 w-4 text-emerald-600 shrink-0" />
                     <span
                       onClick={() => handleCopy(window.location.href, "Public URL")}
-                      className="font-mono text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                      className="font-mono text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer break-all min-w-0"
                       title="Click to copy public portal link"
                     >
                       impacto.rw/@{org.slug}
@@ -1821,12 +1828,12 @@ export const PublicOrgPage: React.FC = () => {
               </div>
 
               {/* Card 2: Community Support & Donations */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col gap-4 text-slate-900 dark:text-slate-100">
-                <div className="flex items-center gap-3">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col gap-4 text-slate-900 dark:text-slate-100 min-w-0 overflow-hidden">
+                <div className="flex items-center gap-3 min-w-0">
                   <div className="h-9 w-9 rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
                     <Heart className="h-4.5 w-4.5" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <h3 className="text-base font-bold font-display text-slate-900 dark:text-white">
                       Community Support & Donations
                     </h3>
@@ -1838,42 +1845,34 @@ export const PublicOrgPage: React.FC = () => {
 
                 {/* Direct USSD Payment Code and Phone to Pay */}
                 {(codeUssd || phoneUssd) && (
-                  <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+                  <div className="w-full grid grid-cols-1 gap-3 text-left min-w-0">
                     {/* Option 1: MoMo Pay Merchant Code */}
                     {codeUssd ? (
-                      <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-col justify-between gap-2.5">
-                        <div>
-                          <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
+                      <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-col justify-between gap-2.5 min-w-0 overflow-hidden">
+                        <div className="min-w-0">
+                          <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400 mb-1.5">
                             <span className="flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-200">
-                              <Store className="h-3.5 w-3.5 text-slate-500" /> Merchant Code
+                              <Store className="h-3.5 w-3.5 text-slate-500 shrink-0" /> Merchant Code
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(donationMCode, "Merchant Code")}
-                              className="font-mono text-xs text-slate-700 dark:text-slate-300 hover:text-emerald-600 cursor-pointer"
-                              title="Click to copy code"
-                            >
-                              {copiedField === "Merchant Code" ? "Copied" : donationMCode}
-                            </button>
                           </div>
-                          <div className="font-mono text-xs text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 select-all">
+                          <div className="font-mono text-xs text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 select-all break-all leading-relaxed overflow-hidden min-w-0">
                             <span>{codeUssd}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 pt-1">
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
                           <button
                             type="button"
                             onClick={() => handleCopy(codeUssd, "Merchant USSD Code")}
-                            className="flex-1 py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-1 cursor-pointer"
+                            className="flex-1 min-w-0 whitespace-nowrap py-1.5 px-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-1.5 cursor-pointer"
                           >
-                            {copiedField === "Merchant USSD Code" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                            {copiedField === "Merchant USSD Code" ? <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
                             <span>{copiedField === "Merchant USSD Code" ? "Copied" : "Copy USSD"}</span>
                           </button>
                           <a
                             href={`tel:${encodeURIComponent(codeUssd)}`}
-                            className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer"
+                            className="whitespace-nowrap shrink-0 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer"
                           >
-                            <Smartphone className="h-3.5 w-3.5" />
+                            <Smartphone className="h-3.5 w-3.5 shrink-0" />
                             <span>Dial</span>
                           </a>
                         </div>
@@ -1882,39 +1881,31 @@ export const PublicOrgPage: React.FC = () => {
 
                     {/* Option 2: Pay to Phone Number */}
                     {phoneUssd ? (
-                      <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-col justify-between gap-2.5">
-                        <div>
-                          <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
+                      <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-col justify-between gap-2.5 min-w-0 overflow-hidden">
+                        <div className="min-w-0">
+                          <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400 mb-1.5">
                             <span className="flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-200">
-                              <PhoneCall className="h-3.5 w-3.5 text-slate-500" /> Phone Number
+                              <PhoneCall className="h-3.5 w-3.5 text-slate-500 shrink-0" /> Phone Number
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(donationPhone, "Phone Number")}
-                              className="font-mono text-xs text-slate-700 dark:text-slate-300 hover:text-emerald-600 cursor-pointer"
-                              title="Click to copy phone number"
-                            >
-                              {copiedField === "Phone Number" ? "Copied" : donationPhone}
-                            </button>
                           </div>
-                          <div className="font-mono text-xs text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 select-all">
+                          <div className="font-mono text-xs text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 select-all break-all leading-relaxed overflow-hidden min-w-0">
                             <span>{phoneUssd}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 pt-1">
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
                           <button
                             type="button"
                             onClick={() => handleCopy(phoneUssd, "Phone USSD Code")}
-                            className="flex-1 py-1.5 px-2 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-1 cursor-pointer"
+                            className="flex-1 min-w-0 whitespace-nowrap py-1.5 px-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-1.5 cursor-pointer"
                           >
-                            {copiedField === "Phone USSD Code" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                            {copiedField === "Phone USSD Code" ? <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
                             <span>{copiedField === "Phone USSD Code" ? "Copied" : "Copy USSD"}</span>
                           </button>
                           <a
                             href={`tel:${encodeURIComponent(phoneUssd)}`}
-                            className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer"
+                            className="whitespace-nowrap shrink-0 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer"
                           >
-                            <Smartphone className="h-3.5 w-3.5" />
+                            <Smartphone className="h-3.5 w-3.5 shrink-0" />
                             <span>Dial</span>
                           </a>
                         </div>
@@ -2537,20 +2528,20 @@ export const PublicOrgPage: React.FC = () => {
                     return (
                       <div
                         key={req.id}
-                        className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-xs space-y-3"
+                        className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-xs space-y-3 min-w-0 overflow-hidden"
                       >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
-                          <div>
-                            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5 min-w-0">
+                          <div className="min-w-0">
+                            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase break-all block">
                               Booking Ref: #{req.id}
                             </span>
-                            <h4 className="text-sm font-extrabold text-slate-900 dark:text-white leading-snug">
+                            <h4 className="text-sm font-extrabold text-slate-900 dark:text-white leading-snug break-words">
                               {req.space_name} — {req.title}
                             </h4>
                           </div>
 
                           {/* Order Status Badge */}
-                          <div>
+                          <div className="shrink-0">
                             {isPaid ? (
                               <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
                                 <CheckCircle2 className="h-3 w-3" />
@@ -2574,20 +2565,20 @@ export const PublicOrgPage: React.FC = () => {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
-                          <div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300 min-w-0">
+                          <div className="min-w-0">
                             <span className="text-slate-400 block text-[10px] uppercase font-bold">Name on Receipt:</span>
-                            <span className="font-bold text-slate-900 dark:text-white">{req.receipt_name || req.requester_name || req.reserved_by}</span>
+                            <span className="font-bold text-slate-900 dark:text-white break-words block">{req.receipt_name || req.requester_name || req.reserved_by}</span>
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <span className="text-slate-400 block text-[10px] uppercase font-bold">Reserved Date & Time:</span>
-                            <span className="font-semibold">{req.date} ({req.start_time || "09:00"} - {req.end_time || "12:00"})</span>
+                            <span className="font-semibold break-words block">{req.date} ({req.start_time || "09:00"} - {req.end_time || "12:00"})</span>
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <span className="text-slate-400 block text-[10px] uppercase font-bold">Contact Phone:</span>
-                            <span className="font-mono">{req.contact_phone || req.requester_phone || "N/A"}</span>
+                            <span className="font-mono break-all block">{req.contact_phone || req.requester_phone || "N/A"}</span>
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <span className="text-slate-400 block text-[10px] uppercase font-bold">Total Space Rate:</span>
                             <span className="font-bold text-emerald-600 font-mono">RWF {Number(req.cost || 0).toLocaleString()}</span>
                           </div>

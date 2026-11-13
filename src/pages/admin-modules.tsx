@@ -3211,7 +3211,7 @@ export const GrantsTracker: React.FC<GrantsTrackerProps> = ({ defaultTab = "gran
               onClick={() => {
                 if (!isOrgVerified) {
                   addToast(
-                    "To get grant funding your organization must be officially validated. Please submit your registration certificate to proceed.",
+                    "To track or apply for grant funding, your organization must be officially verified (Admin & Accountant identity documents). Please submit your verification dossier to proceed.",
                     "warning"
                   );
                   setOpenVerificationModal(true);
@@ -3261,8 +3261,8 @@ export const GrantsTracker: React.FC<GrantsTrackerProps> = ({ defaultTab = "gran
               </div>
               <p className="text-xs text-gray-600 dark:text-slate-300 mt-1 max-w-2xl leading-relaxed">
                 {isPendingReview
-                  ? "Your legal registration documents are currently under review by compliance officers. Once verified, strategic grant applications and disbursement records will be fully unlocked."
-                  : "Institutional funders and international grantmakers require legal registration validation. Validate your organization with your RDB, RCA, or RGB certificate to apply for and log strategic grants."}
+                  ? "Your leadership verification documents are currently under review by Super Admin compliance reviewers. Once verified, strategic grant applications and disbursement records will be fully unlocked."
+                  : "Institutional funders and grantmakers require official platform authenticity verification. Complete your Administrator and Accountant identity dossier (Passport Photo + Government ID) to earn the Green Tick and log strategic grants."}
               </p>
             </div>
           </div>

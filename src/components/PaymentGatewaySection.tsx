@@ -199,21 +199,21 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
           </div>
 
           {resolvedMerchantCode && (
-            <div className="bg-white dark:bg-slate-950 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
-              <div className="min-w-0">
+            <div className="bg-white dark:bg-slate-950 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 min-w-0 overflow-hidden">
+              <div className="min-w-0 flex-1">
                 <span className="text-[10px] uppercase font-mono text-slate-400 block">
                   {isPlatform ? "Platform Merchant Code" : "Org Merchant / Collection Code"}
                 </span>
-                <span className="font-mono text-sm font-bold text-slate-900 dark:text-white tabular-nums">
+                <span className="font-mono text-sm font-bold text-slate-900 dark:text-white tabular-nums break-all block">
                   {resolvedMerchantCode}
                 </span>
               </div>
               <button
                 type="button"
                 onClick={handleCopyCode}
-                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold transition flex items-center gap-1 shrink-0 cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold transition flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer"
               >
-                {copiedCode ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                {copiedCode ? <Check className="h-3.5 w-3.5 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
                 <span>{copiedCode ? "Copied" : "Copy Code"}</span>
               </button>
             </div>
@@ -261,6 +261,7 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
           amountRwf={amountRwf}
           itemName={itemName}
           onRequestAdmin={onRequestAdmin}
+          compact
         />
       )}
 

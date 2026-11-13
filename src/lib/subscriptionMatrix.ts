@@ -74,6 +74,7 @@ export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierDefinition> = {
       "Up to 100 active members",
       "1 GB secure cloud storage",
       "All Free Forever features with expanded capacity",
+      "Events Access (Interactive Calendar, Attendance & Internal Events)",
       "Strategic Goals Tracker (Full Create & Edit)",
       "Eligible for $4/mo Add-On Feature Packages (+20 members each)",
       "Safe Read-Only Data Preservation (Zero deletion)"
@@ -619,6 +620,7 @@ export type ImpactFeatureKey =
   | "basic_chat"
   | "announcements"
   | "event_listings"
+  | "host_external_event"
   | "video_call"
   | "task_assignment"
   | "dues_charges"
@@ -670,7 +672,8 @@ export function canAccessFeature(
     member_directory: "free",
     basic_chat: "free",
     announcements: "free",
-    event_listings: "pro",
+    event_listings: "starter",
+    host_external_event: "pro",
     video_call: "pro",
     task_assignment: "growth",
     dues_charges: "free",

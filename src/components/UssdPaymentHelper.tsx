@@ -24,6 +24,7 @@ export interface UssdPaymentHelperProps {
   onRequestAdmin?: () => void;
   className?: string;
   isDonation?: boolean;
+  compact?: boolean;
 }
 
 /**
@@ -99,7 +100,8 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
   itemName = "Payment",
   onRequestAdmin,
   className = "",
-  isDonation = false
+  isDonation = false,
+  compact = false
 }) => {
   const { addToast } = useToast();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -206,12 +208,12 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
             )}
           </div>
 
-          <div className={`grid grid-cols-1 ${activeCount > 1 ? "md:grid-cols-2" : ""} gap-3 w-full min-w-0`}>
+          <div className={`grid grid-cols-1 ${!compact && activeCount > 1 ? "md:grid-cols-2" : ""} gap-3 w-full min-w-0`}>
             {/* 1. MoMo Pay Merchant Code (Primary when code is set) */}
             {cleanMCode && (
-              <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 flex flex-col justify-between gap-3 w-full min-w-0 shadow-2xs">
+              <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 flex flex-col justify-between gap-3 w-full min-w-0 shadow-2xs overflow-hidden">
                 <div className="space-y-2 min-w-0">
-                  <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
                     <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 shrink-0">
                       <Store className="h-4 w-4 text-amber-500 shrink-0" /> MTN MoMo Code
                     </span>
@@ -239,7 +241,7 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
 
                   {merchantUssdWithAmount && (
                     <div className="text-[11px] text-slate-500 font-mono flex items-center justify-between gap-2 min-w-0">
-                      <span className="truncate min-w-0">Base: <span className="select-all text-slate-700 dark:text-slate-300 font-semibold">{merchantUssdBase}</span></span>
+                      <span className="break-all min-w-0">Base: <span className="select-all text-slate-700 dark:text-slate-300 font-semibold">{merchantUssdBase}</span></span>
                       <button
                         type="button"
                         onClick={() => copyToClipboard(merchantUssdBase, "merchant_base", "Base merchant code")}
@@ -255,14 +257,14 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
                   <button
                     type="button"
                     onClick={() => copyToClipboard(merchantUssdPrimary, "merchant", "USSD code")}
-                    className="flex-1 min-h-[38px] min-w-[110px] py-1.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200/80 dark:border-slate-700"
+                    className="flex-1 min-h-[38px] min-w-0 whitespace-nowrap py-1.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200/80 dark:border-slate-700"
                   >
                     {copiedKey === "merchant" ? <Check className="h-4 w-4 text-emerald-600 shrink-0" /> : <Copy className="h-4 w-4 shrink-0" />}
                     <span>{copiedKey === "merchant" ? "Copied" : "Copy USSD"}</span>
                   </button>
                   <a
                     href={`tel:${encodeURIComponent(merchantUssdPrimary)}`}
-                    className="min-h-[38px] min-w-[80px] py-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+                    className="min-h-[38px] whitespace-nowrap shrink-0 py-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
                   >
                     <Smartphone className="h-4 w-4 shrink-0" />
                     <span>Dial</span>
@@ -273,9 +275,9 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
 
             {/* 2. Pay on MTN Phone Number */}
             {cleanNum && (
-              <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 flex flex-col justify-between gap-3 w-full min-w-0 shadow-2xs">
+              <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 flex flex-col justify-between gap-3 w-full min-w-0 shadow-2xs overflow-hidden">
                 <div className="space-y-2 min-w-0">
-                  <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
                     <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 shrink-0">
                       <PhoneCall className="h-4 w-4 text-yellow-500 shrink-0" /> MTN Phone
                     </span>
@@ -303,7 +305,7 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
 
                   {p2pUssdWithAmount && (
                     <div className="text-[11px] text-slate-500 font-mono flex items-center justify-between gap-2 min-w-0">
-                      <span className="truncate min-w-0">Base: <span className="select-all text-slate-700 dark:text-slate-300 font-semibold">{p2pUssdBase}</span></span>
+                      <span className="break-all min-w-0">Base: <span className="select-all text-slate-700 dark:text-slate-300 font-semibold">{p2pUssdBase}</span></span>
                       <button
                         type="button"
                         onClick={() => copyToClipboard(p2pUssdBase, "p2p_base", "Base phone code")}
@@ -319,14 +321,14 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
                   <button
                     type="button"
                     onClick={() => copyToClipboard(p2pUssdPrimary, "p2p", "USSD code")}
-                    className="flex-1 min-h-[38px] min-w-[110px] py-1.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200/80 dark:border-slate-700"
+                    className="flex-1 min-h-[38px] min-w-0 whitespace-nowrap py-1.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200/80 dark:border-slate-700"
                   >
                     {copiedKey === "p2p" ? <Check className="h-4 w-4 text-emerald-600 shrink-0" /> : <Copy className="h-4 w-4 shrink-0" />}
                     <span>{copiedKey === "p2p" ? "Copied" : "Copy USSD"}</span>
                   </button>
                   <a
                     href={`tel:${encodeURIComponent(p2pUssdPrimary)}`}
-                    className="min-h-[38px] min-w-[80px] py-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+                    className="min-h-[38px] whitespace-nowrap shrink-0 py-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
                   >
                     <Smartphone className="h-4 w-4 shrink-0" />
                     <span>Dial</span>
@@ -337,9 +339,9 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
 
             {/* 3. Pay on Airtel Money Phone Number */}
             {cleanAirtel && (
-              <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 flex flex-col justify-between gap-3 w-full min-w-0 shadow-2xs">
+              <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 flex flex-col justify-between gap-3 w-full min-w-0 shadow-2xs overflow-hidden">
                 <div className="space-y-2 min-w-0">
-                  <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
                     <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 shrink-0">
                       <PhoneCall className="h-4 w-4 text-rose-500 shrink-0" /> Airtel Money
                     </span>
@@ -367,7 +369,7 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
 
                   {airtelUssdWithAmount && (
                     <div className="text-[11px] text-slate-500 font-mono flex items-center justify-between gap-2 min-w-0">
-                      <span className="truncate min-w-0">Base: <span className="select-all text-slate-700 dark:text-slate-300 font-semibold">{airtelUssdBase}</span></span>
+                      <span className="break-all min-w-0">Base: <span className="select-all text-slate-700 dark:text-slate-300 font-semibold">{airtelUssdBase}</span></span>
                       <button
                         type="button"
                         onClick={() => copyToClipboard(airtelUssdBase, "airtel_base", "Base Airtel code")}
@@ -383,14 +385,14 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
                   <button
                     type="button"
                     onClick={() => copyToClipboard(airtelUssdPrimary, "airtel", "USSD code")}
-                    className="flex-1 min-h-[38px] min-w-[110px] py-1.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200/80 dark:border-slate-700"
+                    className="flex-1 min-h-[38px] min-w-0 whitespace-nowrap py-1.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200/80 dark:border-slate-700"
                   >
                     {copiedKey === "airtel" ? <Check className="h-4 w-4 text-emerald-600 shrink-0" /> : <Copy className="h-4 w-4 shrink-0" />}
                     <span>{copiedKey === "airtel" ? "Copied" : "Copy USSD"}</span>
                   </button>
                   <a
                     href={`tel:${encodeURIComponent(airtelUssdPrimary)}`}
-                    className="min-h-[38px] min-w-[80px] py-1.5 px-3.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+                    className="min-h-[38px] whitespace-nowrap shrink-0 py-1.5 px-3.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
                   >
                     <Smartphone className="h-4 w-4 shrink-0" />
                     <span>Dial</span>

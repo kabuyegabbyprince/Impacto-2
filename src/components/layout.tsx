@@ -243,15 +243,28 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
     ...(isPrivilegedRole ? [
       ...(notificationSends || []).map((ns) => {
         const lower = (ns.body_text || "").toLowerCase();
-        const isConfirmed = lower.includes("confirmed") || lower.includes("cleared") || lower.includes("verified") || lower.includes("approved");
+        const isVerification = lower.includes("verification") || lower.includes("dossier");
+        const isConfirmed = !isVerification && (lower.includes("confirmed") || lower.includes("cleared") || lower.includes("verified") || lower.includes("approved"));
         const isRejected = lower.includes("rejected");
         return {
           id: "notif-" + ns.id,
           type: isConfirmed ? ("payment_success" as const) : isRejected ? ("payment_rejected" as const) : ("notification" as const),
-          title: isConfirmed ? "Payment / Subscription Approved" : isRejected ? "Payment Proof Rejected" : lower.includes("submitted") ? "Payment Slip Submitted" : "Cooperative Update",
+          title: isVerification
+            ? "Verification Document Reminder"
+            : isConfirmed
+            ? "Payment / Subscription Approved"
+            : isRejected
+            ? "Payment Proof Rejected"
+            : lower.includes("submitted")
+            ? "Payment Slip Submitted"
+            : "Cooperative Update",
           summary: ns.body_text || "Notice dispatched",
           time: ns.created_at || new Date().toISOString(),
-          path: lower.includes("subscription") || lower.includes("package") ? "/dashboard/settings?tab=subscription" : "/dashboard/fees",
+          path: isVerification
+            ? "/dashboard"
+            : lower.includes("subscription") || lower.includes("package")
+            ? "/dashboard/settings?tab=subscription"
+            : "/dashboard/fees",
         };
       }),
       ...(orgSubPayments || []).filter(p => p.status === "approved" || p.status === "rejected").map((p) => {
@@ -1434,18 +1447,18 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
             const activeDockLabel = merchantUssdPrimary ? "MoMo" : "Phone";
 
             return (
-              <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end flex-wrap">
+              <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end flex-wrap min-w-0">
                 {activeDockUssd ? (
-                  <div className="flex items-center gap-1.5 bg-white/10 dark:bg-white/5 border border-white/10 rounded-lg px-2.5 py-1 text-xs font-mono font-medium">
-                    <span className="text-slate-300">{activeDockLabel}:</span>
-                    <span className="text-white select-all">{activeDockUssd}</span>
+                  <div className="flex items-center gap-1.5 bg-white/10 dark:bg-white/5 border border-white/10 rounded-lg px-2.5 py-1 text-xs font-mono font-medium min-w-0 max-w-full">
+                    <span className="text-slate-300 shrink-0">{activeDockLabel}:</span>
+                    <span className="text-white select-all break-all min-w-0">{activeDockUssd}</span>
                     <button
                       type="button"
                       onClick={() => {
                         navigator.clipboard?.writeText(activeDockUssd);
                         addToast(`USSD Code copied: ${activeDockUssd}`, "success");
                       }}
-                      className="hover:text-amber-300 p-0.5 ml-1 text-slate-300 cursor-pointer"
+                      className="hover:text-amber-300 p-0.5 ml-1 text-slate-300 cursor-pointer shrink-0"
                       title="Copy USSD"
                     >
                       <Copy className="h-3 w-3" />

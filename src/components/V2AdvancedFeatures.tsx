@@ -1559,7 +1559,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       {/* ========================================================================= */}
       {showCheckout && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 max-w-md w-full border border-gray-200 dark:border-gray-800 shadow-2xl">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-200 dark:border-gray-800 shadow-2xl">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-2">
               <CreditCard className="h-5 w-5 text-emerald-600" /> Mobile Money Payment Gateway
             </h3>
@@ -1578,6 +1578,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 recipientName={platformSettings?.payment_name}
                 amountRwf={selectedPackage ? selectedPackage.price : 45000}
                 itemName={selectedPackage ? `Tool Package: ${selectedPackage.name}` : "Pro Tier Upgrade"}
+                compact
               />
             </div>
 

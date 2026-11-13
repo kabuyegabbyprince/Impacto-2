@@ -20,7 +20,8 @@ import {
   Layers,
   Calendar as CalendarIcon,
   HelpCircle,
-  X
+  X,
+  Lock
 } from "lucide-react";
 import { Event as ImpactEvent, OrgMember } from "../types";
 import { useCurrencyStore } from "../store/currencyStore";
@@ -28,6 +29,8 @@ import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
 import { useToast } from "./Toast";
 import { RentableSpacesManager } from "./RentableSpacesManager";
+import { canAccessFeature } from "../lib/subscriptionMatrix";
+import { PlanGatedView } from "./PlanGatedView";
 
 export interface SpaceEntity {
   id: string;
@@ -139,15 +142,20 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
   const rawSubTab = activeSubTab !== undefined ? activeSubTab : internalSubTab;
   const subTab = rawSubTab;
 
-  // Rentable spaces master toggle
-  const hasRentableSpaces = Boolean(
-    activeOrg?.has_rentable_spaces ||
-    (orgId && localStorage.getItem(`org_has_rentable_spaces_${orgId}`) === "true") ||
-    subTab === "spaces"
-  );
+  // Host External Event & Rentable Spaces are strictly Pro Plan only
+  const canHostExternalEvents = canAccessFeature(activeOrg, "host_external_event").allowed;
+
+  // Rentable spaces master toggle (requires Pro Plan)
+  const hasRentableSpaces =
+    canHostExternalEvents &&
+    Boolean(
+      activeOrg?.has_rentable_spaces ||
+      (orgId && localStorage.getItem(`org_has_rentable_spaces_${orgId}`) === "true") ||
+      subTab === "spaces"
+    );
 
   const setSubTab = (tab: "calendar" | "spaces" | "agenda") => {
-    if (tab === "spaces" && orgId) {
+    if (tab === "spaces" && canHostExternalEvents && orgId) {
       localStorage.setItem(`org_has_rentable_spaces_${orgId}`, "true");
       if (activeOrg) {
         activeOrg.has_rentable_spaces = true;
@@ -436,7 +444,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
             <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
             <span>Interactive Calendar</span>
           </button>
-          {hasRentableSpaces && (
+          {canHostExternalEvents && hasRentableSpaces && (
             <button
               type="button"
               onClick={() => setSubTab("spaces")}
@@ -464,21 +472,33 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
           </button>
         </div>
 
-        {/* Quick Actions & Host External Event */}
+        {/* Quick Actions & Host External Event (Pro Plan Only) */}
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => {
-              setSubTab("spaces");
-              setOpenAddSpaceModal(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
-          >
-            <Plus className="h-3.5 w-3.5 shrink-0" />
-            <span>Host External Event</span>
-          </button>
+          {canHostExternalEvents ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSubTab("spaces");
+                setOpenAddSpaceModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+            >
+              <Plus className="h-3.5 w-3.5 shrink-0" />
+              <span>Host External Event</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSubTab("spaces")}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
+              title="Hosting external events requires the Pro Plan"
+            >
+              <Lock className="h-3.5 w-3.5 shrink-0" />
+              <span>Host External Event (Pro)</span>
+            </button>
+          )}
 
-          {hasRentableSpaces && spaces.length > 0 && (
+          {canHostExternalEvents && hasRentableSpaces && spaces.length > 0 && (
             <>
               <button
                 type="button"
@@ -865,16 +885,23 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
         </div>
       )}
 
-      {/* VIEW B: RENTABLE SPACES, 24H SCHEDULE, BOOKING APPROVALS & EVENT TO-DOS */}
+      {/* VIEW B: RENTABLE SPACES, 24H SCHEDULE, BOOKING APPROVALS & EVENT TO-DOS (PRO PLAN ONLY) */}
       {subTab === "spaces" && (
-        <RentableSpacesManager
-          activeOrg={activeOrg}
-          isAdmin={isAdmin}
-          onEventCreated={(ev) => {
-            if (onSelectEvent) onSelectEvent(ev);
-          }}
-          onSwitchToCalendar={() => setSubTab("calendar")}
-        />
+        <PlanGatedView
+          featureKey="host_external_event"
+          requiredTier="pro"
+          featureName="Host External Events & Facility Space Lending"
+          customMessage="Starter plans include full access to organization events and interactive calendars. Hosting external events and renting out organization spaces is available exclusively on the Pro Plan."
+        >
+          <RentableSpacesManager
+            activeOrg={activeOrg}
+            isAdmin={isAdmin}
+            onEventCreated={(ev) => {
+              if (onSelectEvent) onSelectEvent(ev);
+            }}
+            onSwitchToCalendar={() => setSubTab("calendar")}
+          />
+        </PlanGatedView>
       )}
 
       {/* VIEW C: AGENDA ROSTER & SESSIONS (Standard view with quick filters) */}

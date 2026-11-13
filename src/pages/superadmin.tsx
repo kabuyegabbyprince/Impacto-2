@@ -83,7 +83,8 @@ import {
   useCreatePromoter,
   useUpdatePromoter,
   useDeletePromoter,
-  useMembers
+  useMembers,
+  usePlatformVerificationData
 } from "../hooks/useImpactoData";
 import { Promoter } from "../types";
 import { useAuthStore } from "../store/authStore";
@@ -91,6 +92,8 @@ import { Button, Input, Card, Badge, Table, Modal, EmptyState, Avatar, getLucide
 import { useToast } from "../components/Toast";
 import { notifyPlanOrPackageGranted } from "../lib/crossTabSync";
 import { MockDB } from "../lib/mockData";
+import { isSupabaseConfigured } from "../lib/supabase";
+import { ResolvedImage } from "../components/ResolvedMedia";
 
 const formatDuration = (startStr: string, endStr?: string) => {
   if (!endStr) return "N/A";
@@ -298,6 +301,7 @@ export const SuperadminDashboard: React.FC = () => {
   const [fullDocPreviewUrl, setFullDocPreviewUrl] = useState<string | null>(null);
 
   const reviewOrgVerificationMutation = useReviewOrgVerification();
+  const { data: verificationData, refetch: refetchVerificationData } = usePlatformVerificationData(activeTab === "verifications");
   const { data: allReferrals = [] } = useReferrals();
   const { data: promoters = [] } = usePromoters();
   const createPromoterMutation = useCreatePromoter();
@@ -1924,8 +1928,17 @@ export const SuperadminDashboard: React.FC = () => {
 
         {/* 3B. ORGANIZATION AUTHENTICITY & VERIFICATIONS AUDIT TAB */}
         {activeTab === "verifications" && (() => {
-          const allMembers = MockDB.getMembers();
-          const allUsers = MockDB.getUsers();
+          const allMembers =
+            verificationData?.officers ??
+            (isSupabaseConfigured ? [] : MockDB.getMembers().filter((m) => m.role !== "member"));
+          const allUsers =
+            verificationData?.users ??
+            (isSupabaseConfigured ? [] : MockDB.getUsers());
+
+          const resolveOfficerUser = (m: any) =>
+            m?.user ||
+            allUsers.find((u: any) => u.id === m?.user_id || u.auth_user_id === m?.user_id) ||
+            null;
 
           // Calculate stats
           const totalOrgs = orgs.length;
@@ -1950,11 +1963,30 @@ export const SuperadminDashboard: React.FC = () => {
           });
 
           // Members for the currently selected org to review
-          const reviewingMembers = reviewingOrg ? allMembers.filter((m) => m.org_id === reviewingOrg.id) : [];
-          const reviewingAdmin = reviewingMembers.find((m) => m.role === "org_admin" || m.role === "superadmin") || reviewingMembers[0];
-          const reviewingAccountant = reviewingMembers.find((m) => m.role === "accountant");
-          const reviewingAdminUser = reviewingAdmin ? allUsers.find((u) => u.id === reviewingAdmin.user_id) : null;
-          const reviewingAccountantUser = reviewingAccountant ? allUsers.find((u) => u.id === reviewingAccountant.user_id) : null;
+          const reviewingMembers = reviewingOrg
+            ? allMembers.filter(
+                (m: any) =>
+                  m.org_id === reviewingOrg.id &&
+                  m.role !== "member" &&
+                  m.status !== "rejected" &&
+                  m.status !== "suspended"
+              )
+            : [];
+          const reviewingAdmin =
+            reviewingMembers.find((m: any) => m.role === "org_admin" || m.role === "superadmin") ||
+            reviewingMembers[0];
+          const reviewingAccountant = reviewingMembers.find((m: any) => m.role === "accountant");
+          const reviewingExtraOfficers = reviewingMembers.filter(
+            (m: any) => m.id !== reviewingAdmin?.id && m.id !== reviewingAccountant?.id
+          );
+          const reviewingAdminUser = resolveOfficerUser(reviewingAdmin);
+          const reviewingAccountantUser = resolveOfficerUser(reviewingAccountant);
+          const canReviewingApprove = Boolean(
+            reviewingAdmin?.passport_photo_url &&
+              reviewingAdmin?.id_document_url &&
+              reviewingAccountant?.passport_photo_url &&
+              reviewingAccountant?.id_document_url
+          );
 
           const handleApproveVerification = async (orgId: string, orgName: string) => {
             try {
@@ -1962,11 +1994,13 @@ export const SuperadminDashboard: React.FC = () => {
                 org_id: orgId,
                 status: "verified",
                 reviewed_by: user?.full_name || "Platform Auditor",
+                reviewed_by_user_id: user?.id,
               });
               addToast(`Green Tick granted to ${orgName}! Organization is now authentic verified.`, "success");
               setReviewingOrg(null);
               setShowRejectForm(false);
               refetch();
+              refetchVerificationData();
             } catch (err: any) {
               addToast(err?.message || "Failed to grant verification", "error");
             }
@@ -1982,20 +2016,21 @@ export const SuperadminDashboard: React.FC = () => {
                 org_id: orgId,
                 status: "rejected",
                 reviewed_by: user?.full_name || "Platform Auditor",
+                reviewed_by_user_id: user?.id,
                 rejection_reason: reviewRejectReason.trim(),
               });
-              addToast(`Verification dossier for ${orgName} rejected. Notification recorded.`, "info");
+              addToast(`Verification dossier for ${orgName} rejected. Feedback saved.`, "info");
               setReviewingOrg(null);
               setShowRejectForm(false);
               setReviewRejectReason("");
               refetch();
+              refetchVerificationData();
             } catch (err: any) {
               addToast(err?.message || "Failed to reject verification", "error");
             }
           };
 
           const handleSimulateDossier = (orgItem: any) => {
-            // Quick simulation helper so auditor can test review and approve easily
             const mems = MockDB.getMembers();
             let adminM = mems.find((m) => m.org_id === orgItem.id && (m.role === "org_admin" || m.role === "superadmin"));
             if (!adminM) {
@@ -2045,6 +2080,7 @@ export const SuperadminDashboard: React.FC = () => {
             localStorage.setItem(`impacto_org_verification_status_${orgItem.id}`, "pending_review");
             addToast(`Submitted test Admin & Accountant verification credentials for ${orgItem.name}!`, "success");
             refetch();
+            refetchVerificationData();
           };
 
           return (
@@ -2064,24 +2100,26 @@ export const SuperadminDashboard: React.FC = () => {
                     All organizations in the platform start with status <span className="font-semibold text-slate-700 dark:text-slate-300">Unverified</span>. To receive the official <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Green Tick</span>, authenticity verification is required for all key governance roles: <span className="font-bold text-gray-800 dark:text-gray-200">Admin</span> and <span className="font-bold text-gray-800 dark:text-gray-200">Accountant</span> must both submit their passport photo and National ID or Passport. Normal members do not require verification.
                   </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    onClick={() => {
-                      const firstUnverified = orgs.find((o: any) => !o.verification_status || o.verification_status === "unverified");
-                      if (firstUnverified) {
-                        handleSimulateDossier(firstUnverified);
-                      } else if (orgs.length > 0) {
-                        handleSimulateDossier(orgs[0]);
-                      } else {
-                        addToast("No organization found to simulate.", "info");
-                      }
-                    }}
-                    variant="outline"
-                    className="text-xs font-bold py-2 border-emerald-600 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                  >
-                    <Upload className="h-3.5 w-3.5 mr-1.5" /> Simulate Verification Dossier
-                  </Button>
-                </div>
+                {!isSupabaseConfigured && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      onClick={() => {
+                        const firstUnverified = orgs.find((o: any) => !o.verification_status || o.verification_status === "unverified");
+                        if (firstUnverified) {
+                          handleSimulateDossier(firstUnverified);
+                        } else if (orgs.length > 0) {
+                          handleSimulateDossier(orgs[0]);
+                        } else {
+                          addToast("No organization found to simulate.", "info");
+                        }
+                      }}
+                      variant="outline"
+                      className="text-xs font-bold py-2 border-emerald-600 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                    >
+                      <Upload className="h-3.5 w-3.5 mr-1.5" /> Simulate Verification Dossier
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Stats KPIs */}
@@ -2199,39 +2237,63 @@ export const SuperadminDashboard: React.FC = () => {
                 ) : (
                   filteredOrgs.map((orgItem: any) => {
                     const status = orgItem.verification_status || "unverified";
-                    const orgOfficers = allMembers.filter((m) => m.org_id === orgItem.id && m.role !== "member");
-                    const adminM = orgOfficers.find((m) => m.role === "org_admin" || m.role === "superadmin") || orgOfficers[0];
-                    const accM = orgOfficers.find((m) => m.role === "accountant");
-                    const submittedCount = orgOfficers.filter((m) => !!m.passport_photo_url && !!m.id_document_url).length;
-                    const requiredTotal = Math.max(orgOfficers.length, 2);
+                    const orgOfficers = allMembers.filter(
+                      (m: any) =>
+                        m.org_id === orgItem.id &&
+                        m.role !== "member" &&
+                        m.status !== "rejected" &&
+                        m.status !== "suspended"
+                    );
+                    const mandatoryOrgOfficers = orgOfficers.filter(
+                      (m: any) =>
+                        m.role === "org_admin" ||
+                        m.role === "superadmin" ||
+                        m.role === "accountant"
+                    );
+                    const adminM =
+                      orgOfficers.find((m: any) => m.role === "org_admin" || m.role === "superadmin") ||
+                      orgOfficers[0];
+                    const accM = orgOfficers.find((m: any) => m.role === "accountant");
+                    const adminUser = resolveOfficerUser(adminM);
+                    const accUser = resolveOfficerUser(accM);
+                    const submittedCount = mandatoryOrgOfficers.filter(
+                      (m: any) => !!m.passport_photo_url && !!m.id_document_url
+                    ).length;
+                    const requiredTotal = Math.max(mandatoryOrgOfficers.length, 2);
                     const progress = Math.min(100, Math.round((submittedCount / requiredTotal) * 100));
+                    const canGrantTick = Boolean(
+                      adminM?.passport_photo_url &&
+                        adminM?.id_document_url &&
+                        accM?.passport_photo_url &&
+                        accM?.id_document_url
+                    );
 
                     return (
                       <div
                         key={orgItem.id}
-                        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs flex flex-col gap-5 transition hover:border-slate-300 dark:hover:border-slate-700"
+                        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs flex flex-col gap-5 transition hover:border-slate-300 dark:hover:border-slate-700 min-w-0"
                       >
                         {/* Section Header */}
-                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b pb-4 dark:border-slate-800">
-                          <div className="flex items-center gap-3.5">
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b pb-4 dark:border-slate-800 min-w-0">
+                          <div className="flex items-center gap-3.5 min-w-0">
                             <div className="h-12 w-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200/60 dark:border-emerald-800 flex items-center justify-center font-bold text-emerald-800 dark:text-emerald-300 text-sm shrink-0 overflow-hidden">
                               {orgItem.logo_url && !orgItem.logo_url.includes("logo.png") ? (
-                                <img 
-                                  src={orgItem.logo_url} 
-                                  alt="" 
-                                  className="h-full w-full object-contain p-1 rounded-2xl" 
-                                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                <ResolvedImage
+                                  src={orgItem.logo_url}
+                                  alt={orgItem.name}
+                                  bucketName="impacto-files"
+                                  className="h-full w-full object-contain p-1 rounded-2xl"
                                 />
                               ) : (
                                 orgItem.name?.substring(0, 2).toUpperCase() || "OR"
                               )}
                             </div>
-                            <div>
+                            <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
-                                <h3 className="text-base font-bold text-slate-900 dark:text-white font-display">
+                                <h3 className="text-base font-bold text-slate-900 dark:text-white font-display break-words">
                                   {orgItem.name}
                                 </h3>
-                                <span className="font-mono text-xs text-slate-400">
+                                <span className="font-mono text-xs text-slate-400 break-all">
                                   /{orgItem.slug}
                                 </span>
                                 {status === "verified" ? (
@@ -2259,7 +2321,7 @@ export const SuperadminDashboard: React.FC = () => {
                                 {orgItem.referred_by_code && (
                                   <>
                                     <span>•</span>
-                                    <span className="font-mono text-teal-600 dark:text-teal-400 font-bold">
+                                    <span className="font-mono text-teal-600 dark:text-teal-400 font-bold break-all">
                                       Promoter: {orgItem.referred_by_code}
                                     </span>
                                   </>
@@ -2269,10 +2331,12 @@ export const SuperadminDashboard: React.FC = () => {
                           </div>
 
                           {/* Action Buttons */}
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
                             {status === "pending_review" && (
                               <Button
                                 onClick={() => handleApproveVerification(orgItem.id, orgItem.name)}
+                                disabled={!canGrantTick || reviewOrgVerificationMutation.isPending}
+                                title={!canGrantTick ? "Both Admin and Accountant documents are required first." : "Approve verification"}
                                 size="sm"
                                 className="text-xs font-bold py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 cursor-pointer shadow-xs"
                               >
@@ -2295,14 +2359,23 @@ export const SuperadminDashboard: React.FC = () => {
                           </div>
                         </div>
 
+                        {status === "rejected" && orgItem.verification_rejection_reason && (
+                          <div className="p-3 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50/70 dark:bg-rose-950/20 text-xs text-rose-800 dark:text-rose-300 flex items-start gap-2">
+                            <XCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                            <span className="break-words">
+                              <strong>Rejection Reason:</strong> {orgItem.verification_rejection_reason}
+                            </span>
+                          </div>
+                        )}
+
                         {/* Progress Bar of Officers Required to Submit */}
                         <div className="bg-slate-50/80 dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col gap-2">
-                          <div className="flex items-center justify-between text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                             <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                              <Users className="h-3.5 w-3.5 text-emerald-600" /> Officer Document Submission Progress:
+                              <Users className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> Officer Document Submission Progress:
                             </span>
                             <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                              {submittedCount} / {requiredTotal} Required Officers ({progress}%)
+                              {submittedCount} / {requiredTotal} Mandatory Officers ({progress}%)
                             </span>
                           </div>
                           <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
@@ -2316,12 +2389,12 @@ export const SuperadminDashboard: React.FC = () => {
                         {/* Officer Roster Cards (All Non-Member Roles) */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
                           {/* 1. Administrator */}
-                          <div className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between gap-2.5">
-                            <div className="flex items-center justify-between">
+                          <div className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between gap-2.5 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 uppercase tracking-wider">
                                 Role: Admin (Mandatory)
                               </span>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
                                 adminM?.verification_status === "verified"
                                   ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
                                   : adminM?.passport_photo_url && adminM?.id_document_url
@@ -2332,15 +2405,15 @@ export const SuperadminDashboard: React.FC = () => {
                               </span>
                             </div>
 
-                            <div>
-                              <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                                {allUsers.find((u) => u.id === adminM?.user_id)?.full_name || "Administrator"}
+                            <div className="min-w-0">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white block truncate">
+                                {adminUser?.full_name || "Administrator"}
                               </span>
-                              <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                                <Phone className="h-3 w-3 text-emerald-600" />
-                                {adminM?.phone_number || allUsers.find((u) => u.id === adminM?.user_id)?.phone_number || "No telephone number"}
+                              <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 break-all">
+                                <Phone className="h-3 w-3 text-emerald-600 shrink-0" />
+                                {adminM?.phone_number || adminUser?.phone_number || "No telephone number"}
                               </span>
-                              <span className="font-mono text-[10px] text-slate-400 block mt-0.5">
+                              <span className="font-mono text-[10px] text-slate-400 block mt-0.5 break-all">
                                 {adminM?.id_document_type || "national_id"}: {adminM?.id_document_number || "No ID #"}
                               </span>
                             </div>
@@ -2352,13 +2425,13 @@ export const SuperadminDashboard: React.FC = () => {
                                   onClick={() => setFullDocPreviewUrl(adminM.passport_photo_url!)}
                                   className="h-14 w-14 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group shrink-0"
                                 >
-                                  <img src={adminM.passport_photo_url} alt="Photo" className="w-full h-full object-cover" />
+                                  <ResolvedImage src={adminM.passport_photo_url} alt="Photo" bucketName="impacto-files" className="w-full h-full object-cover" />
                                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-[9px] font-bold">
                                     Zoom
                                   </div>
                                 </div>
                               ) : (
-                                <div className="h-14 w-14 rounded-lg border border-dashed flex flex-col items-center justify-center text-slate-400 text-[9px]">
+                                <div className="h-14 w-14 rounded-lg border border-dashed flex flex-col items-center justify-center text-slate-400 text-[9px] shrink-0">
                                   No Photo
                                 </div>
                               )}
@@ -2366,9 +2439,9 @@ export const SuperadminDashboard: React.FC = () => {
                               {adminM?.id_document_url ? (
                                 <div
                                   onClick={() => setFullDocPreviewUrl(adminM.id_document_url!)}
-                                  className="h-14 flex-1 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group"
+                                  className="h-14 flex-1 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group min-w-0"
                                 >
-                                  <img src={adminM.id_document_url} alt="ID" className="w-full h-full object-cover" />
+                                  <ResolvedImage src={adminM.id_document_url} alt="ID" bucketName="impacto-files" className="w-full h-full object-cover" />
                                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-[9px] font-bold">
                                     Zoom ID
                                   </div>
@@ -2382,12 +2455,12 @@ export const SuperadminDashboard: React.FC = () => {
                           </div>
 
                           {/* 2. Accountant */}
-                          <div className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between gap-2.5">
-                            <div className="flex items-center justify-between">
+                          <div className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between gap-2.5 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 uppercase tracking-wider">
                                 Role: Accountant (Mandatory)
                               </span>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
                                 accM?.verification_status === "verified"
                                   ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
                                   : accM?.passport_photo_url && accM?.id_document_url
@@ -2400,15 +2473,15 @@ export const SuperadminDashboard: React.FC = () => {
 
                             {accM ? (
                               <>
-                                <div>
-                                  <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                                    {allUsers.find((u) => u.id === accM.user_id)?.full_name || "Accountant"}
+                                <div className="min-w-0">
+                                  <span className="text-xs font-bold text-slate-900 dark:text-white block truncate">
+                                    {accUser?.full_name || "Accountant"}
                                   </span>
-                                  <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                                    <Phone className="h-3 w-3 text-emerald-600" />
-                                    {accM.phone_number || allUsers.find((u) => u.id === accM.user_id)?.phone_number || "No telephone number"}
+                                  <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 break-all">
+                                    <Phone className="h-3 w-3 text-emerald-600 shrink-0" />
+                                    {accM.phone_number || accUser?.phone_number || "No telephone number"}
                                   </span>
-                                  <span className="font-mono text-[10px] text-slate-400 block mt-0.5">
+                                  <span className="font-mono text-[10px] text-slate-400 block mt-0.5 break-all">
                                     {accM.id_document_type || "passport"}: {accM.id_document_number || "No ID #"}
                                   </span>
                                 </div>
@@ -2419,13 +2492,13 @@ export const SuperadminDashboard: React.FC = () => {
                                       onClick={() => setFullDocPreviewUrl(accM.passport_photo_url!)}
                                       className="h-14 w-14 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group shrink-0"
                                     >
-                                      <img src={accM.passport_photo_url} alt="Photo" className="w-full h-full object-cover" />
+                                      <ResolvedImage src={accM.passport_photo_url} alt="Photo" bucketName="impacto-files" className="w-full h-full object-cover" />
                                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-[9px] font-bold">
                                         Zoom
                                       </div>
                                     </div>
                                   ) : (
-                                    <div className="h-14 w-14 rounded-lg border border-dashed flex flex-col items-center justify-center text-slate-400 text-[9px]">
+                                    <div className="h-14 w-14 rounded-lg border border-dashed flex flex-col items-center justify-center text-slate-400 text-[9px] shrink-0">
                                       No Photo
                                     </div>
                                   )}
@@ -2433,9 +2506,9 @@ export const SuperadminDashboard: React.FC = () => {
                                   {accM.id_document_url ? (
                                     <div
                                       onClick={() => setFullDocPreviewUrl(accM.id_document_url!)}
-                                      className="h-14 flex-1 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group"
+                                      className="h-14 flex-1 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group min-w-0"
                                     >
-                                      <img src={accM.id_document_url} alt="ID" className="w-full h-full object-cover" />
+                                      <ResolvedImage src={accM.id_document_url} alt="ID" bucketName="impacto-files" className="w-full h-full object-cover" />
                                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-[9px] font-bold">
                                         Zoom ID
                                       </div>
@@ -2457,63 +2530,69 @@ export const SuperadminDashboard: React.FC = () => {
 
                           {/* 3. Additional Governance Officers (e.g. Managers) */}
                           {orgOfficers
-                            .filter((m) => m.role !== "org_admin" && m.role !== "superadmin" && m.role !== "accountant")
-                            .map((officer) => (
-                              <div key={officer.id} className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between gap-2.5">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                                    Role: {officer.role}
-                                  </span>
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                    officer.verification_status === "verified"
-                                      ? "bg-emerald-100 text-emerald-800"
-                                      : officer.passport_photo_url
-                                      ? "bg-amber-100 text-amber-800"
-                                      : "bg-slate-100 text-slate-600"
-                                  }`}>
-                                    {officer.verification_status === "verified" ? "Verified" : officer.passport_photo_url ? "Submitted" : "Missing"}
-                                  </span>
-                                </div>
+                            .filter((m: any) => m.id !== adminM?.id && m.id !== accM?.id)
+                            .map((officer: any) => {
+                              const officerUser = resolveOfficerUser(officer);
+                              return (
+                                <div key={officer.id} className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between gap-2.5 min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                                      Role: {officer.role}
+                                    </span>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                                      officer.verification_status === "verified"
+                                        ? "bg-emerald-100 text-emerald-800"
+                                        : officer.passport_photo_url && officer.id_document_url
+                                        ? "bg-amber-100 text-amber-800"
+                                        : "bg-slate-100 text-slate-600"
+                                    }`}>
+                                      {officer.verification_status === "verified" ? "Verified" : officer.passport_photo_url ? "Submitted" : "Missing"}
+                                    </span>
+                                  </div>
 
-                                <div>
-                                  <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                                    {allUsers.find((u) => u.id === officer.user_id)?.full_name || "Governance Officer"}
-                                  </span>
-                                  <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                                    <Phone className="h-3 w-3 text-emerald-600" />
-                                    {officer.phone_number || "No telephone"}
-                                  </span>
-                                </div>
+                                  <div className="min-w-0">
+                                    <span className="text-xs font-bold text-slate-900 dark:text-white block truncate">
+                                      {officerUser?.full_name || "Governance Officer"}
+                                    </span>
+                                    <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 break-all">
+                                      <Phone className="h-3 w-3 text-emerald-600 shrink-0" />
+                                      {officer.phone_number || officerUser?.phone_number || "No telephone"}
+                                    </span>
+                                    <span className="font-mono text-[10px] text-slate-400 block mt-0.5 break-all">
+                                      {officer.id_document_type || "national_id"}: {officer.id_document_number || "No ID #"}
+                                    </span>
+                                  </div>
 
-                                <div className="flex items-center gap-2 pt-1 border-t dark:border-slate-800">
-                                  {officer.passport_photo_url ? (
-                                    <div
-                                      onClick={() => setFullDocPreviewUrl(officer.passport_photo_url!)}
-                                      className="h-14 w-14 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group shrink-0"
-                                    >
-                                      <img src={officer.passport_photo_url} alt="Photo" className="w-full h-full object-cover" />
-                                    </div>
-                                  ) : (
-                                    <div className="h-14 w-14 rounded-lg border border-dashed flex items-center justify-center text-slate-400 text-[9px]">
-                                      No Photo
-                                    </div>
-                                  )}
+                                  <div className="flex items-center gap-2 pt-1 border-t dark:border-slate-800">
+                                    {officer.passport_photo_url ? (
+                                      <div
+                                        onClick={() => setFullDocPreviewUrl(officer.passport_photo_url!)}
+                                        className="h-14 w-14 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group shrink-0"
+                                      >
+                                        <ResolvedImage src={officer.passport_photo_url} alt="Photo" bucketName="impacto-files" className="w-full h-full object-cover" />
+                                      </div>
+                                    ) : (
+                                      <div className="h-14 w-14 rounded-lg border border-dashed flex items-center justify-center text-slate-400 text-[9px] shrink-0">
+                                        No Photo
+                                      </div>
+                                    )}
 
-                                  {officer.id_document_url ? (
-                                    <div
-                                      onClick={() => setFullDocPreviewUrl(officer.id_document_url!)}
-                                      className="h-14 flex-1 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group"
-                                    >
-                                      <img src={officer.id_document_url} alt="ID" className="w-full h-full object-cover" />
-                                    </div>
-                                  ) : (
-                                    <div className="h-14 flex-1 rounded-lg border border-dashed flex items-center justify-center text-slate-400 text-[10px]">
-                                      No ID Scan
-                                    </div>
-                                  )}
+                                    {officer.id_document_url ? (
+                                      <div
+                                        onClick={() => setFullDocPreviewUrl(officer.id_document_url!)}
+                                        className="h-14 flex-1 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer relative group min-w-0"
+                                      >
+                                        <ResolvedImage src={officer.id_document_url} alt="ID" bucketName="impacto-files" className="w-full h-full object-cover" />
+                                      </div>
+                                    ) : (
+                                      <div className="h-14 flex-1 rounded-lg border border-dashed flex items-center justify-center text-slate-400 text-[10px]">
+                                        No ID Scan
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                         </div>
                       </div>
                     );
@@ -2532,21 +2611,21 @@ export const SuperadminDashboard: React.FC = () => {
                   title=""
                   maxWidth="max-w-4xl"
                 >
-                  <div className="flex flex-col gap-6 pt-1">
+                  <div className="flex flex-col gap-6 pt-1 min-w-0">
                     {/* Header */}
-                    <div className="flex items-start justify-between border-b pb-4 dark:border-slate-800">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-start justify-between gap-3 border-b pb-4 dark:border-slate-800 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="h-12 w-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
                           <ShieldCheck className="h-7 w-7" />
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white break-words">
                               Authenticity Dossier: {reviewingOrg.name}
                             </h2>
-                            <span className="font-mono text-xs text-slate-400">({reviewingOrg.slug})</span>
+                            <span className="font-mono text-xs text-slate-400 break-all">({reviewingOrg.slug})</span>
                           </div>
-                          <p className="text-xs text-slate-500 mt-0.5">
+                          <p className="text-xs text-slate-500 mt-0.5 break-words">
                             Status: <span className="font-bold uppercase text-emerald-600">{reviewingOrg.verification_status || "Unverified"}</span>
                             {reviewingOrg.referred_by_code && (
                               <span className="ml-2 font-mono text-[11px] text-teal-600">
@@ -2558,7 +2637,7 @@ export const SuperadminDashboard: React.FC = () => {
                       </div>
                       <button
                         onClick={() => setReviewingOrg(null)}
-                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 shrink-0"
                       >
                         <X className="h-5 w-5" />
                       </button>
@@ -2572,17 +2651,26 @@ export const SuperadminDashboard: React.FC = () => {
                       </span>
                     </div>
 
+                    {reviewingOrg.verification_status === "rejected" && reviewingOrg.verification_rejection_reason && (
+                      <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900 text-xs text-rose-800 dark:text-rose-300 flex items-start gap-2">
+                        <XCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                        <span className="break-words">
+                          <strong>Previous Rejection Reason:</strong> {reviewingOrg.verification_rejection_reason}
+                        </span>
+                      </div>
+                    )}
+
                     {/* Side-by-Side Review Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       {/* 1. ADMIN GOVERNANCE CARD */}
-                      <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col gap-3">
-                        <div className="flex items-center justify-between border-b pb-2.5 dark:border-slate-800">
+                      <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col gap-3 min-w-0">
+                        <div className="flex items-center justify-between gap-2 border-b pb-2.5 dark:border-slate-800">
                           <div className="flex items-center gap-2">
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 uppercase">
                               Role: Admin (Mandatory)
                             </span>
                           </div>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
                             reviewingAdmin?.verification_status === "verified"
                               ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
                               : reviewingAdmin?.passport_photo_url
@@ -2593,17 +2681,17 @@ export const SuperadminDashboard: React.FC = () => {
                           </span>
                         </div>
 
-                        <div>
+                        <div className="min-w-0">
                           <span className="text-[11px] text-slate-400 block">Name & Email:</span>
-                          <span className="text-xs font-bold text-slate-900 dark:text-white">
-                            {reviewingAdminUser?.full_name || "Administrator"} ({reviewingAdminUser?.email || "admin@org.org"})
+                          <span className="text-xs font-bold text-slate-900 dark:text-white break-all block">
+                            {reviewingAdminUser?.full_name || "Administrator"} ({reviewingAdminUser?.email || "No email"})
                           </span>
                         </div>
 
-                        <div>
-                          <span className="text-[11px] text-slate-400 block">Document Identification:</span>
-                          <span className="font-mono text-xs font-bold text-slate-900 dark:text-white uppercase">
-                            {reviewingAdmin?.id_document_type || "national_id"}: {reviewingAdmin?.id_document_number || "Not specified"}
+                        <div className="min-w-0">
+                          <span className="text-[11px] text-slate-400 block">Telephone & Document ID:</span>
+                          <span className="font-mono text-xs font-bold text-slate-900 dark:text-white uppercase break-all block">
+                            {reviewingAdmin?.phone_number || reviewingAdminUser?.phone_number || "No phone"} • {reviewingAdmin?.id_document_type || "national_id"}: {reviewingAdmin?.id_document_number || "Not specified"}
                           </span>
                         </div>
 
@@ -2616,9 +2704,10 @@ export const SuperadminDashboard: React.FC = () => {
                                 onClick={() => setFullDocPreviewUrl(reviewingAdmin.passport_photo_url!)}
                                 className="h-36 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 cursor-pointer relative group"
                               >
-                                <img
+                                <ResolvedImage
                                   src={reviewingAdmin.passport_photo_url}
                                   alt="Admin Passport"
+                                  bucketName="impacto-files"
                                   className="w-full h-full object-cover group-hover:scale-105 transition"
                                 />
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1">
@@ -2640,9 +2729,10 @@ export const SuperadminDashboard: React.FC = () => {
                                 onClick={() => setFullDocPreviewUrl(reviewingAdmin.id_document_url!)}
                                 className="h-36 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 cursor-pointer relative group"
                               >
-                                <img
+                                <ResolvedImage
                                   src={reviewingAdmin.id_document_url}
                                   alt="Admin ID Document"
+                                  bucketName="impacto-files"
                                   className="w-full h-full object-cover group-hover:scale-105 transition"
                                 />
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1">
@@ -2660,14 +2750,14 @@ export const SuperadminDashboard: React.FC = () => {
                       </div>
 
                       {/* 2. ACCOUNTANT GOVERNANCE CARD */}
-                      <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col gap-3">
-                        <div className="flex items-center justify-between border-b pb-2.5 dark:border-slate-800">
+                      <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col gap-3 min-w-0">
+                        <div className="flex items-center justify-between gap-2 border-b pb-2.5 dark:border-slate-800">
                           <div className="flex items-center gap-2">
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 uppercase">
                               Role: Accountant (Mandatory)
                             </span>
                           </div>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
                             reviewingAccountant?.verification_status === "verified"
                               ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
                               : reviewingAccountant?.passport_photo_url
@@ -2680,17 +2770,17 @@ export const SuperadminDashboard: React.FC = () => {
 
                         {reviewingAccountant ? (
                           <>
-                            <div>
+                            <div className="min-w-0">
                               <span className="text-[11px] text-slate-400 block">Name & Email:</span>
-                              <span className="text-xs font-bold text-slate-900 dark:text-white">
-                                {reviewingAccountantUser?.full_name || "Chief Accountant"} ({reviewingAccountantUser?.email || "finance@org.org"})
+                              <span className="text-xs font-bold text-slate-900 dark:text-white break-all block">
+                                {reviewingAccountantUser?.full_name || "Chief Accountant"} ({reviewingAccountantUser?.email || "No email"})
                               </span>
                             </div>
 
-                            <div>
-                              <span className="text-[11px] text-slate-400 block">Document Identification:</span>
-                              <span className="font-mono text-xs font-bold text-slate-900 dark:text-white uppercase">
-                                {reviewingAccountant?.id_document_type || "passport"}: {reviewingAccountant?.id_document_number || "Not specified"}
+                            <div className="min-w-0">
+                              <span className="text-[11px] text-slate-400 block">Telephone & Document ID:</span>
+                              <span className="font-mono text-xs font-bold text-slate-900 dark:text-white uppercase break-all block">
+                                {reviewingAccountant?.phone_number || reviewingAccountantUser?.phone_number || "No phone"} • {reviewingAccountant?.id_document_type || "passport"}: {reviewingAccountant?.id_document_number || "Not specified"}
                               </span>
                             </div>
 
@@ -2703,9 +2793,10 @@ export const SuperadminDashboard: React.FC = () => {
                                     onClick={() => setFullDocPreviewUrl(reviewingAccountant.passport_photo_url!)}
                                     className="h-36 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 cursor-pointer relative group"
                                   >
-                                    <img
+                                    <ResolvedImage
                                       src={reviewingAccountant.passport_photo_url}
                                       alt="Accountant Passport"
+                                      bucketName="impacto-files"
                                       className="w-full h-full object-cover group-hover:scale-105 transition"
                                     />
                                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1">
@@ -2727,9 +2818,10 @@ export const SuperadminDashboard: React.FC = () => {
                                     onClick={() => setFullDocPreviewUrl(reviewingAccountant.id_document_url!)}
                                     className="h-36 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 cursor-pointer relative group"
                                   >
-                                    <img
+                                    <ResolvedImage
                                       src={reviewingAccountant.id_document_url}
                                       alt="Accountant ID Document"
+                                      bucketName="impacto-files"
                                       className="w-full h-full object-cover group-hover:scale-105 transition"
                                     />
                                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1">
@@ -2756,6 +2848,60 @@ export const SuperadminDashboard: React.FC = () => {
                         )}
                       </div>
                     </div>
+
+                    {/* Additional Governance Officers (e.g. Managers / Extra Officers) */}
+                    {reviewingExtraOfficers.length > 0 && (
+                      <div className="flex flex-col gap-3">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                          Additional Leadership Officers ({reviewingExtraOfficers.length})
+                        </span>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {reviewingExtraOfficers.map((officer: any) => {
+                            const officerUser = resolveOfficerUser(officer);
+                            return (
+                              <div key={officer.id} className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col gap-2 min-w-0">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 uppercase">
+                                    Role: {officer.role}
+                                  </span>
+                                  <span className="text-[10px] font-bold text-slate-500">
+                                    {officer.passport_photo_url && officer.id_document_url ? "Submitted" : "Optional / Missing"}
+                                  </span>
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="text-xs font-bold text-slate-900 dark:text-white break-all block">
+                                    {officerUser?.full_name || "Officer"} ({officerUser?.email || "No email"})
+                                  </span>
+                                  <span className="font-mono text-[11px] text-slate-500 break-all block">
+                                    {officer.phone_number || officerUser?.phone_number || "No phone"} • {officer.id_document_type || "national_id"}: {officer.id_document_number || "N/A"}
+                                  </span>
+                                </div>
+                                {(officer.passport_photo_url || officer.id_document_url) && (
+                                  <div className="grid grid-cols-2 gap-2 pt-1">
+                                    {officer.passport_photo_url && (
+                                      <div
+                                        onClick={() => setFullDocPreviewUrl(officer.passport_photo_url!)}
+                                        className="h-24 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer"
+                                      >
+                                        <ResolvedImage src={officer.passport_photo_url} alt="Officer Photo" bucketName="impacto-files" className="w-full h-full object-cover" />
+                                      </div>
+                                    )}
+                                    {officer.id_document_url && (
+                                      <div
+                                        onClick={() => setFullDocPreviewUrl(officer.id_document_url!)}
+                                        className="h-24 rounded-lg overflow-hidden border bg-slate-100 cursor-pointer"
+                                      >
+                                        <ResolvedImage src={officer.id_document_url} alt="Officer ID" bucketName="impacto-files" className="w-full h-full object-cover" />
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Rejection Form Drawer */}
                     {showRejectForm && (
@@ -2798,6 +2944,7 @@ export const SuperadminDashboard: React.FC = () => {
                           </Button>
                           <Button
                             size="sm"
+                            loading={reviewOrgVerificationMutation.isPending}
                             onClick={() => handleRejectVerification(reviewingOrg.id, reviewingOrg.name)}
                             className="text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white"
                           >
@@ -2808,7 +2955,7 @@ export const SuperadminDashboard: React.FC = () => {
                     )}
 
                     {/* Footer Actions */}
-                    <div className="flex items-center justify-between border-t pt-4 dark:border-slate-800">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 dark:border-slate-800">
                       <Button
                         variant="outline"
                         onClick={() => {
@@ -2820,7 +2967,7 @@ export const SuperadminDashboard: React.FC = () => {
                         Close
                       </Button>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {!showRejectForm && (
                           <Button
                             variant="outline"
@@ -2832,6 +2979,9 @@ export const SuperadminDashboard: React.FC = () => {
                         )}
                         <Button
                           onClick={() => handleApproveVerification(reviewingOrg.id, reviewingOrg.name)}
+                          disabled={!canReviewingApprove}
+                          loading={reviewOrgVerificationMutation.isPending}
+                          title={!canReviewingApprove ? "Both Admin and Accountant documents are required." : "Grant Green Tick"}
                           className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5"
                         >
                           <CheckCircle2 className="h-4 w-4" /> Grant Green Tick Verification
@@ -2851,10 +3001,11 @@ export const SuperadminDashboard: React.FC = () => {
                   maxWidth="max-w-3xl"
                 >
                   <div className="flex flex-col gap-4 items-center">
-                    <div className="max-h-[70vh] overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-950 p-2">
-                      <img
+                    <div className="max-h-[70vh] overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-950 p-2 w-full flex justify-center">
+                      <ResolvedImage
                         src={fullDocPreviewUrl}
                         alt="Document High Res"
+                        bucketName="impacto-files"
                         className="max-h-[65vh] w-auto object-contain mx-auto rounded-lg shadow-lg"
                       />
                     </div>

@@ -97,28 +97,28 @@ export const ReferralCenterModal: React.FC<ReferralCenterModalProps> = ({
 
         {/* Link Share Box */}
         <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 border border-emerald-200/80 dark:border-emerald-800/50 rounded-2xl flex flex-col gap-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider">
               Your Shareable Referral Link
             </span>
-            <span className="text-[11px] font-mono text-emerald-700 dark:text-emerald-300 font-bold bg-white/80 dark:bg-slate-900/80 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+            <span className="text-[11px] font-mono text-emerald-700 dark:text-emerald-300 font-bold bg-white/80 dark:bg-slate-900/80 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800 shrink-0">
               Code: {referralCode}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-0">
             <input
               type="text"
               readOnly
               value={referralLink}
-              className="flex-1 text-xs font-mono bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700/80 rounded-xl px-3 py-2 text-gray-800 dark:text-slate-200 outline-none select-all"
+              className="w-full sm:flex-1 min-w-0 text-xs font-mono bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700/80 rounded-xl px-3 py-2 text-gray-800 dark:text-slate-200 outline-none select-all"
             />
             <Button
               type="button"
               onClick={handleCopyLink}
-              className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-1.5 py-2 px-3.5"
+              className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-1.5 py-2 px-3.5 shrink-0 whitespace-nowrap"
             >
-              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? <Check className="h-3.5 w-3.5 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
               {copied ? "Copied" : "Copy Link"}
             </Button>
           </div>
@@ -129,7 +129,7 @@ export const ReferralCenterModal: React.FC<ReferralCenterModalProps> = ({
         </div>
 
         {/* Analytics Grid */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col gap-1">
             <span className="text-[10px] font-bold uppercase text-gray-400">Direct Referrals (Level 1)</span>
             <div className="flex items-baseline gap-1.5">

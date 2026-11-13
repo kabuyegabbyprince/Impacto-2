@@ -201,18 +201,29 @@ export function useOrganizations() {
               ? JSON.parse(localSIP)
               : (org.show_impact_publicly ?? true),
           verification_status:
-            (localStorage.getItem(`impacto_org_verification_status_${org.id}`) as any) ||
-            org.verification_status ||
-            "unverified",
+            isSupabaseConfigured
+              ? ((org.verification_status as any) ||
+                 (localStorage.getItem(`impacto_org_verification_status_${org.id}`) as any) ||
+                 "unverified")
+              : ((localStorage.getItem(`impacto_org_verification_status_${org.id}`) as any) ||
+                 org.verification_status ||
+                 "unverified"),
           verified_at:
-            localStorage.getItem(`impacto_org_verified_at_${org.id}`) ||
-            org.verified_at,
+            isSupabaseConfigured
+              ? (org.verified_at ?? localStorage.getItem(`impacto_org_verified_at_${org.id}`))
+              : (localStorage.getItem(`impacto_org_verified_at_${org.id}`) || org.verified_at),
           verified_by:
-            localStorage.getItem(`impacto_org_verified_by_${org.id}`) ||
-            org.verified_by,
+            isSupabaseConfigured
+              ? (org.verified_by ?? localStorage.getItem(`impacto_org_verified_by_${org.id}`))
+              : (localStorage.getItem(`impacto_org_verified_by_${org.id}`) || org.verified_by),
           verification_rejection_reason:
-            localStorage.getItem(`impacto_org_rejection_reason_${org.id}`) ||
-            org.verification_rejection_reason,
+            isSupabaseConfigured
+              ? (org.verification_rejection_reason ??
+                 (org.verification_status === "rejected"
+                   ? localStorage.getItem(`impacto_org_rejection_reason_${org.id}`)
+                   : undefined))
+              : (localStorage.getItem(`impacto_org_rejection_reason_${org.id}`) ||
+                 org.verification_rejection_reason),
           referred_by_code:
             localStorage.getItem(`impacto_org_referred_by_code_${org.id}`) ||
             org.referred_by_code,
@@ -338,18 +349,29 @@ export function useOrganization(slug: string | undefined) {
               ? JSON.parse(localSIP)
               : (org.show_impact_publicly ?? true),
           verification_status:
-            (localStorage.getItem(`impacto_org_verification_status_${org.id}`) as any) ||
-            org.verification_status ||
-            "unverified",
+            isSupabaseConfigured
+              ? ((org.verification_status as any) ||
+                 (localStorage.getItem(`impacto_org_verification_status_${org.id}`) as any) ||
+                 "unverified")
+              : ((localStorage.getItem(`impacto_org_verification_status_${org.id}`) as any) ||
+                 org.verification_status ||
+                 "unverified"),
           verified_at:
-            localStorage.getItem(`impacto_org_verified_at_${org.id}`) ||
-            org.verified_at,
+            isSupabaseConfigured
+              ? (org.verified_at ?? localStorage.getItem(`impacto_org_verified_at_${org.id}`))
+              : (localStorage.getItem(`impacto_org_verified_at_${org.id}`) || org.verified_at),
           verified_by:
-            localStorage.getItem(`impacto_org_verified_by_${org.id}`) ||
-            org.verified_by,
+            isSupabaseConfigured
+              ? (org.verified_by ?? localStorage.getItem(`impacto_org_verified_by_${org.id}`))
+              : (localStorage.getItem(`impacto_org_verified_by_${org.id}`) || org.verified_by),
           verification_rejection_reason:
-            localStorage.getItem(`impacto_org_rejection_reason_${org.id}`) ||
-            org.verification_rejection_reason,
+            isSupabaseConfigured
+              ? (org.verification_rejection_reason ??
+                 (org.verification_status === "rejected"
+                   ? localStorage.getItem(`impacto_org_rejection_reason_${org.id}`)
+                   : undefined))
+              : (localStorage.getItem(`impacto_org_rejection_reason_${org.id}`) ||
+                 org.verification_rejection_reason),
           referred_by_code:
             localStorage.getItem(`impacto_org_referred_by_code_${org.id}`) ||
             org.referred_by_code,
@@ -731,10 +753,19 @@ export function useMembers(orgId: string | undefined) {
       if (!orgId) return [];
       if (isSupabaseConfigured) {
         try {
-          const { data, error } = await supabase
+          let { data, error } = await supabase
             .from("org_members")
-            .select("*, user:user_id(id, email, full_name, avatar_url)")
+            .select("*, user:user_id(id, email, full_name, avatar_url, phone_number, auth_user_id)")
             .eq("org_id", orgId);
+          if (error) {
+            // Retry with core user columns if schema cache misses phone_number/auth_user_id
+            const retryRes = await supabase
+              .from("org_members")
+              .select("*, user:user_id(id, email, full_name, avatar_url)")
+              .eq("org_id", orgId);
+            data = retryRes.data;
+            error = retryRes.error;
+          }
           if (error) {
             console.warn("Supabase members query notice, using local cache:", error);
           } else if (data) {
@@ -1023,6 +1054,7 @@ export function useUpdateMemberStatus() {
       queryClient.invalidateQueries({ queryKey: ["members", data.org_id] });
       queryClient.invalidateQueries({ queryKey: ["member_fees", data.org_id] });
       queryClient.invalidateQueries({ queryKey: ["audit_logs", data.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["platform_verification_data"] });
       const { activeMember, setActiveOrg, activeOrg } = useOrgStore.getState();
       if (activeMember && activeMember.id === data.id) {
         const updatedMember = { ...activeMember, ...data };
@@ -3919,6 +3951,52 @@ export function usePlatformAdminData() {
   });
 }
 
+export function usePlatformVerificationData(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ["platform_verification_data"],
+    enabled,
+    queryFn: async () => {
+      if (isSupabaseConfigured) {
+        try {
+          let { data: officerRows, error } = await supabase
+            .from("org_members")
+            .select("*, user:user_id(id, email, full_name, avatar_url, phone_number, auth_user_id)")
+            .neq("role", "member");
+
+          if (error) {
+            const retryRes = await supabase
+              .from("org_members")
+              .select("*, user:user_id(id, email, full_name, avatar_url)")
+              .neq("role", "member");
+            officerRows = retryRes.data;
+            error = retryRes.error;
+          }
+
+          if (!error && officerRows) {
+            const { data: usersRows } = await supabase
+              .from("users")
+              .select("id, email, full_name, avatar_url, phone_number, auth_user_id");
+
+            return {
+              officers: officerRows as OrgMember[],
+              users: (usersRows || []) as any[],
+            };
+          }
+        } catch (err) {
+          console.warn("[PlatformVerificationData] Query error:", err);
+        }
+      }
+
+      await delay(100);
+      return {
+        officers: MockDB.getMembers().filter((m) => m.role !== "member"),
+        users: MockDB.getUsers(),
+      };
+    },
+    refetchInterval: enabled ? 8000 : false,
+  });
+}
+
 export function useApproveSubscription() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -5575,8 +5653,144 @@ export function useSubmitOfficerVerification() {
       id_document_number: string;
     }) => {
       const now = new Date().toISOString();
+      let allOfficersSubmitted = false;
 
-      // 1. Update Officer Member record
+      if (isSupabaseConfigured) {
+        let rpcHandled = false;
+        try {
+          const { data: rpcData, error: rpcError } = await supabase.rpc(
+            "submit_officer_verification",
+            {
+              p_org_id: payload.org_id,
+              p_member_id: payload.member_id,
+              p_user_id: payload.user_id,
+              p_phone_number: payload.phone_number,
+              p_passport_photo_url: payload.passport_photo_url,
+              p_id_document_url: payload.id_document_url,
+              p_id_document_type: payload.id_document_type,
+              p_id_document_number: payload.id_document_number,
+            }
+          );
+
+          if (!rpcError) {
+            rpcHandled = true;
+            if (rpcData && typeof rpcData === "object" && (rpcData as any).error) {
+              throw new Error((rpcData as any).error);
+            }
+            allOfficersSubmitted = Boolean(
+              (rpcData as any)?.all_officers_submitted ?? (rpcData as any)?.allOfficersSubmitted
+            );
+          } else {
+            const msg = String(rpcError.message || "").toLowerCase();
+            const isMissingRpc =
+              rpcError.code === "42883" ||
+              rpcError.code === "PGRST202" ||
+              msg.includes("could not find the function") ||
+              msg.includes("schema cache");
+            if (!isMissingRpc) {
+              throw new Error(rpcError.message || "Failed to save officer verification documents.");
+            }
+          }
+        } catch (err: any) {
+          if (!String(err?.message || "").toLowerCase().includes("function")) {
+            throw err;
+          }
+        }
+
+        if (!rpcHandled) {
+          // Direct Supabase fallback if update.sql RPCs are not yet applied
+          const { data: updatedMemberRows, error: memberUpdateError } = await supabase
+            .from("org_members")
+            .update({
+              passport_photo_url: payload.passport_photo_url,
+              id_document_url: payload.id_document_url,
+              id_document_type: payload.id_document_type,
+              id_document_number: payload.id_document_number,
+              phone_number: payload.phone_number,
+              id_submitted_at: now,
+              verification_status: "pending",
+            })
+            .eq("id", payload.member_id)
+            .select();
+
+          if (memberUpdateError) {
+            throw new Error(
+              memberUpdateError.message || "Permission denied updating officer verification record."
+            );
+          }
+          if (!updatedMemberRows || updatedMemberRows.length === 0) {
+            throw new Error(
+              "Your verification update was blocked by database permissions (0 rows updated). Please run update.sql in Supabase."
+            );
+          }
+
+          await supabase
+            .from("users")
+            .update({ phone_number: payload.phone_number })
+            .eq("id", payload.user_id);
+
+          const { data: liveOfficers, error: fetchErr } = await supabase
+            .from("org_members")
+            .select("id, role, status, passport_photo_url, id_document_url, id_document_number")
+            .eq("org_id", payload.org_id)
+            .eq("status", "active");
+
+          if (fetchErr) {
+            throw new Error(fetchErr.message || "Could not verify leadership dossier completeness.");
+          }
+
+          const admins = (liveOfficers || []).filter(
+            (m: any) => m.role === "org_admin" || m.role === "superadmin"
+          );
+          const accountants = (liveOfficers || []).filter(
+            (m: any) => m.role === "accountant"
+          );
+          const allAdminsReady =
+            admins.length >= 1 &&
+            admins.every(
+              (m: any) =>
+                Boolean(m.passport_photo_url) &&
+                Boolean(m.id_document_url) &&
+                Boolean(m.id_document_number)
+            );
+          const allAccountantsReady =
+            accountants.length >= 1 &&
+            accountants.every(
+              (m: any) =>
+                Boolean(m.passport_photo_url) &&
+                Boolean(m.id_document_url) &&
+                Boolean(m.id_document_number)
+            );
+          allOfficersSubmitted = allAdminsReady && allAccountantsReady;
+
+          if (allOfficersSubmitted) {
+            const { data: orgRow } = await supabase
+              .from("organizations")
+              .select("verification_status")
+              .eq("id", payload.org_id)
+              .maybeSingle();
+
+            if (orgRow?.verification_status !== "verified") {
+              const { error: orgErr } = await supabase
+                .from("organizations")
+                .update({
+                  verification_status: "pending_review",
+                  verification_submitted_at: now,
+                  verification_rejection_reason: null,
+                })
+                .eq("id", payload.org_id);
+              if (orgErr) {
+                throw new Error(
+                  orgErr.message ||
+                    "Documents saved, but could not transition organization to Pending Review."
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // Update local MockDB / store cache consistently
       const members = MockDB.getMembers();
       const mIdx = members.findIndex((m) => m.id === payload.member_id);
       if (mIdx !== -1) {
@@ -5590,7 +5804,6 @@ export function useSubmitOfficerVerification() {
         MockDB.saveMembers(members);
       }
 
-      // 2. Persist phone to User profile as well
       const users = MockDB.getUsers();
       const uIdx = users.findIndex((u) => u.id === payload.user_id);
       if (uIdx !== -1) {
@@ -5598,91 +5811,91 @@ export function useSubmitOfficerVerification() {
         MockDB.saveUsers(users);
       }
 
-      // 3. Check if all required officers (non-members) in this org have now submitted documents
-      const orgOfficers = members.filter(
-        (m) => m.org_id === payload.org_id && m.role !== "member"
-      );
-      const hasAdmin = orgOfficers.some(
-        (m) =>
-          (m.role === "org_admin" || m.role === "superadmin") &&
-          !!m.passport_photo_url &&
-          !!m.id_document_url
-      );
-      const hasAccountant = orgOfficers.some(
-        (m) =>
-          m.role === "accountant" &&
-          !!m.passport_photo_url &&
-          !!m.id_document_url
-      );
-      const allOfficersSubmitted =
-        orgOfficers.length >= 2 &&
-        hasAdmin &&
-        hasAccountant &&
-        orgOfficers.every(
-          (m) => !!m.passport_photo_url && !!m.id_document_url
+      if (!isSupabaseConfigured) {
+        const activeOfficers = members.filter(
+          (m) => m.org_id === payload.org_id && m.status === "active"
         );
-
-      const orgs = MockDB.getOrgs();
-      const oIdx = orgs.findIndex((o) => o.id === payload.org_id);
-      const isAlreadyVerified =
-        oIdx !== -1 && orgs[oIdx].verification_status === "verified";
-
-      if (allOfficersSubmitted && !isAlreadyVerified && oIdx !== -1) {
-        orgs[oIdx].verification_status = "pending_review";
-        orgs[oIdx].verification_submitted_at = now;
-        delete orgs[oIdx].verification_rejection_reason;
-        MockDB.saveOrgs(orgs);
-        localStorage.setItem(
-          `impacto_org_verification_status_${payload.org_id}`,
-          "pending_review"
+        const admins = activeOfficers.filter(
+          (m) => m.role === "org_admin" || m.role === "superadmin"
         );
-        localStorage.removeItem(
-          `impacto_org_rejection_reason_${payload.org_id}`
-        );
+        const accountants = activeOfficers.filter((m) => m.role === "accountant");
+        allOfficersSubmitted =
+          admins.length >= 1 &&
+          accountants.length >= 1 &&
+          admins.every((m) => !!m.passport_photo_url && !!m.id_document_url) &&
+          accountants.every((m) => !!m.passport_photo_url && !!m.id_document_url);
       }
 
-      if (isSupabaseConfigured) {
-        try {
-          await supabase
-            .from("org_members")
-            .update({
-              passport_photo_url: payload.passport_photo_url,
-              id_document_url: payload.id_document_url,
-              id_document_type: payload.id_document_type,
-              id_document_number: payload.id_document_number,
-              phone_number: payload.phone_number,
-              verification_status: "pending",
-            })
-            .eq("id", payload.member_id);
-
-          if (allOfficersSubmitted && !isAlreadyVerified) {
-            await supabase
-              .from("organizations")
-              .update({
-                verification_status: "pending_review",
-                verification_submitted_at: now,
-              })
-              .eq("id", payload.org_id);
+      if (allOfficersSubmitted) {
+        const orgs = MockDB.getOrgs();
+        const oIdx = orgs.findIndex((o) => o.id === payload.org_id);
+        const isAlreadyVerified =
+          oIdx !== -1 && orgs[oIdx].verification_status === "verified";
+        if (!isAlreadyVerified) {
+          if (oIdx !== -1) {
+            orgs[oIdx].verification_status = "pending_review";
+            orgs[oIdx].verification_submitted_at = now;
+            delete orgs[oIdx].verification_rejection_reason;
+            MockDB.saveOrgs(orgs);
           }
-        } catch (dbErr) {
-          console.warn("Supabase officer verification notice:", dbErr);
+          localStorage.setItem(
+            `impacto_org_verification_status_${payload.org_id}`,
+            "pending_review"
+          );
+          localStorage.removeItem(
+            `impacto_org_rejection_reason_${payload.org_id}`
+          );
         }
       }
 
-      await auditMutation.mutateAsync({
-        org_id: payload.org_id,
-        performed_by: payload.user_id,
-        action: "submit_officer_verification",
-        action_label: `Officer submitted verification credentials (${payload.id_document_type.toUpperCase()} & Passport photo, Phone: ${payload.phone_number})`,
-        target_table: "org_members",
-        target_id: payload.member_id,
-      });
+      const { activeOrg, activeMember, setActiveOrg } = useOrgStore.getState();
+      if (activeOrg?.id === payload.org_id || activeMember?.id === payload.member_id) {
+        const nextOrg =
+          activeOrg && activeOrg.id === payload.org_id && allOfficersSubmitted && activeOrg.verification_status !== "verified"
+            ? {
+                ...activeOrg,
+                verification_status: "pending_review" as const,
+                verification_submitted_at: now,
+                verification_rejection_reason: undefined,
+              }
+            : activeOrg;
+        const nextMember =
+          activeMember && activeMember.id === payload.member_id
+            ? {
+                ...activeMember,
+                phone_number: payload.phone_number,
+                passport_photo_url: payload.passport_photo_url,
+                id_document_url: payload.id_document_url,
+                id_document_type: payload.id_document_type,
+                id_document_number: payload.id_document_number,
+                id_submitted_at: now,
+                verification_status: "pending" as const,
+              }
+            : activeMember;
+        setActiveOrg(nextOrg, nextMember);
+      }
+
+      try {
+        await auditMutation.mutateAsync({
+          org_id: payload.org_id,
+          performed_by: payload.user_id,
+          action: "submit_officer_verification",
+          action_label: `Officer submitted verification credentials (${payload.id_document_type.toUpperCase()} & Passport photo, Phone: ${payload.phone_number})`,
+          target_table: "org_members",
+          target_id: payload.member_id,
+        });
+      } catch (auditErr) {
+        console.warn("[Audit] Failed to log officer verification:", auditErr);
+      }
 
       return { success: true, allOfficersSubmitted };
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      queryClient.invalidateQueries({ queryKey: ["organization"] });
       queryClient.invalidateQueries({ queryKey: ["members", vars.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+      queryClient.invalidateQueries({ queryKey: ["platform_verification_data"] });
     },
   });
 }
@@ -5710,7 +5923,110 @@ export function useSubmitOrgVerification() {
     }) => {
       const now = new Date().toISOString();
 
-      // 1. Update Organization state
+      if (isSupabaseConfigured) {
+        let rpcHandled = false;
+        try {
+          const { data: rpcData, error: rpcError } = await supabase.rpc(
+            "submit_org_verification_dossier",
+            {
+              p_org_id: payload.org_id,
+              p_admin_member_id: payload.admin_member_id,
+              p_admin_phone: payload.admin_phone_number || "",
+              p_admin_passport_photo_url: payload.admin_passport_photo_url,
+              p_admin_id_document_url: payload.admin_id_document_url,
+              p_admin_id_document_type: payload.admin_id_document_type,
+              p_admin_id_document_number: payload.admin_id_document_number,
+              p_accountant_member_id: payload.accountant_member_id,
+              p_accountant_phone: payload.accountant_phone_number || "",
+              p_accountant_passport_photo_url: payload.accountant_passport_photo_url,
+              p_accountant_id_document_url: payload.accountant_id_document_url,
+              p_accountant_id_document_type: payload.accountant_id_document_type,
+              p_accountant_id_document_number: payload.accountant_id_document_number,
+            }
+          );
+
+          if (!rpcError) {
+            rpcHandled = true;
+            if (rpcData && typeof rpcData === "object" && (rpcData as any).error) {
+              throw new Error((rpcData as any).error);
+            }
+          } else {
+            const msg = String(rpcError.message || "").toLowerCase();
+            const isMissingRpc =
+              rpcError.code === "42883" ||
+              rpcError.code === "PGRST202" ||
+              msg.includes("could not find the function") ||
+              msg.includes("schema cache");
+            if (!isMissingRpc) {
+              throw new Error(rpcError.message || "Failed to submit organization verification dossier.");
+            }
+          }
+        } catch (err: any) {
+          if (!String(err?.message || "").toLowerCase().includes("function")) {
+            throw err;
+          }
+        }
+
+        if (!rpcHandled) {
+          const { data: adminRows, error: adminErr } = await supabase
+            .from("org_members")
+            .update({
+              passport_photo_url: payload.admin_passport_photo_url,
+              id_document_url: payload.admin_id_document_url,
+              id_document_type: payload.admin_id_document_type,
+              id_document_number: payload.admin_id_document_number,
+              phone_number: payload.admin_phone_number,
+              id_submitted_at: now,
+              verification_status: "pending",
+            })
+            .eq("id", payload.admin_member_id)
+            .select();
+
+          if (adminErr || !adminRows || adminRows.length === 0) {
+            throw new Error(
+              adminErr?.message || "Failed to update Administrator verification record."
+            );
+          }
+
+          const { data: accRows, error: accErr } = await supabase
+            .from("org_members")
+            .update({
+              passport_photo_url: payload.accountant_passport_photo_url,
+              id_document_url: payload.accountant_id_document_url,
+              id_document_type: payload.accountant_id_document_type,
+              id_document_number: payload.accountant_id_document_number,
+              phone_number: payload.accountant_phone_number,
+              id_submitted_at: now,
+              verification_status: "pending",
+            })
+            .eq("id", payload.accountant_member_id)
+            .select();
+
+          if (accErr || !accRows || accRows.length === 0) {
+            throw new Error(
+              accErr?.message || "Failed to update Accountant verification record."
+            );
+          }
+
+          const { data: orgRows, error: orgErr } = await supabase
+            .from("organizations")
+            .update({
+              verification_status: "pending_review",
+              verification_submitted_at: now,
+              verification_rejection_reason: null,
+            })
+            .eq("id", payload.org_id)
+            .select();
+
+          if (orgErr || !orgRows || orgRows.length === 0) {
+            throw new Error(
+              orgErr?.message || "Failed to transition organization verification status."
+            );
+          }
+        }
+      }
+
+      // Sync MockDB & local cache
       const orgs = MockDB.getOrgs();
       const oIdx = orgs.findIndex((o) => o.id === payload.org_id);
       if (oIdx !== -1) {
@@ -5722,7 +6038,6 @@ export function useSubmitOrgVerification() {
       localStorage.setItem(`impacto_org_verification_status_${payload.org_id}`, "pending_review");
       localStorage.removeItem(`impacto_org_rejection_reason_${payload.org_id}`);
 
-      // 2. Update Admin Member Documents
       const members = MockDB.getMembers();
       const adminIdx = members.findIndex((m) => m.id === payload.admin_member_id);
       if (adminIdx !== -1) {
@@ -5735,7 +6050,6 @@ export function useSubmitOrgVerification() {
         members[adminIdx].verification_status = "pending";
       }
 
-      // 3. Update Accountant Member Documents
       const accountantIdx = members.findIndex((m) => m.id === payload.accountant_member_id);
       if (accountantIdx !== -1) {
         if (payload.accountant_phone_number) members[accountantIdx].phone_number = payload.accountant_phone_number;
@@ -5748,50 +6062,40 @@ export function useSubmitOrgVerification() {
       }
       MockDB.saveMembers(members);
 
-      // Supabase synchronization if configured
-      if (isSupabaseConfigured) {
-        try {
-          await supabase.from("organizations").update({
+      const { activeOrg, activeMember, setActiveOrg } = useOrgStore.getState();
+      if (activeOrg?.id === payload.org_id) {
+        setActiveOrg(
+          {
+            ...activeOrg,
             verification_status: "pending_review",
             verification_submitted_at: now,
-          }).eq("id", payload.org_id);
-
-          await supabase.from("org_members").update({
-            passport_photo_url: payload.admin_passport_photo_url,
-            id_document_url: payload.admin_id_document_url,
-            id_document_type: payload.admin_id_document_type,
-            id_document_number: payload.admin_id_document_number,
-            phone_number: payload.admin_phone_number,
-            verification_status: "pending",
-          }).eq("id", payload.admin_member_id);
-
-          await supabase.from("org_members").update({
-            passport_photo_url: payload.accountant_passport_photo_url,
-            id_document_url: payload.accountant_id_document_url,
-            id_document_type: payload.accountant_id_document_type,
-            id_document_number: payload.accountant_id_document_number,
-            phone_number: payload.accountant_phone_number,
-            verification_status: "pending",
-          }).eq("id", payload.accountant_member_id);
-        } catch (dbErr) {
-          console.warn("Supabase org verification update notice:", dbErr);
-        }
+            verification_rejection_reason: undefined,
+          },
+          activeMember
+        );
       }
 
-      await auditMutation.mutateAsync({
-        org_id: payload.org_id,
-        performed_by: payload.submitted_by_user_id,
-        action: "submit_org_verification",
-        action_label: "Submitted Organization Authenticity dossier (Admin & Accountant ID verifications & Telephone numbers)",
-        target_table: "organizations",
-        target_id: payload.org_id,
-      });
+      try {
+        await auditMutation.mutateAsync({
+          org_id: payload.org_id,
+          performed_by: payload.submitted_by_user_id,
+          action: "submit_org_verification",
+          action_label: "Submitted Organization Authenticity dossier (Admin & Accountant ID verifications & Telephone numbers)",
+          target_table: "organizations",
+          target_id: payload.org_id,
+        });
+      } catch (auditErr) {
+        console.warn("[Audit] Failed to log org verification:", auditErr);
+      }
 
       return { success: true, org_id: payload.org_id };
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      queryClient.invalidateQueries({ queryKey: ["organization"] });
       queryClient.invalidateQueries({ queryKey: ["members", vars.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+      queryClient.invalidateQueries({ queryKey: ["platform_verification_data"] });
     },
   });
 }
@@ -5805,11 +6109,124 @@ export function useReviewOrgVerification() {
       org_id: string;
       status: "verified" | "rejected";
       reviewed_by: string;
+      reviewed_by_user_id?: string;
       rejection_reason?: string;
     }) => {
       const now = new Date().toISOString();
 
-      // 1. Update Organization
+      if (isSupabaseConfigured) {
+        let rpcHandled = false;
+        try {
+          const { data: rpcData, error: rpcError } = await supabase.rpc(
+            "review_org_verification",
+            {
+              p_org_id: payload.org_id,
+              p_status: payload.status,
+              p_reviewed_by_name: payload.reviewed_by,
+              p_rejection_reason: payload.rejection_reason || null,
+            }
+          );
+
+          if (!rpcError) {
+            rpcHandled = true;
+            if (rpcData && typeof rpcData === "object" && (rpcData as any).error) {
+              throw new Error((rpcData as any).error);
+            }
+          } else {
+            const msg = String(rpcError.message || "").toLowerCase();
+            const isMissingRpc =
+              rpcError.code === "42883" ||
+              rpcError.code === "PGRST202" ||
+              msg.includes("could not find the function") ||
+              msg.includes("schema cache");
+            if (!isMissingRpc) {
+              throw new Error(rpcError.message || "Failed to review organization verification.");
+            }
+          }
+        } catch (err: any) {
+          if (!String(err?.message || "").toLowerCase().includes("function")) {
+            throw err;
+          }
+        }
+
+        if (!rpcHandled) {
+          if (payload.status === "verified") {
+            const { data: liveOfficers, error: fetchErr } = await supabase
+              .from("org_members")
+              .select("id, role, status, passport_photo_url, id_document_url")
+              .eq("org_id", payload.org_id)
+              .eq("status", "active");
+
+            if (fetchErr) {
+              throw new Error(fetchErr.message || "Could not verify leadership officer documents.");
+            }
+            const hasAdmin = (liveOfficers || []).some(
+              (m: any) =>
+                (m.role === "org_admin" || m.role === "superadmin") &&
+                Boolean(m.passport_photo_url) &&
+                Boolean(m.id_document_url)
+            );
+            const hasAccountant = (liveOfficers || []).some(
+              (m: any) =>
+                m.role === "accountant" &&
+                Boolean(m.passport_photo_url) &&
+                Boolean(m.id_document_url)
+            );
+            if (!hasAdmin || !hasAccountant) {
+              throw new Error(
+                "Both an Admin and an Accountant must submit their Passport Photo and ID scan before granting verification."
+              );
+            }
+          }
+
+          const { data: orgRows, error: orgErr } = await supabase
+            .from("organizations")
+            .update({
+              verification_status: payload.status,
+              verified_at: payload.status === "verified" ? now : null,
+              verified_by: payload.status === "verified" ? payload.reviewed_by : null,
+              verification_rejection_reason:
+                payload.status === "rejected" ? payload.rejection_reason || "Verification requirements not met." : null,
+            })
+            .eq("id", payload.org_id)
+            .select();
+
+          if (orgErr || !orgRows || orgRows.length === 0) {
+            throw new Error(
+              orgErr?.message || "Permission denied updating organization verification status."
+            );
+          }
+
+          const memberUpdate: Record<string, any> = {
+            verification_status: payload.status === "verified" ? "verified" : "rejected",
+            verified_at: payload.status === "verified" ? now : null,
+          };
+          if (payload.status === "rejected") {
+            memberUpdate.verified_by = null;
+          } else if (payload.reviewed_by_user_id && !payload.reviewed_by_user_id.startsWith("mock")) {
+            memberUpdate.verified_by = payload.reviewed_by_user_id;
+          }
+
+          const { error: memErr } = await supabase
+            .from("org_members")
+            .update(memberUpdate)
+            .eq("org_id", payload.org_id)
+            .in("role", ["org_admin", "accountant", "superadmin", "manager"]);
+
+          if (memErr) {
+            console.warn("Supabase member verification status sync notice:", memErr);
+          }
+
+          if (payload.status === "verified") {
+            await supabase
+              .from("referrals")
+              .update({ status: "verified" })
+              .eq("referred_org_id", payload.org_id);
+          }
+        }
+      }
+
+      // 1. Update local Organization cache
       const orgs = MockDB.getOrgs();
       const oIdx = orgs.findIndex((o) => o.id === payload.org_id);
       if (oIdx !== -1) {
@@ -5833,14 +6250,14 @@ export function useReviewOrgVerification() {
         localStorage.setItem(`impacto_org_rejection_reason_${payload.org_id}`, payload.rejection_reason || "Verification rejected.");
       }
 
-      // 2. Update Key Governance Members (Admin & Accountant)
+      // 2. Update Key Governance Members
       const members = MockDB.getMembers();
       members.forEach((m) => {
-        if (m.org_id === payload.org_id && (m.role === "org_admin" || m.role === "accountant" || m.role === "superadmin")) {
+        if (m.org_id === payload.org_id && (m.role === "org_admin" || m.role === "accountant" || m.role === "superadmin" || m.role === "manager")) {
           m.verification_status = payload.status === "verified" ? "verified" : "rejected";
           if (payload.status === "verified") {
             m.verified_at = now;
-            m.verified_by = payload.reviewed_by;
+            if (payload.reviewed_by_user_id) m.verified_by = payload.reviewed_by_user_id;
           }
         }
       });
@@ -5859,34 +6276,44 @@ export function useReviewOrgVerification() {
         if (changed) MockDB.saveReferrals(refs);
       }
 
-      // Supabase synchronization
-      if (isSupabaseConfigured) {
-        try {
-          await supabase.from("organizations").update({
+      const { activeOrg, activeMember, setActiveOrg } = useOrgStore.getState();
+      if (activeOrg?.id === payload.org_id) {
+        setActiveOrg(
+          {
+            ...activeOrg,
             verification_status: payload.status,
-            verified_at: payload.status === "verified" ? now : null,
-            verified_by: payload.status === "verified" ? payload.reviewed_by : null,
-            verification_rejection_reason: payload.status === "rejected" ? payload.rejection_reason : null,
-          }).eq("id", payload.org_id);
-        } catch (dbErr) {
-          console.warn("Supabase review notice:", dbErr);
-        }
+            verified_at: payload.status === "verified" ? now : undefined,
+            verified_by: payload.status === "verified" ? payload.reviewed_by : undefined,
+            verification_rejection_reason:
+              payload.status === "rejected"
+                ? payload.rejection_reason || "Verification requirements not met."
+                : undefined,
+          },
+          activeMember
+        );
       }
 
-      await auditMutation.mutateAsync({
-        org_id: payload.org_id,
-        performed_by: payload.reviewed_by,
-        action: "review_org_verification",
-        action_label: `Organization authenticity ${payload.status.toUpperCase()} by platform reviewer`,
-        target_table: "organizations",
-        target_id: payload.org_id,
-      });
+      try {
+        await auditMutation.mutateAsync({
+          org_id: payload.org_id,
+          performed_by: payload.reviewed_by_user_id || payload.reviewed_by,
+          action: "review_org_verification",
+          action_label: `Organization authenticity ${payload.status.toUpperCase()} by platform reviewer`,
+          target_table: "organizations",
+          target_id: payload.org_id,
+        });
+      } catch (auditErr) {
+        console.warn("[Audit] Failed to log org review:", auditErr);
+      }
 
       return { success: true, org_id: payload.org_id, status: payload.status };
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["organizations"] });
+      queryClient.invalidateQueries({ queryKey: ["organization"] });
       queryClient.invalidateQueries({ queryKey: ["members", vars.org_id] });
+      queryClient.invalidateQueries({ queryKey: ["platform_admin_data"] });
+      queryClient.invalidateQueries({ queryKey: ["platform_verification_data"] });
       queryClient.invalidateQueries({ queryKey: ["referrals"] });
     },
   });

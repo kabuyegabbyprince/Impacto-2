@@ -1814,6 +1814,17 @@ export const MeetRoomPage: React.FC = () => {
           open={inCall}
           onClose={() => {
             hasExplicitlyLeftRef.current = true;
+            if (previewStream) {
+              previewStream.getTracks().forEach((t) => t.stop());
+              setPreviewStream(null);
+            }
+            if (screenStream) {
+              screenStream.getTracks().forEach((t) => t.stop());
+              setScreenStream(null);
+            }
+            setPreviewMic(false);
+            setPreviewVideo(false);
+            setIsScreenSharing(false);
             setInCall(false);
           }}
           channelName={activeMeet?.channelName || "General"}
@@ -1840,6 +1851,17 @@ export const MeetRoomPage: React.FC = () => {
           initialLocalStream={isScreenSharing ? screenStream : previewStream}
           onHostedMeetEnded={() => {
             hasExplicitlyLeftRef.current = true;
+            if (previewStream) {
+              previewStream.getTracks().forEach((t) => t.stop());
+              setPreviewStream(null);
+            }
+            if (screenStream) {
+              screenStream.getTracks().forEach((t) => t.stop());
+              setScreenStream(null);
+            }
+            setPreviewMic(false);
+            setPreviewVideo(false);
+            setIsScreenSharing(false);
             const endedOrgId = activeMeet?.orgId || targetOrg.id;
             const endedMeetId = activeMeet?.meetingId;
             if (isSupabaseConfigured && endedMeetId) {

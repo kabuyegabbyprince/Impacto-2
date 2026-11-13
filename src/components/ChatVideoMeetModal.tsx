@@ -236,6 +236,53 @@ const playMeetingChime = (type: "join" | "mute" | "unmute" | "leave" | "hand") =
   }
 };
 
+// Memoized remote video player that only assigns srcObject when the MediaStream instance changes
+// Prevents flashing/blinking caused by parent 1s timer & audio-meter re-renders
+const RemoteStreamVideo = React.memo<{
+  stream: MediaStream;
+  className?: string;
+}>(({ stream, className }) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (el.srcObject !== stream) {
+      el.srcObject = stream;
+    }
+    const p = el.play();
+    if (p && typeof (p as any).catch === "function") {
+      (p as any).catch(() => {});
+    }
+  }, [stream]);
+
+  return <video ref={videoRef} autoPlay playsInline className={className} />;
+});
+
+// Memoized remote audio player that never re-attaches srcObject on parent re-renders
+const RemoteStreamAudio = React.memo<{
+  stream: MediaStream;
+  onAudioBlocked?: (blocked: boolean) => void;
+}>(({ stream, onAudioBlocked }) => {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (el.srcObject !== stream) {
+      el.srcObject = stream;
+    }
+    const p = el.play();
+    if (p && typeof (p as any).catch === "function") {
+      (p as any)
+        .then(() => onAudioBlocked?.(false))
+        .catch(() => onAudioBlocked?.(true));
+    }
+  }, [stream, onAudioBlocked]);
+
+  return <audio ref={audioRef} autoPlay playsInline />;
+});
+
 export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   open,
   onClose,
@@ -332,6 +379,12 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   }, [user, guestUser, isSameOrgAuthenticatedMember, activeMember?.role, hostedMeetInfo, activeOrg?.owner_id]);
 
   const isLeavingRef = useRef(false);
+
+  useEffect(() => {
+    if (open) {
+      isLeavingRef.current = false;
+    }
+  }, [open]);
 
   const [micOn, setMicOn] = useState(initialMic !== undefined ? initialMic : false);
   const [videoOn, setVideoOn] = useState(initialVideo !== undefined ? initialVideo : false);
@@ -1274,22 +1327,42 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             if (!Array.isArray(entries)) return;
             entries.forEach((p: any) => {
               if (!p?.peerId || p.peerId === myPeerId || String(p.peerId).startsWith("wait-")) return;
-              setRemotePeers((prev) => ({
-                ...prev,
-                [p.peerId]: {
-                  ...prev[p.peerId],
-                  peerId: p.peerId,
-                  userId: p.userId || "guest",
-                  name: p.name || "Participant",
-                  role: p.role || "Participant",
-                  isMe: false,
-                  mic: p.mic ?? prev[p.peerId]?.mic ?? false,
-                  video: p.video ?? prev[p.peerId]?.video ?? false,
-                  speaking: prev[p.peerId]?.speaking ?? false,
-                  handRaised: !!p.handRaised,
-                  stream: remoteStreamsRef.current[p.peerId] || prev[p.peerId]?.stream
+              setRemotePeers((prev) => {
+                const existing = prev[p.peerId];
+                const nextStream = remoteStreamsRef.current[p.peerId] || existing?.stream;
+                const nextMic = p.mic ?? existing?.mic ?? false;
+                const nextVideo = p.video ?? existing?.video ?? false;
+                const nextHand = !!p.handRaised;
+                const nextName = p.name || "Participant";
+                const nextRole = p.role || "Participant";
+                if (
+                  existing &&
+                  existing.name === nextName &&
+                  existing.role === nextRole &&
+                  existing.mic === nextMic &&
+                  existing.video === nextVideo &&
+                  existing.handRaised === nextHand &&
+                  existing.stream === nextStream
+                ) {
+                  return prev;
                 }
-              }));
+                return {
+                  ...prev,
+                  [p.peerId]: {
+                    ...existing,
+                    peerId: p.peerId,
+                    userId: p.userId || "guest",
+                    name: nextName,
+                    role: nextRole,
+                    isMe: false,
+                    mic: nextMic,
+                    video: nextVideo,
+                    speaking: existing?.speaking ?? false,
+                    handRaised: nextHand,
+                    stream: nextStream
+                  }
+                };
+              });
               const shouldInitiate = myPeerId > p.peerId;
               createPeerConnection(p.peerId, shouldInitiate);
             });
@@ -1457,8 +1530,27 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       handRaised: handRaisedRef.current
     });
 
+    // Auto-release hardware and close empty meeting if last participant closes browser tab
+    const handleTabUnload = () => {
+      try {
+        if (localStreamRef.current) {
+          localStreamRef.current.getTracks().forEach((t) => t.stop());
+        }
+        const remainingCount = Object.keys(remotePeersRef.current).filter((id) => id !== myPeerId).length;
+        const orgIdForEnd = activeOrgRef.current?.id || hostedMeetInfoRef.current?.orgId || "default";
+        if (remainingCount === 0 && navigator.sendBeacon) {
+          const blob = new Blob([JSON.stringify({ orgId: orgIdForEnd })], { type: "application/json" });
+          navigator.sendBeacon("/api/meet/end", blob);
+        }
+      } catch (e) {}
+    };
+    window.addEventListener("pagehide", handleTabUnload);
+    window.addEventListener("beforeunload", handleTabUnload);
+
     return () => {
       isUnmounted = true;
+      window.removeEventListener("pagehide", handleTabUnload);
+      window.removeEventListener("beforeunload", handleTabUnload);
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       broadcastSignalingMessage({
         type: "PEER_LEFT",
@@ -1665,10 +1757,10 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     setTimeout(() => setIsRetryingHandshake(false), 1500);
   }, [handshakeAlert, myPeerId, broadcastSignalingMessage, resolvedDisplayName, addToast]);
 
-  // Callback ref for local video element
+  // Callback ref for local video element (only updates srcObject when stream reference changes)
   const handleLocalVideoRef = useCallback((el: HTMLVideoElement | null) => {
     localVideoRef.current = el;
-    if (el && localStream) {
+    if (el && localStream && el.srcObject !== localStream) {
       el.srcObject = localStream;
     }
   }, [localStream]);
@@ -2012,10 +2104,41 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     isLeavingRef.current = true;
 
     playMeetingChime("leave");
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
+    }
     if (localStream) {
-      localStream.getTracks().forEach(t => t.stop());
+      localStream.getTracks().forEach((t) => t.stop());
+    }
+    if (initialLocalStream) {
+      initialLocalStream.getTracks().forEach((t) => t.stop());
+    }
+    if (initialScreenStream) {
+      initialScreenStream.getTracks().forEach((t) => t.stop());
     }
     setLocalStream(null);
+    setMicOn(false);
+    setVideoOn(false);
+    setScreenSharing(false);
+
+    // Count remaining active call participants before tearing down connections
+    let otherActivePeersCount = Object.keys(remotePeersRef.current).filter((id) => id !== myPeerId).length;
+    if (supabaseChannelRef.current && supabaseSubscribedRef.current) {
+      try {
+        const presenceState = supabaseChannelRef.current.presenceState() as Record<string, any[]>;
+        const activeIds = new Set<string>();
+        Object.values(presenceState).forEach((entries) => {
+          entries?.forEach((p: any) => {
+            if (p?.peerId && p.peerId !== myPeerId && !String(p.peerId).startsWith("wait-")) {
+              activeIds.add(p.peerId);
+            }
+          });
+        });
+        if (activeIds.size > otherActivePeersCount) {
+          otherActivePeersCount = activeIds.size;
+        }
+      } catch (e) {}
+    }
 
     // Compile meeting history record with deterministic session ID to prevent duplicates when multiple members leave
     const duration = elapsedSeconds;
@@ -2184,10 +2307,53 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     }
 
     const isMeetingHost = hostedMeetInfo?.hostId === user?.id || isAdmin;
-    if (isMeetingHost) {
+    const isLastParticipantExiting = otherActivePeersCount === 0;
+
+    // Close the meeting room completely when the host ends or when all participants have exited
+    if (isMeetingHost || isLastParticipantExiting) {
+      const orgIdToClose = hostedMeetInfo?.orgId || activeOrg?.id || "default";
       try {
-        localStorage.removeItem(`impacto_meet_chat_${activeOrg?.id || "default"}`);
+        localStorage.removeItem(`impacto_meet_chat_${orgIdToClose}`);
+        localStorage.removeItem(`impacto_active_hosted_meet_${orgIdToClose}`);
       } catch (e) {}
+
+      if (isSupabaseConfigured && (hostedMeetInfo?.meetingId || record.id)) {
+        Promise.resolve(
+          supabase
+            .from("meetings")
+            .update({ status: "completed", ended_at: endedTime })
+            .eq("id", hostedMeetInfo?.meetingId || record.id)
+        ).catch(() => {});
+      }
+
+      fetch("/api/meet/end", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgId: orgIdToClose })
+      }).catch(() => {});
+
+      try {
+        const bc = new BroadcastChannel(`impacto_org_meet_bus_${orgIdToClose}`);
+        bc.postMessage({ type: "HOSTED_MEET_ENDED" });
+        bc.close();
+      } catch (e) {}
+
+      if (isSupabaseConfigured && orgIdToClose !== "default") {
+        try {
+          const orgBus = supabase.channel(`impacto_org_meet_bus_${orgIdToClose}`);
+          orgBus.subscribe((status: string) => {
+            if (status === "SUBSCRIBED") {
+              orgBus.send({
+                type: "broadcast",
+                event: "meet_bus",
+                payload: { type: "HOSTED_MEET_ENDED" }
+              });
+              setTimeout(() => supabase.removeChannel(orgBus), 1000);
+            }
+          });
+        } catch (e) {}
+      }
+
       if (onHostedMeetEnded) {
         onHostedMeetEnded();
       }
@@ -2251,22 +2417,12 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       <div className="fixed bottom-6 right-6 z-50 bg-[#1a1b1e]/95 backdrop-blur-md border border-[#3c4043] rounded-2xl shadow-2xl p-3.5 flex items-center gap-3 animate-in slide-in-from-bottom-4 text-white font-sans">
         {/* Dedicated audio elements for all remote peers to guarantee continuous voice communication */}
         <div className="hidden" aria-hidden="true">
-          {(Object.values(remotePeers) as PeerParticipant[]).map((p: PeerParticipant, idx: number) => {
+          {(Object.values(remotePeers) as PeerParticipant[]).map((p: PeerParticipant) => {
             if (!p.stream || p.isMe || p.peerId === myPeerId) return null;
             return (
-              <audio
-                key={`remote-audio-min-${p.peerId}-${idx}`}
-                autoPlay
-                playsInline
-                ref={(el) => {
-                  if (el && p.stream && el.srcObject !== p.stream) {
-                    el.srcObject = p.stream;
-                    const playPromise = el.play();
-                    if (playPromise && typeof (playPromise as any).catch === "function") {
-                      (playPromise as any).catch(() => {});
-                    }
-                  }
-                }}
+              <RemoteStreamAudio
+                key={`remote-audio-min-${p.peerId}`}
+                stream={p.stream}
               />
             );
           })}
@@ -2341,24 +2497,13 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       
       {/* Dedicated audio elements for all remote peers to guarantee continuous voice communication */}
       <div className="hidden" aria-hidden="true">
-        {(Object.values(remotePeers) as PeerParticipant[]).map((p: PeerParticipant, idx: number) => {
+        {(Object.values(remotePeers) as PeerParticipant[]).map((p: PeerParticipant) => {
           if (!p.stream || p.isMe || p.peerId === myPeerId) return null;
           return (
-            <audio
-              key={`remote-audio-tag-${p.peerId}-${idx}`}
-              autoPlay
-              playsInline
-              ref={(el) => {
-                if (el && p.stream && el.srcObject !== p.stream) {
-                  el.srcObject = p.stream;
-                  const playPromise = el.play();
-                  if (playPromise && typeof (playPromise as any).catch === "function") {
-                    (playPromise as any)
-                      .then(() => setAudioPlaybackBlocked(false))
-                      .catch(() => setAudioPlaybackBlocked(true));
-                  }
-                }
-              }}
+            <RemoteStreamAudio
+              key={`remote-audio-tag-${p.peerId}`}
+              stream={p.stream}
+              onAudioBlocked={setAudioPlaybackBlocked}
             />
           );
         })}
@@ -2773,12 +2918,8 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                         className="w-full h-full object-cover transform scale-x-[-1]"
                       />
                     ) : p.stream && p.video ? (
-                      <video
-                        autoPlay
-                        playsInline
-                        ref={el => {
-                          if (el && p.stream) el.srcObject = p.stream;
-                        }}
+                      <RemoteStreamVideo
+                        stream={p.stream}
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -2836,12 +2977,8 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                     />
                   ) : p.stream && p.video ? (
                     /* Remote Peer Live Video Stream */
-                    <video
-                      autoPlay
-                      playsInline
-                      ref={el => {
-                        if (el && p.stream) el.srcObject = p.stream;
-                      }}
+                    <RemoteStreamVideo
+                      stream={p.stream}
                       className="w-full h-full object-cover"
                     />
                   ) : (
