@@ -2028,7 +2028,6 @@ export const PublicOrgPage: React.FC = () => {
               proof_url: data.providerTransactionId || data.depositId,
             });
             addToast(`Contribution of ${Number(momoAmount || 2000).toLocaleString()} RWF successfully recorded for ${org.name}!`, "success");
-            setMomoModalOpen(false);
           } catch (err: any) {
             console.error("Failed to save donation record:", err);
             addToast("Payment authorized by telecom, but saving record failed: " + err.message, "warning");

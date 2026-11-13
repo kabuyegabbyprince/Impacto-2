@@ -13,10 +13,11 @@ import {
   useUpdateOrganization,
   useBroadcastNotification
 } from "../hooks/useImpactoData";
-import { Card, Input, Button, Badge, ImageUploadInput } from "../components/ui";
+import { Card, Input, Button, Badge, ImageUploadInput, Modal } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "../components/MoMoPushPaymentModal";
-import { UssdPaymentHelper } from "../components/UssdPaymentHelper";
+import { PaymentGatewaySection, PaymentGatewaySuccessState } from "../components/PaymentGatewaySection";
+import { PaymentSuccessPulse } from "../components/PaymentSuccessPulse";
 import { 
   Coins, 
   Filter, 
@@ -207,6 +208,8 @@ export const OrganizationMemberFees: React.FC = () => {
   const [manualNote, setManualNote] = useState("");
   const [manualProofUrl, setManualProofUrl] = useState("");
   const [resendMessageText, setResendMessageText] = useState("");
+  const [feePaymentSuccess, setFeePaymentSuccess] = useState<PaymentGatewaySuccessState | null>(null);
+  const [showOrgGatewayModal, setShowOrgGatewayModal] = useState(false);
 
   // Admin Review / Confirmation state variables
   const [reviewingFee, setReviewingFee] = useState<MemberFee | null>(null);
@@ -534,8 +537,8 @@ export const OrganizationMemberFees: React.FC = () => {
 
     if (payMethod === "MTN MoMo / Airtel") {
       const cleanPhone = momoPhoneNumber.replace(/\D/g, "");
-      if (!/^07[89]\d{7}$/.test(cleanPhone)) {
-        addToast("Error: MTN phone number required. Must be 10 digits starting with 078 or 079 (e.g. 078XXXXXXX or 079XXXXXXX) to reduce errors.", "error");
+      if (!/^07[2389]\d{7}$/.test(cleanPhone)) {
+        addToast("Error: Valid Rwandan Mobile Money number required (10 digits starting with 078, 079, 072, or 073).", "error");
         return;
       }
       if (!manualSenderInfo.trim()) {
@@ -607,10 +610,12 @@ export const OrganizationMemberFees: React.FC = () => {
       }
 
       addToast("Your payment report was submitted! An administrator will verify and confirm shortly.", "success");
-    } catch (err: any) {
-      addToast(sanitizeError(err, "Failed to log payment report."), "error");
-    } finally {
-      setSelectedFeeToPay(null);
+      setFeePaymentSuccess({
+        title: "Payment Proof Submitted",
+        message: `Your payment report for ${selectedFeeToPay.payment_period} (${selectedFeeToPay.amount.toLocaleString()} RWF) was sent to the verification queue.`,
+        reference: generatedTxRef,
+        amountRwf: selectedFeeToPay.amount
+      });
       // Reset inputs
       setMomoPhoneNumber("");
       setManualTxRef("");
@@ -618,6 +623,8 @@ export const OrganizationMemberFees: React.FC = () => {
       setManualNote("");
       setManualProofUrl("");
       setResendMessageText("");
+    } catch (err: any) {
+      addToast(sanitizeError(err, "Failed to log payment report."), "error");
     }
   };
 
@@ -1171,6 +1178,17 @@ export const OrganizationMemberFees: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {(isAccountant || isAdmin) && (
+            <Button
+              onClick={() => setShowOrgGatewayModal(true)}
+              variant="outline"
+              className="flex items-center gap-1.5 py-2.5 font-semibold rounded-xl border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-3xs"
+              id="btn-org-payment-gateway"
+            >
+              <Landmark className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Payment Gateway
+            </Button>
+          )}
           {isAccountant && (
             <>
               <Button onClick={() => setShowAddModal(true)} className="flex items-center gap-1.5 py-2.5 bg-emerald-700 hover:bg-emerald-800 font-bold rounded-xl shadow-xs" id="btn-add-fee">
@@ -2167,7 +2185,10 @@ export const OrganizationMemberFees: React.FC = () => {
               </div>
               <button 
                 type="button"
-                onClick={() => setSelectedFeeToPay(null)}
+                onClick={() => {
+                  setFeePaymentSuccess(null);
+                  setSelectedFeeToPay(null);
+                }}
                 className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
                 id="btn-close-pay-modal"
                 aria-label="Close modal"
@@ -2177,210 +2198,204 @@ export const OrganizationMemberFees: React.FC = () => {
             </div>
 
             <div className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
-              {/* Target summary card */}
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-slate-500 font-medium">Invoice period</span>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">
-                    {selectedFeeToPay.payment_period}
-                  </p>
-                  <p className="text-xs text-slate-500 font-mono mt-0.5">
-                    Date: {selectedFeeToPay.period_date}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs text-slate-500 block">Amount due</span>
-                  <span className="text-base font-semibold font-mono text-slate-900 dark:text-white mt-0.5">
-                    {selectedFeeToPay.amount.toLocaleString()} RWF
-                  </span>
-                </div>
-              </div>
-
-              {/* Selector for payment reported method */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
-                  Payment method
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: "MTN MoMo / Airtel", label: "Mobile Money", subtitle: "MTN or Airtel transfer" },
-                    { id: "Cash", label: "Cash payment", subtitle: "Direct to cashier" }
-                  ].map((method) => (
-                    <button
-                      key={method.id}
-                      type="button"
-                      id={`btn-pay-method-${method.id.replace(/\s+/g, '-')}`}
-                      onClick={() => setPayMethod(method.id as any)}
-                      className={`flex flex-col items-start p-2.5 border rounded-lg text-left transition cursor-pointer ${
-                        payMethod === method.id
-                          ? "border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 text-slate-900 dark:text-slate-100"
-                          : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 text-slate-700 dark:text-slate-400"
-                      }`}
-                    >
-                      <span className="text-xs font-semibold">{method.label}</span>
-                      <span className="text-[11px] text-slate-500">{method.subtitle}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Conditional forms based on selection */}
-              {payMethod === "MTN MoMo / Airtel" ? (
-                <form id="form-momo-report" onSubmit={handleSubmitManualReport} className="space-y-4">
-                  <div className="border-b border-slate-200 dark:border-slate-800 pb-2">
-                    <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 block">Payment details & receipt</span>
-                    <span className="text-[11px] text-slate-500">Enter the sender phone number and paste the confirmation SMS.</span>
-                  </div>
-
-                  {/* Auto-generated USSD Quick Dial Helper for Organization */}
-                  <UssdPaymentHelper
-                    targetType="organization"
-                    mtnNumber={activeOrg?.dues_mtn_number || activeOrg?.donation_mtn_number}
-                    merchantCode={activeOrg?.momo_merchant_code}
-                    airtelNumber={activeOrg?.dues_airtel_number || activeOrg?.donation_airtel_number}
-                    recipientName={activeOrg?.dues_account_name || activeOrg?.name}
-                    amountRwf={selectedFeeToPay?.amount}
-                    itemName={`Dues: ${selectedFeeToPay?.payment_period || "Cycle"}`}
-                  />
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div className="flex flex-col gap-1">
-                      <Input
-                        label="MTN MoMo Phone (078 / 079)"
-                        placeholder="078XXXXXXX or 079..."
-                        required
-                        value={momoPhoneNumber}
-                        onChange={(e) => setMomoPhoneNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                        id="input-momo-subscriber-phone"
-                      />
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[10px] text-stone-400 font-mono">Quick prefix:</span>
-                        <button
-                          type="button"
-                          onClick={() => setMomoPhoneNumber("078")}
-                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700"
-                        >
-                          078
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMomoPhoneNumber("079")}
-                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700"
-                        >
-                          079
-                        </button>
-                      </div>
-                    </div>
-                    <Input
-                      label="Sender's Registered Full Name"
-                      placeholder="e.g. Jean Pierre N."
-                      required
-                      value={manualSenderInfo}
-                      onChange={(e) => setManualSenderInfo(e.target.value)}
-                      id="input-momo-subscriber-name"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-850 dark:text-slate-300 block select-none">
-                      Pasted Transaction SMS Copy Text
-                    </label>
-                    <textarea
-                      rows={3}
-                      placeholder="e.g. TxId: 93821033. You have transferred 1,000 RWF to Greening Kigali Ltd..."
-                      required
-                      value={resendMessageText}
-                      onChange={(e) => setResendMessageText(e.target.value)}
-                      className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-300 dark:border-slate-800 p-2.5 outline-none focus:ring-2 focus:ring-[#156c45] text-stone-800 dark:text-stone-100 font-mono shadow-3xs"
-                      id="input-manual-momo-sms-copy"
-                    />
-                    <p className="text-[10px] text-stone-500">Copy and paste the exact text from the received transaction message.</p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-850 dark:text-slate-300 block select-none">
-                      Optional Verification Note
-                    </label>
-                    <textarea
-                      rows={2}
-                      placeholder="e.g. Sent via agent, please verify ledger balance."
-                      value={manualNote}
-                      onChange={(e) => setManualNote(e.target.value)}
-                      className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-300 dark:border-slate-800 p-2.5 outline-none focus:ring-2 focus:ring-[#156c45] text-stone-800 dark:text-stone-100 shadow-3xs"
-                      id="input-manual-momo-note"
-                    />
-                  </div>
-                </form>
+              {feePaymentSuccess && payMethod === "Cash" ? (
+                <PaymentSuccessPulse
+                  title={feePaymentSuccess.title}
+                  message={feePaymentSuccess.message}
+                  reference={feePaymentSuccess.reference}
+                  amountRwf={feePaymentSuccess.amountRwf}
+                  doneLabel="Done & Close"
+                  onDone={() => {
+                    setFeePaymentSuccess(null);
+                    setSelectedFeeToPay(null);
+                  }}
+                />
               ) : (
-                <form id="form-cash-report" onSubmit={handleSubmitManualReport} className="space-y-4 animate-in slide-in-from-bottom-2">
-                  <div className="flex items-center gap-2 select-none border-b border-gray-150 dark:border-slate-800 pb-2.5">
-                    <span className="h-6 w-6 rounded-lg bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 flex items-center justify-center">
-                      <Coins className="h-3.5 w-3.5" />
-                    </span>
-                    <div>
-                      <span className="text-[11px] font-black text-amber-850 dark:text-amber-400 block leading-tight uppercase">Hand Cash Submission</span>
-                      <span className="text-[10px] text-gray-500 dark:text-slate-400">Confirm the member payer name and officer cashier recipient.</span>
-                    </div>
-                  </div>
+                <>
+                  {!feePaymentSuccess && (
+                    <>
+                      {/* Target summary card */}
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg flex items-center justify-between">
+                        <div>
+                          <span className="text-xs text-slate-500 font-medium">Invoice period</span>
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">
+                            {selectedFeeToPay.payment_period}
+                          </p>
+                          <p className="text-xs text-slate-500 font-mono mt-0.5">
+                            Date: {selectedFeeToPay.period_date}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs text-slate-500 block">Amount due</span>
+                          <span className="text-base font-semibold font-mono text-slate-900 dark:text-white mt-0.5 tabular-nums">
+                            {selectedFeeToPay.amount.toLocaleString()} RWF
+                          </span>
+                        </div>
+                      </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <Input
-                      label="Payer Member Name"
-                      placeholder="e.g. Jean Pierre N."
-                      required
-                      value={manualSenderInfo}
-                      onChange={(e) => setManualSenderInfo(e.target.value)}
-                      id="input-manual-cash-payer"
-                    />
-                    <Input
-                      label="Receiver Officer Name"
-                      placeholder="e.g. Divine Uwera (Cashier)"
-                      required
-                      value={manualTxRef}
-                      onChange={(e) => setManualTxRef(e.target.value)}
-                      id="input-manual-cash-receiver"
-                    />
-                  </div>
+                      {/* Selector for payment reported method */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
+                          Payment method
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { id: "MTN MoMo / Airtel", label: "Mobile Money", subtitle: "MTN or Airtel transfer" },
+                            { id: "Cash", label: "Cash payment", subtitle: "Direct to cashier" }
+                          ].map((method) => (
+                            <button
+                              key={method.id}
+                              type="button"
+                              id={`btn-pay-method-${method.id.replace(/\s+/g, '-')}`}
+                              onClick={() => setPayMethod(method.id as any)}
+                              className={`flex flex-col items-start p-2.5 border rounded-lg text-left transition cursor-pointer ${
+                                payMethod === method.id
+                                  ? "border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 text-slate-900 dark:text-slate-100"
+                                  : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 text-slate-700 dark:text-slate-400"
+                              }`}
+                            >
+                              <span className="text-xs font-semibold">{method.label}</span>
+                              <span className="text-[11px] text-slate-500">{method.subtitle}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-stone-850 dark:text-slate-300 block select-none">
-                      Optional Verification Notes
-                    </label>
-                    <textarea
-                      rows={2}
-                      placeholder="e.g. Handed cash directly to supervisor at Kigali forest nurseries sector."
-                      value={manualNote}
-                      onChange={(e) => setManualNote(e.target.value)}
-                      className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-300 dark:border-slate-800 p-2.5 outline-none focus:ring-2 focus:ring-emerald-700 text-stone-800 dark:text-stone-100"
-                      id="input-manual-cash-note"
+                  {/* Conditional forms based on selection */}
+                  {payMethod === "MTN MoMo / Airtel" ? (
+                    <PaymentGatewaySection
+                      targetType="organization"
+                      itemName={`Dues: ${selectedFeeToPay.payment_period.toUpperCase()} Cycle`}
+                      amountRwf={selectedFeeToPay.amount}
+                      phone={momoPhoneNumber}
+                      onPhoneChange={setMomoPhoneNumber}
+                      senderName={manualSenderInfo}
+                      onSenderNameChange={setManualSenderInfo}
+                      showSenderName
+                      showReferenceInput={false}
+                      smsProof={resendMessageText}
+                      onSmsProofChange={setResendMessageText}
+                      showNoteInput
+                      note={manualNote}
+                      onNoteChange={setManualNote}
+                      formId="form-momo-report"
+                      onSubmit={handleSubmitManualReport}
+                      successState={feePaymentSuccess}
+                      onDoneSuccess={() => {
+                        setFeePaymentSuccess(null);
+                        setSelectedFeeToPay(null);
+                      }}
+                      doneLabel="Done & Close"
+                      hideDefaultActions
                     />
-                  </div>
-                </form>
+                  ) : (
+                    <form id="form-cash-report" onSubmit={handleSubmitManualReport} className="space-y-4">
+                      <div className="flex items-center gap-2 select-none border-b border-gray-150 dark:border-slate-800 pb-2.5">
+                        <span className="h-6 w-6 rounded-lg bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 flex items-center justify-center">
+                          <Coins className="h-3.5 w-3.5" />
+                        </span>
+                        <div>
+                          <span className="text-[11px] font-black text-amber-850 dark:text-amber-400 block leading-tight uppercase">Hand Cash Submission</span>
+                          <span className="text-[10px] text-gray-500 dark:text-slate-400">Confirm the member payer name and officer cashier recipient.</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <Input
+                          label="Payer Member Name"
+                          placeholder="e.g. Jean Pierre N."
+                          required
+                          value={manualSenderInfo}
+                          onChange={(e) => setManualSenderInfo(e.target.value)}
+                          id="input-manual-cash-payer"
+                        />
+                        <Input
+                          label="Receiver Officer Name"
+                          placeholder="e.g. Divine Uwera (Cashier)"
+                          required
+                          value={manualTxRef}
+                          onChange={(e) => setManualTxRef(e.target.value)}
+                          id="input-manual-cash-receiver"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-stone-850 dark:text-slate-300 block select-none">
+                          Optional Verification Notes
+                        </label>
+                        <textarea
+                          rows={2}
+                          placeholder="e.g. Handed cash directly to supervisor at Kigali forest nurseries sector."
+                          value={manualNote}
+                          onChange={(e) => setManualNote(e.target.value)}
+                          className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-gray-300 dark:border-slate-800 p-2.5 outline-none focus:ring-2 focus:ring-emerald-700 text-stone-800 dark:text-stone-100"
+                          id="input-manual-cash-note"
+                        />
+                      </div>
+                    </form>
+                  )}
+                </>
               )}
             </div>
 
-            <div className="p-4 bg-gray-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0">
-              <Button variant="outline" onClick={() => setSelectedFeeToPay(null)} id="btn-cancel-payment-panel">
-                Close
-              </Button>
-              <Button
-                type="submit"
-                form={payMethod === "MTN MoMo / Airtel" ? "form-momo-report" : "form-cash-report"}
-                className="bg-[#15803D] hover:bg-emerald-800 text-white font-extrabold px-5 py-2.5 rounded-xl transition shadow-xs"
-                id="btn-submit-momo-manual-report"
-              >
-                Submit Payment Report
-              </Button>
-            </div>
+            {!feePaymentSuccess && (
+              <div className="p-4 bg-gray-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setFeePaymentSuccess(null);
+                    setSelectedFeeToPay(null);
+                  }}
+                  id="btn-cancel-payment-panel"
+                >
+                  Close
+                </Button>
+                <Button
+                  type="submit"
+                  form={payMethod === "MTN MoMo / Airtel" ? "form-momo-report" : "form-cash-report"}
+                  disabled={updateFeeStatusMutation.isPending}
+                  className="bg-[#15803D] hover:bg-emerald-800 text-white font-extrabold px-5 py-2.5 rounded-xl transition shadow-xs"
+                  id="btn-submit-momo-manual-report"
+                >
+                  {updateFeeStatusMutation.isPending ? "Submitting..." : "Submit Payment Report"}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      {/* Organization Payment Gateway Reference Modal for Admins & Accountants */}
+      <Modal
+        open={showOrgGatewayModal}
+        onClose={() => setShowOrgGatewayModal(false)}
+        title="Organization Dues Collection Gateway"
+      >
+        <div className="flex flex-col gap-4">
+          <PaymentGatewaySection
+            targetType="organization"
+            itemName={`${activeOrg?.name || "Organization"} Collection Gateway`}
+            amountRwf={activeOrg?.default_dues_amount || 1000}
+            readOnlyPreview
+          />
+          <div className="flex justify-end pt-2 border-t border-slate-200 dark:border-slate-800">
+            <Button variant="outline" onClick={() => setShowOrgGatewayModal(false)}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* MoMo Push Payment Modal for Member Dues */}
       {selectedFeeToPay && (
         <MoMoPushPaymentModal
           isOpen={openMoMoPushPromptModal}
-          onClose={() => setOpenMoMoPushPromptModal(false)}
+          onClose={() => {
+            setOpenMoMoPushPromptModal(false);
+            setSelectedFeeToPay(null);
+          }}
           title={`Pay Dues: ${selectedFeeToPay.payment_period.toUpperCase()} Cycle`}
           description="Enter your phone number to receive an instant USSD PIN authorization prompt on your handset."
           amountRwf={selectedFeeToPay.amount}
@@ -2433,8 +2448,6 @@ export const OrganizationMemberFees: React.FC = () => {
                   : "Payment report submitted! The accountant will verify shortly.", 
                 "success"
               );
-              setOpenMoMoPushPromptModal(false);
-              setSelectedFeeToPay(null);
             } catch (err: any) {
               console.error("Failed to update fee record:", err);
               addToast(err?.message || "Failed to record payment.", "error");

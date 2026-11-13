@@ -50,6 +50,13 @@ export const APP_CONFIG = {
     momoCurrency: "RWF",
   },
 
+  // WebRTC NAT Traversal (STUN / TURN)
+  webrtc: {
+    turnUrls: getEnv("VITE_TURN_URLS", ""),
+    turnUsername: getEnv("VITE_TURN_USERNAME", ""),
+    turnCredential: getEnv("VITE_TURN_CREDENTIAL", ""),
+  },
+
   // Navigation Links
   links: {
     privacyPolicy: getEnv("VITE_PRIVACY_URL", "/privacy"),

@@ -76,7 +76,9 @@ import {
   useReviewIdentityVerification,
   useResignations,
   useFinalizeResignation,
-  useGoals
+  useGoals,
+  usePlatformSettings,
+  useSubmitSubscriptionPayment
 } from "../hooks/useImpactoData";
 import { Button, Input, Card, Badge, Avatar, Table, Modal, EmptyState } from "../components/ui";
 import { useToast } from "../components/Toast";
@@ -85,6 +87,8 @@ import { PlanGatedView } from "../components/PlanGatedView";
 import { EmptyLedgerState, EmptyGrantsState, EmptyReportsState } from "../components/EmptyModuleStates";
 import { BulkMemberInviteModal } from "../components/BulkMemberInviteModal";
 import { OrganizationVerificationModal } from "../components/OrganizationVerificationModal";
+import { PaymentGatewaySection, PaymentGatewaySuccessState } from "../components/PaymentGatewaySection";
+import { SubscriptionPaymentDashboard } from "../components/SubscriptionPaymentDashboard";
 
 // ==========================================
 // 1. ROSTER MEMBERS LISTS (Admin Route)
@@ -1564,15 +1568,26 @@ export const LedgerBookkeeping: React.FC = () => {
 
   const { data: goals } = useGoals(activeOrg?.id);
   const { data: members } = useMembers(activeOrg?.id);
+  const { data: platformSettings } = usePlatformSettings();
+  const submitSubscriptionPayment = useSubmitSubscriptionPayment();
 
   const isOrgAdmin = activeMember?.role === "org_admin";
 
-  const [activeSubTab, setActiveSubTab] = useState<"ledger_book" | "balance_sheet" | "fast_batch">(() => {
+  const [activeSubTab, setActiveSubTab] = useState<"ledger_book" | "balance_sheet" | "fast_batch" | "payment_gateway">(() => {
     return activeMember?.role === "org_admin" ? "balance_sheet" : "ledger_book";
   });
 
+  // Ledger Payment Gateway state
+  const [gatewayTarget, setGatewayTarget] = useState<"organization" | "platform">("organization");
+  const [ledgerSubTier, setLedgerSubTier] = useState<"Growth Plan - $10/month" | "Pro Plan - $25/month">("Growth Plan - $10/month");
+  const [ledgerPayPhone, setLedgerPayPhone] = useState("");
+  const [ledgerPayRef, setLedgerPayRef] = useState("");
+  const [ledgerSmsProof, setLedgerSmsProof] = useState("");
+  const [ledgerPaySubmitting, setLedgerPaySubmitting] = useState(false);
+  const [ledgerPaySuccess, setLedgerPaySuccess] = useState<PaymentGatewaySuccessState | null>(null);
+
   useEffect(() => {
-    if (isOrgAdmin) {
+    if (isOrgAdmin && activeSubTab === "ledger_book") {
       setActiveSubTab("balance_sheet");
     }
   }, [isOrgAdmin]);
@@ -2079,7 +2094,7 @@ export const LedgerBookkeeping: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveSubTab("balance_sheet")}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
                 activeSubTab === "balance_sheet"
                   ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
@@ -2088,8 +2103,164 @@ export const LedgerBookkeeping: React.FC = () => {
               <Scale className="h-3.5 w-3.5" />
               Real-Time Balance Sheet
             </button>
+            <button
+              onClick={() => setActiveSubTab("payment_gateway")}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                activeSubTab === "payment_gateway"
+                  ? "bg-white dark:bg-slate-900 text-[#156c45] dark:text-emerald-400 shadow-3xs"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+              }`}
+            >
+              <Wallet className="h-3.5 w-3.5" />
+              Payment Gateway
+            </button>
           </div>
         </div>
+
+        {/* SUBTAB: STANDARDIZED PAYMENT GATEWAY */}
+        {activeSubTab === "payment_gateway" && (
+          <div className="flex flex-col gap-6 animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-3xs flex flex-col gap-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Standardized Payment Gateway
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Access active organization MoMo collection codes or submit platform subscription payment proofs.
+                  </p>
+                </div>
+                <div className="inline-flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 self-start">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGatewayTarget("organization");
+                      setLedgerPaySuccess(null);
+                    }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer ${
+                      gatewayTarget === "organization"
+                        ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-3xs"
+                        : "text-slate-600 dark:text-slate-400"
+                    }`}
+                  >
+                    Organization Collection Codes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGatewayTarget("platform");
+                      setLedgerPaySuccess(null);
+                    }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer ${
+                      gatewayTarget === "platform"
+                        ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-3xs"
+                        : "text-slate-600 dark:text-slate-400"
+                    }`}
+                  >
+                    Platform License Billing
+                  </button>
+                </div>
+              </div>
+
+              {gatewayTarget === "organization" ? (
+                <PaymentGatewaySection
+                  targetType="organization"
+                  itemName={`${activeOrg?.name || "Organization"} Dues & Contributions Gateway`}
+                  amountRwf={activeOrg?.default_dues_amount || 1000}
+                  platformSettings={platformSettings}
+                  readOnlyPreview
+                />
+              ) : (
+                <PaymentGatewaySection
+                  targetType="platform"
+                  itemName={ledgerSubTier}
+                  amountUsd={ledgerSubTier.includes("$25") ? 25 : 10}
+                  amountRwf={(ledgerSubTier.includes("$25") ? 25 : 10) * (platformSettings?.usd_to_rwf_rate || 1400)}
+                  usdToRwfRate={platformSettings?.usd_to_rwf_rate || 1400}
+                  platformSettings={platformSettings}
+                  tierSelector={
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {[
+                        { label: "Growth Plan - $10/month", desc: "Up to 250 members & Financial Ledger" },
+                        { label: "Pro Plan - $25/month", desc: "Unlimited members, Video Meet & Reports" }
+                      ].map((plan) => (
+                        <button
+                          key={plan.label}
+                          type="button"
+                          onClick={() => setLedgerSubTier(plan.label as any)}
+                          className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                            ledgerSubTier === plan.label
+                              ? "border-emerald-600 bg-emerald-50/60 dark:bg-emerald-950/30"
+                              : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                          }`}
+                        >
+                          <span className="text-xs font-bold text-slate-900 dark:text-white block">{plan.label}</span>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5">{plan.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  }
+                  phone={ledgerPayPhone}
+                  onPhoneChange={setLedgerPayPhone}
+                  reference={ledgerPayRef}
+                  onReferenceChange={setLedgerPayRef}
+                  smsProof={ledgerSmsProof}
+                  onSmsProofChange={setLedgerSmsProof}
+                  submitting={ledgerPaySubmitting}
+                  submitLabel="Submit Subscription Payment Proof"
+                  successState={ledgerPaySuccess}
+                  onDoneSuccess={() => setLedgerPaySuccess(null)}
+                  doneLabel="Submit Another Proof"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const cleanPhone = ledgerPayPhone.replace(/\D/g, "");
+                    if (!/^07[2389]\d{7}$/.test(cleanPhone)) {
+                      addToast("Please enter a valid 10-digit MTN (078/079) or Airtel (072/073) number.", "error");
+                      return;
+                    }
+                    if (!ledgerSmsProof.trim()) {
+                      addToast("Please paste your confirmation SMS receipt text.", "error");
+                      return;
+                    }
+                    setLedgerPaySubmitting(true);
+                    try {
+                      const rate = platformSettings?.usd_to_rwf_rate || 1400;
+                      const usd = ledgerSubTier.includes("$25") ? 25 : 10;
+                      const ref = ledgerPayRef.trim() || `TXN-${Date.now().toString().slice(-6)}`;
+                      await submitSubscriptionPayment.mutateAsync({
+                        org_id: activeOrg?.id || "org-1",
+                        plan: ledgerSubTier,
+                        amount_usd: usd,
+                        amount_local: usd * rate,
+                        method: cleanPhone.startsWith("072") || cleanPhone.startsWith("073") ? "airtel" : "mtn",
+                        phone: cleanPhone,
+                        reference: ref,
+                        proof_url: ledgerSmsProof.trim(),
+                        item_type: "subscription"
+                      });
+                      addToast("Subscription payment proof logged for verification.", "success");
+                      setLedgerPaySuccess({
+                        title: "Subscription Proof Submitted",
+                        message: `Your payment receipt for ${ledgerSubTier} was logged and sent to the approval queue.`,
+                        reference: ref,
+                        amountRwf: usd * rate
+                      });
+                      setLedgerPayPhone("");
+                      setLedgerPayRef("");
+                      setLedgerSmsProof("");
+                    } catch (err: any) {
+                      addToast(err?.message || "Failed to submit subscription payment proof.", "error");
+                    } finally {
+                      setLedgerPaySubmitting(false);
+                    }
+                  }}
+                />
+              )}
+            </div>
+
+            <SubscriptionPaymentDashboard org={activeOrg} orgId={activeOrg?.id} />
+          </div>
+        )}
 
         {/* SUBTAB 1: REAL-TIME BALANCE SHEET */}
         {activeSubTab === "balance_sheet" && (

@@ -48,6 +48,47 @@ export function cleanPhoneNumber(input?: string): string {
   return digits;
 }
 
+/**
+ * Resolves the active payment code across platform settings, active organization, localStorage, and system defaults.
+ */
+export function getEffectivePaymentCode(
+  platformSettings?: any,
+  activeOrg?: any,
+  targetType: "platform" | "organization" = "platform"
+): string {
+  if (targetType === "organization") {
+    const orgCode = activeOrg?.momo_merchant_code || activeOrg?.dues_mtn_number || activeOrg?.mtn_payment_number;
+    if (orgCode && typeof orgCode === "string" && orgCode.trim()) return orgCode.trim();
+
+    if (activeOrg?.id) {
+      try {
+        const orgLocal = localStorage.getItem(`impacto_org_momo_merchant_code_${activeOrg.id}`);
+        if (orgLocal && typeof orgLocal === "string" && orgLocal.trim()) return orgLocal.trim();
+      } catch (e) {}
+    }
+    return "";
+  }
+
+  const psCode = platformSettings?.momo_merchant_code || platformSettings?.mtn_merchant_code || platformSettings?.mtn_payment_number;
+  if (psCode && typeof psCode === "string" && psCode.trim()) return psCode.trim();
+
+  try {
+    const rawPs = localStorage.getItem("impacto_mock_platform_settings");
+    if (rawPs) {
+      const parsed = JSON.parse(rawPs);
+      const cachedPs = parsed?.momo_merchant_code || parsed?.mtn_merchant_code || parsed?.mtn_payment_number;
+      if (cachedPs && typeof cachedPs === "string" && cachedPs.trim()) return cachedPs.trim();
+    }
+  } catch (e) {}
+
+  try {
+    const globalCode = localStorage.getItem("impacto_global_momo_merchant_code");
+    if (globalCode && typeof globalCode === "string" && globalCode.trim()) return globalCode.trim();
+  } catch (e) {}
+
+  return "2325266";
+}
+
 export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
   targetType,
   mtnNumber,
@@ -65,9 +106,15 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
   const [isRequestingAdmin, setIsRequestingAdmin] = useState(false);
   const [adminRequestSent, setAdminRequestSent] = useState(false);
 
-  const cleanNum = cleanPhoneNumber(mtnNumber);
-  const cleanMCode = cleanMerchantCode(merchantCode);
-  const cleanAirtel = cleanPhoneNumber(airtelNumber);
+  const effectiveMCode =
+    targetType === "organization"
+      ? (merchantCode || "")
+      : (merchantCode || getEffectivePaymentCode(undefined, undefined, "platform"));
+  const hasExplicitMtn = Boolean(mtnNumber && mtnNumber.trim() && mtnNumber !== "0788300000");
+  const hasExplicitAirtel = Boolean(airtelNumber && airtelNumber.trim() && airtelNumber !== "0728300000");
+  const cleanNum = hasExplicitMtn ? cleanPhoneNumber(mtnNumber) : "";
+  const cleanMCode = cleanMerchantCode(effectiveMCode);
+  const cleanAirtel = hasExplicitAirtel ? cleanPhoneNumber(airtelNumber) : "";
   // For donations, contributions are random so no fixed amount is attached to the USSD dial code
   const formattedAmount = isDonation ? null : (amountRwf && amountRwf > 0 ? Math.round(amountRwf) : null);
 

@@ -2,7 +2,7 @@ import { GoalsPage } from "./goals";
 import { WaitRoomView } from "../components/WaitRoomView";
 import { DynamicAttendanceGrid } from "../components/DynamicAttendanceGrid";
 import { EventScheduleCalendar } from "../components/EventScheduleCalendar";
-import { ChatVideoMeetModal } from "../components/ChatVideoMeetModal";
+import { ChatVideoMeetModal, getCanonicalMeetRoomId, isMeetHostOrAdmin } from "../components/ChatVideoMeetModal";
 import { MeetingHistoryModal } from "../components/MeetingHistoryModal";
 import { getTaskDeadlineNotice, useTaskProgressSync } from "../hooks/useTaskProgressSync";
 import { MyTasksWorkspaceModal } from "../components/MyTasksWorkspaceModal";
@@ -91,7 +91,7 @@ import { useOrgStore } from "../store/orgStore";
 import { useCurrencyStore } from "../store/currencyStore";
 import { OrganizationVerificationModal } from "../components/OrganizationVerificationModal";
 import { Goal, GoalTask, Event as ImpactEvent, EventTask, NewsPost, Meeting, ChatChannel, Document, LiveMeetHistoryRecord, HostedMeetInfo } from "../types";
-import { generateMeetingCode } from "./MeetRoomPage";
+import { generateMeetingCode, isSameMeetMeta } from "./MeetRoomPage";
 import { RealtimeTaskCountdown } from "../components/RealtimeTaskCountdown";
 import {
   useEvents,
@@ -156,9 +156,12 @@ import {
   useSaveMeetingAttendance,
   useMeetingSessions,
   useDeleteMeetingSession,
-  useClearAllMeetingSessions
+  useClearAllMeetingSessions,
+  usePlatformSettings,
+  useSubmitSubscriptionPayment
 } from "../hooks/useImpactoData";
 import { Button, Input, Card, Badge, Avatar, ProgressBar, EmptyState, Modal, Table } from "../components/ui";
+import { PaymentGatewaySection, PaymentGatewaySuccessState } from "../components/PaymentGatewaySection";
 import { MockDB } from "../lib/mockData";
 import { canAccessFeature, getOrgSubscriptionLifecycle, ADDON_PACKAGES } from "../lib/subscriptionMatrix";
 
@@ -370,7 +373,17 @@ export const DashboardHome: React.FC = () => {
   const { data: goals } = useGoals(activeOrg?.id);
   const { data: news } = useNews(activeOrg?.id);
   const { data: members } = useMembers(activeOrg?.id);
+  const { data: platformSettings } = usePlatformSettings();
+  const submitDashboardSubPayment = useSubmitSubscriptionPayment();
   const [openOrgVerifyModal, setOpenOrgVerifyModal] = useState(false);
+  const [openDashboardGatewayModal, setOpenDashboardGatewayModal] = useState(false);
+  const [dashGatewayMode, setDashGatewayMode] = useState<"organization" | "platform">("organization");
+  const [dashSubPlan, setDashSubPlan] = useState<"Growth Plan - $10/month" | "Pro Plan - $25/month">("Growth Plan - $10/month");
+  const [dashPayPhone, setDashPayPhone] = useState("");
+  const [dashPayRef, setDashPayRef] = useState("");
+  const [dashSmsProof, setDashSmsProof] = useState("");
+  const [dashPaySubmitting, setDashPaySubmitting] = useState(false);
+  const [dashPaySuccess, setDashPaySuccess] = useState<PaymentGatewaySuccessState | null>(null);
   const [remindedOfficers, setRemindedOfficers] = useState<Record<string, boolean>>({});
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskProgressVal, setTaskProgressVal] = useState<number>(0);
@@ -1516,12 +1529,27 @@ export const DashboardHome: React.FC = () => {
             </div>
           </div>
 
-          <Link
-            to="/dashboard/fees"
-            className="self-start md:self-auto inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
-          >
-            {isAccountant || isAdmin ? "Manage Fee Ledger" : "View Statement"} <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+            {(isAccountant || isAdmin) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDashPaySuccess(null);
+                  setOpenDashboardGatewayModal(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-100 transition cursor-pointer"
+              >
+                <Wallet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Payment Gateway</span>
+              </button>
+            )}
+            <Link
+              to="/dashboard/fees"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
+            >
+              {isAccountant || isAdmin ? "Manage Fee Ledger" : "View Statement"} <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
 
         {isAccountant || isAdmin ? (
@@ -1991,6 +2019,145 @@ export const DashboardHome: React.FC = () => {
         currentMember={activeMember}
         activeOrg={activeOrg}
       />
+
+      {/* Standardized Dashboard Payment Gateway Modal */}
+      <Modal
+        open={openDashboardGatewayModal}
+        onClose={() => {
+          setDashPaySuccess(null);
+          setOpenDashboardGatewayModal(false);
+        }}
+        title="Payment Gateway & Billing"
+      >
+        <div className="flex flex-col gap-4">
+          {!dashPaySuccess && (
+            <div className="inline-flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 self-start">
+              <button
+                type="button"
+                onClick={() => setDashGatewayMode("organization")}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer ${
+                  dashGatewayMode === "organization"
+                    ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-3xs"
+                    : "text-slate-600 dark:text-slate-400"
+                }`}
+              >
+                Organization Codes
+              </button>
+              <button
+                type="button"
+                onClick={() => setDashGatewayMode("platform")}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer ${
+                  dashGatewayMode === "platform"
+                    ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-3xs"
+                    : "text-slate-600 dark:text-slate-400"
+                }`}
+              >
+                Platform License
+              </button>
+            </div>
+          )}
+
+          {dashGatewayMode === "organization" ? (
+            <PaymentGatewaySection
+              targetType="organization"
+              itemName={`${activeOrg?.name || "Organization"} Collection Gateway`}
+              amountRwf={activeOrg?.default_dues_amount || 1000}
+              platformSettings={platformSettings}
+              readOnlyPreview
+            />
+          ) : (
+            <PaymentGatewaySection
+              targetType="platform"
+              itemName={dashSubPlan}
+              amountUsd={dashSubPlan.includes("$25") ? 25 : 10}
+              amountRwf={(dashSubPlan.includes("$25") ? 25 : 10) * (platformSettings?.usd_to_rwf_rate || 1400)}
+              usdToRwfRate={platformSettings?.usd_to_rwf_rate || 1400}
+              platformSettings={platformSettings}
+              tierSelector={
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {[
+                    { label: "Growth Plan - $10/month", desc: "250 members & Financial Ledger" },
+                    { label: "Pro Plan - $25/month", desc: "Unlimited members & Video Meet" }
+                  ].map((plan) => (
+                    <button
+                      key={plan.label}
+                      type="button"
+                      onClick={() => setDashSubPlan(plan.label as any)}
+                      className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                        dashSubPlan === plan.label
+                          ? "border-emerald-600 bg-emerald-50/60 dark:bg-emerald-950/30"
+                          : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                      }`}
+                    >
+                      <span className="text-xs font-bold text-slate-900 dark:text-white block">{plan.label}</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">{plan.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              }
+              phone={dashPayPhone}
+              onPhoneChange={setDashPayPhone}
+              reference={dashPayRef}
+              onReferenceChange={setDashPayRef}
+              smsProof={dashSmsProof}
+              onSmsProofChange={setDashSmsProof}
+              submitting={dashPaySubmitting}
+              submitLabel="Submit Payment Receipt Proof"
+              onBack={() => setOpenDashboardGatewayModal(false)}
+              backLabel="Close"
+              successState={dashPaySuccess}
+              onDoneSuccess={() => {
+                setDashPaySuccess(null);
+                setOpenDashboardGatewayModal(false);
+              }}
+              doneLabel="Done & Close"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const cleanPhone = dashPayPhone.replace(/\D/g, "");
+                if (!/^07[2389]\d{7}$/.test(cleanPhone)) {
+                  addToast("Please enter a valid 10-digit MTN (078/079) or Airtel (072/073) number.", "error");
+                  return;
+                }
+                if (!dashSmsProof.trim()) {
+                  addToast("Please paste your confirmation SMS receipt text.", "error");
+                  return;
+                }
+                setDashPaySubmitting(true);
+                try {
+                  const rate = platformSettings?.usd_to_rwf_rate || 1400;
+                  const usd = dashSubPlan.includes("$25") ? 25 : 10;
+                  const ref = dashPayRef.trim() || `TXN-${Date.now().toString().slice(-6)}`;
+                  await submitDashboardSubPayment.mutateAsync({
+                    org_id: activeOrg?.id || "org-1",
+                    plan: dashSubPlan,
+                    amount_usd: usd,
+                    amount_local: usd * rate,
+                    method: cleanPhone.startsWith("072") || cleanPhone.startsWith("073") ? "airtel" : "mtn",
+                    phone: cleanPhone,
+                    reference: ref,
+                    proof_url: dashSmsProof.trim(),
+                    item_type: "subscription"
+                  });
+                  addToast("Subscription payment proof logged for verification.", "success");
+                  setDashPaySuccess({
+                    title: "Subscription Proof Submitted",
+                    message: `Your payment receipt for ${dashSubPlan} was sent to the approval queue.`,
+                    reference: ref,
+                    amountRwf: usd * rate
+                  });
+                  setDashPayPhone("");
+                  setDashPayRef("");
+                  setDashSmsProof("");
+                } catch (err: any) {
+                  addToast(err?.message || "Failed to submit subscription payment proof.", "error");
+                } finally {
+                  setDashPaySubmitting(false);
+                }
+              }}
+            />
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };
@@ -2379,6 +2546,11 @@ export const ChatRoom: React.FC = () => {
   const [openMeetingWaitRoomModal, setOpenMeetingWaitRoomModal] = useState(false);
   const [isMeetingPublic, setIsMeetingPublic] = useState(true);
 
+  const openMeetModalRef = useRef(openMeetModal);
+  openMeetModalRef.current = openMeetModal;
+  const openWaitRoomRef = useRef(openMeetingWaitRoomModal);
+  openWaitRoomRef.current = openMeetingWaitRoomModal;
+
   // Synchronized Organization-Wide Hosted Meeting State
   const [activeHostedMeet, setActiveHostedMeet] = useState<HostedMeetInfo | null>(() => {
     try {
@@ -2390,74 +2562,194 @@ export const ChatRoom: React.FC = () => {
 
   useEffect(() => {
     if (!openMeetingWaitRoomModal || !activeHostedMeet) return;
-    const orgId = activeOrg?.id || "default";
+    const orgId = activeHostedMeet.orgId || activeOrg?.id || "default";
+    const canonicalRoomId = getCanonicalMeetRoomId(activeHostedMeet, orgId);
+    const effectiveUserId = user?.id;
+    if (!effectiveUserId) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws/meet?orgId=${encodeURIComponent(orgId)}&peerId=wait-${user?.id}&userId=${encodeURIComponent(user?.id || "guest")}&name=${encodeURIComponent(user?.full_name || "Member")}&role=Waiting`;
-    let ws: WebSocket | null = null;
-    try {
-      ws = new WebSocket(wsUrl);
-      ws.onmessage = (ev) => {
-        try {
-          const msg = JSON.parse(ev.data);
-          if (msg.type === "ADMIT_PEER" && msg.userId === user?.id) {
-            setOpenMeetingWaitRoomModal(false);
-            setMeetingTitleToStart(activeHostedMeet.meetingTitle);
-            setOpenMeetModal(true);
-            addToast("Admission approved by host. Entering meet...", "success");
-          } else if (msg.type === "DECLINE_PEER" && msg.userId === user?.id) {
-            setOpenMeetingWaitRoomModal(false);
-            addToast("Admission request declined by host.", "error");
-          }
-        } catch (e) {}
-      };
-    } catch (e) {}
+    const admissionPayload = {
+      type: "REQUEST_ADMISSION",
+      roomId: canonicalRoomId,
+      meetingCode: activeHostedMeet.meetingCode,
+      userId: effectiveUserId,
+      userName: user?.full_name || "Member",
+      role: activeMember?.role || "Member"
+    };
 
-    const bc = new BroadcastChannel(`impacto_call_org_${orgId}`);
-    bc.onmessage = (ev) => {
-      if (ev.data?.type === "ADMIT_PEER" && ev.data.userId === user?.id) {
+    let settled = false;
+    const handleAdmissionEvent = (msg: any) => {
+      if (!msg || settled) return;
+      if (msg.type === "ADMIT_PEER" && msg.userId === effectiveUserId) {
+        settled = true;
         setOpenMeetingWaitRoomModal(false);
         setMeetingTitleToStart(activeHostedMeet.meetingTitle);
         setOpenMeetModal(true);
         addToast("Admission approved by host. Entering meet...", "success");
-      } else if (ev.data?.type === "DECLINE_PEER" && ev.data.userId === user?.id) {
+      } else if (msg.type === "DECLINE_PEER" && msg.userId === effectiveUserId) {
+        settled = true;
         setOpenMeetingWaitRoomModal(false);
         addToast("Admission request declined by host.", "error");
+      } else if (msg.type === "HOSTED_MEET_ENDED") {
+        settled = true;
+        setOpenMeetingWaitRoomModal(false);
+        setActiveHostedMeet(null);
       }
     };
+
+    // 1. Supabase Realtime channel on canonical room ID
+    let supaChannel: any = null;
+    if (isSupabaseConfigured) {
+      try {
+        supaChannel = supabase.channel(`impacto_meet_rt_${canonicalRoomId}`, {
+          config: { broadcast: { self: false } }
+        });
+        supaChannel
+          .on("broadcast", { event: "signal" }, ({ payload }: { payload: any }) => {
+            handleAdmissionEvent(payload);
+          })
+          .subscribe((status: string) => {
+            if (status === "SUBSCRIBED") {
+              supaChannel.send({ type: "broadcast", event: "signal", payload: admissionPayload });
+            }
+          });
+      } catch (e) {}
+    }
+
+    // 2. WebSocket on canonical roomId
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws/meet?roomId=${encodeURIComponent(
+      canonicalRoomId
+    )}&orgId=${encodeURIComponent(orgId)}${
+      activeHostedMeet.meetingCode ? `&meetingCode=${encodeURIComponent(activeHostedMeet.meetingCode)}` : ""
+    }&peerId=wait-${effectiveUserId}&userId=${encodeURIComponent(effectiveUserId)}&name=${encodeURIComponent(
+      user?.full_name || "Member"
+    )}&role=Waiting`;
+
+    let ws: WebSocket | null = null;
+    try {
+      ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        try {
+          ws?.send(JSON.stringify(admissionPayload));
+        } catch (e) {}
+      };
+      ws.onmessage = (ev) => {
+        try {
+          handleAdmissionEvent(JSON.parse(ev.data));
+        } catch (e) {}
+      };
+    } catch (e) {}
+
+    // 3. Same-origin BroadcastChannel on canonical room ID
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel(`impacto_call_room_${canonicalRoomId}`);
+      bc.onmessage = (ev) => handleAdmissionEvent(ev.data);
+      bc.postMessage(admissionPayload);
+    } catch (e) {}
+
+    // 4. Periodic retry every 4s while waiting
+    const retryTimer = setInterval(() => {
+      if (settled) return;
+      if (supaChannel) {
+        try {
+          supaChannel.send({ type: "broadcast", event: "signal", payload: admissionPayload });
+        } catch (e) {}
+      }
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify(admissionPayload));
+        } catch (e) {}
+      }
+      fetch("/api/meet/signal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orgId,
+          roomId: canonicalRoomId,
+          meetingCode: activeHostedMeet.meetingCode,
+          message: admissionPayload
+        })
+      }).catch(() => {});
+    }, 4000);
+
     return () => {
+      settled = true;
+      clearInterval(retryTimer);
+      if (supaChannel) {
+        try {
+          supabase.removeChannel(supaChannel);
+        } catch (e) {}
+      }
       if (ws) {
         try { ws.close(); } catch (e) {}
       }
-      bc.close();
+      if (bc) {
+        try { bc.close(); } catch (e) {}
+      }
     };
-  }, [openMeetingWaitRoomModal, activeHostedMeet, user?.id, activeOrg?.id]);
+  }, [openMeetingWaitRoomModal, activeHostedMeet, user?.id, user?.full_name, activeMember?.role, activeOrg?.id]);
 
   useEffect(() => {
     const orgId = activeOrg?.id || "default";
 
     const syncMeet = async () => {
+      if (openMeetModalRef.current || openWaitRoomRef.current) return;
+
       try {
         const res = await fetch(`/api/meet/active?orgId=${encodeURIComponent(orgId)}`);
-        if (res.ok) {
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && contentType.includes("application/json")) {
           const data = await res.json();
           if (data.activeMeet) {
-            setActiveHostedMeet(data.activeMeet);
+            setActiveHostedMeet((prev) => (isSameMeetMeta(prev, data.activeMeet) ? prev : data.activeMeet));
             return;
           }
         }
       } catch (e) {}
 
+      // Cross-device Supabase DB fallback with narrow columns + composite index
+      if (isSupabaseConfigured && orgId !== "default") {
+        try {
+          const { data: rows } = await supabase
+            .from("meetings")
+            .select(
+              "id, org_id, title, meeting_title, meeting_code, channel_name, channel_id, host_id, host_name, recorded_by, started_at, is_public"
+            )
+            .eq("org_id", orgId)
+            .eq("status", "active")
+            .order("started_at", { ascending: false })
+            .limit(1);
+          if (rows && rows.length > 0) {
+            const dbMeet: any = rows[0];
+            const mapped: HostedMeetInfo = {
+              meetingId: dbMeet.id,
+              meetingCode: dbMeet.meeting_code || undefined,
+              meetingTitle: dbMeet.title || dbMeet.meeting_title || "Live Meeting",
+              channelName: dbMeet.channel_name || "General",
+              channelId: dbMeet.channel_id || undefined,
+              orgId: dbMeet.org_id || orgId,
+              hostId: dbMeet.host_id || dbMeet.recorded_by || "host",
+              hostName: dbMeet.host_name || "Host",
+              startedAt: dbMeet.started_at || new Date().toISOString(),
+              isPublic: dbMeet.is_public ?? true
+            };
+            setActiveHostedMeet((prev) => (isSameMeetMeta(prev, mapped) ? prev : mapped));
+            return;
+          }
+        } catch (e) {}
+      }
+
       try {
         const raw = localStorage.getItem(`impacto_active_hosted_meet_${orgId}`);
         if (raw) {
           const parsed = JSON.parse(raw);
-          setActiveHostedMeet(parsed);
+          setActiveHostedMeet((prev) => (isSameMeetMeta(prev, parsed) ? prev : parsed));
         } else {
-          setActiveHostedMeet(null);
+          setActiveHostedMeet((prev) => (prev === null ? prev : null));
         }
       } catch (e) {
-        setActiveHostedMeet(null);
+        setActiveHostedMeet((prev) => (prev === null ? prev : null));
       }
     };
 
@@ -2469,20 +2761,44 @@ export const ChatRoom: React.FC = () => {
       }
     };
     window.addEventListener("storage", handleStorage);
-    const interval = setInterval(syncMeet, 2000);
+    const interval = setInterval(syncMeet, 15000);
 
     const bc = new BroadcastChannel(`impacto_org_meet_bus_${orgId}`);
     bc.onmessage = (ev) => {
       if (ev.data?.type === "HOSTED_MEET_ACTIVE" && ev.data.meet) {
-        setActiveHostedMeet(ev.data.meet);
+        setActiveHostedMeet((prev) => (isSameMeetMeta(prev, ev.data.meet) ? prev : ev.data.meet));
       } else if (ev.data?.type === "HOSTED_MEET_ENDED") {
         setActiveHostedMeet(null);
       }
     };
+
+    let supaBus: any = null;
+    if (isSupabaseConfigured && orgId !== "default") {
+      try {
+        supaBus = supabase.channel(`impacto_org_meet_bus_${orgId}`, {
+          config: { broadcast: { self: false } }
+        });
+        supaBus
+          .on("broadcast", { event: "meet_bus" }, ({ payload }: { payload: any }) => {
+            if (payload?.type === "HOSTED_MEET_ACTIVE" && payload.meet) {
+              setActiveHostedMeet((prev) => (isSameMeetMeta(prev, payload.meet) ? prev : payload.meet));
+            } else if (payload?.type === "HOSTED_MEET_ENDED") {
+              setActiveHostedMeet(null);
+            }
+          })
+          .subscribe();
+      } catch (e) {}
+    }
+
     return () => {
       window.removeEventListener("storage", handleStorage);
       clearInterval(interval);
       bc.close();
+      if (supaBus) {
+        try {
+          supabase.removeChannel(supaBus);
+        } catch (e) {}
+      }
     };
   }, [activeOrg?.id]);
 
@@ -2492,7 +2808,13 @@ export const ChatRoom: React.FC = () => {
       const params = new URLSearchParams(window.location.search);
       const joinMeetOrg = params.get("joinMeet") || params.get("meet");
       if (joinMeetOrg && activeHostedMeet && !openMeetModal && !openMeetingWaitRoomModal) {
-        const isHostOrAdmin = user?.id === activeHostedMeet.hostId || activeMember?.role === "org_admin";
+        const isHostOrAdmin = isMeetHostOrAdmin(
+          activeMember?.role,
+          user?.id,
+          activeHostedMeet,
+          activeOrg?.owner_id,
+          user?.is_superadmin
+        );
         if (activeHostedMeet.isPublic || isHostOrAdmin) {
           setMeetingTitleToStart(activeHostedMeet.meetingTitle);
           setOpenMeetModal(true);
@@ -2502,11 +2824,22 @@ export const ChatRoom: React.FC = () => {
         }
       }
     } catch (e) {}
-  }, [activeHostedMeet, openMeetModal, openMeetingWaitRoomModal, user?.id, activeMember?.role]);
+  }, [activeHostedMeet, openMeetModal, openMeetingWaitRoomModal, user?.id, user?.is_superadmin, activeMember?.role, activeOrg?.owner_id]);
 
   const handleHostedMeetEnded = () => {
     const orgId = activeOrg?.id || "default";
+    const endedMeetId = activeHostedMeet?.meetingId;
     localStorage.removeItem(`impacto_active_hosted_meet_${orgId}`);
+    if (isSupabaseConfigured && endedMeetId) {
+      (async () => {
+        try {
+          await supabase
+            .from("meetings")
+            .update({ status: "completed", ended_at: new Date().toISOString() })
+            .eq("id", endedMeetId);
+        } catch (e) {}
+      })();
+    }
     try {
       fetch("/api/meet/end", {
         method: "POST",
@@ -2519,6 +2852,21 @@ export const ChatRoom: React.FC = () => {
       bc.postMessage({ type: "HOSTED_MEET_ENDED" });
       bc.close();
     } catch (e) {}
+    if (isSupabaseConfigured && orgId !== "default") {
+      try {
+        const orgBus = supabase.channel(`impacto_org_meet_bus_${orgId}`);
+        orgBus.subscribe((status: string) => {
+          if (status === "SUBSCRIBED") {
+            orgBus.send({
+              type: "broadcast",
+              event: "meet_bus",
+              payload: { type: "HOSTED_MEET_ENDED" }
+            });
+            setTimeout(() => supabase.removeChannel(orgBus), 1000);
+          }
+        });
+      } catch (e) {}
+    }
     setActiveHostedMeet(null);
   };
 
@@ -3273,47 +3621,50 @@ export const ChatRoom: React.FC = () => {
                         addToast("Live Video Meetings require Growth or Pro tier", "info");
                         return;
                       }
-                      const isHostOrAdmin = user?.id === activeHostedMeet.hostId || activeMember?.role === "org_admin";
+                      const isHostOrAdmin = isMeetHostOrAdmin(
+                        activeMember?.role,
+                        user?.id,
+                        activeHostedMeet,
+                        activeOrg?.owner_id,
+                        user?.is_superadmin
+                      );
                       if (activeHostedMeet.isPublic || isHostOrAdmin) {
                         setMeetingTitleToStart(activeHostedMeet.meetingTitle);
                         setOpenMeetModal(true);
                         addToast(`Joined ongoing meet: ${activeHostedMeet.meetingTitle}`, "success");
                       } else {
+                        const canonicalRoomId = getCanonicalMeetRoomId(activeHostedMeet, activeOrg?.id || "default");
+                        const payload = {
+                          type: "REQUEST_ADMISSION",
+                          roomId: canonicalRoomId,
+                          meetingCode: activeHostedMeet.meetingCode,
+                          userId: user?.id,
+                          userName: user?.full_name || "Member",
+                          role: activeMember?.role || "Member"
+                        };
                         setOpenMeetingWaitRoomModal(true);
                         try {
-                          const bc = new BroadcastChannel(`impacto_call_org_${activeOrg?.id || "default"}`);
-                          bc.postMessage({
-                            type: "REQUEST_ADMISSION",
-                            userId: user?.id,
-                            userName: user?.full_name || "Member",
-                            role: activeMember?.role || "Member"
-                          });
+                          const bc = new BroadcastChannel(`impacto_call_room_${canonicalRoomId}`);
+                          bc.postMessage(payload);
                           bc.close();
                         } catch (e) {}
-
-                        try {
-                          const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-                          const wsUrl = `${protocol}//${window.location.host}/ws/meet?orgId=${encodeURIComponent(activeOrg?.id || "default")}&peerId=wait-${user?.id}&userId=${encodeURIComponent(user?.id || "guest")}&name=${encodeURIComponent(user?.full_name || "Member")}&role=${encodeURIComponent(activeMember?.role || "Member")}`;
-                          const ws = new WebSocket(wsUrl);
-                          ws.onopen = () => {
-                            ws.send(JSON.stringify({
-                              type: "REQUEST_ADMISSION",
-                              userId: user?.id,
-                              userName: user?.full_name || "Member",
-                              role: activeMember?.role || "Member"
-                            }));
-                            setTimeout(() => {
-                              try { ws.close(); } catch (e) {}
-                            }, 1200);
-                          };
-                        } catch (e) {}
+                        fetch("/api/meet/signal", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            orgId: activeOrg?.id || "default",
+                            roomId: canonicalRoomId,
+                            meetingCode: activeHostedMeet.meetingCode,
+                            message: payload
+                          })
+                        }).catch(() => {});
                         addToast("Sent to meeting waiting room. Awaiting host admission.", "info");
                       }
                     }}
                     className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 h-8 sm:h-8.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-3xs cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white"
                     title={`Hosted meeting: ${activeHostedMeet.meetingTitle} (hosted by ${activeHostedMeet.hostName})`}
                   >
-                    <span className="h-2 w-2 rounded-full bg-white animate-ping" />
+                    <Video className="h-3.5 w-3.5 shrink-0" />
                     <span>Join Meet ({activeHostedMeet.meetingTitle})</span>
                   </button>
                 ) : (
@@ -3527,14 +3878,18 @@ export const ChatRoom: React.FC = () => {
                                       if (codeToQuery) {
                                         try {
                                           const res = await fetch(`/api/meet/active?code=${encodeURIComponent(codeToQuery)}`);
-                                          if (res.ok) {
+                                          const contentType = res.headers.get("content-type") || "";
+                                          if (res.ok && contentType.includes("application/json")) {
                                             const data = await res.json();
                                             const meet = data?.activeMeet;
                                             if (meet) {
-                                              const isHostOrAdmin =
-                                                user?.id === meet.hostId ||
-                                                activeMember?.role === "org_admin" ||
-                                                activeMember?.role === "superadmin";
+                                              const isHostOrAdmin = isMeetHostOrAdmin(
+                                                activeMember?.role,
+                                                user?.id,
+                                                meet,
+                                                activeOrg?.owner_id,
+                                                user?.is_superadmin
+                                              );
 
                                               // Check Access Restriction: Private vs Public
                                               if (meet.isPublic === false && !isHostOrAdmin) {
@@ -4216,7 +4571,7 @@ export const ChatRoom: React.FC = () => {
                 }
               }
 
-              // Persist meeting record in Supabase DB if available
+              // Persist meeting record in Supabase DB & notify Realtime bus if available
               if (isSupabaseConfigured) {
                 try {
                   await supabase.from("meetings").insert({
@@ -4225,11 +4580,33 @@ export const ChatRoom: React.FC = () => {
                     title: newHostedMeet.meetingTitle,
                     meeting_code: code,
                     channel_name: newHostedMeet.channelName,
+                    channel_id: newHostedMeet.channelId || null,
                     status: "active",
                     is_public: isMeetingPublic,
+                    date_time: newHostedMeet.startedAt,
+                    duration: 60,
+                    location: "Online Meet",
+                    location_type: "online",
+                    host_id: user?.id || "host",
+                    host_name: newHostedMeet.hostName,
+                    recorded_by: user?.id || "host",
                     started_at: newHostedMeet.startedAt
                   });
                 } catch (dbErr) {}
+
+                try {
+                  const orgBus = supabase.channel(`impacto_org_meet_bus_${activeOrg?.id || "default"}`);
+                  orgBus.subscribe((status: string) => {
+                    if (status === "SUBSCRIBED") {
+                      orgBus.send({
+                        type: "broadcast",
+                        event: "meet_bus",
+                        payload: { type: "HOSTED_MEET_ACTIVE", meet: newHostedMeet }
+                      });
+                      setTimeout(() => supabase.removeChannel(orgBus), 1000);
+                    }
+                  });
+                } catch (e) {}
               }
 
               setActiveHostedMeet(newHostedMeet);
@@ -4375,6 +4752,7 @@ export const ChatRoom: React.FC = () => {
         activeMember={activeMember}
         members={orgMembers || []}
         documents={documents}
+        displayName={user?.full_name || "Participant"}
         onMeetingEnded={handleMeetingEnded}
         hostedMeetInfo={activeHostedMeet}
         onHostedMeetEnded={handleHostedMeetEnded}

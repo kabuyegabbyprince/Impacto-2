@@ -55,13 +55,15 @@ import {
   PhoneCall,
   Store,
   CheckCircle2,
-  HeartHandshake
+  HeartHandshake,
+  KeyRound
 } from "lucide-react";
 import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "./MoMoPushPaymentModal";
 import { OrganizationVerificationModal } from "./OrganizationVerificationModal";
 import { ReferralCenterModal } from "./ReferralCenterModal";
 import { PlanDetailsDisclosure } from "./PlanDetailsDisclosure";
-import { UssdPaymentHelper, cleanMerchantCode, cleanPhoneNumber } from "./UssdPaymentHelper";
+import { UssdPaymentHelper, cleanMerchantCode, cleanPhoneNumber, getEffectivePaymentCode } from "./UssdPaymentHelper";
+import { PaymentGatewaySection } from "./PaymentGatewaySection";
 import { getOrgSubscriptionLifecycle } from "../lib/subscriptionMatrix";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
@@ -1243,13 +1245,11 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       setPaySuccessAlert(`Payment of ${data.amount.toLocaleString()} RWF authorized via MTN MoMo SIM push! Workspace unlocked on ${selectedTier}.`);
-      setOpenLockoutMoMo(false);
       refetchSaas();
       addToast(`Workspace unlocked! Your subscription to ${selectedTier} is now active.`, "success");
     } catch (err: any) {
       console.error(err);
       addToast("MoMo prompt authorized! Updating workspace: " + (err.message || ""), "info");
-      setOpenLockoutMoMo(false);
     }
   };
 
@@ -1262,15 +1262,15 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (momoPhone) {
       const clean = momoPhone.replace(/\D/g, "");
-      if (!/^07[89]\d{7}$/.test(clean)) {
-        addToast("Error: MTN phone number required. Must be 10 digits starting with 078 or 079 (e.g. 078XXXXXXX or 079XXXXXXX) to reduce errors.", "error");
+      if (!/^07[2389]\d{7}$/.test(clean)) {
+        addToast("Please enter a valid 10-digit Rwanda mobile number starting with 078/079 (MTN) or 072/073 (Airtel).", "error");
         return;
       }
     }
 
     setSubmittingPayment(true);
     try {
-      const rate = platformSettings.usd_to_rwf_rate || 1350;
+      const rate = platformSettings.usd_to_rwf_rate || 1400;
       let costUsd = 10;
       if (selectedTier.includes("Free")) costUsd = 0;
       else if (selectedTier.includes("Growth")) costUsd = 10;
@@ -1313,15 +1313,15 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (momoPhone) {
       const clean = momoPhone.replace(/\D/g, "");
-      if (!/^07[89]\d{7}$/.test(clean)) {
-        addToast("Error: MTN phone number required. Must be 10 digits starting with 078 or 079 (e.g. 078XXXXXXX or 079XXXXXXX) to reduce errors.", "error");
+      if (!/^07[2389]\d{7}$/.test(clean)) {
+        addToast("Please enter a valid 10-digit Rwanda mobile number starting with 078/079 (MTN) or 072/073 (Airtel).", "error");
         return;
       }
     }
 
     setSubmittingPayment(true);
     try {
-      const rate = platformSettings.usd_to_rwf_rate || 1350;
+      const rate = platformSettings.usd_to_rwf_rate || 1400;
       let costUsd = 10;
       if (selectedTier.includes("Free")) costUsd = 0;
       else if (selectedTier.includes("Growth")) costUsd = 10;
@@ -1352,7 +1352,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
       });
       localStorage.setItem(`plan_recs_${activeOrg?.id}`, JSON.stringify(recs));
 
-      setRecommendSuccess(`Success! Payment proof and recommendation for "${selectedTier}" submitted successfully! Platform Superadmin has been notified to verify the logs and unlock your workspace.`);
+      setRecommendSuccess(`Payment proof and recommendation for "${selectedTier}" submitted successfully! Platform Superadmin has been notified to verify the logs and unlock your workspace.`);
       setMomoPhone("");
       setMomoRef("");
       setSmsProof("");
@@ -1592,59 +1592,35 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                     Select Subscription Plan
                   </h3>
                 </div>
-                {paySuccessAlert ? (
-                  <div className="p-3 bg-emerald-50 border border-emerald-150 text-xs text-emerald-800 font-medium rounded-lg flex flex-col gap-1.5 leading-relaxed">
-                    <span className="font-semibold flex items-center gap-1.5"><CheckCircle className="h-4 w-4 shrink-0" /> Receipt Sent</span>
-                    <p>{paySuccessAlert}</p>
-                  </div>
-                ) : (
-                  <form onSubmit={handlePayLockout} className="flex flex-col gap-3 text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {/* Instant MTN MoMo Push Option */}
-                    <div className="p-3.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
-                          <Smartphone className="h-4 w-4 text-emerald-600" />
-                          Direct MTN MoMo SIM Prompt
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-normal leading-relaxed">
-                        Trigger a prompt straight to your registered phone number to authorize renewal with your secret MoMo PIN.
-                      </p>
-                      <Button
-                        type="button"
-                        onClick={() => setOpenLockoutMoMo(true)}
-                        className="w-full py-2 bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-medium text-xs rounded-lg flex items-center justify-center gap-1.5 shadow-xs"
-                      >
-                        <Smartphone className="h-3.5 w-3.5" />
-                        Send MoMo SIM Prompt
-                      </Button>
-                    </div>
-
-                    <div className="relative flex py-0.5 items-center">
-                      <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
-                      <span className="flex-shrink mx-2 text-xs text-slate-400 font-medium">Or manual USSD transfer</span>
-                      <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
-                    </div>
-
-                    {/* Auto-generated USSD Codes with Super Admin Check */}
-                    <UssdPaymentHelper
-                      targetType="platform"
-                      mtnNumber={platformSettings.mtn_payment_number}
-                      merchantCode={platformSettings.momo_merchant_code || platformSettings.mtn_merchant_code}
-                      airtelNumber={platformSettings.airtel_payment_number}
-                      recipientName={platformSettings.payment_name}
-                      amountRwf={amountRwf}
-                      itemName={selectedTier}
-                      onRequestAdmin={async () => {
-                        await supportMutation.mutateAsync({
-                          org_id: activeOrg?.id || "",
-                          title: "Request for Platform MoMo Payment Credentials",
-                          description: `Organization @${activeOrg?.slug} is requesting Superadmin to configure MTN MoMo settlement credentials to pay for plan ${selectedTier}.`,
-                          priority: "critical"
-                        });
-                      }}
-                    />
-
+                <PaymentGatewaySection
+                  targetType="platform"
+                  itemName={selectedTier}
+                  amountRwf={amountRwf}
+                  amountUsd={costUsd}
+                  usdToRwfRate={platformSettings.usd_to_rwf_rate || 1400}
+                  platformSettings={platformSettings}
+                  activeOrg={activeOrg}
+                  phone={momoPhone}
+                  onPhoneChange={setMomoPhone}
+                  reference={momoRef}
+                  onReferenceChange={setMomoRef}
+                  smsProof={smsProof}
+                  onSmsProofChange={setSmsProof}
+                  onSubmit={handlePayLockout}
+                  submitting={submittingPayment}
+                  submitLabel="Submit Plan Upgrade & Proof"
+                  successState={
+                    paySuccessAlert
+                      ? {
+                          title: "Payment Receipt Submitted",
+                          message: paySuccessAlert,
+                          amountRwf
+                        }
+                      : null
+                  }
+                  onDoneSuccess={() => setPaySuccessAlert("")}
+                  doneLabel="Submit Another Payment"
+                  tierSelector={
                     <div className="flex flex-col gap-1">
                       <label className="text-xs text-slate-600 dark:text-slate-400 font-medium">Select active tier</label>
                       <select
@@ -1658,52 +1634,16 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                         <option value="Enterprise Plan - Custom">Enterprise Plan — Custom / Contact Sales</option>
                       </select>
                     </div>
-
-                    <PlanDetailsDisclosure defaultOpen={false} />
-
-                    <div className="flex flex-col gap-1">
-                      <Input
-                        label="MTN MoMo Phone (078 / 079)"
-                        value={momoPhone}
-                        onChange={(e) => setMomoPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                        placeholder="078XXXXXXX or 079..."
-                      />
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[10px] text-stone-400 font-mono">Quick prefix:</span>
-                        <button
-                          type="button"
-                          onClick={() => setMomoPhone("078")}
-                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700 dark:bg-slate-800 dark:text-slate-200"
-                        >
-                          078
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMomoPhone("079")}
-                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700 dark:bg-slate-800 dark:text-slate-200"
-                        >
-                          079
-                        </button>
-                      </div>
-                    </div>
-                    <Input label="MoMo / Airtel Ref ID Key (Optional)" value={momoRef} onChange={(e) => setMomoRef(e.target.value)} placeholder="TXNXXXXXXX" />
-
-                    <div className="flex flex-col gap-1 w-full">
-                      <label className="text-[10px] uppercase text-emerald-800 dark:text-emerald-400 font-mono tracking-wider font-bold">Payment SMS Message / Proof of Transfer <span className="text-red-500">*</span></label>
-                      <textarea
-                        className="w-full text-xs rounded-lg border bg-white/80 border-gray-300 p-2.5 h-20 text-stone-900 dark:bg-slate-950/80 dark:border-slate-800 dark:text-white font-sans focus:ring-1 focus:ring-emerald-500"
-                        value={smsProof}
-                        onChange={(e) => setSmsProof(e.target.value)}
-                        required
-                        placeholder="Paste transaction SMS or write details e.g. 'Paid 32,500 RWF for Growth tier from John'. Admin will verify later."
-                      />
-                    </div>
-
-                    <Button type="submit" loading={submittingPayment} className="w-full py-2.5 mt-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl">
-                      Submit Plan Upgrade & Proof
-                    </Button>
-                  </form>
-                )}
+                  }
+                  onRequestAdmin={async () => {
+                    await supportMutation.mutateAsync({
+                      org_id: activeOrg?.id || "",
+                      title: "Request for Platform MoMo Payment Credentials",
+                      description: `Organization @${activeOrg?.slug} is requesting Superadmin to configure MTN MoMo settlement credentials to pay for plan ${selectedTier}.`,
+                      priority: "critical"
+                    });
+                  }}
+                />
               </div>
 
               <div className="rounded-2xl p-5 bg-white/45 dark:bg-slate-900/40 backdrop-blur-md border border-white/60 dark:border-white/10 shadow-xs flex flex-col gap-4">
@@ -1743,65 +1683,41 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           ) : (
             // MEMBER/STAFF LOCK SCREEN: RECOMMEND PLAN & TEXT ADMIN
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full font-medium">
-              <div className="rounded-2xl p-5 bg-white/45 dark:bg-slate-900/40 backdrop-blur-md border border-white/60 dark:border-white/10 shadow-xs flex flex-col gap-4">
-                <div className="border-b border-stone-200/50 dark:border-slate-800/60 pb-2.5">
+              <div className="rounded-2xl p-5 bg-white/75 dark:bg-slate-900/75 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col gap-4">
+                <div className="border-b border-slate-200 dark:border-slate-800 pb-2.5">
                   <h3 className="font-display font-bold text-sm text-stone-900 dark:text-white flex items-center justify-between">
                     <span>Select Subscription Plan</span>
                   </h3>
                 </div>
-                {recommendSuccess ? (
-                  <div className="p-3 bg-emerald-50 border border-emerald-150 text-xs text-emerald-800 font-medium rounded-lg flex flex-col gap-1.5 leading-relaxed">
-                    <span className="font-semibold flex items-center gap-1.5"><CheckCircle className="h-4 w-4 shrink-0" /> Submission Successful</span>
-                    <p>{recommendSuccess}</p>
-                  </div>
-                ) : (
-                  <form onSubmit={handleSubmitMemberPayment} className="flex flex-col gap-3 text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {/* Instant MTN MoMo Push Option */}
-                    <div className="p-3.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
-                          <Smartphone className="h-4 w-4 text-emerald-600" />
-                          Direct MTN MoMo SIM Prompt
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-normal leading-relaxed">
-                        Trigger a prompt straight to your registered phone number to authorize renewal with your secret MoMo PIN.
-                      </p>
-                      <Button
-                        type="button"
-                        onClick={() => setOpenLockoutMoMo(true)}
-                        className="w-full py-2 bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-medium text-xs rounded-lg flex items-center justify-center gap-1.5 shadow-xs"
-                      >
-                        <Smartphone className="h-3.5 w-3.5" />
-                        Send MoMo SIM Prompt
-                      </Button>
-                    </div>
-
-                    <div className="relative flex py-0.5 items-center">
-                      <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
-                      <span className="flex-shrink mx-2 text-xs text-slate-400 font-medium">Or manual USSD transfer</span>
-                      <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
-                    </div>
-
-                    {/* Auto-generated USSD Codes with Super Admin Check */}
-                    <UssdPaymentHelper
-                      targetType="platform"
-                      mtnNumber={platformSettings.mtn_payment_number}
-                      merchantCode={platformSettings.momo_merchant_code || platformSettings.mtn_merchant_code}
-                      airtelNumber={platformSettings.airtel_payment_number}
-                      recipientName={platformSettings.payment_name}
-                      amountRwf={amountRwf}
-                      itemName={selectedTier}
-                      onRequestAdmin={async () => {
-                        await supportMutation.mutateAsync({
-                          org_id: activeOrg?.id || "",
-                          title: "Request for Platform MoMo Payment Credentials",
-                          description: `Member from @${activeOrg?.slug} is requesting Superadmin to configure MTN MoMo settlement credentials to pay for plan ${selectedTier}.`,
-                          priority: "critical"
-                        });
-                      }}
-                    />
-
+                <PaymentGatewaySection
+                  targetType="platform"
+                  itemName={selectedTier}
+                  amountRwf={amountRwf}
+                  amountUsd={costUsd}
+                  usdToRwfRate={platformSettings.usd_to_rwf_rate || 1400}
+                  platformSettings={platformSettings}
+                  activeOrg={activeOrg}
+                  phone={momoPhone}
+                  onPhoneChange={setMomoPhone}
+                  reference={momoRef}
+                  onReferenceChange={setMomoRef}
+                  smsProof={smsProof}
+                  onSmsProofChange={setSmsProof}
+                  onSubmit={handleSubmitMemberPayment}
+                  submitting={submittingPayment}
+                  submitLabel="Submit Payment Proof & Recommend"
+                  successState={
+                    recommendSuccess
+                      ? {
+                          title: "Payment Proof & Recommendation Sent",
+                          message: recommendSuccess,
+                          amountRwf
+                        }
+                      : null
+                  }
+                  onDoneSuccess={() => setRecommendSuccess("")}
+                  doneLabel="Submit Another Payment"
+                  tierSelector={
                     <div className="flex flex-col gap-1">
                       <label className="text-xs text-slate-600 dark:text-slate-400 font-medium">Select tier to pay</label>
                       <select
@@ -1815,52 +1731,16 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                         <option value="Enterprise Plan - Custom">Enterprise Plan — Custom / Contact Sales</option>
                       </select>
                     </div>
-
-                    <PlanDetailsDisclosure defaultOpen={false} />
-
-                    <div className="flex flex-col gap-1">
-                      <Input
-                        label="MTN MoMo Phone (078 / 079)"
-                        value={momoPhone}
-                        onChange={(e) => setMomoPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                        placeholder="078XXXXXXX or 079..."
-                      />
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[10px] text-stone-400 font-mono">Quick prefix:</span>
-                        <button
-                          type="button"
-                          onClick={() => setMomoPhone("078")}
-                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700 dark:bg-slate-800 dark:text-slate-200"
-                        >
-                          078
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMomoPhone("079")}
-                          className="px-1.5 py-0.5 rounded bg-stone-100 hover:bg-amber-100 text-[10px] font-mono font-bold text-stone-700 dark:bg-slate-800 dark:text-slate-200"
-                        >
-                          079
-                        </button>
-                      </div>
-                    </div>
-                    <Input label="MoMo / Airtel Ref ID Key (Optional)" value={momoRef} onChange={(e) => setMomoRef(e.target.value)} placeholder="TXNXXXXXXX" />
-
-                    <div className="flex flex-col gap-1 w-full">
-                      <label className="text-[10px] uppercase text-emerald-800 dark:text-emerald-400 font-mono tracking-wider font-bold">Payment SMS Message / Proof of Transfer <span className="text-red-500">*</span></label>
-                      <textarea
-                        className="w-full text-xs rounded-lg border bg-white/80 border-gray-300 p-2.5 h-20 text-stone-900 dark:bg-slate-950/80 dark:border-slate-800 dark:text-white font-sans focus:ring-1 focus:ring-emerald-500"
-                        value={smsProof}
-                        onChange={(e) => setSmsProof(e.target.value)}
-                        required
-                        placeholder="Paste transaction SMS or write details e.g. 'Paid 32,500 RWF for Growth tier from John'. Admin will verify later."
-                      />
-                    </div>
-
-                    <Button type="submit" loading={submittingPayment} icon={<Crown className="h-4 w-4" />} className="w-full py-2.5 mt-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl">
-                      Submit Payment Proof & Recommend
-                    </Button>
-                  </form>
-                )}
+                  }
+                  onRequestAdmin={async () => {
+                    await supportMutation.mutateAsync({
+                      org_id: activeOrg?.id || "",
+                      title: "Request for Platform MoMo Payment Credentials",
+                      description: `Member from @${activeOrg?.slug} is requesting Superadmin to configure MTN MoMo settlement credentials to pay for plan ${selectedTier}.`,
+                      priority: "critical"
+                    });
+                  }}
+                />
               </div>
 
               <div className="rounded-2xl p-5 bg-white/45 dark:bg-slate-900/40 backdrop-blur-md border border-white/60 dark:border-white/10 shadow-xs flex flex-col gap-4">

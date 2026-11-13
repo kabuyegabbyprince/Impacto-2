@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { uploadFile, dataUrlToUint8Array } from "../lib/supabaseStorage";
 import { MockDB } from "../lib/mockData";
@@ -1845,12 +1845,14 @@ export function useUpdateMeetingStatus() {
  */
 export function useMeetingStatusRealtime(orgId: string | undefined, onStatusChange?: (payload: any) => void) {
   const queryClient = useQueryClient();
+  const onStatusChangeRef = useRef(onStatusChange);
+  onStatusChangeRef.current = onStatusChange;
 
   useEffect(() => {
-    if (!orgId || !isSupabaseConfigured) return;
+    if (!orgId || !isSupabaseConfigured || orgId === "default") return;
 
     const channel = supabase
-      .channel(`meeting_status_rt_${orgId}_${Math.random().toString(36).substring(2, 9)}`)
+      .channel(`meeting_status_rt_${orgId}`)
       .on(
         "postgres_changes",
         {
@@ -1862,8 +1864,8 @@ export function useMeetingStatusRealtime(orgId: string | undefined, onStatusChan
         (payload) => {
           queryClient.invalidateQueries({ queryKey: ["meetings", orgId] });
           queryClient.invalidateQueries({ queryKey: ["meeting_sessions", orgId] });
-          if (onStatusChange) {
-            onStatusChange(payload);
+          if (onStatusChangeRef.current) {
+            onStatusChangeRef.current(payload);
           }
         }
       )
@@ -1872,7 +1874,7 @@ export function useMeetingStatusRealtime(orgId: string | undefined, onStatusChan
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [orgId, queryClient, onStatusChange]);
+  }, [orgId, queryClient]);
 }
 
 

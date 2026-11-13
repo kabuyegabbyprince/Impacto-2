@@ -65,7 +65,8 @@ import { useToast } from "../components/Toast";
 import { Button, Input, Card, Badge, Modal, Avatar, ImageUploadInput, getLucideIcon } from "../components/ui";
 import { ResolvedImage } from "../components/ResolvedMedia";
 import { V2AdvancedFeatures } from "../components/V2AdvancedFeatures";
-import { UssdPaymentHelper } from "../components/UssdPaymentHelper";
+import { UssdPaymentHelper, getEffectivePaymentCode } from "../components/UssdPaymentHelper";
+import { PaymentGatewaySection, PaymentGatewaySuccessState } from "../components/PaymentGatewaySection";
 import { SubscriptionPaymentDashboard } from "../components/SubscriptionPaymentDashboard";
 import { OrganizationVerificationModal } from "../components/OrganizationVerificationModal";
 import { ReferralCenterModal } from "../components/ReferralCenterModal";
@@ -163,7 +164,7 @@ export const OrganizationSettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"general" | "public_portal" | "exit_survey" | "members_dashboard" | "momo" | "subscription" | "support" | "profile">(() => {
     const tabParam = searchParams.get("tab");
     if (tabParam === "profile" || tabParam === "accessibility") return "profile";
-    if (tabParam === "momo") return "momo";
+    if (tabParam === "momo" || tabParam === "payments") return "momo";
     if (tabParam === "exit_survey" || tabParam === "survey" || tabParam === "offboarding") return "exit_survey";
     if (tabParam === "subscription" || tabParam === "billing") {
       return (activeMember?.role === "org_admin" || activeMember?.role === "accountant" || !!user?.is_superadmin) ? "subscription" : "general";
@@ -180,7 +181,7 @@ export const OrganizationSettingsPage: React.FC = () => {
       setActiveTab("exit_survey");
     } else if ((tabParam === "subscription" || tabParam === "billing") && canAccessSubscription) {
       setActiveTab("subscription");
-    } else if (tabParam === "momo" && canAccessMomo) {
+    } else if ((tabParam === "momo" || tabParam === "payments") && canAccessMomo) {
       setActiveTab("momo");
     } else if (tabParam === "support" && canAccessSupport) {
       setActiveTab("support");
@@ -404,6 +405,7 @@ export const OrganizationSettingsPage: React.FC = () => {
   const [paymentRef, setPaymentRef] = useState("");
   const [momoSmsProof, setMomoSmsProof] = useState("");
   const [submittingPayment, setSubmittingPayment] = useState(false);
+  const [subPaymentSuccess, setSubPaymentSuccess] = useState<PaymentGatewaySuccessState | null>(null);
 
   // Only show upgrade packages to organizations on Free plan or Starter plan (or trial)
   const shouldShowPackages = !activeOrg?.subscription_tier || 
@@ -413,6 +415,7 @@ export const OrganizationSettingsPage: React.FC = () => {
 
   const handleOpenSubscriptionCheckout = (planName: string) => {
     setSubPlan(planName);
+    setSubPaymentSuccess(null);
     setOpenSubModal(true);
   };
 
@@ -719,6 +722,16 @@ export const OrganizationSettingsPage: React.FC = () => {
         momo_merchant_code: momoMerchantCode
       });
       setActiveOrg(updated, useOrgStore.getState().activeMember);
+      if (activeOrg?.id) {
+        try {
+          const cleanMCode = (momoMerchantCode || "").trim();
+          if (cleanMCode) {
+            localStorage.setItem(`impacto_org_momo_merchant_code_${activeOrg.id}`, cleanMCode);
+          } else {
+            localStorage.removeItem(`impacto_org_momo_merchant_code_${activeOrg.id}`);
+          }
+        } catch (e) {}
+      }
       addToast("Organization Mobile Money payment receiving credentials synced successfully!", "success");
     } catch (err: any) {
       console.error(err);
@@ -779,7 +792,12 @@ export const OrganizationSettingsPage: React.FC = () => {
       });
 
       addToast(`Payment proof logged! Super Admin MoMo Approval Queue notified.`, "success");
-      setOpenSubModal(false);
+      setSubPaymentSuccess({
+        title: "Subscription Proof Submitted",
+        message: `Your payment receipt for ${subPlan} has been logged and sent to the Super Admin approval queue.`,
+        reference: actualRef,
+        amountRwf: costUsd * rate
+      });
       setPayerPhone("");
       setPaymentRef("");
       setMomoSmsProof("");
@@ -1733,6 +1751,22 @@ export const OrganizationSettingsPage: React.FC = () => {
                 Save Organization Settlement Numbers
               </Button>
             </form>
+
+            <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
+              <PaymentGatewaySection
+                targetType="organization"
+                itemName={`${activeOrg?.name || "Organization"} Active Collection Gateway`}
+                amountRwf={activeOrg?.default_dues_amount || 1000}
+                activeOrg={{
+                  ...(activeOrg as any),
+                  momo_merchant_code: momoMerchantCode || activeOrg?.momo_merchant_code,
+                  dues_mtn_number: mtnNum || activeOrg?.dues_mtn_number,
+                  dues_airtel_number: airtelNum || activeOrg?.dues_airtel_number,
+                  dues_account_name: mName || activeOrg?.dues_account_name
+                }}
+                readOnlyPreview
+              />
+            </div>
           </Card>
         )}
 
@@ -1976,10 +2010,7 @@ export const OrganizationSettingsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Dropdown of details containing all features in each package across Free, Growth, and Pro */}
-                <div className="mt-5">
-                  <PlanDetailsDisclosure defaultOpen={false} />
-                </div>
+
               </div>
 
               {/* Billing & Invoices Ledger */}
@@ -2440,98 +2471,46 @@ export const OrganizationSettingsPage: React.FC = () => {
       </div>
 
       {/* Manual Subscription payment modal details */}
-      <Modal open={openSubModal} onClose={() => setOpenSubModal(false)} title={t("lbl_license_sub_gateway", "License Subscription Gateway")}>
-        <form onSubmit={handlePaySubscription} className="flex flex-col gap-4 text-xs font-semibold text-stone-704">
-          <p className="text-stone-550 font-normal leading-normal">
-            {t("lbl_momo_transfer_info", "As a Rwandese localized portal, payments resolve via MTN MoMo / Airtel Money. Please transfer correct funds to the official merchant/account numbers below, then enter your transaction reference and details.")}
-          </p>
-
-          <div className="p-4 bg-emerald-50 rounded-2xl border flex flex-col gap-2 font-display text-emerald-950">
-            <span className="text-[10px] uppercase font-mono tracking-widest text-emerald-800 leading-none">{t("lbl_selected_license_tier", "Selected License Tier")}</span>
-            <div className="flex justify-between items-center select-none font-bold">
-              <span>{subPlan}</span>
-              <span className="text-base font-extrabold text-emerald-900">
-                {(parseFloat(subPlan.split("$")[1]) * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF
-              </span>
-            </div>
-            <p className="text-[10px] text-emerald-650 mt-1 font-mono font-bold leading-none">{t("lbl_local_rate_label", "Local Rate:")} 1 USD = {platformSettings.usd_to_rwf_rate} RWF</p>
-          </div>
-
-          <UssdPaymentHelper
+      <Modal
+        open={openSubModal}
+        onClose={() => {
+          setOpenSubModal(false);
+          setSubPaymentSuccess(null);
+        }}
+        title={t("lbl_license_sub_gateway", "License Subscription Gateway")}
+      >
+        <div className="flex flex-col gap-4 text-xs text-slate-600 dark:text-slate-400">
+          {!subPaymentSuccess && (
+            <p className="leading-relaxed">
+              {t("lbl_momo_transfer_info", "As a Rwandese localized portal, payments resolve via MTN MoMo / Airtel Money. Please transfer correct funds to the official merchant/account numbers below, then enter your transaction reference and details.")}
+            </p>
+          )}
+          <PaymentGatewaySection
             targetType="platform"
-            mtnNumber={platformSettings.mtn_payment_number}
-            merchantCode={platformSettings.momo_merchant_code || platformSettings.mtn_merchant_code}
-            airtelNumber={platformSettings.airtel_payment_number}
-            recipientName={platformSettings.payment_name}
+            itemName={subPlan}
             amountRwf={parseFloat(subPlan.split("$")[1] || "25") * (platformSettings.usd_to_rwf_rate || 1400)}
-            itemName={`Platform Plan: ${subPlan}`}
+            amountUsd={parseFloat(subPlan.split("$")[1] || "25")}
+            usdToRwfRate={platformSettings.usd_to_rwf_rate || 1400}
+            platformSettings={platformSettings}
+            phone={payerPhone}
+            onPhoneChange={setPayerPhone}
+            reference={paymentRef}
+            onReferenceChange={setPaymentRef}
+            smsProof={momoSmsProof}
+            onSmsProofChange={setMomoSmsProof}
+            onSubmit={handlePaySubscription}
+            submitting={submittingPayment}
+            submitLabel={t("btn_submit_receipt", "Submit Payment Receipt Proof")}
+            onBack={() => setOpenSubModal(false)}
+            backLabel={t("btn_back", "Back")}
+            successState={subPaymentSuccess}
+            onDoneSuccess={() => {
+              setSubPaymentSuccess(null);
+              setOpenSubModal(false);
+            }}
+            doneLabel="Done & Close"
           />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div className="flex flex-col gap-1">
-              <Input
-                label={t("lbl_payer_momo_phone", "Sender Phone (MTN 078/079 or Airtel 072/073)")}
-                value={payerPhone}
-                onChange={(e) => setPayerPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                placeholder="078... or 072/073..."
-              />
-              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                <span className="text-[10px] text-stone-400 font-mono">Quick prefix:</span>
-                <button
-                  type="button"
-                  onClick={() => setPayerPhone("078")}
-                  className="px-1.5 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-[10px] font-mono font-bold text-amber-800 border border-amber-200"
-                >
-                  078 (MTN)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPayerPhone("079")}
-                  className="px-1.5 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-[10px] font-mono font-bold text-amber-800 border border-amber-200"
-                >
-                  079 (MTN)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPayerPhone("072")}
-                  className="px-1.5 py-0.5 rounded bg-rose-50 hover:bg-rose-100 text-[10px] font-mono font-bold text-rose-800 border border-rose-200"
-                >
-                  072 (Airtel)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPayerPhone("073")}
-                  className="px-1.5 py-0.5 rounded bg-rose-50 hover:bg-rose-100 text-[10px] font-mono font-bold text-rose-800 border border-rose-200"
-                >
-                  073 (Airtel)
-                </button>
-              </div>
-            </div>
-            <Input label={t("lbl_momo_trans_ref", "MoMo Transaction Ref ID")} value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} placeholder="e.g. TXN2468135" />
-          </div>
-
-          <div className="flex flex-col gap-1.5 w-full">
-            <label className="text-xs font-bold text-gray-700 dark:text-slate-300">{t("lbl_momo_sms_proof", "MTN or Airtel Money confirmation SMS text proof")}</label>
-            <textarea
-              className="w-full text-xs rounded-xl border bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700 p-2.5 focus:ring-2 focus:ring-[var(--org-primary)] focus:outline-none font-mono"
-              value={momoSmsProof}
-              onChange={(e) => setMomoSmsProof(e.target.value)}
-              placeholder="Paste raw SMS text transaction copy, e.g. TxId: 4810294. Yello! You have sent 30,000 RWF to VIRELLIX INC..."
-              rows={3}
-            />
-          </div>
-
-          <PlanDetailsDisclosure defaultOpen={false} />
-
-          <div className="flex items-center gap-3 border-t border-slate-200 dark:border-slate-800 pt-3">
-            <Button type="button" variant="outline" className="w-1/2" onClick={() => setOpenSubModal(false)}>
-              {t("btn_back", "Back")}
-            </Button>
-            <Button type="submit" loading={submittingPayment} className="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
-              {t("btn_submit_receipt", "Submit Payment Receipt Proof")}
-            </Button>
-          </div>
-        </form>
+        </div>
       </Modal>
 
       {/* Workspace Deletion Modal */}

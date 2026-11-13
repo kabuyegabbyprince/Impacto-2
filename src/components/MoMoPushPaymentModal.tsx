@@ -17,6 +17,7 @@ import {
 import { Button, Input } from "./ui";
 import { useCurrencyStore } from "../store/currencyStore";
 import { UssdPaymentHelper } from "./UssdPaymentHelper";
+import { PaymentSuccessPulse } from "./PaymentSuccessPulse";
 
 export interface MoMoPaymentSuccessData {
   depositId: string;
@@ -351,6 +352,8 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
         method: "manual_proof",
         proofText: manualSms,
       });
+      setProviderTxId(cleanRef || `MAN-${Date.now().toString().slice(-6)}`);
+      setStatusMessage("Payment slip recorded and submitted for accountant verification.");
       setPushStatus("success");
     } catch (err: any) {
       alert(err.message || "Failed to submit manual proof.");
@@ -768,30 +771,14 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
               )}
 
               {pushStatus === "success" && (
-                <div className="py-6 text-center space-y-4 animate-in zoom-in-[0.98]">
-                  <div className="h-14 w-14 mx-auto rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-[#156c45] dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-center shadow-md">
-                    <CheckCircle2 className="h-8 w-8" />
-                  </div>
-                  <div>
-                    <h4 className="font-display font-extrabold text-slate-900 dark:text-white text-base sm:text-lg">
-                      Payment Confirmed!
-                    </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      {statusMessage}
-                    </p>
-                    {providerTxId && (
-                      <div className="mt-2.5 inline-block bg-slate-100 dark:bg-slate-800 font-mono text-xs font-bold px-3 py-1 rounded-lg text-slate-700 dark:text-slate-300">
-                        Ref: {providerTxId}
-                      </div>
-                    )}
-                  </div>
-                  <Button
-                    onClick={onClose}
-                    className="w-full py-3 bg-[#156c45] hover:bg-[#125939] text-white font-bold rounded-xl text-xs sm:text-sm"
-                  >
-                    Done & Close
-                  </Button>
-                </div>
+                <PaymentSuccessPulse
+                  title="Payment Confirmed!"
+                  message={statusMessage}
+                  reference={providerTxId || undefined}
+                  amountRwf={amountRwf}
+                  doneLabel="Done & Close"
+                  onDone={onClose}
+                />
               )}
 
               {pushStatus === "failed" && (
@@ -834,6 +821,15 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                 </div>
               )}
             </div>
+          ) : pushStatus === "success" ? (
+            <PaymentSuccessPulse
+              title="Payment Proof Submitted!"
+              message={statusMessage || "Payment slip recorded and submitted for accountant verification."}
+              reference={providerTxId || manualTxRef || undefined}
+              amountRwf={amountRwf}
+              doneLabel="Done & Close"
+              onDone={onClose}
+            />
           ) : (
             <form onSubmit={handleManualSubmit} className="space-y-3.5">
               <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed">

@@ -152,8 +152,9 @@ export class MockDB {
       kes_to_rwf_rate: 10,
       mtn_payment_number: "",
       airtel_payment_number: "",
-      payment_name: "VIRELLIX INC",
-      momo_merchant_code: ""
+      payment_name: "Gaby Prince / VIRELLIX INC",
+      momo_merchant_code: "2325266",
+      mtn_merchant_code: "2325266"
     });
   }
 

@@ -20,7 +20,8 @@ import {
   Lock,
   Plus,
   ExternalLink,
-  X
+  X,
+  Wifi
 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
@@ -31,7 +32,11 @@ import {
   useChatChannels,
   useSendChatMessage
 } from "../hooks/useImpactoData";
-import { ChatVideoMeetModal } from "../components/ChatVideoMeetModal";
+import {
+  ChatVideoMeetModal,
+  getCanonicalMeetRoomId,
+  isMeetHostOrAdmin
+} from "../components/ChatVideoMeetModal";
 import { HostedMeetInfo } from "../types";
 import { useToast } from "../components/Toast";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
@@ -53,6 +58,38 @@ export function formatMeetingCodeInput(val: string): string {
     return `${clean.slice(0, 3)}-${clean.slice(3)}`;
   }
   return clean;
+}
+
+export function isSameMeetMeta(a: HostedMeetInfo | null, b: HostedMeetInfo | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.meetingId === b.meetingId &&
+    a.meetingCode === b.meetingCode &&
+    a.meetingTitle === b.meetingTitle &&
+    a.orgId === b.orgId &&
+    a.hostId === b.hostId &&
+    a.isPublic === b.isPublic &&
+    a.startedAt === b.startedAt
+  );
+}
+
+const MEET_SELECT_COLUMNS =
+  "id, org_id, title, meeting_title, meeting_code, channel_name, channel_id, host_id, host_name, recorded_by, started_at, is_public";
+
+function mapDbRowToHostedMeet(dbMeet: any, fallbackOrgId: string, fallbackCode?: string): HostedMeetInfo {
+  return {
+    meetingId: dbMeet.id,
+    meetingCode: dbMeet.meeting_code || fallbackCode || undefined,
+    meetingTitle: dbMeet.title || dbMeet.meeting_title || "Live Meeting",
+    channelName: dbMeet.channel_name || "General",
+    channelId: dbMeet.channel_id || undefined,
+    orgId: dbMeet.org_id || fallbackOrgId,
+    hostId: dbMeet.host_id || dbMeet.recorded_by || "host",
+    hostName: dbMeet.host_name || "Host",
+    startedAt: dbMeet.started_at || new Date().toISOString(),
+    isPublic: dbMeet.is_public ?? true
+  };
 }
 
 export const MeetRoomPage: React.FC = () => {
@@ -79,9 +116,17 @@ export const MeetRoomPage: React.FC = () => {
     slug: "workspace"
   };
 
-  const { data: orgMembers = [] } = useMembers(targetOrg.id);
-  const { data: dbDocs = [] } = useV2Documents(targetOrg.id);
-  const { data: chatChannels = [] } = useChatChannels(targetOrg.id);
+  // Only treat user as an internal member if authenticated AND belongs to this target organization
+  const isAuthenticatedOrgMember = Boolean(
+    user &&
+      activeMember &&
+      (!targetOrg.id || targetOrg.id === "default" || !activeMember.org_id || activeMember.org_id === targetOrg.id)
+  );
+
+  // Never query internal member rosters, documents, or chat channels for external link joiners
+  const { data: orgMembers = [] } = useMembers(isAuthenticatedOrgMember ? targetOrg.id : undefined);
+  const { data: dbDocs = [] } = useV2Documents(isAuthenticatedOrgMember ? targetOrg.id : undefined);
+  const { data: chatChannels = [] } = useChatChannels(isAuthenticatedOrgMember ? targetOrg.id : undefined);
   const sendChatMessage = useSendChatMessage();
 
   const generalChannel =
@@ -93,6 +138,7 @@ export const MeetRoomPage: React.FC = () => {
   const [loadingMeet, setLoadingMeet] = useState(true);
   const [inCall, setInCall] = useState(false);
   const [waitingForAdmission, setWaitingForAdmission] = useState(false);
+  const [waitingChannelStatus, setWaitingChannelStatus] = useState<"connecting" | "connected" | "retrying">("connecting");
 
   // Manual meeting code input for joining
   const [manualCodeInput, setManualCodeInput] = useState("");
@@ -108,9 +154,28 @@ export const MeetRoomPage: React.FC = () => {
   const [autoBroadcastToChat, setAutoBroadcastToChat] = useState(true);
   const [isCreatingMeet, setIsCreatingMeet] = useState(false);
 
-  // Guest input state
-  const [guestName, setGuestName] = useState("");
+  // Display name state (required for external link/code joiners, prefilled when available)
+  const [guestName, setGuestName] = useState<string>(() => {
+    try {
+      return user?.full_name || localStorage.getItem("impacto_meet_guest_name") || "";
+    } catch (e) {
+      return user?.full_name || "";
+    }
+  });
   const [guestUser, setGuestUser] = useState<{ id: string; full_name: string; role: string } | null>(null);
+
+  useEffect(() => {
+    if (user?.full_name && !guestName.trim()) {
+      setGuestName(user.full_name);
+    }
+  }, [user?.full_name]);
+
+  const inCallRef = useRef(inCall);
+  inCallRef.current = inCall;
+  const waitingRef = useRef(waitingForAdmission);
+  waitingRef.current = waitingForAdmission;
+  const checkedDroppedRef = useRef(false);
+  const hasExplicitlyLeftRef = useRef(false);
 
   // Pre-join audio/video preview toggles & streams
   const [previewMic, setPreviewMic] = useState(false);
@@ -152,12 +217,22 @@ export const MeetRoomPage: React.FC = () => {
     };
   }, []);
 
-  // Check Supabase for active session_token / recent session participation to auto-rejoin dropped session
+  // Check Supabase once for recent active session participation to auto-rejoin dropped session
   useEffect(() => {
     let isMounted = true;
     const checkDroppedSession = async () => {
       const effectiveUserId = user?.id;
-      if (!effectiveUserId || !isSupabaseConfigured || !activeMeet) return;
+      if (
+        !effectiveUserId ||
+        !isSupabaseConfigured ||
+        !activeMeet ||
+        inCall ||
+        checkedDroppedRef.current ||
+        hasExplicitlyLeftRef.current
+      ) {
+        return;
+      }
+      checkedDroppedRef.current = true;
       try {
         const { data, error } = await supabase
           .from("meeting_participants")
@@ -168,10 +243,9 @@ export const MeetRoomPage: React.FC = () => {
         if (!error && data && data.length > 0) {
           const recentSession = data[0];
           const joinedTime = new Date(recentSession.joined_at).getTime();
-          // Auto reconnect if session started within last 15 minutes and meet is active
-          if (Date.now() - joinedTime < 900000 && activeMeet && isMounted && !inCall) {
+          if (Date.now() - joinedTime < 900000 && activeMeet && isMounted && !inCallRef.current && !hasExplicitlyLeftRef.current) {
             setInCall(true);
-            addToast("Automatically reconnected to your dropped meeting session.", "success");
+            addToast("Reconnected to your active meeting session.", "success");
           }
         }
       } catch (err) {}
@@ -182,51 +256,127 @@ export const MeetRoomPage: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [activeMeet, user?.id, inCall, addToast]);
+  }, [activeMeet?.meetingId, user?.id, inCall, addToast]);
 
   // Support URL code parameter on load
+  const codeFromQuery = searchParams.get("code");
   useEffect(() => {
-    const codeFromQuery = searchParams.get("code");
-    if (codeFromQuery) {
-      const formatted = formatMeetingCodeInput(codeFromQuery);
-      setManualCodeInput(formatted);
-      fetch(`/api/meet/active?code=${encodeURIComponent(formatted)}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.activeMeet) {
-            setActiveMeet(data.activeMeet);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [searchParams]);
+    if (!codeFromQuery) return;
+    const formatted = formatMeetingCodeInput(codeFromQuery);
+    setManualCodeInput(formatted);
 
-  // Poll for active meet state from backend
+    const resolveInitialByCode = async () => {
+      try {
+        const res = await fetch(`/api/meet/active?code=${encodeURIComponent(formatted)}`);
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && contentType.includes("application/json")) {
+          const data = await res.json();
+          if (data?.activeMeet) {
+            setActiveMeet((prev) => (isSameMeetMeta(prev, data.activeMeet) ? prev : data.activeMeet));
+            setLoadingMeet(false);
+            return;
+          }
+        }
+      } catch (e) {}
+
+      if (isSupabaseConfigured) {
+        try {
+          const { data: rows } = await supabase
+            .from("meetings")
+            .select(MEET_SELECT_COLUMNS)
+            .ilike("meeting_code", formatted)
+            .eq("status", "active")
+            .order("started_at", { ascending: false })
+            .limit(1);
+          if (rows && rows.length > 0) {
+            const mapped = mapDbRowToHostedMeet(rows[0], orgIdFromParam, formatted);
+            setActiveMeet((prev) => (isSameMeetMeta(prev, mapped) ? prev : mapped));
+            setLoadingMeet(false);
+          }
+        } catch (err) {}
+      }
+    };
+    resolveInitialByCode();
+  }, [codeFromQuery, orgIdFromParam]);
+
+  // Poll for active meet state from backend + Supabase Realtime bus + Supabase DB fallback
+  // Pauses HTTP/DB polling while inCall or waitingForAdmission to avoid object churn and save Supabase egress
   useEffect(() => {
     let isMounted = true;
     const fetchActive = async () => {
+      if (inCallRef.current || waitingRef.current) return;
+
       try {
-        const res = await fetch(`/api/meet/active?orgId=${encodeURIComponent(orgIdFromParam)}`);
-        if (res.ok) {
+        const query = codeFromQuery
+          ? `orgId=${encodeURIComponent(orgIdFromParam)}&code=${encodeURIComponent(formatMeetingCodeInput(codeFromQuery))}`
+          : `orgId=${encodeURIComponent(orgIdFromParam)}`;
+        const res = await fetch(`/api/meet/active?${query}`);
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && contentType.includes("application/json")) {
           const data = await res.json();
-          if (isMounted) {
-            setActiveMeet(data.activeMeet || null);
-            setLoadingMeet(false);
+          if (data.activeMeet) {
+            if (isMounted) {
+              setActiveMeet((prev) => (isSameMeetMeta(prev, data.activeMeet) ? prev : data.activeMeet));
+              setLoadingMeet(false);
+            }
+            return;
           }
         }
-      } catch (e) {
-        if (isMounted) setLoadingMeet(false);
+      } catch (e) {}
+
+      // Supabase DB fallback: match by meeting code when present, otherwise by org_id + active status
+      if (isSupabaseConfigured) {
+        try {
+          let dbMeet: any = null;
+          if (codeFromQuery) {
+            const formatted = formatMeetingCodeInput(codeFromQuery);
+            const { data: codeRows } = await supabase
+              .from("meetings")
+              .select(MEET_SELECT_COLUMNS)
+              .ilike("meeting_code", formatted)
+              .eq("status", "active")
+              .order("started_at", { ascending: false })
+              .limit(1);
+            if (codeRows && codeRows.length > 0) dbMeet = codeRows[0];
+          } else if (orgIdFromParam && orgIdFromParam !== "default") {
+            const { data: rows } = await supabase
+              .from("meetings")
+              .select(MEET_SELECT_COLUMNS)
+              .eq("org_id", orgIdFromParam)
+              .eq("status", "active")
+              .order("started_at", { ascending: false })
+              .limit(1);
+            if (rows && rows.length > 0) dbMeet = rows[0];
+          }
+
+          if (dbMeet) {
+            const mapped = mapDbRowToHostedMeet(
+              dbMeet,
+              orgIdFromParam,
+              codeFromQuery ? formatMeetingCodeInput(codeFromQuery) : undefined
+            );
+            if (isMounted) {
+              setActiveMeet((prev) => (isSameMeetMeta(prev, mapped) ? prev : mapped));
+              setLoadingMeet(false);
+            }
+            return;
+          }
+        } catch (err) {}
+      }
+
+      if (isMounted) {
+        setLoadingMeet(false);
       }
     };
 
     fetchActive();
-    const interval = setInterval(fetchActive, 2000);
+    const interval = setInterval(fetchActive, 15000);
 
     // Listen to local BroadcastChannel as well
     const bc = new BroadcastChannel(`impacto_org_meet_bus_${orgIdFromParam}`);
     bc.onmessage = (ev) => {
       if (ev.data?.type === "HOSTED_MEET_ACTIVE" && ev.data.meet) {
-        setActiveMeet(ev.data.meet);
+        setActiveMeet((prev) => (isSameMeetMeta(prev, ev.data.meet) ? prev : ev.data.meet));
       } else if (ev.data?.type === "HOSTED_MEET_ENDED") {
         setActiveMeet(null);
         setInCall(false);
@@ -234,62 +384,194 @@ export const MeetRoomPage: React.FC = () => {
       }
     };
 
+    // Listen to Supabase Realtime org meet bus for cross-device meeting lifecycle
+    let orgBusChannel: any = null;
+    if (isSupabaseConfigured && orgIdFromParam && orgIdFromParam !== "default") {
+      try {
+        orgBusChannel = supabase.channel(`impacto_org_meet_bus_${orgIdFromParam}`, {
+          config: { broadcast: { self: false } }
+        });
+        orgBusChannel
+          .on("broadcast", { event: "meet_bus" }, ({ payload }: { payload: any }) => {
+            if (payload?.type === "HOSTED_MEET_ACTIVE" && payload.meet) {
+              setActiveMeet((prev) => (isSameMeetMeta(prev, payload.meet) ? prev : payload.meet));
+            } else if (payload?.type === "HOSTED_MEET_ENDED") {
+              setActiveMeet(null);
+              setInCall(false);
+              setWaitingForAdmission(false);
+            }
+          })
+          .subscribe();
+      } catch (e) {}
+    }
+
     return () => {
       isMounted = false;
       clearInterval(interval);
       bc.close();
+      if (orgBusChannel) {
+        try {
+          supabase.removeChannel(orgBusChannel);
+        } catch (e) {}
+      }
     };
-  }, [orgIdFromParam]);
+  }, [orgIdFromParam, codeFromQuery]);
 
-  // Listen for admission response over WebSocket / BroadcastChannel
+  // Listen for admission response over Supabase Realtime + WebSocket + BroadcastChannel
   useEffect(() => {
-    if (!waitingForAdmission) return;
+    if (!waitingForAdmission || !activeMeet) return;
     const effectiveUserId = user?.id || guestUser?.id;
     if (!effectiveUserId) return;
 
-    const targetRoomOrgId = activeMeet?.orgId || orgIdFromParam;
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws/meet?orgId=${encodeURIComponent(
-      targetRoomOrgId
-    )}&peerId=wait-${effectiveUserId}&userId=${encodeURIComponent(effectiveUserId)}&name=${encodeURIComponent(
-      user?.full_name || guestName
-    )}&role=Waiting`;
+    const effectiveName = user?.full_name || guestUser?.full_name || guestName.trim() || "Guest";
+    const effectiveRole = user ? activeMember?.role || "Member" : "Guest";
+    const targetRoomOrgId = activeMeet.orgId || orgIdFromParam;
+    const canonicalRoomId = getCanonicalMeetRoomId(activeMeet, targetRoomOrgId);
+    const admissionPayload = {
+      type: "REQUEST_ADMISSION",
+      roomId: canonicalRoomId,
+      meetingCode: activeMeet.meetingCode,
+      userId: effectiveUserId,
+      userName: effectiveName,
+      role: effectiveRole
+    };
 
-    let ws: WebSocket | null = null;
-    try {
-      ws = new WebSocket(wsUrl);
-      ws.onmessage = (ev) => {
-        try {
-          const msg = JSON.parse(ev.data);
-          if (msg.type === "ADMIT_PEER" && msg.userId === effectiveUserId) {
-            setWaitingForAdmission(false);
-            setInCall(true);
-            addToast("You have been admitted to the meeting!", "success");
-          } else if (msg.type === "DECLINE_PEER" && msg.userId === effectiveUserId) {
-            setWaitingForAdmission(false);
-            addToast("Your request to join this meeting was declined by the host.", "error");
-          }
-        } catch (e) {}
-      };
-    } catch (e) {}
+    setWaitingChannelStatus("connecting");
+    let settled = false;
+    let supaConnected = false;
 
-    const bc = new BroadcastChannel(`impacto_call_org_${targetRoomOrgId}`);
-    bc.onmessage = (ev) => {
-      if (ev.data?.type === "ADMIT_PEER" && ev.data.userId === effectiveUserId) {
+    const handleAdmissionEvent = (msg: any) => {
+      if (!msg || settled) return;
+      if (msg.type === "ADMIT_PEER" && msg.userId === effectiveUserId) {
+        settled = true;
         setWaitingForAdmission(false);
         setInCall(true);
         addToast("You have been admitted to the meeting!", "success");
-      } else if (ev.data?.type === "DECLINE_PEER" && ev.data.userId === effectiveUserId) {
+      } else if (msg.type === "DECLINE_PEER" && msg.userId === effectiveUserId) {
+        settled = true;
         setWaitingForAdmission(false);
         addToast("Your request to join this meeting was declined by the host.", "error");
+      } else if (msg.type === "HOSTED_MEET_ENDED") {
+        settled = true;
+        setWaitingForAdmission(false);
+        setActiveMeet(null);
       }
     };
 
+    // 1. Supabase Realtime channel (canonical room key shared with ChatVideoMeetModal)
+    let supaChannel: any = null;
+    if (isSupabaseConfigured) {
+      try {
+        supaChannel = supabase.channel(`impacto_meet_rt_${canonicalRoomId}`, {
+          config: { broadcast: { self: false } }
+        });
+        supaChannel
+          .on("broadcast", { event: "signal" }, ({ payload }: { payload: any }) => {
+            handleAdmissionEvent(payload);
+          })
+          .subscribe((status: string) => {
+            if (status === "SUBSCRIBED") {
+              supaConnected = true;
+              setWaitingChannelStatus("connected");
+              supaChannel.send({
+                type: "broadcast",
+                event: "signal",
+                payload: admissionPayload
+              });
+            } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+              supaConnected = false;
+              setWaitingChannelStatus("retrying");
+            }
+          });
+      } catch (e) {}
+    }
+
+    // 2. Keep WebSocket open on canonical roomId while in waiting room (optional when Express WS is mounted)
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws/meet?roomId=${encodeURIComponent(
+      canonicalRoomId
+    )}&orgId=${encodeURIComponent(targetRoomOrgId)}${
+      activeMeet.meetingCode ? `&meetingCode=${encodeURIComponent(activeMeet.meetingCode)}` : ""
+    }&peerId=wait-${effectiveUserId}&userId=${encodeURIComponent(effectiveUserId)}&name=${encodeURIComponent(
+      effectiveName
+    )}&role=Waiting`;
+
+    let ws: WebSocket | null = null;
+    let wsOpened = false;
+    try {
+      ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        wsOpened = true;
+        setWaitingChannelStatus("connected");
+        try {
+          ws?.send(JSON.stringify(admissionPayload));
+        } catch (e) {}
+      };
+      ws.onmessage = (ev) => {
+        try {
+          handleAdmissionEvent(JSON.parse(ev.data));
+        } catch (e) {}
+      };
+      ws.onclose = () => {
+        if (!settled && !supaConnected && !isSupabaseConfigured && wsOpened) {
+          setWaitingChannelStatus("retrying");
+        }
+      };
+    } catch (e) {}
+
+    // 3. Same-origin BroadcastChannel on canonical room key
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel(`impacto_call_room_${canonicalRoomId}`);
+      bc.onmessage = (ev) => handleAdmissionEvent(ev.data);
+      bc.postMessage(admissionPayload);
+    } catch (e) {}
+
+    // 4. Periodically re-announce admission request every 4s in case host joins slightly after waiting user
+    const retryInterval = setInterval(() => {
+      if (settled) return;
+      if (supaChannel) {
+        try {
+          supaChannel.send({ type: "broadcast", event: "signal", payload: admissionPayload });
+        } catch (e) {}
+      }
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify(admissionPayload));
+        } catch (e) {}
+      }
+      fetch("/api/meet/signal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orgId: targetRoomOrgId,
+          roomId: canonicalRoomId,
+          meetingCode: activeMeet.meetingCode,
+          message: admissionPayload
+        })
+      }).catch(() => {});
+    }, 4000);
+
     return () => {
-      if (ws) ws.close();
-      bc.close();
+      settled = true;
+      clearInterval(retryInterval);
+      if (supaChannel) {
+        try {
+          supabase.removeChannel(supaChannel);
+        } catch (e) {}
+      }
+      if (ws) {
+        try {
+          ws.close();
+        } catch (e) {}
+      }
+      if (bc) {
+        try {
+          bc.close();
+        } catch (e) {}
+      }
     };
-  }, [waitingForAdmission, user?.id, guestUser?.id, orgIdFromParam, activeMeet?.orgId, guestName, addToast]);
+  }, [waitingForAdmission, user?.id, user?.full_name, guestUser?.id, guestUser?.full_name, orgIdFromParam, activeMeet, activeMember?.role, guestName, addToast]);
 
   // Sync preview stream to video element
   useEffect(() => {
@@ -437,66 +719,93 @@ export const MeetRoomPage: React.FC = () => {
     }
   };
 
+  // Helper to send admission request to canonical room across HTTP + BroadcastChannel
+  const dispatchAdmissionRequest = (
+    meetObj: HostedMeetInfo | null,
+    effectiveUserId: string,
+    effectiveName: string,
+    effectiveRole: string
+  ) => {
+    const targetRoomOrgId = meetObj?.orgId || orgIdFromParam;
+    const canonicalRoomId = getCanonicalMeetRoomId(meetObj, targetRoomOrgId);
+    const payload = {
+      type: "REQUEST_ADMISSION",
+      roomId: canonicalRoomId,
+      meetingCode: meetObj?.meetingCode,
+      userId: effectiveUserId,
+      userName: effectiveName,
+      role: effectiveRole
+    };
+
+    try {
+      const bc = new BroadcastChannel(`impacto_call_room_${canonicalRoomId}`);
+      bc.postMessage(payload);
+      bc.close();
+    } catch (err) {}
+
+    fetch("/api/meet/signal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orgId: targetRoomOrgId,
+        roomId: canonicalRoomId,
+        meetingCode: meetObj?.meetingCode,
+        message: payload
+      })
+    }).catch(() => {});
+  };
+
+  // Resolve validated display name so nobody joins as "You" or "Member"
+  const getValidatedDisplayName = (): string | null => {
+    const candidate = (guestName.trim() || user?.full_name?.trim() || "").trim();
+    if (!candidate || candidate.toLowerCase() === "you") {
+      addToast("Please enter your name before joining the meeting.", "error");
+      return null;
+    }
+    try {
+      localStorage.setItem("impacto_meet_guest_name", candidate);
+    } catch (e) {}
+    return candidate;
+  };
+
   // Join Existing Active Meeting
   const handleJoinClick = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const effectiveName = user?.full_name || guestName.trim();
-    if (!effectiveName) {
-      addToast("Please enter your name to join the meeting", "error");
-      return;
-    }
+    const effectiveName = getValidatedDisplayName();
+    if (!effectiveName) return;
 
-    const currentGuest = user
-      ? null
-      : {
-          id: `guest-${Math.random().toString(36).substring(2, 9)}`,
-          full_name: effectiveName,
-          role: "Guest"
-        };
+    hasExplicitlyLeftRef.current = false;
 
-    if (currentGuest) {
+    let currentGuest = guestUser;
+    if (!isAuthenticatedOrgMember) {
+      currentGuest = {
+        id: guestUser?.id || `guest-${Math.random().toString(36).substring(2, 9)}`,
+        full_name: effectiveName,
+        role: "Guest"
+      };
       setGuestUser(currentGuest);
     }
 
-    const effectiveUserId = user?.id || currentGuest?.id || "guest";
-    const isHostOrAdmin = user?.id === activeMeet?.hostId || activeMember?.role === "org_admin";
+    const effectiveUserId = (isAuthenticatedOrgMember ? user?.id : currentGuest?.id) || "guest";
+    const isHostOrAdmin = isMeetHostOrAdmin(
+      isAuthenticatedOrgMember ? activeMember?.role : "Guest",
+      isAuthenticatedOrgMember ? user?.id : currentGuest?.id,
+      activeMeet,
+      (targetOrg as any)?.owner_id,
+      Boolean(isAuthenticatedOrgMember && user?.is_superadmin),
+      !isAuthenticatedOrgMember
+    );
 
     if (activeMeet?.isPublic || isHostOrAdmin) {
       setInCall(true);
     } else {
       setWaitingForAdmission(true);
-      const targetRoomOrgId = activeMeet?.orgId || orgIdFromParam;
-      // Dispatch admission request to room
-      try {
-        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = `${protocol}//${window.location.host}/ws/meet?orgId=${encodeURIComponent(
-          targetRoomOrgId
-        )}&peerId=wait-${effectiveUserId}&userId=${encodeURIComponent(effectiveUserId)}&name=${encodeURIComponent(
-          effectiveName
-        )}&role=Guest`;
-        const tempWs = new WebSocket(wsUrl);
-        tempWs.onopen = () => {
-          tempWs.send(
-            JSON.stringify({
-              type: "REQUEST_ADMISSION",
-              userId: effectiveUserId,
-              userName: effectiveName,
-              role: user ? activeMember?.role || "Member" : "Guest"
-            })
-          );
-        };
-      } catch (err) {}
-
-      try {
-        const bc = new BroadcastChannel(`impacto_call_org_${targetRoomOrgId}`);
-        bc.postMessage({
-          type: "REQUEST_ADMISSION",
-          userId: effectiveUserId,
-          userName: effectiveName,
-          role: user ? activeMember?.role || "Member" : "Guest"
-        });
-        bc.close();
-      } catch (err) {}
+      dispatchAdmissionRequest(
+        activeMeet,
+        effectiveUserId,
+        effectiveName,
+        isAuthenticatedOrgMember ? activeMember?.role || "Member" : "Guest"
+      );
     }
   };
 
@@ -509,8 +818,41 @@ export const MeetRoomPage: React.FC = () => {
       return;
     }
 
+    const effectiveName = getValidatedDisplayName();
+    if (!effectiveName) return;
+
+    hasExplicitlyLeftRef.current = false;
     setIsSearchingCode(true);
     const cleanInputCode = formatted.replace(/[^a-z0-9]/g, "").toLowerCase();
+
+    let effectiveUserId = isAuthenticatedOrgMember ? user?.id : guestUser?.id;
+    if (!isAuthenticatedOrgMember) {
+      const g = {
+        id: guestUser?.id || `guest-${Math.random().toString(36).substring(2, 9)}`,
+        full_name: effectiveName,
+        role: "Guest"
+      };
+      setGuestUser(g);
+      effectiveUserId = g.id;
+    }
+    const effectiveRole = isAuthenticatedOrgMember ? activeMember?.role || "Member" : "Guest";
+
+    const routeIntoMeet = (targetMeet: HostedMeetInfo) => {
+      const isHostOrAdmin = isMeetHostOrAdmin(
+        isAuthenticatedOrgMember ? activeMember?.role : "Guest",
+        effectiveUserId,
+        targetMeet,
+        (targetOrg as any)?.owner_id,
+        Boolean(isAuthenticatedOrgMember && user?.is_superadmin),
+        !isAuthenticatedOrgMember
+      );
+      if (targetMeet.isPublic || isHostOrAdmin) {
+        setInCall(true);
+      } else {
+        setWaitingForAdmission(true);
+        dispatchAdmissionRequest(targetMeet, effectiveUserId!, effectiveName, effectiveRole);
+      }
+    };
 
     // 1. Check if local activeMeet matches this code
     if (
@@ -519,31 +861,22 @@ export const MeetRoomPage: React.FC = () => {
         (activeMeet.meetingId && activeMeet.meetingId.replace(/[^a-z0-9]/g, "").toLowerCase() === cleanInputCode))
     ) {
       addToast(`Connecting to meeting "${activeMeet.meetingTitle}" (${formatted})...`, "success");
-      const isHostOrAdmin = user?.id === activeMeet.hostId || activeMember?.role === "org_admin" || activeMember?.role === "superadmin";
-      if (activeMeet.isPublic || isHostOrAdmin) {
-        setInCall(true);
-      } else {
-        setWaitingForAdmission(true);
-      }
+      routeIntoMeet(activeMeet);
       setIsSearchingCode(false);
       return;
     }
 
-    // 2. Query active meeting from server API by code (isolated try-catch)
+    // 2. Query active meeting from server API by code (content-type guarded for static hosting)
     try {
       const res = await fetch(`/api/meet/active?code=${encodeURIComponent(formatted)}`);
-      if (res.ok) {
+      const contentType = res.headers.get("content-type") || "";
+      if (res.ok && contentType.includes("application/json")) {
         const data = await res.json();
         if (data?.activeMeet) {
           const targetMeet: HostedMeetInfo = data.activeMeet;
-          setActiveMeet(targetMeet);
+          setActiveMeet((prev) => (isSameMeetMeta(prev, targetMeet) ? prev : targetMeet));
           addToast(`Connecting to active meeting "${targetMeet.meetingTitle}" (${formatted})...`, "success");
-          const isHostOrAdmin = user?.id === targetMeet.hostId || activeMember?.role === "org_admin" || activeMember?.role === "superadmin";
-          if (targetMeet.isPublic || isHostOrAdmin) {
-            setInCall(true);
-          } else {
-            setWaitingForAdmission(true);
-          }
+          routeIntoMeet(targetMeet);
           setIsSearchingCode(false);
           return;
         }
@@ -552,16 +885,15 @@ export const MeetRoomPage: React.FC = () => {
       console.warn("[MeetRoomPage] Active meet API lookup warning:", apiErr);
     }
 
-    // 3. Fallback: Query Supabase database directly (isolated try-catch)
+    // 3. Fallback: Query Supabase database directly using narrow columns + composite index
     if (isSupabaseConfigured) {
       try {
         let dbMeet = null;
         const formattedCode = formatted.trim();
 
-        // Step 3a: Query by formatted code
         const { data: d1 } = await supabase
           .from("meetings")
-          .select("*")
+          .select(MEET_SELECT_COLUMNS)
           .ilike("meeting_code", formattedCode)
           .eq("status", "active")
           .limit(1);
@@ -569,10 +901,9 @@ export const MeetRoomPage: React.FC = () => {
         if (d1 && d1.length > 0) {
           dbMeet = d1[0];
         } else {
-          // Step 3b: Query by clean code
           const { data: d2 } = await supabase
             .from("meetings")
-            .select("*")
+            .select(MEET_SELECT_COLUMNS)
             .ilike("meeting_code", cleanInputCode)
             .eq("status", "active")
             .limit(1);
@@ -580,11 +911,11 @@ export const MeetRoomPage: React.FC = () => {
           if (d2 && d2.length > 0) {
             dbMeet = d2[0];
           } else {
-            // Step 3c: Wildcard query e.g. "%9d5%88v%"
-            const wildcardPattern = cleanInputCode.length >= 6 ? `%${cleanInputCode.slice(0, 3)}%${cleanInputCode.slice(3)}%` : `%${cleanInputCode}%`;
+            const wildcardPattern =
+              cleanInputCode.length >= 6 ? `%${cleanInputCode.slice(0, 3)}%${cleanInputCode.slice(3)}%` : `%${cleanInputCode}%`;
             const { data: d3 } = await supabase
               .from("meetings")
-              .select("*")
+              .select(MEET_SELECT_COLUMNS)
               .ilike("meeting_code", wildcardPattern)
               .eq("status", "active")
               .limit(1);
@@ -596,19 +927,8 @@ export const MeetRoomPage: React.FC = () => {
         }
 
         if (dbMeet) {
-          const fetchedMeet: HostedMeetInfo = {
-            meetingId: dbMeet.id,
-            meetingCode: dbMeet.meeting_code || formatted,
-            meetingTitle: dbMeet.title || dbMeet.meeting_title || "Live Meeting",
-            channelName: dbMeet.channel_name || "General",
-            orgId: dbMeet.org_id || targetOrg.id,
-            hostId: dbMeet.recorded_by || "host",
-            hostName: "Host",
-            startedAt: dbMeet.started_at || new Date().toISOString(),
-            isPublic: dbMeet.is_public ?? true
-          };
-
-          setActiveMeet(fetchedMeet);
+          const fetchedMeet = mapDbRowToHostedMeet(dbMeet, targetOrg.id, formatted);
+          setActiveMeet((prev) => (isSameMeetMeta(prev, fetchedMeet) ? prev : fetchedMeet));
           fetch("/api/meet/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -616,12 +936,7 @@ export const MeetRoomPage: React.FC = () => {
           }).catch(() => {});
 
           addToast(`Connecting to meeting "${fetchedMeet.meetingTitle}" (${formatted})...`, "success");
-          const isHostOrAdmin = user?.id === fetchedMeet.hostId || activeMember?.role === "org_admin" || activeMember?.role === "superadmin";
-          if (fetchedMeet.isPublic || isHostOrAdmin) {
-            setInCall(true);
-          } else {
-            setWaitingForAdmission(true);
-          }
+          routeIntoMeet(fetchedMeet);
           setIsSearchingCode(false);
           return;
         }
@@ -630,7 +945,8 @@ export const MeetRoomPage: React.FC = () => {
       }
     }
 
-    // 4. Guaranteed Room Connection: Reserve/create room for this code so participants connect together!
+    // 4. Guaranteed Room Connection: Reserve/create room for this code so participants connect together
+    const startedIso = new Date().toISOString();
     const roomMeet: HostedMeetInfo = {
       meetingId: `meet-${cleanInputCode}-${Date.now()}`,
       meetingCode: formatted,
@@ -638,9 +954,9 @@ export const MeetRoomPage: React.FC = () => {
       channelName: "General",
       channelId: generalChannel?.id,
       orgId: targetOrg.id,
-      hostId: user?.id || "host",
-      hostName: user?.full_name || "Member",
-      startedAt: new Date().toISOString(),
+      hostId: isAuthenticatedOrgMember && user?.id ? user.id : effectiveUserId || "host",
+      hostName: effectiveName,
+      startedAt: startedIso,
       isPublic: true
     };
 
@@ -652,7 +968,7 @@ export const MeetRoomPage: React.FC = () => {
       });
     } catch (e) {}
 
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && targetOrg.id && targetOrg.id !== "default") {
       try {
         await supabase.from("meetings").insert({
           id: roomMeet.meetingId,
@@ -660,9 +976,17 @@ export const MeetRoomPage: React.FC = () => {
           title: roomMeet.meetingTitle,
           meeting_code: formatted,
           channel_name: roomMeet.channelName,
+          channel_id: roomMeet.channelId || null,
           status: "active",
           is_public: true,
-          started_at: roomMeet.startedAt
+          date_time: startedIso,
+          duration: 60,
+          location: "Online Meet",
+          location_type: "online",
+          host_id: roomMeet.hostId,
+          host_name: roomMeet.hostName,
+          recorded_by: roomMeet.hostId,
+          started_at: startedIso
         });
       } catch (e) {}
     }
@@ -685,8 +1009,10 @@ export const MeetRoomPage: React.FC = () => {
   // Handle Confirmed Meeting Creation
   const handleCreateNewMeet = async () => {
     setIsCreatingMeet(true);
+    hasExplicitlyLeftRef.current = false;
     const code = formatMeetingCodeInput(newMeetCode) || generateMeetingCode();
     const title = newMeetTitle.trim() || `${targetOrg.name} Live Meeting`;
+    const startedIso = new Date().toISOString();
 
     const newMeet: HostedMeetInfo = {
       meetingId: `meet-${Date.now()}`,
@@ -696,8 +1022,8 @@ export const MeetRoomPage: React.FC = () => {
       channelId: generalChannel?.id,
       orgId: targetOrg.id,
       hostId: user?.id || "host",
-      hostName: user?.full_name || "Host",
-      startedAt: new Date().toISOString(),
+      hostName: guestName.trim() || user?.full_name || "Host",
+      startedAt: startedIso,
       isPublic: newMeetIsPublic
     };
 
@@ -709,7 +1035,7 @@ export const MeetRoomPage: React.FC = () => {
       });
 
       // Automatically broadcast meeting code and link to General Chat channel if toggled
-      if (autoBroadcastToChat && user) {
+      if (autoBroadcastToChat && user && isAuthenticatedOrgMember) {
         const directJoinUrl = `${window.location.origin}/meet?org=${targetOrg.id}&code=${code}`;
         const broadcastText = `Live Meeting Started: "${title}"\nMeeting Code: ${code}\nJoin Link: ${directJoinUrl}`;
 
@@ -728,7 +1054,6 @@ export const MeetRoomPage: React.FC = () => {
           }
         }
 
-        // Also post to local BroadcastChannel for live tabs
         try {
           const chatBc = new BroadcastChannel(`impacto_chat_bus_${targetOrg.id}`);
           chatBc.postMessage({
@@ -747,7 +1072,7 @@ export const MeetRoomPage: React.FC = () => {
         } catch (bcErr) {}
       }
 
-      // Persist meeting record in Supabase DB if available
+      // Persist meeting record in Supabase DB with full required fields from schema/update.sql
       if (isSupabaseConfigured) {
         try {
           await supabase.from("meetings").insert({
@@ -756,11 +1081,34 @@ export const MeetRoomPage: React.FC = () => {
             title: newMeet.meetingTitle,
             meeting_code: code,
             channel_name: newMeet.channelName,
+            channel_id: newMeet.channelId || null,
             status: "active",
             is_public: newMeetIsPublic,
-            started_at: newMeet.startedAt
+            date_time: startedIso,
+            duration: 60,
+            location: "Online Meet",
+            location_type: "online",
+            host_id: user?.id || "host",
+            host_name: newMeet.hostName,
+            recorded_by: user?.id || "host",
+            started_at: startedIso
           });
         } catch (dbErr) {}
+
+        // Broadcast active meeting across devices via Supabase Realtime bus
+        try {
+          const orgBus = supabase.channel(`impacto_org_meet_bus_${targetOrg.id}`);
+          orgBus.subscribe((status: string) => {
+            if (status === "SUBSCRIBED") {
+              orgBus.send({
+                type: "broadcast",
+                event: "meet_bus",
+                payload: { type: "HOSTED_MEET_ACTIVE", meet: newMeet }
+              });
+              setTimeout(() => supabase.removeChannel(orgBus), 1000);
+            }
+          });
+        } catch (e) {}
       }
 
       setActiveMeet(newMeet);
@@ -814,24 +1162,35 @@ export const MeetRoomPage: React.FC = () => {
           </button>
           <span className="text-[#3c4043]">|</span>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#81c995] animate-pulse" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#81c995]" />
             <span className="font-bold text-sm text-white">{targetOrg.name}</span>
           </div>
           {/* Real-time Connection Status Indicator in MeetRoomPage */}
           <div className="hidden sm:flex items-center gap-1.5 ml-2">
             {inCall ? (
               <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#81c995] bg-[#133020] px-2.5 py-0.5 rounded-full border border-[#1e4620]">
-                <span className="w-2 h-2 rounded-full bg-[#81c995] animate-pulse" />
-                <span>Connected</span>
+                <Wifi className="h-3 w-3 text-[#81c995]" />
+                <span>In Call</span>
+              </span>
+            ) : waitingForAdmission ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                <RefreshCw className={`h-3 w-3 ${waitingChannelStatus === "connected" ? "" : "animate-spin"}`} />
+                <span>
+                  {waitingChannelStatus === "connected"
+                    ? "Waiting for Host"
+                    : waitingChannelStatus === "retrying"
+                    ? "Retrying Channel..."
+                    : "Connecting Room..."}
+                </span>
               </span>
             ) : isSearchingCode ? (
               <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                <RefreshCw className="h-3 w-3 animate-spin" />
                 <span>Connecting...</span>
               </span>
             ) : activeMeet ? (
               <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                <Wifi className="h-3 w-3 text-emerald-400" />
                 <span>Ready to Join</span>
               </span>
             ) : (
@@ -869,7 +1228,7 @@ export const MeetRoomPage: React.FC = () => {
       <main className="flex-1 flex items-center justify-center p-4">
         {waitingForAdmission ? (
           <div className="max-w-md w-full bg-[#1a1b1e] border border-[#2d2e31] rounded-2xl p-6 sm:p-8 text-center flex flex-col items-center gap-5 shadow-2xl animate-in fade-in">
-            <div className="h-16 w-16 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center animate-pulse">
+            <div className="h-16 w-16 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
               <Clock className="h-8 w-8" />
             </div>
             <div>
@@ -878,6 +1237,24 @@ export const MeetRoomPage: React.FC = () => {
                 You have asked to join <strong className="text-white">"{activeMeet?.meetingTitle || "Live Meeting"}"</strong>.
                 The meeting host has been notified and will admit you shortly.
               </p>
+              <div className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-[#282a2d] border border-[#3c4043] text-[#9aa0a6]">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    waitingChannelStatus === "connected"
+                      ? "bg-[#81c995]"
+                      : waitingChannelStatus === "retrying"
+                      ? "bg-amber-400"
+                      : "bg-sky-400"
+                  }`}
+                />
+                <span>
+                  {waitingChannelStatus === "connected"
+                    ? "Admission channel connected — awaiting host"
+                    : waitingChannelStatus === "retrying"
+                    ? "Signaling channel reconnecting..."
+                    : "Connecting to admission channel..."}
+                </span>
+              </div>
             </div>
             <button
               type="button"
@@ -893,7 +1270,7 @@ export const MeetRoomPage: React.FC = () => {
             <div className="flex items-start justify-between border-b border-[#2d2e31] pb-4">
               <div>
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#81c995] bg-[#133020] px-2.5 py-0.5 rounded-full border border-[#1e4620] mb-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#81c995] animate-ping" />
+                  <Video className="h-3 w-3 text-[#81c995]" />
                   Meeting in Progress
                 </span>
                 <h2 className="text-lg sm:text-xl font-bold text-white leading-tight">
@@ -949,23 +1326,24 @@ export const MeetRoomPage: React.FC = () => {
               </div>
             </div>
 
-            {/* If not logged in, ask for guest name */}
-            {!user && (
-              <form onSubmit={handleJoinClick} className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-[#e3e3e3]">Your Full Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter your name (e.g., Jean Dupont)"
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  className="w-full bg-[#282a2d] border border-[#3c4043] text-white text-xs px-3.5 py-2.5 rounded-xl outline-none focus:border-[#81c995] transition"
-                />
-                <p className="text-[11px] text-[#9aa0a6]">
-                  This name will identify you in the video room and chat messages.
-                </p>
-              </form>
-            )}
+            {/* Required Display Name right below the Meeting Code & Direct Link */}
+            <form onSubmit={handleJoinClick} className="flex flex-col gap-1.5">
+              <label htmlFor="meet-join-display-name" className="text-xs font-bold text-[#e3e3e3]">
+                Your Name <span className="text-[#f28b82]">*</span>
+              </label>
+              <input
+                id="meet-join-display-name"
+                type="text"
+                required
+                placeholder="Enter your name to join with (e.g., Jean Dupont)"
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                className="w-full bg-[#282a2d] border border-[#3c4043] text-white text-xs px-3.5 py-2.5 rounded-xl outline-none focus:border-[#81c995] transition"
+              />
+              <p className="text-[11px] text-[#9aa0a6]">
+                Other participants will see this name on your tile, in chat, and in the people list.
+              </p>
+            </form>
 
             {/* Real-Time Hardware Availability Visual Indicator */}
             <div className="p-3.5 bg-[#1e2023] border border-[#2d2e31] rounded-xl text-xs space-y-2">
@@ -1203,14 +1581,22 @@ export const MeetRoomPage: React.FC = () => {
                 <input
                   type="text"
                   maxLength={7}
-                  placeholder="e.g. k8m-42p"
+                  placeholder="Meeting code (e.g. k8m-42p)"
                   value={manualCodeInput}
                   onChange={(e) => setManualCodeInput(formatMeetingCodeInput(e.target.value))}
                   className="w-full bg-[#282a2d] border border-[#3c4043] text-white font-mono text-center text-sm py-2.5 px-3 rounded-xl tracking-widest outline-none focus:border-[#81c995] transition"
                 />
+                <input
+                  type="text"
+                  required
+                  placeholder="Your Name (required to join)"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  className="w-full bg-[#282a2d] border border-[#3c4043] text-white text-xs py-2.5 px-3.5 rounded-xl outline-none focus:border-[#81c995] transition"
+                />
                 <button
                   type="submit"
-                  disabled={isSearchingCode || !manualCodeInput.trim()}
+                  disabled={isSearchingCode || !manualCodeInput.trim() || !guestName.trim()}
                   className="w-full py-2.5 rounded-xl bg-[#3c4043] hover:bg-[#4a4e53] disabled:opacity-50 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-2"
                 >
                   <ArrowRight className="h-3.5 w-3.5 text-[#81c995]" />
@@ -1426,21 +1812,71 @@ export const MeetRoomPage: React.FC = () => {
       {inCall && (
         <ChatVideoMeetModal
           open={inCall}
-          onClose={() => setInCall(false)}
+          onClose={() => {
+            hasExplicitlyLeftRef.current = true;
+            setInCall(false);
+          }}
           channelName={activeMeet?.channelName || "General"}
           meetingTitle={activeMeet?.meetingTitle || "Live Meeting"}
           activeOrg={activeMeet?.orgId ? { ...targetOrg, id: activeMeet.orgId } : targetOrg}
-          activeMember={activeMember || (guestUser as any) || undefined}
-          members={orgMembers as any}
-          documents={dbDocs as any}
+          activeMember={isAuthenticatedOrgMember ? activeMember : undefined}
+          members={isAuthenticatedOrgMember ? (orgMembers as any) : []}
+          documents={isAuthenticatedOrgMember ? (dbDocs as any) : []}
           hostedMeetInfo={activeMeet}
-          guestUser={guestUser || undefined}
+          displayName={guestName.trim() || user?.full_name || "Participant"}
+          guestUser={
+            !isAuthenticatedOrgMember
+              ? guestUser || {
+                  id: `guest-${Math.random().toString(36).substring(2, 9)}`,
+                  full_name: guestName.trim() || "Participant",
+                  role: "Guest"
+                }
+              : undefined
+          }
           initialMic={previewMic}
           initialVideo={previewVideo}
           initialScreenShare={isScreenSharing}
           initialScreenStream={screenStream}
           initialLocalStream={isScreenSharing ? screenStream : previewStream}
           onHostedMeetEnded={() => {
+            hasExplicitlyLeftRef.current = true;
+            const endedOrgId = activeMeet?.orgId || targetOrg.id;
+            const endedMeetId = activeMeet?.meetingId;
+            if (isSupabaseConfigured && endedMeetId) {
+              (async () => {
+                try {
+                  await supabase
+                    .from("meetings")
+                    .update({ status: "completed", ended_at: new Date().toISOString() })
+                    .eq("id", endedMeetId);
+                } catch (e) {}
+              })();
+            }
+            fetch("/api/meet/end", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orgId: endedOrgId })
+            }).catch(() => {});
+            try {
+              const bc = new BroadcastChannel(`impacto_org_meet_bus_${endedOrgId}`);
+              bc.postMessage({ type: "HOSTED_MEET_ENDED" });
+              bc.close();
+            } catch (e) {}
+            if (isSupabaseConfigured) {
+              try {
+                const orgBus = supabase.channel(`impacto_org_meet_bus_${endedOrgId}`);
+                orgBus.subscribe((status: string) => {
+                  if (status === "SUBSCRIBED") {
+                    orgBus.send({
+                      type: "broadcast",
+                      event: "meet_bus",
+                      payload: { type: "HOSTED_MEET_ENDED" }
+                    });
+                    setTimeout(() => supabase.removeChannel(orgBus), 1000);
+                  }
+                });
+              } catch (e) {}
+            }
             setActiveMeet(null);
             setInCall(false);
           }}

@@ -2649,6 +2649,219 @@ EXCEPTION
   WHEN OTHERS THEN NULL;
 END $$;
 
+-- ============================================================================
+-- IMPACTO LIVE MEET & WEBRTC SIGNALING SUPABASE STABILITY SCHEMA (update.sql)
+-- ============================================================================
+
+-- 1. Meetings Table
+CREATE TABLE IF NOT EXISTS public.meetings (
+  id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  meeting_title TEXT,
+  meeting_code TEXT,
+  channel_name TEXT,
+  date_time TIMESTAMPTZ,
+  status TEXT DEFAULT 'active',
+  is_public BOOLEAN DEFAULT true,
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  ended_at TIMESTAMPTZ,
+  duration INTEGER,
+  duration_seconds INTEGER,
+  duration_formatted TEXT,
+  location TEXT,
+  location_type TEXT,
+  recorded_by TEXT,
+  participants JSONB DEFAULT '[]'::jsonb,
+  documents_used JSONB DEFAULT '[]'::jsonb,
+  notes JSONB DEFAULT '[]'::jsonb,
+  chat_messages JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Ensure columns exist on pre-existing public.meetings deployments
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS meeting_title TEXT;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS meeting_code TEXT;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS channel_name TEXT;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS channel_id TEXT;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS host_id TEXT;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS host_name TEXT;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS date_time TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT true;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS duration INTEGER DEFAULT 60;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS duration_seconds INTEGER;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS duration_formatted TEXT;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS location TEXT DEFAULT 'Online Meet';
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS location_type TEXT DEFAULT 'online';
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS recorded_by TEXT;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS participants JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS documents_used JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS notes JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS chat_messages JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- Relax legacy NOT NULL constraints from db.sql for ad-hoc live meetings and allow 'active' status
+ALTER TABLE public.meetings ALTER COLUMN date_time DROP NOT NULL;
+ALTER TABLE public.meetings ALTER COLUMN date_time SET DEFAULT NOW();
+ALTER TABLE public.meetings ALTER COLUMN duration DROP NOT NULL;
+ALTER TABLE public.meetings ALTER COLUMN duration SET DEFAULT 60;
+ALTER TABLE public.meetings ALTER COLUMN location DROP NOT NULL;
+ALTER TABLE public.meetings ALTER COLUMN location SET DEFAULT 'Online Meet';
+ALTER TABLE public.meetings DROP CONSTRAINT IF EXISTS meetings_status_check;
+ALTER TABLE public.meetings ADD CONSTRAINT meetings_status_check CHECK (status IN ('scheduled', 'active', 'completed', 'cancelled'));
+
+-- Ensure full row data on Supabase Realtime postgres_changes updates
+ALTER TABLE public.meetings REPLICA IDENTITY FULL;
+
+-- Indexes for fast, low-egress meeting code & organization status lookups
+CREATE INDEX IF NOT EXISTS idx_meetings_code ON public.meetings (meeting_code);
+CREATE INDEX IF NOT EXISTS idx_meetings_code_status ON public.meetings (meeting_code, status);
+CREATE INDEX IF NOT EXISTS idx_meetings_org_status ON public.meetings (org_id, status);
+CREATE INDEX IF NOT EXISTS idx_meetings_org_status_started ON public.meetings (org_id, status, started_at DESC);
+
+-- 2. Meeting Sessions Table (Session Archive Metadata)
+CREATE TABLE IF NOT EXISTS public.meeting_sessions (
+  id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL,
+  meeting_title TEXT NOT NULL,
+  channel_name TEXT,
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  ended_at TIMESTAMPTZ,
+  duration_seconds INTEGER,
+  duration_formatted TEXT,
+  recorded_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_meeting_sessions_org ON public.meeting_sessions (org_id);
+
+-- 3. Meeting Participants Table
+CREATE TABLE IF NOT EXISTS public.meeting_participants (
+  id SERIAL PRIMARY KEY,
+  session_id TEXT,
+  meeting_id TEXT,
+  peer_id TEXT,
+  user_id TEXT,
+  user_name TEXT,
+  name TEXT,
+  role TEXT,
+  is_me BOOLEAN DEFAULT false,
+  joined_at TIMESTAMPTZ DEFAULT NOW(),
+  left_at TIMESTAMPTZ
+);
+
+ALTER TABLE public.meeting_participants ADD COLUMN IF NOT EXISTS session_id TEXT;
+ALTER TABLE public.meeting_participants ADD COLUMN IF NOT EXISTS meeting_id TEXT;
+ALTER TABLE public.meeting_participants ADD COLUMN IF NOT EXISTS peer_id TEXT;
+ALTER TABLE public.meeting_participants ADD COLUMN IF NOT EXISTS user_name TEXT;
+ALTER TABLE public.meeting_participants ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE public.meeting_participants ADD COLUMN IF NOT EXISTS is_me BOOLEAN DEFAULT false;
+
+CREATE INDEX IF NOT EXISTS idx_meeting_participants_user ON public.meeting_participants (user_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_participants_session ON public.meeting_participants (session_id);
+
+-- 4. Meeting Documents Table
+CREATE TABLE IF NOT EXISTS public.meeting_documents (
+  id SERIAL PRIMARY KEY,
+  session_id TEXT,
+  doc_id TEXT,
+  name TEXT,
+  category TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_meeting_documents_session ON public.meeting_documents (session_id);
+
+-- 5. Meeting Notes / Agenda Action Items Table
+CREATE TABLE IF NOT EXISTS public.meeting_notes (
+  id SERIAL PRIMARY KEY,
+  session_id TEXT,
+  title TEXT,
+  assignee TEXT,
+  status TEXT DEFAULT 'open',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_meeting_notes_session ON public.meeting_notes (session_id);
+
+-- 6. Meeting Chat Messages Table
+CREATE TABLE IF NOT EXISTS public.meeting_chat_messages (
+  id TEXT PRIMARY KEY DEFAULT md5(random()::text || clock_timestamp()::text),
+  session_id TEXT,
+  meeting_id TEXT,
+  sender_id TEXT,
+  sender_name TEXT,
+  sender TEXT,
+  text TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.meeting_chat_messages ADD COLUMN IF NOT EXISTS session_id TEXT;
+ALTER TABLE public.meeting_chat_messages ADD COLUMN IF NOT EXISTS meeting_id TEXT;
+ALTER TABLE public.meeting_chat_messages ADD COLUMN IF NOT EXISTS sender TEXT;
+ALTER TABLE public.meeting_chat_messages ADD COLUMN IF NOT EXISTS sender_name TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_meeting_chat_session ON public.meeting_chat_messages (session_id);
+
+-- Enable Row Level Security (RLS) for stability & real-time access
+ALTER TABLE public.meetings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.meeting_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.meeting_participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.meeting_documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.meeting_notes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.meeting_chat_messages ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if any to ensure idempotency
+DROP POLICY IF EXISTS "Enable all access for meetings" ON public.meetings;
+DROP POLICY IF EXISTS "Enable all access for meeting_sessions" ON public.meeting_sessions;
+DROP POLICY IF EXISTS "Enable all access for meeting_participants" ON public.meeting_participants;
+DROP POLICY IF EXISTS "Enable all access for meeting_documents" ON public.meeting_documents;
+DROP POLICY IF EXISTS "Enable all access for meeting_notes" ON public.meeting_notes;
+DROP POLICY IF EXISTS "Enable all access for meeting_chat_messages" ON public.meeting_chat_messages;
+
+-- Create permissive open policies for cross-device meeting room sync & real-time signaling
+CREATE POLICY "Enable all access for meetings" ON public.meetings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all access for meeting_sessions" ON public.meeting_sessions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all access for meeting_participants" ON public.meeting_participants FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all access for meeting_documents" ON public.meeting_documents FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all access for meeting_notes" ON public.meeting_notes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all access for meeting_chat_messages" ON public.meeting_chat_messages FOR ALL USING (true) WITH CHECK (true);
+
+-- Ensure Supabase Realtime publication includes meeting tables (idempotent)
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.meetings;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+  WHEN undefined_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.meeting_sessions;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+  WHEN undefined_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.meeting_participants;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+  WHEN undefined_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.meeting_chat_messages;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+  WHEN undefined_object THEN NULL;
+END $$;
 
 
 

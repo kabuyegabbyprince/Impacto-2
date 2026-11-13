@@ -36,6 +36,18 @@ const roomChat = new Map<string, any[]>();
 const roomSharedDocs = new Map<string, any>();
 const roomAgenda = new Map<string, any[]>();
 
+export function resolveCanonicalRoomKey(
+  orgId?: string | null,
+  roomId?: string | null,
+  meetingCode?: string | null
+): string {
+  if (roomId && roomId.trim()) return roomId.trim();
+  if (meetingCode && meetingCode.trim()) {
+    return `meet_${meetingCode.trim().toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+  }
+  return (orgId && orgId.trim()) || "default";
+}
+
 export function getActiveHostedMeet(orgId: string): HostedMeetInfo | null {
   return activeMeets.get(orgId) || null;
 }
@@ -74,10 +86,6 @@ export function getMeetByCode(code: string): HostedMeetInfo | null {
     }
   }
 
-  // Fallback: If any active meeting is currently running, connect participant
-  const anyMeet = getAnyActiveMeet();
-  if (anyMeet) return anyMeet;
-
   return null;
 }
 
@@ -95,17 +103,28 @@ export function setActiveHostedMeet(orgId: string, meet: HostedMeetInfo): void {
     if (rawId) activeMeetsByCode.set(rawId, meet);
     if (cleanId) activeMeetsByCode.set(cleanId, meet);
   }
+  const canonicalKey = resolveCanonicalRoomKey(orgId, undefined, meet.meetingCode);
   broadcastToOrg(orgId, {
     type: "HOSTED_MEET_ACTIVE",
     meet
   });
+  if (canonicalKey !== orgId) {
+    broadcastToOrg(canonicalKey, {
+      type: "HOSTED_MEET_ACTIVE",
+      meet
+    });
+  }
 }
 
 export function endActiveHostedMeet(orgId: string): void {
   const existing = activeMeets.get(orgId);
+  let canonicalKey = orgId;
   if (existing) {
     if (existing.meetingCode) {
-      activeMeetsByCode.delete(existing.meetingCode.trim().toLowerCase().replace(/[^a-z0-9]/g, ""));
+      const cleanCode = existing.meetingCode.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      canonicalKey = `meet_${cleanCode}`;
+      activeMeetsByCode.delete(cleanCode);
+      activeMeetsByCode.delete(existing.meetingCode.trim().toLowerCase());
     }
     if (existing.meetingId) {
       activeMeetsByCode.delete(existing.meetingId.trim().toLowerCase().replace(/[^a-z0-9]/g, ""));
@@ -115,10 +134,21 @@ export function endActiveHostedMeet(orgId: string): void {
   roomSharedDocs.delete(orgId);
   roomChat.delete(orgId);
   roomAgenda.delete(orgId);
+  if (canonicalKey !== orgId) {
+    roomSharedDocs.delete(canonicalKey);
+    roomChat.delete(canonicalKey);
+    roomAgenda.delete(canonicalKey);
+  }
   broadcastToOrg(orgId, {
     type: "HOSTED_MEET_ENDED",
     orgId
   });
+  if (canonicalKey !== orgId) {
+    broadcastToOrg(canonicalKey, {
+      type: "HOSTED_MEET_ENDED",
+      orgId
+    });
+  }
 }
 
 export function broadcastToOrg(orgId: string, data: any, excludeWs?: WebSocket): void {
@@ -185,17 +215,11 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
     let orgId = url.searchParams.get("orgId") || "default";
 
     // Unify roomKey: if roomId or meetingCode is specified, route into roomKey
-    let targetRoomKey = orgId;
-    if (roomIdParam && roomIdParam.trim()) {
-      targetRoomKey = roomIdParam.trim();
-    } else if (meetingCodeParam && meetingCodeParam.trim()) {
-      targetRoomKey = `meet_${meetingCodeParam.trim().toLowerCase().replace(/[^a-z0-9]/g, "")}`;
-    } else if (orgId === "default") {
+    let targetRoomKey = resolveCanonicalRoomKey(orgId, roomIdParam, meetingCodeParam);
+    if (!roomIdParam && !meetingCodeParam && orgId === "default") {
       const anyMeet = getAnyActiveMeet();
       if (anyMeet) {
-        targetRoomKey = anyMeet.meetingCode
-          ? `meet_${anyMeet.meetingCode.toLowerCase().replace(/[^a-z0-9]/g, "")}`
-          : anyMeet.orgId;
+        targetRoomKey = resolveCanonicalRoomKey(anyMeet.orgId, undefined, anyMeet.meetingCode);
         orgId = anyMeet.orgId;
       }
     }
@@ -233,7 +257,7 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
 
     // Send initial room snapshot to newly connected client
     const existingPeers = Array.from(peers.values())
-      .filter((p) => p.peerId !== peerId)
+      .filter((p) => p.peerId !== peerId && !p.peerId.startsWith("wait-"))
       .map((p) => ({
         peerId: p.peerId,
         userId: p.userId,
@@ -261,21 +285,23 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
       })
     );
 
-    // Announce to all other peers in the same room
-    broadcastToOrg(
-      targetRoomKey,
-      {
-        type: "PEER_JOINED",
-        fromPeerId: peerId,
-        userId,
-        name,
-        role,
-        mic: false,
-        video: false,
-        handRaised: false
-      },
-      ws
-    );
+    // Announce to active call peers (skip waiting-room observer sockets)
+    if (!peerId.startsWith("wait-")) {
+      broadcastToOrg(
+        targetRoomKey,
+        {
+          type: "PEER_JOINED",
+          fromPeerId: peerId,
+          userId,
+          name,
+          role,
+          mic: false,
+          video: false,
+          handRaised: false
+        },
+        ws
+      );
+    }
 
     ws.on("message", (rawMessage: any) => {
       try {
@@ -356,22 +382,24 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
           }
 
           case "REQUEST_ADMISSION": {
-            // Forward admission request to host or org admins
             broadcastToOrg(targetRoomKey, msg, ws);
-            break;
-          }
-
-          case "ADMIT_PEER": {
-            if (msg.userId) {
-              sendToUser(targetRoomKey, msg.userId, msg);
+            if (orgId && orgId !== targetRoomKey) {
+              broadcastToOrg(orgId, msg, ws);
             }
-            broadcastToOrg(targetRoomKey, msg, ws);
             break;
           }
 
+          case "ADMIT_PEER":
           case "DECLINE_PEER": {
             if (msg.userId) {
               sendToUser(targetRoomKey, msg.userId, msg);
+              if (orgId && orgId !== targetRoomKey) {
+                sendToUser(orgId, msg.userId, msg);
+              }
+            }
+            broadcastToOrg(targetRoomKey, msg, ws);
+            if (orgId && orgId !== targetRoomKey) {
+              broadcastToOrg(orgId, msg, ws);
             }
             break;
           }
@@ -392,7 +420,6 @@ export function setupMeetWebSocketServer(server: HttpServer): WebSocketServer {
           }
 
           default: {
-            // Forward any other signaling messages to target or room
             if (msg.toPeerId) {
               sendToPeer(targetRoomKey, msg.toPeerId, msg);
             } else {

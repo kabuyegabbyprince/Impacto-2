@@ -48,6 +48,8 @@ export interface Organization {
   dues_airtel_number?: string;
   dues_account_name?: string;
   momo_merchant_code?: string;
+  default_dues_amount?: number;
+  owner_id?: string;
   subscription_status: "trial" | "active" | "expired";
   subscription_ends_at?: string;
   subscription_tier?: "trial" | "starter" | "growth" | "enterprise" | "free" | "pro";
