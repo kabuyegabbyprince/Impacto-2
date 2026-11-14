@@ -1701,11 +1701,13 @@ export const Register: React.FC = () => {
                           onChange={(e) => setOrgCategory(e.target.value)}
                           className="w-full text-sm rounded-lg border bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700 px-3.5 py-2.5 text-gray-805 dark:text-slate-100 outline-none focus:ring-2 focus:ring-emerald-500 transition"
                         >
-                          <option value="Environment">Environment & Forestry</option>
-                          <option value="Education">Education & Tech Mentoring</option>
-                          <option value="Health">Health & Sanitization</option>
-                          <option value="Social Action">Social Action & Welfare</option>
-                          <option value="Enterprise">Enterprise Cooperative</option>
+                          <option value="Environment">{t("auth.org_cat_environment", "Environment & Forestry")}</option>
+                          <option value="Education">{t("auth.org_cat_education", "Education & Tech Mentoring")}</option>
+                          <option value="Health">{t("auth.org_cat_health", "Health & Sanitation")}</option>
+                          <option value="Social Action">{t("auth.org_cat_social", "Social Action & Welfare")}</option>
+                          <option value="Enterprise">{t("auth.org_cat_enterprise", "Enterprise Cooperative")}</option>
+                          <option value="Company">{t("auth.org_cat_company", "Company")}</option>
+                          <option value="Other">{t("auth.org_cat_other", "Other")}</option>
                         </select>
                       </div>
 

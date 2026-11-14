@@ -18,6 +18,7 @@ import { useToast } from "../components/Toast";
 import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "../components/MoMoPushPaymentModal";
 import { PaymentGatewaySection, PaymentGatewaySuccessState } from "../components/PaymentGatewaySection";
 import { PaymentSuccessPulse } from "../components/PaymentSuccessPulse";
+import { getOrgMomoDisplayMethods } from "../components/UssdPaymentHelper";
 import { 
   Coins, 
   Filter, 
@@ -54,7 +55,10 @@ import {
   FileSpreadsheet,
   CheckCheck,
   AlertTriangle,
-  Users
+  Users,
+  Tag as TagIcon,
+  ChevronDown,
+  History
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -68,7 +72,9 @@ import {
   Pie,
   Cell
 } from "recharts";
-import { MemberFee } from "../types";
+import { MemberFee, MemberFeeInstallment } from "../types";
+import { getFeeBalances, getFeeDueName, getEffectiveInstallments } from "../lib/feeUtils";
+import { FeeStatusBadge } from "../components/FeeStatusBadge";
 
 const sanitizeError = (err: any, fallbackMessage: string): string => {
   const msg = err?.message || "";
@@ -129,15 +135,22 @@ export const OrganizationMemberFees: React.FC = () => {
   // View mode for Master Ledger: "schemes" (grouped master dues as created from form) or "invoices" (all individual member lines)
   const [ledgerViewMode, setLedgerViewMode] = useState<"schemes" | "invoices">("schemes");
 
-  // Receipt view state for members & accountants
+  // Receipt & Payment History view states
   const [viewingReceiptFee, setViewingReceiptFee] = useState<MemberFee | null>(null);
+  const [viewingHistoryFee, setViewingHistoryFee] = useState<MemberFee | null>(null);
+  const [expandedFeeIds, setExpandedFeeIds] = useState<Record<string, boolean>>({});
+  const toggleExpandFee = (feeId: string) => {
+    setExpandedFeeIds((prev) => ({ ...prev, [feeId]: !prev[feeId] }));
+  };
 
   // Edit & Delete states for Accountants
   const [editingFee, setEditingFee] = useState<MemberFee | null>(null);
+  const [editDueName, setEditDueName] = useState("");
   const [editAmount, setEditAmount] = useState("");
+  const [editPaidAmount, setEditPaidAmount] = useState("");
   const [editPeriod, setEditPeriod] = useState<"weekly" | "monthly" | "flexible">("weekly");
   const [editPeriodDate, setEditPeriodDate] = useState("");
-  const [editStatus, setEditStatus] = useState<"paid" | "pending" | "pending_confirmation">("pending");
+  const [editStatus, setEditStatus] = useState<"paid" | "partially_paid" | "pending" | "pending_confirmation">("pending");
   const [editDueDate, setEditDueDate] = useState("");
   const [editAdminNote, setEditAdminNote] = useState("");
   const [editApplyToAllUsers, setEditApplyToAllUsers] = useState(true);
@@ -155,7 +168,8 @@ export const OrganizationMemberFees: React.FC = () => {
   // Manage All Dues Modal & Bulk Operation States
   const [showAllDuesModal, setShowAllDuesModal] = useState(false);
   const [allDuesSearch, setAllDuesSearch] = useState("");
-  const [allDuesStatusFilter, setAllDuesStatusFilter] = useState<"all" | "paid" | "pending" | "pending_confirmation">("all");
+  const [allDuesDueNameFilter, setAllDuesDueNameFilter] = useState("");
+  const [allDuesStatusFilter, setAllDuesStatusFilter] = useState<"all" | "paid" | "partially_paid" | "overdue" | "pending" | "pending_confirmation">("all");
   const [allDuesPeriodFilter, setAllDuesPeriodFilter] = useState<"all" | "weekly" | "monthly" | "flexible">("all");
   const [allDuesSortBy, setAllDuesSortBy] = useState<"newest" | "oldest" | "highest" | "lowest" | "member_asc" | "member_desc" | "due_date">("newest");
   const [selectedBulkFeeIds, setSelectedBulkFeeIds] = useState<string[]>([]);
@@ -173,12 +187,14 @@ export const OrganizationMemberFees: React.FC = () => {
     }
   }, [isAccountant, activeTab]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [dueNameFilter, setDueNameFilter] = useState("");
   const [periodFilter, setPeriodFilter] = useState<"all" | "weekly" | "monthly" | "flexible">("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "paid" | "pending" | "pending_confirmation">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "paid" | "partially_paid" | "overdue" | "pending" | "pending_confirmation">("all");
 
   // Form states for Admin to record dues manually
   const [showAddModal, setShowAddModal] = useState(false);
   const [formMemberId, setFormMemberId] = useState("");
+  const [formDueName, setFormDueName] = useState("");
   const [formAmount, setFormAmount] = useState("");
   const [formPeriod, setFormPeriod] = useState<"weekly" | "monthly" | "flexible">("weekly");
   const [formPeriodDate, setFormPeriodDate] = useState("");
@@ -198,6 +214,8 @@ export const OrganizationMemberFees: React.FC = () => {
   const [selectedFeeToPay, setSelectedFeeToPay] = useState<MemberFee | null>(null);
   const [openMoMoPushPromptModal, setOpenMoMoPushPromptModal] = useState(false);
   const [payMethod, setPayMethod] = useState<"MTN MoMo / Airtel" | "Cash">("MTN MoMo / Airtel");
+  const [paymentMode, setPaymentMode] = useState<"full" | "partial">("full");
+  const [customPayAmount, setCustomPayAmount] = useState("");
   
   // MoMo state variables
   const [momoPhoneNumber, setMomoPhoneNumber] = useState("");
@@ -214,6 +232,7 @@ export const OrganizationMemberFees: React.FC = () => {
   // Admin Review / Confirmation state variables
   const [reviewingFee, setReviewingFee] = useState<MemberFee | null>(null);
   const [adminNoteInput, setAdminNoteInput] = useState("");
+  const [verifiedInstallmentAmount, setVerifiedInstallmentAmount] = useState("");
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   // Sub-roster boundaries
@@ -419,10 +438,13 @@ export const OrganizationMemberFees: React.FC = () => {
     }
     
     const finalPeriodDate = formPeriod === "flexible" ? "Anytime" : formPeriodDate;
-    if (!formAmount || !finalPeriodDate) {
+    const parsedAmount = parseFloat(formAmount);
+    if (!formAmount || isNaN(parsedAmount) || parsedAmount <= 0 || !finalPeriodDate) {
       addToast("Please fill in all core dues logging parameters.", "error");
       return;
     }
+
+    const resolvedDueName = formDueName.trim() || (finalPeriodDate === "Anytime" ? "Flexible Cooperative Due" : `${finalPeriodDate} Dues`);
 
     const targetMembers = chargeTargetType === "all" 
       ? activeMembersOnly 
@@ -445,7 +467,19 @@ export const OrganizationMemberFees: React.FC = () => {
         await createFeeMutation.mutateAsync({
           org_id: activeOrg.id,
           member_id: targetMem.id,
-          amount: parseFloat(formAmount),
+          due_name: resolvedDueName,
+          amount: parsedAmount,
+          total_due_amount: parsedAmount,
+          paid_amount: formStatus === "paid" ? parsedAmount : 0,
+          pending_installment_amount: 0,
+          payment_history: formStatus === "paid" ? [{
+            id: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            amount: parsedAmount,
+            method: "Pre-cleared by Accountant",
+            paid_at: new Date().toISOString(),
+            verified_by: user?.full_name || "Accountant",
+            note: "Initial pre-cleared dues record",
+          }] : [],
           currency: "RWF",
           payment_period: formPeriod,
           period_date: finalPeriodDate,
@@ -465,7 +499,7 @@ export const OrganizationMemberFees: React.FC = () => {
           sent_by: user?.id || "",
           recipient_group: recipientGroupLabel,
           recipient_count: targetMembers.length,
-          body_text: `CO-OP ALERT: New ${formPeriod} dues of ${parseFloat(formAmount).toLocaleString()} RWF set for cycle ${finalPeriodDate}.${dueDeadlineDate ? ` Deadline to pay: ${dueDeadlineDate}.` : ""}`
+          body_text: `CO-OP ALERT: New ${formPeriod} dues "${resolvedDueName}" of ${parsedAmount.toLocaleString()} RWF set for cycle ${finalPeriodDate}.${dueDeadlineDate ? ` Deadline to pay: ${dueDeadlineDate}.` : ""}`
         });
 
         if (formPeriod === "weekly" && sendPreDeadlineReminder && dueDeadlineDate) {
@@ -474,7 +508,7 @@ export const OrganizationMemberFees: React.FC = () => {
             sent_by: user?.id || "",
             recipient_group: `${recipientGroupLabel} (Scheduled Weekly Reminder)`,
             recipient_count: targetMembers.length,
-            body_text: `WEEKLY REMINDER (Due in 2 days): Please settle your outstanding Weekly micro-saving dues of ${parseFloat(formAmount).toLocaleString()} RWF for period ${finalPeriodDate} before ${dueDeadlineDate}.`
+            body_text: `WEEKLY REMINDER (Due in 2 days): Please settle your outstanding Weekly dues "${resolvedDueName}" of ${parsedAmount.toLocaleString()} RWF for period ${finalPeriodDate} before ${dueDeadlineDate}.`
           });
         }
       } catch (broadcastErr) {
@@ -496,6 +530,7 @@ export const OrganizationMemberFees: React.FC = () => {
 
       // Reset form
       setFormMemberId("");
+      setFormDueName("");
       setFormAmount("");
       setFormPeriodDate("");
       setFormStatus("pending");
@@ -510,19 +545,44 @@ export const OrganizationMemberFees: React.FC = () => {
   // Immediate toggle for accountants
   const handleToggleStatusLegacy = async (fee: MemberFee) => {
     if (!isAccountant) return;
+    const bal = getFeeBalances(fee);
     const newStatus = fee.status === "paid" ? "pending" : "paid";
     const paidAt = newStatus === "paid" ? new Date().toISOString() : undefined;
+    const newHistory: MemberFeeInstallment[] = newStatus === "paid"
+      ? [
+          ...bal.installments,
+          ...(bal.remainingBalance > 0
+            ? [{
+                id: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                amount: bal.remainingBalance,
+                method: fee.paid_by_method || "Direct Accountant Clearance",
+                reference: fee.transaction_reference || `CLR-${Date.now().toString().slice(-6)}`,
+                paid_at: new Date().toISOString(),
+                verified_by: user?.full_name || "Accountant",
+                note: "Marked as fully paid by accountant",
+              }]
+            : []),
+        ]
+      : [];
 
     try {
       await updateFeeStatusMutation.mutateAsync({
         id: fee.id,
         org_id: activeOrg!.id,
         member_id: fee.member_id,
-        amount: fee.amount,
+        due_name: getFeeDueName(fee),
+        amount: bal.totalDueAmount,
+        total_due_amount: bal.totalDueAmount,
+        paid_amount: newStatus === "paid" ? bal.totalDueAmount : 0,
+        pending_installment_amount: 0,
+        installment_amount: newStatus === "paid" ? bal.remainingBalance : 0,
+        payment_history: newHistory,
         payment_period: fee.payment_period,
         period_date: fee.period_date,
         status: newStatus,
-        paid_at: paidAt
+        paid_at: paidAt,
+        actor_name: user?.full_name || "Accountant",
+        user_id: user?.id,
       });
       addToast(`Status updated to ${newStatus.toUpperCase()}!`, "success");
     } catch (err: any) {
@@ -530,10 +590,32 @@ export const OrganizationMemberFees: React.FC = () => {
     }
   };
 
+  // Compute active payable amount for the currently open pay modal
+  const selectedFeeBalances = React.useMemo(() => {
+    if (!selectedFeeToPay) return null;
+    return getFeeBalances(selectedFeeToPay);
+  }, [selectedFeeToPay]);
+
+  const resolvedPayAmount = React.useMemo(() => {
+    if (!selectedFeeBalances) return 0;
+    if (paymentMode === "full") return selectedFeeBalances.remainingBalance;
+    const parsed = Math.round(Number(customPayAmount) || 0);
+    return Math.max(0, Math.min(selectedFeeBalances.remainingBalance, parsed));
+  }, [selectedFeeBalances, paymentMode, customPayAmount]);
+
   // Submit payment report offline/manually (Member side)
   const handleSubmitManualReport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFeeToPay) return;
+    const bal = getFeeBalances(selectedFeeToPay);
+    const payAmt = paymentMode === "full"
+      ? bal.remainingBalance
+      : Math.round(Number(customPayAmount) || 0);
+
+    if (payAmt <= 0 || payAmt > bal.remainingBalance) {
+      addToast(`Please enter a valid installment amount between 1 RWF and ${bal.remainingBalance.toLocaleString()} RWF.`, "error");
+      return;
+    }
 
     if (payMethod === "MTN MoMo / Airtel") {
       const cleanPhone = momoPhoneNumber.replace(/\D/g, "");
@@ -575,12 +657,20 @@ export const OrganizationMemberFees: React.FC = () => {
       const generatedTxRef = payMethod === "MTN MoMo / Airtel"
         ? `MOMO-${Math.floor(100000 + Math.random() * 900000)}`
         : `CASH-${Math.floor(100000 + Math.random() * 900000)}`;
+      const dueName = getFeeDueName(selectedFeeToPay);
+      const isPartialSubmission = payAmt < bal.remainingBalance || bal.paidAmount > 0;
+      const installmentTag = `[INSTALLMENT: ${payAmt.toLocaleString()} RWF of ${bal.totalDueAmount.toLocaleString()} RWF]`;
 
       await updateFeeStatusMutation.mutateAsync({
         id: selectedFeeToPay.id,
         org_id: activeOrg!.id,
         member_id: selectedFeeToPay.member_id,
-        amount: selectedFeeToPay.amount,
+        due_name: dueName,
+        amount: bal.totalDueAmount,
+        total_due_amount: bal.totalDueAmount,
+        paid_amount: bal.paidAmount,
+        pending_installment_amount: payAmt,
+        payment_history: bal.installments,
         payment_period: selectedFeeToPay.payment_period,
         period_date: selectedFeeToPay.period_date,
         status: "pending_confirmation",
@@ -591,8 +681,8 @@ export const OrganizationMemberFees: React.FC = () => {
           : `Payer Member: ${manualSenderInfo}, Received by Officer: ${manualTxRef}`,
         reported_at: new Date().toISOString(),
         report_note: payMethod === "MTN MoMo / Airtel"
-          ? `[SMS CONFIRMATION]: ${resendMessageText}\n[REPORTER NOTE]: ${manualNote || "None"}`
-          : `Hand cash receipt recorded.\n[REPORTER NOTE]: ${manualNote || "None"}`,
+          ? `${installmentTag}\n[SMS CONFIRMATION]: ${resendMessageText}\n[REPORTER NOTE]: ${manualNote || "None"}`
+          : `${installmentTag}\nHand cash receipt recorded.\n[REPORTER NOTE]: ${manualNote || "None"}`,
         proof_url: manualProofUrl || undefined
       });
 
@@ -603,7 +693,7 @@ export const OrganizationMemberFees: React.FC = () => {
           sent_by: activeMember?.id || activeOrg!.id,
           recipient_group: "accountants_and_admins",
           recipient_count: 1,
-          body_text: `Payment Slip Submitted: Member ${user?.full_name || 'A member'} reported payment of ${selectedFeeToPay.amount.toLocaleString()} RWF for ${selectedFeeToPay.payment_period.toUpperCase()} cycle (${selectedFeeToPay.period_date || 'current'}). Ref: ${generatedTxRef}. Please verify.`
+          body_text: `${isPartialSubmission ? "Partial Installment Slip" : "Payment Slip"} Submitted: Member ${user?.full_name || "A member"} reported payment of ${payAmt.toLocaleString()} RWF (Total Due: ${bal.totalDueAmount.toLocaleString()} RWF) for "${dueName}". Ref: ${generatedTxRef}. Please verify.`
         });
       } catch (notifErr) {
         console.warn("[Payment Report] Broadcast error:", notifErr);
@@ -611,10 +701,10 @@ export const OrganizationMemberFees: React.FC = () => {
 
       addToast("Your payment report was submitted! An administrator will verify and confirm shortly.", "success");
       setFeePaymentSuccess({
-        title: "Payment Proof Submitted",
-        message: `Your payment report for ${selectedFeeToPay.payment_period} (${selectedFeeToPay.amount.toLocaleString()} RWF) was sent to the verification queue.`,
+        title: isPartialSubmission ? "Partial Payment Proof Submitted" : "Payment Proof Submitted",
+        message: `Your installment report of ${payAmt.toLocaleString()} RWF for "${dueName}" was sent to the verification queue.`,
         reference: generatedTxRef,
-        amountRwf: selectedFeeToPay.amount
+        amountRwf: payAmt
       });
       // Reset inputs
       setMomoPhoneNumber("");
@@ -623,76 +713,157 @@ export const OrganizationMemberFees: React.FC = () => {
       setManualNote("");
       setManualProofUrl("");
       setResendMessageText("");
+      setPaymentMode("full");
+      setCustomPayAmount("");
     } catch (err: any) {
       addToast(sanitizeError(err, "Failed to log payment report."), "error");
     }
   };
 
-  // Administrator resolves/approves reported payments
+  // Administrator resolves/approves reported payments (supports partial installments)
   const handleResolvePaymentReport = async (approve: boolean) => {
     if (!isAccountant) {
       addToast("Permission Denied: Only the cooperative accountant can verify payments.", "error");
       return;
     }
     if (!reviewingFee) return;
+    const bal = getFeeBalances(reviewingFee);
+    const dueName = getFeeDueName(reviewingFee);
     setIsSubmittingReview(true);
 
     try {
-      const finalStatus = approve ? "paid" : "pending";
-      const paidAt = approve ? new Date().toISOString() : undefined;
-      const noteText = adminNoteInput || (approve ? "Approved and cleared by accountant" : "Rejected: Verification slip invalid");
+      if (approve) {
+        const parsedVerified = Number(verifiedInstallmentAmount);
+        const defaultSuggested = bal.pendingInstallmentAmount > 0 ? bal.pendingInstallmentAmount : bal.remainingBalance;
+        const verifiedAmt = Math.min(
+          bal.remainingBalance > 0 ? bal.remainingBalance : bal.totalDueAmount,
+          Math.max(1, isNaN(parsedVerified) || parsedVerified <= 0 ? defaultSuggested : Math.round(parsedVerified))
+        );
 
-      await updateFeeStatusMutation.mutateAsync({
-        id: reviewingFee.id,
-        org_id: activeOrg!.id,
-        member_id: reviewingFee.member_id,
-        amount: reviewingFee.amount,
-        payment_period: reviewingFee.payment_period,
-        period_date: reviewingFee.period_date,
-        status: finalStatus,
-        paid_at: paidAt,
-        admin_note: noteText,
-        // Clear transaction details if rejected, but keep them for transparency
-        ...(approve ? {} : { 
-          transaction_reference: `REJECTED: ${reviewingFee.transaction_reference}`,
-          report_note: `Rejection justification: ${adminNoteInput}`
-        })
-      });
+        const newPaidAmount = Math.min(bal.totalDueAmount, bal.paidAmount + verifiedAmt);
+        const remainingAfter = Math.max(0, bal.totalDueAmount - newPaidAmount);
+        const finalStatus: "paid" | "partially_paid" = remainingAfter <= 0 ? "paid" : "partially_paid";
+        const paidAt = new Date().toISOString();
 
-      // Dispatch real-time communication notification to the member who sent the transaction
-      try {
-        await broadcastMutation.mutateAsync({
+        const newInstallment: MemberFeeInstallment = {
+          id: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          amount: verifiedAmt,
+          method: reviewingFee.paid_by_method || "Direct Verification",
+          reference: reviewingFee.transaction_reference || `VER-${Date.now().toString().slice(-6)}`,
+          paid_at: paidAt,
+          verified_by: user?.full_name || "Accountant",
+          note: adminNoteInput || (finalStatus === "paid" ? "Final balance verified by accountant" : "Partial installment verified by accountant"),
+        };
+        const updatedHistory = [...bal.installments, newInstallment];
+        const noteText =
+          adminNoteInput ||
+          (finalStatus === "paid"
+            ? "Approved and cleared in full by accountant"
+            : `Partial installment of ${verifiedAmt.toLocaleString()} RWF approved. Remaining balance: ${remainingAfter.toLocaleString()} RWF.`);
+
+        await updateFeeStatusMutation.mutateAsync({
+          id: reviewingFee.id,
           org_id: activeOrg!.id,
-          sent_by: activeMember?.id || activeOrg!.id,
-          recipient_group: `member_${reviewingFee.member_id}`,
-          recipient_count: 1,
-          body_text: approve
-            ? `Payment Confirmed: Your payment of ${reviewingFee.amount.toLocaleString()} RWF for ${reviewingFee.payment_period.toUpperCase()} (${reviewingFee.period_date || "cycle"}) has been verified & confirmed by accountant!`
-            : `Payment Rejected: Your payment report for ${reviewingFee.payment_period.toUpperCase()} (${reviewingFee.period_date || "cycle"}) was rejected. Reason: ${noteText}.`
+          member_id: reviewingFee.member_id,
+          due_name: dueName,
+          amount: bal.totalDueAmount,
+          total_due_amount: bal.totalDueAmount,
+          paid_amount: newPaidAmount,
+          pending_installment_amount: 0,
+          installment_amount: verifiedAmt,
+          payment_history: updatedHistory,
+          payment_period: reviewingFee.payment_period,
+          period_date: reviewingFee.period_date,
+          status: finalStatus,
+          paid_at: paidAt,
+          paid_by_method: reviewingFee.paid_by_method,
+          transaction_reference: reviewingFee.transaction_reference,
+          admin_note: noteText,
+          actor_name: user?.full_name || "Accountant",
+          user_id: user?.id,
         });
-      } catch (notifErr) {
-        console.warn("[Payment Confirmation] Broadcast error:", notifErr);
-      }
 
-      addToast(
-        approve 
-          ? "Successfully confirmed member's payment. Ledger is updated and member notified!" 
-          : "Payment report has been rejected and invoice set back to pending.", 
-        approve ? "success" : "info"
-      );
+        try {
+          await broadcastMutation.mutateAsync({
+            org_id: activeOrg!.id,
+            sent_by: activeMember?.id || activeOrg!.id,
+            recipient_group: `member_${reviewingFee.member_id}`,
+            recipient_count: 1,
+            body_text:
+              finalStatus === "paid"
+                ? `Payment Confirmed: Your payment of ${verifiedAmt.toLocaleString()} RWF for "${dueName}" has been verified & settled in full (${newPaidAmount.toLocaleString()} / ${bal.totalDueAmount.toLocaleString()} RWF).`
+                : `Partial Payment Confirmed: ${verifiedAmt.toLocaleString()} RWF verified for "${dueName}" (Paid: ${newPaidAmount.toLocaleString()} / ${bal.totalDueAmount.toLocaleString()} RWF). Reminder: Remaining balance of ${remainingAfter.toLocaleString()} RWF is still due.`,
+          });
+        } catch (notifErr) {
+          console.warn("[Payment Confirmation] Broadcast error:", notifErr);
+        }
+
+        addToast(
+          finalStatus === "paid"
+            ? "Payment confirmed in full! Ledger updated and member notified."
+            : `Partial payment of ${verifiedAmt.toLocaleString()} RWF recorded! Member reminded of ${remainingAfter.toLocaleString()} RWF remaining.`,
+          "success"
+        );
+      } else {
+        const restoredStatus: "partially_paid" | "pending" = bal.paidAmount > 0 ? "partially_paid" : "pending";
+        const noteText = adminNoteInput || "Rejected: Verification slip invalid";
+
+        await updateFeeStatusMutation.mutateAsync({
+          id: reviewingFee.id,
+          org_id: activeOrg!.id,
+          member_id: reviewingFee.member_id,
+          due_name: dueName,
+          amount: bal.totalDueAmount,
+          total_due_amount: bal.totalDueAmount,
+          paid_amount: bal.paidAmount,
+          pending_installment_amount: 0,
+          payment_history: bal.installments,
+          payment_period: reviewingFee.payment_period,
+          period_date: reviewingFee.period_date,
+          status: restoredStatus,
+          admin_note: noteText,
+          transaction_reference: `REJECTED: ${reviewingFee.transaction_reference || "SLIP"}`,
+          report_note: `Rejection justification: ${noteText}`,
+          actor_name: user?.full_name || "Accountant",
+          user_id: user?.id,
+        });
+
+        try {
+          await broadcastMutation.mutateAsync({
+            org_id: activeOrg!.id,
+            sent_by: activeMember?.id || activeOrg!.id,
+            recipient_group: `member_${reviewingFee.member_id}`,
+            recipient_count: 1,
+            body_text: `Payment Rejected: Your payment report for "${dueName}" was rejected. Reason: ${noteText}.${bal.remainingBalance > 0 ? ` Remaining balance due: ${bal.remainingBalance.toLocaleString()} RWF.` : ""}`,
+          });
+        } catch (notifErr) {
+          console.warn("[Payment Rejection] Broadcast error:", notifErr);
+        }
+
+        addToast(
+          bal.paidAmount > 0
+            ? "Payment report rejected. Previous partial payment balance preserved."
+            : "Payment report has been rejected and invoice set back to pending.",
+          "info"
+        );
+      }
     } catch (err: any) {
       addToast(sanitizeError(err, "Failed to update report status."), "error");
     } finally {
       setReviewingFee(null);
       setAdminNoteInput("");
+      setVerifiedInstallmentAmount("");
       setIsSubmittingReview(false);
     }
   };
 
   const openEditModal = (fee: MemberFee, defaultApplyAll = false) => {
     if (!isAccountant) return;
+    const bal = getFeeBalances(fee);
     setEditingFee(fee);
-    setEditAmount(fee.amount.toString());
+    setEditDueName(getFeeDueName(fee));
+    setEditAmount(bal.totalDueAmount.toString());
+    setEditPaidAmount(bal.paidAmount.toString());
     setEditPeriod((fee.payment_period as any) || "weekly");
     setEditPeriodDate(fee.period_date || "");
     setEditStatus(fee.status || "pending");
@@ -710,28 +881,42 @@ export const OrganizationMemberFees: React.FC = () => {
     if (!editingFee || !activeOrg?.id) return;
     try {
       const parsedAmount = parseFloat(editAmount) || 0;
+      const parsedPaid = Math.max(0, Math.min(parsedAmount, parseFloat(editPaidAmount) || 0));
+      const resolvedDueName = editDueName.trim() || editPeriodDate || getFeeDueName(editingFee);
+      let computedStatus = editStatus;
+      if (parsedPaid >= parsedAmount && parsedAmount > 0) {
+        computedStatus = "paid";
+      } else if (parsedPaid > 0 && computedStatus === "pending") {
+        computedStatus = "partially_paid";
+      }
+
       if (editApplyToAllUsers) {
         await updateAllDuesMutation.mutateAsync({
           org_id: activeOrg.id,
           period_date: editingFee.period_date,
           payment_period: editPeriod,
+          due_name: resolvedDueName,
           amount: parsedAmount,
+          total_due_amount: parsedAmount,
           due_date: editDueDate || undefined,
           admin_note: editAdminNote || undefined,
           only_pending: true,
         });
         addToast(
-          `Updated due and synchronized changes to all members for cycle "${editPeriodDate || editingFee.period_date}"!`,
+          `Updated due "${resolvedDueName}" and synchronized changes to all members for cycle "${editPeriodDate || editingFee.period_date}"!`,
           "success"
         );
       } else {
         await updateFeeMutation.mutateAsync({
           id: editingFee.id,
           org_id: activeOrg.id,
+          due_name: resolvedDueName,
           amount: parsedAmount,
+          total_due_amount: parsedAmount,
+          paid_amount: computedStatus === "paid" ? parsedAmount : parsedPaid,
           payment_period: editPeriod,
           period_date: editPeriodDate,
-          status: editStatus,
+          status: computedStatus,
           due_date: editDueDate,
           admin_note: editAdminNote,
         });
@@ -782,13 +967,32 @@ export const OrganizationMemberFees: React.FC = () => {
       for (const feeId of selectedBulkFeeIds) {
         const feeObj = fees?.find((f) => f.id === feeId);
         if (feeObj && feeObj.status !== "paid") {
+          const bal = getFeeBalances(feeObj);
+          const nowIso = new Date().toISOString();
           await updateFeeStatusMutation.mutateAsync({
             id: feeId,
             org_id: activeOrg.id,
+            member_id: feeObj.member_id,
+            due_name: getFeeDueName(feeObj),
             status: "paid",
-            amount: feeObj.amount,
+            amount: bal.totalDueAmount,
+            total_due_amount: bal.totalDueAmount,
+            paid_amount: bal.totalDueAmount,
+            pending_installment_amount: 0,
+            installment_amount: bal.remainingBalance,
+            payment_history: [
+              ...bal.installments,
+              {
+                id: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                amount: bal.remainingBalance,
+                method: "Bank Transfer / Bulk Clearance",
+                paid_at: nowIso,
+                verified_by: user?.full_name || "Accountant",
+                note: "Bulk marked as cleared",
+              },
+            ],
             paid_by_method: "Bank Transfer",
-            paid_at: new Date().toISOString(),
+            paid_at: nowIso,
             actor_name: user?.full_name || "Accountant",
             user_id: user?.id,
           });
@@ -923,39 +1127,92 @@ export const OrganizationMemberFees: React.FC = () => {
     }
   };
 
-  // Global Lists Computations
+  // Global Lists Computations using paid_amount vs total_due_amount
   const paidDuesList = fees?.filter((f) => f.status === "paid") || [];
-  const pendingDuesList = fees?.filter((f) => f.status === "pending" || f.status === "pending_confirmation") || [];
+  const partialPaidDuesList = fees?.filter((f) => f.status === "partially_paid") || [];
+  const pendingDuesList = fees?.filter((f) => f.status === "pending" || f.status === "partially_paid" || f.status === "pending_confirmation") || [];
   const awaitingVerificationList = fees?.filter((f) => f.status === "pending_confirmation") || [];
 
-  const paidSumRwf = paidDuesList.reduce((acc, current) => acc + (Number(current.amount) || 0), 0);
-  const pendingSumRwf = pendingDuesList.reduce((acc, current) => acc + (Number(current.amount) || 0), 0);
+  const paidSumRwf = (fees || []).reduce((acc, current) => acc + getFeeBalances(current).paidAmount, 0);
+  const partialPaidSumRwf = partialPaidDuesList.reduce((acc, current) => acc + getFeeBalances(current).paidAmount, 0);
+  const fullyPaidSumRwf = Math.max(0, paidSumRwf - partialPaidSumRwf);
+  const pendingSumRwf = (fees || []).reduce((acc, current) => acc + getFeeBalances(current).remainingBalance, 0);
 
-  const myPaidSumRwf = myDues.filter((f) => f.status === "paid").reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
-  const myPendingSumRwf = myDues.filter((f) => f.status === "pending" || f.status === "pending_confirmation").reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+  const totalDuesCount = (fees || []).length;
+  const partialDuesCount = partialPaidDuesList.length;
+  const partialMembersPct = totalDuesCount > 0 ? Number(((partialDuesCount / totalDuesCount) * 100).toFixed(1)) : 0;
+
+  const myPaidSumRwf = myDues.reduce((acc, curr) => acc + getFeeBalances(curr).paidAmount, 0);
+  const myPendingSumRwf = myDues.reduce((acc, curr) => acc + getFeeBalances(curr).remainingBalance, 0);
   const myAwaitingCount = myDues.filter((f) => f.status === "pending_confirmation").length;
+  const myPartialDuesList = myDues.filter((f) => f.status === "partially_paid");
+  const myOutstandingDuesList = myDues.filter((f) => f.status === "pending" || f.status === "partially_paid");
+
+  const uniqueDueNames = React.useMemo(() => {
+    const names = new Set<string>();
+    (fees || []).forEach((f) => {
+      const name = getFeeDueName(f);
+      if (name) names.add(name);
+    });
+    return Array.from(names).sort();
+  }, [fees]);
 
   // Chart Data preparation for Accountants
   const periodChartData = React.useMemo(() => {
     if (!fees || fees.length === 0) return [];
-    const map: Record<string, { period: string; paid: number; awaiting: number; unpaid: number }> = {};
-    
-    fees.forEach((f) => {
-      const key = f.period_date || f.payment_period || "General";
-      const amt = Number(f.amount) || 0;
-      if (!map[key]) {
-        map[key] = { period: key, paid: 0, awaiting: 0, unpaid: 0 };
+    const map: Record<
+      string,
+      {
+        period: string;
+        paid: number;
+        awaiting: number;
+        unpaid: number;
+        partialCount: number;
+        totalCount: number;
+        partialPaidRwf: number;
+        partialPercent: number;
       }
-      if (f.status === "paid") {
-        map[key].paid += amt;
-      } else if (f.status === "pending_confirmation") {
-        map[key].awaiting += amt;
+    > = {};
+
+    fees.forEach((f) => {
+      const key = getFeeDueName(f) || f.period_date || f.payment_period || "General";
+      const bal = getFeeBalances(f);
+      if (!map[key]) {
+        map[key] = {
+          period: key,
+          paid: 0,
+          awaiting: 0,
+          unpaid: 0,
+          partialCount: 0,
+          totalCount: 0,
+          partialPaidRwf: 0,
+          partialPercent: 0,
+        };
+      }
+      map[key].totalCount += 1;
+      map[key].paid += bal.paidAmount;
+      if (f.status === "partially_paid") {
+        map[key].partialCount += 1;
+        map[key].partialPaidRwf += bal.paidAmount;
+      }
+      if (f.status === "pending_confirmation") {
+        const pendingInstallment = bal.pendingInstallmentAmount > 0 ? bal.pendingInstallmentAmount : bal.remainingBalance;
+        map[key].awaiting += pendingInstallment;
+        map[key].unpaid += Math.max(0, bal.remainingBalance - pendingInstallment);
       } else {
-        map[key].unpaid += amt;
+        map[key].unpaid += bal.remainingBalance;
       }
     });
 
-    return Object.values(map).slice(-8);
+    return Object.values(map)
+      .map((item) => ({
+        ...item,
+        partialPercent:
+          item.totalCount > 0
+            ? Number(((item.partialCount / item.totalCount) * 100).toFixed(1))
+            : 0,
+      }))
+      .slice(-8);
   }, [fees]);
 
   const paymentMethodData = React.useMemo(() => {
@@ -965,28 +1222,26 @@ export const OrganizationMemberFees: React.FC = () => {
     let unpaidCount = 0, unpaidAmount = 0;
 
     fees.forEach((f) => {
-      const amt = Number(f.amount) || 0;
-      if (f.status === "paid" || f.status === "pending_confirmation") {
-        if (f.paid_by_method?.includes("MoMo") || f.paid_by_method?.includes("Airtel") || f.paid_by_method?.includes("MTN")) {
-          momoCount++;
-          momoAmount += amt;
-        } else if (f.paid_by_method?.includes("Cash")) {
+      const bal = getFeeBalances(f);
+      if (bal.paidAmount > 0) {
+        if (f.paid_by_method?.includes("Cash")) {
           cashCount++;
-          cashAmount += amt;
+          cashAmount += bal.paidAmount;
         } else {
           momoCount++;
-          momoAmount += amt;
+          momoAmount += bal.paidAmount;
         }
-      } else {
+      }
+      if (bal.remainingBalance > 0) {
         unpaidCount++;
-        unpaidAmount += amt;
+        unpaidAmount += bal.remainingBalance;
       }
     });
 
     return [
       { name: "Mobile Money (MoMo/Airtel)", count: momoCount, amount: momoAmount, color: "#10b981" },
       { name: "Hand Cash", count: cashCount, amount: cashAmount, color: "#3b82f6" },
-      { name: "Unpaid / Pending", count: unpaidCount, amount: unpaidAmount, color: "#f43f5e" }
+      { name: "Unpaid / Remaining", count: unpaidCount, amount: unpaidAmount, color: "#f43f5e" }
     ];
   }, [fees]);
 
@@ -1000,19 +1255,34 @@ export const OrganizationMemberFees: React.FC = () => {
       if (f.status !== "pending_confirmation") return false;
     }
     const matchesPeriod = periodFilter === "all" || f.payment_period === periodFilter;
+    const bal = getFeeBalances(f);
+    const isFeeOverdue = !bal.isFullyPaid && getFeeDeadlineInfo(f).isOverdue;
     const matchesStatus = 
       activeTab === "pending_approvals" 
         ? true
-        : (statusFilter === "all" || f.status === statusFilter || (statusFilter === "pending" && (f.status === "pending" || f.status === "pending_confirmation")));
+        : (
+            statusFilter === "all" ||
+            (statusFilter === "overdue" ? isFeeOverdue : false) ||
+            f.status === statusFilter ||
+            (statusFilter === "pending" && (f.status === "pending" || f.status === "partially_paid" || f.status === "pending_confirmation"))
+          );
+
+    const dueNameTerm = dueNameFilter.trim().toLowerCase();
+    const resolvedDueName = getFeeDueName(f).toLowerCase();
+    const matchesDueName =
+      dueNameTerm === "" ||
+      resolvedDueName.includes(dueNameTerm) ||
+      (f.period_date || "").toLowerCase().includes(dueNameTerm);
     
-    const term = searchQuery.toLowerCase();
-    const matchesSearch = searchQuery === "" || 
+    const term = searchQuery.trim().toLowerCase();
+    const matchesSearch = term === "" || 
       f.member_name?.toLowerCase().includes(term) || 
+      resolvedDueName.includes(term) ||
       f.period_date?.toLowerCase().includes(term) ||
       f.paid_by_method?.toLowerCase().includes(term) ||
       f.transaction_reference?.toLowerCase().includes(term);
 
-    return matchesPeriod && matchesStatus && matchesSearch;
+    return matchesPeriod && matchesStatus && matchesDueName && matchesSearch;
   });
 
   // Computed list for the Manage All Dues Modal with multi-filters and sorting
@@ -1021,7 +1291,9 @@ export const OrganizationMemberFees: React.FC = () => {
     let list = [...fees];
 
     // Status filter
-    if (allDuesStatusFilter !== "all") {
+    if (allDuesStatusFilter === "overdue") {
+      list = list.filter((f) => !getFeeBalances(f).isFullyPaid && getFeeDeadlineInfo(f).isOverdue);
+    } else if (allDuesStatusFilter !== "all") {
       list = list.filter((f) => f.status === allDuesStatusFilter);
     }
 
@@ -1030,12 +1302,23 @@ export const OrganizationMemberFees: React.FC = () => {
       list = list.filter((f) => f.payment_period === allDuesPeriodFilter);
     }
 
+    // Dedicated Due Name filter
+    if (allDuesDueNameFilter.trim()) {
+      const dueTerm = allDuesDueNameFilter.toLowerCase().trim();
+      list = list.filter((f) => {
+        const dueName = getFeeDueName(f).toLowerCase();
+        return dueName.includes(dueTerm) || (f.period_date || "").toLowerCase().includes(dueTerm);
+      });
+    }
+
     // Search query
     if (allDuesSearch.trim()) {
       const term = allDuesSearch.toLowerCase().trim();
       list = list.filter((f) => {
+        const dueName = getFeeDueName(f).toLowerCase();
         return (
           f.member_name?.toLowerCase().includes(term) ||
+          dueName.includes(term) ||
           f.period_date?.toLowerCase().includes(term) ||
           f.transaction_reference?.toLowerCase().includes(term) ||
           f.paid_by_method?.toLowerCase().includes(term) ||
@@ -1055,10 +1338,10 @@ export const OrganizationMemberFees: React.FC = () => {
         return new Date(a.created_at || "").getTime() - new Date(b.created_at || "").getTime();
       }
       if (allDuesSortBy === "highest") {
-        return b.amount - a.amount;
+        return getFeeBalances(b).totalDueAmount - getFeeBalances(a).totalDueAmount;
       }
       if (allDuesSortBy === "lowest") {
-        return a.amount - b.amount;
+        return getFeeBalances(a).totalDueAmount - getFeeBalances(b).totalDueAmount;
       }
       if (allDuesSortBy === "member_asc") {
         return (a.member_name || "").localeCompare(b.member_name || "");
@@ -1075,13 +1358,14 @@ export const OrganizationMemberFees: React.FC = () => {
     });
 
     return list;
-  }, [fees, allDuesStatusFilter, allDuesPeriodFilter, allDuesSearch, allDuesSortBy]);
+  }, [fees, allDuesStatusFilter, allDuesPeriodFilter, allDuesDueNameFilter, allDuesSearch, allDuesSortBy]);
 
   // Master Dues Schemes (Grouped as created from the dues form)
   const duesSchemes = React.useMemo(() => {
     if (!fees || fees.length === 0) return [];
     const map = new Map<string, {
       key: string;
+      due_name: string;
       period_date: string;
       payment_period: string;
       rate_amount: number;
@@ -1103,13 +1387,16 @@ export const OrganizationMemberFees: React.FC = () => {
     fees.forEach((f) => {
       const pDate = f.period_date || "Flexible";
       const pPeriod = f.payment_period || "monthly";
+      const dueName = getFeeDueName(f);
+      const bal = getFeeBalances(f);
       const key = `${pDate}:::${pPeriod}`;
       if (!map.has(key)) {
         map.set(key, {
           key,
+          due_name: dueName,
           period_date: pDate,
           payment_period: pPeriod,
-          rate_amount: Number(f.amount) || 0,
+          rate_amount: bal.totalDueAmount,
           due_date: f.due_date,
           is_recurring: f.is_recurring,
           admin_note: f.admin_note,
@@ -1128,20 +1415,21 @@ export const OrganizationMemberFees: React.FC = () => {
 
       const scheme = map.get(key)!;
       scheme.member_count += 1;
-      scheme.total_expected += Number(f.amount) || 0;
+      scheme.total_expected += bal.totalDueAmount;
+      scheme.total_cleared += bal.paidAmount;
       scheme.members.push(f);
       if (!scheme.due_date && f.due_date) scheme.due_date = f.due_date;
       if (!scheme.admin_note && f.admin_note) scheme.admin_note = f.admin_note;
 
       if (f.status === "paid") {
         scheme.cleared_count += 1;
-        scheme.total_cleared += Number(f.amount) || 0;
       } else if (f.status === "pending_confirmation") {
         scheme.review_count += 1;
-        scheme.total_review += Number(f.amount) || 0;
+        scheme.total_review += bal.pendingInstallmentAmount || bal.remainingBalance;
+        scheme.total_pending += bal.remainingBalance;
       } else {
         scheme.pending_count += 1;
-        scheme.total_pending += Number(f.amount) || 0;
+        scheme.total_pending += bal.remainingBalance;
       }
     });
 
@@ -1149,17 +1437,26 @@ export const OrganizationMemberFees: React.FC = () => {
     if (periodFilter !== "all") {
       list = list.filter((s) => s.payment_period === periodFilter);
     }
+    if (dueNameFilter.trim()) {
+      const dn = dueNameFilter.toLowerCase().trim();
+      list = list.filter(
+        (s) =>
+          s.due_name.toLowerCase().includes(dn) ||
+          s.period_date.toLowerCase().includes(dn)
+      );
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter(
         (s) =>
+          s.due_name.toLowerCase().includes(q) ||
           s.period_date.toLowerCase().includes(q) ||
           s.payment_period.toLowerCase().includes(q) ||
           (s.admin_note && s.admin_note.toLowerCase().includes(q))
       );
     }
     return list.sort((a, b) => b.period_date.localeCompare(a.period_date));
-  }, [fees, periodFilter, searchQuery]);
+  }, [fees, periodFilter, dueNameFilter, searchQuery]);
 
   return (
     <div className="space-y-6 md:space-y-8 container mx-auto max-w-7xl px-4 py-6 font-sans select-none" id="fees-management-container">
@@ -1214,30 +1511,65 @@ export const OrganizationMemberFees: React.FC = () => {
         </div>
       </div>
 
-      {/* Cooperative Broadcast alert / warning system banner */}
-      {activeOrg?.fee_notification && myDues.some(f => f.status === "pending") && (
+      {/* Cooperative Broadcast & Partial-Balance Reminder Banner */}
+      {(activeOrg?.fee_notification || myPartialDuesList.length > 0) && myOutstandingDuesList.length > 0 && (
         <div className="bg-red-50 dark:bg-rose-950/20 border-l-4 border-rose-600 p-4.5 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-3xs shrink-0" id="payment-warning-banner">
           <div className="flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
             <div className="flex flex-col">
-              <span className="font-extrabold text-[10px] uppercase tracking-wider text-rose-800 dark:text-rose-400">{t("URGENT COOPERATIVE PAYMENT REMINDER")}</span>
-              <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1">
-                {activeOrg.fee_notification}
+              <span className="font-extrabold text-[10px] uppercase tracking-wider text-rose-800 dark:text-rose-400">
+                {myPartialDuesList.length > 0 ? t("REMAINING INSTALLMENT & PAYMENT REMINDER") : t("URGENT COOPERATIVE PAYMENT REMINDER")}
+              </span>
+              {activeOrg?.fee_notification && (
+                <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1">
+                  {activeOrg.fee_notification}
+                </p>
+              )}
+              <p className="text-[11px] text-gray-600 dark:text-slate-300 mt-1 leading-normal font-semibold">
+                {t("My profile ledger shows")}{" "}
+                <span className="font-black text-rose-600">
+                  {myOutstandingDuesList.length} {t("unpaid dues cycle(s)")}
+                </span>{" "}
+                ({myPendingSumRwf.toLocaleString()} RWF remaining
+                {myPartialDuesList.length > 0
+                  ? ` · ${myPartialDuesList.length} partially paid`
+                  : ""}). {t("Please settle the remaining balance to complete payment.")}
               </p>
-              <p className="text-[10px] text-gray-500 mt-1 leading-normal font-semibold">
-                {t("My profile ledger shows")} <span className="font-black text-rose-600">{myDues.filter(f => f.status === "pending").length} {t("unpaid dues cycle(s)")}</span>. {t("Please settle them immediately to maintain compliance.")}
-              </p>
+              {myPartialDuesList.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {myPartialDuesList.slice(0, 3).map((pf) => {
+                    const pBal = getFeeBalances(pf);
+                    return (
+                      <span
+                        key={pf.id}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100/80 dark:bg-amber-950/50 text-amber-900 dark:text-amber-300 text-[10px] font-bold border border-amber-200 dark:border-amber-800"
+                      >
+                        {getFeeDueName(pf)}: Paid {pBal.paidAmount.toLocaleString()} / {pBal.totalDueAmount.toLocaleString()} RWF (Left: {pBal.remainingBalance.toLocaleString()} RWF)
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
           <Button 
             size="sm" 
             className="self-start sm:self-center bg-rose-600 hover:bg-rose-700 text-white shrink-0 font-bold rounded-xl"
             onClick={() => {
-              setActiveTab("my_dues");
-              document.getElementById("fees-tabs-navigation")?.scrollIntoView({ behavior: "smooth" });
+              const firstOutstanding = myPartialDuesList[0] || myOutstandingDuesList[0];
+              if (firstOutstanding) {
+                const firstBal = getFeeBalances(firstOutstanding);
+                setSelectedFeeToPay(firstOutstanding);
+                setPayMethod("MTN MoMo / Airtel");
+                setPaymentMode("full");
+                setCustomPayAmount(String(Math.max(1, Math.round(firstBal.remainingBalance / 2))));
+              } else {
+                setActiveTab("my_dues");
+                document.getElementById("fees-tabs-navigation")?.scrollIntoView({ behavior: "smooth" });
+              }
             }}
           >
-            {t("View Statement & Pay")} <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            {myPartialDuesList.length > 0 ? "Pay Remaining Balance" : t("View Statement & Pay")} <ArrowRight className="ml-1 h-3.5 w-3.5" />
           </Button>
         </div>
       )}
@@ -1385,7 +1717,7 @@ export const OrganizationMemberFees: React.FC = () => {
                 RWF {myPendingSumRwf.toLocaleString()}
               </span>
               <p className="text-xs text-[#9db8a8] dark:text-slate-400 font-medium mt-1">
-                {myDues.filter(f => f.status === "pending").length} invoices to clear
+                {myOutstandingDuesList.length} invoices with remaining balance
               </p>
             </div>
           </div>
@@ -1424,35 +1756,63 @@ export const OrganizationMemberFees: React.FC = () => {
                 Visual breakdown of collected dues, payment channels, and member settlement trends.
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 px-3 py-1 rounded-full">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 px-3 py-1 rounded-full tabular-nums">
                 Collection Rate: {((paidSumRwf / ((paidSumRwf + pendingSumRwf) || 1)) * 100).toFixed(1)}%
+              </span>
+              <span className="text-[10px] font-extrabold bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 px-3 py-1 rounded-full tabular-nums">
+                Paid Few (Partial): {partialMembersPct}% ({partialDuesCount}/{totalDuesCount})
               </span>
             </div>
           </div>
 
-          {/* Collection Progress Bar */}
-          <div className="space-y-1.5 bg-stone-50 dark:bg-slate-950 p-3.5 rounded-xl border border-stone-100 dark:border-slate-800">
-            <div className="flex items-center justify-between text-[11px] font-bold text-stone-700 dark:text-slate-300">
-              <span>Collection Target: {(paidSumRwf + pendingSumRwf).toLocaleString()} RWF</span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-mono font-extrabold">{paidSumRwf.toLocaleString()} RWF Cleared</span>
+          {/* Collection Progress Bar & Paid Few Percentage Bar */}
+          <div className="space-y-3 bg-stone-50 dark:bg-slate-950 p-3.5 rounded-xl border border-stone-100 dark:border-slate-800">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-bold text-stone-700 dark:text-slate-300">
+                <span>Collection Target: {(paidSumRwf + pendingSumRwf).toLocaleString()} RWF</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-mono font-extrabold tabular-nums">{paidSumRwf.toLocaleString()} RWF Cleared</span>
+              </div>
+              <div className="w-full bg-stone-200 dark:bg-slate-800 h-3 rounded-full overflow-hidden flex">
+                <div 
+                  className="bg-emerald-500 h-full transition-all duration-500" 
+                  style={{ width: `${Math.min(100, (fullyPaidSumRwf / ((paidSumRwf + pendingSumRwf) || 1)) * 100)}%` }}
+                  title="Fully Paid"
+                />
+                <div 
+                  className="bg-blue-500 h-full transition-all duration-500" 
+                  style={{ width: `${Math.min(100, (partialPaidSumRwf / ((paidSumRwf + pendingSumRwf) || 1)) * 100)}%` }}
+                  title="Paid Few (Partially Paid)"
+                />
+                <div 
+                  className="bg-amber-400 h-full transition-all duration-500" 
+                  style={{ width: `${Math.min(100, (awaitingVerificationList.reduce((a, b) => a + (getFeeBalances(b).pendingInstallmentAmount || getFeeBalances(b).remainingBalance), 0) / ((paidSumRwf + pendingSumRwf) || 1)) * 100)}%` }}
+                  title="Awaiting Verification"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-4 text-[10px] text-gray-500 font-semibold pt-1 tabular-nums">
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Fully Paid ({fullyPaidSumRwf.toLocaleString()} RWF)</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-500" /> Paid Few / Partial ({partialPaidSumRwf.toLocaleString()} RWF)</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" /> Submitted Awaiting Review ({awaitingVerificationList.reduce((a, b) => a + (getFeeBalances(b).pendingInstallmentAmount || getFeeBalances(b).remainingBalance), 0).toLocaleString()} RWF)</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" /> Unpaid / Remaining ({pendingSumRwf.toLocaleString()} RWF)</span>
+              </div>
             </div>
-            <div className="w-full bg-stone-200 dark:bg-slate-800 h-3 rounded-full overflow-hidden flex">
-              <div 
-                className="bg-emerald-500 h-full transition-all duration-500" 
-                style={{ width: `${Math.min(100, (paidSumRwf / ((paidSumRwf + pendingSumRwf) || 1)) * 100)}%` }}
-                title="Paid"
-              />
-              <div 
-                className="bg-amber-400 h-full transition-all duration-500" 
-                style={{ width: `${Math.min(100, (awaitingVerificationList.reduce((a, b) => a + (Number(b.amount) || 0), 0) / ((paidSumRwf + pendingSumRwf) || 1)) * 100)}%` }}
-                title="Awaiting Verification"
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-4 text-[10px] text-gray-500 font-semibold pt-1">
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Cleared Paid ({paidSumRwf.toLocaleString()} RWF)</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" /> Submitted Awaiting Review ({awaitingVerificationList.reduce((a, b) => a + (Number(b.amount) || 0), 0).toLocaleString()} RWF)</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" /> Unpaid Outstanding ({(fees?.filter(f => f.status === "pending").reduce((a, b) => a + (Number(b.amount) || 0), 0) || 0).toLocaleString()} RWF)</span>
+
+            {/* Dedicated Bar: % of Members Who Paid Few (Partial Settlement) */}
+            <div className="pt-2.5 border-t border-stone-200/80 dark:border-slate-800 space-y-1">
+              <div className="flex items-center justify-between text-[11px] font-bold text-stone-700 dark:text-slate-300">
+                <span>Members Who Paid Few (Partial Settlement Share)</span>
+                <span className="text-blue-600 dark:text-blue-400 font-mono font-extrabold tabular-nums">
+                  {partialMembersPct}% ({partialDuesCount} of {totalDuesCount} dues)
+                </span>
+              </div>
+              <div className="w-full bg-stone-200 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-blue-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, partialMembersPct)}%` }}
+                  title={`${partialMembersPct}% of members paid partially`}
+                />
+              </div>
             </div>
           </div>
 
@@ -1461,21 +1821,29 @@ export const OrganizationMemberFees: React.FC = () => {
             {/* Chart 1: Collection by Cycle / Period */}
             <div className="lg:col-span-2 bg-stone-50 dark:bg-slate-950 p-4 rounded-xl border border-gray-100 dark:border-slate-800">
               <h4 className="text-xs font-bold text-stone-800 dark:text-slate-200 mb-3 flex items-center gap-1.5">
-                <TrendingUp className="h-3.5 w-3.5 text-blue-600" /> Payment Collection Trends by Cycle Period
+                <TrendingUp className="h-3.5 w-3.5 text-blue-600" /> Payment Collection Trends & Paid Few (%) by Cycle Period
               </h4>
               <div className="h-56 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={periodChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <XAxis dataKey="period" stroke="#94a3b8" fontSize={10} tickLine={false} />
-                    <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(v) => `${v/1000}k`} />
+                    <YAxis yAxisId="rwf" stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(v) => `${v/1000}k`} />
+                    <YAxis yAxisId="pct" orientation="right" domain={[0, 100]} stroke="#3b82f6" fontSize={10} tickLine={false} tickFormatter={(v) => `${v}%`} />
                     <Tooltip 
-                      formatter={(value: any) => [`${Number(value).toLocaleString()} RWF`]}
+                      formatter={(value: any, name: any, props: any) => {
+                        if (name === "Paid Few (% Members)" || props?.dataKey === "partialPercent") {
+                          const p = props?.payload;
+                          return [`${value}% (${p?.partialCount ?? 0}/${p?.totalCount ?? 0} dues · ${(p?.partialPaidRwf ?? 0).toLocaleString()} RWF)`, name];
+                        }
+                        return [`${Number(value).toLocaleString()} RWF`, name];
+                      }}
                       contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff', fontSize: '11px', borderRadius: '8px' }}
                     />
                     <Legend wrapperStyle={{ fontSize: '11px' }} />
-                    <Bar dataKey="paid" name="Paid (RWF)" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="awaiting" name="Awaiting Review (RWF)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="unpaid" name="Unpaid (RWF)" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                    <Bar yAxisId="rwf" dataKey="paid" name="Paid (RWF)" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar yAxisId="pct" dataKey="partialPercent" name="Paid Few (% Members)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    <Bar yAxisId="rwf" dataKey="awaiting" name="Awaiting Review (RWF)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                    <Bar yAxisId="rwf" dataKey="unpaid" name="Unpaid (RWF)" fill="#f43f5e" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1570,9 +1938,9 @@ export const OrganizationMemberFees: React.FC = () => {
             }`}
           >
             <Smartphone className="h-4 w-4" /> {t("fees_tab_personal")}
-            {myDues.filter(f => f.status === "pending").length > 0 && (
+            {myOutstandingDuesList.length > 0 && (
               <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-500 text-white">
-                {myDues.filter(f => f.status === "pending").length}
+                {myOutstandingDuesList.length}
               </span>
             )}
           </button>
@@ -1594,18 +1962,18 @@ export const OrganizationMemberFees: React.FC = () => {
                 </span>
               </h2>
               <p className="text-xs text-stone-600 dark:text-slate-400 font-medium mt-0.5">
-                View your personal cooperative dues, payment history, and submit transaction slips for accountant verification.
+                View your personal cooperative dues, track partial installments, and submit transaction slips for verification.
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {myDues.filter(f => f.status === "pending").length === 0 ? (
+            {myOutstandingDuesList.length === 0 ? (
               <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-extrabold bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-xl text-xs shadow-3xs">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" /> All Dues Up To Date
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 text-rose-700 dark:text-rose-300 font-extrabold bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 px-3 py-1.5 rounded-xl text-xs shadow-3xs">
-                <AlertCircle className="h-4 w-4 text-rose-600" /> {myDues.filter(f => f.status === "pending").length} Payment(s) Due
+                <AlertCircle className="h-4 w-4 text-rose-600" /> {myOutstandingDuesList.length} Payment(s) Due ({myPendingSumRwf.toLocaleString()} RWF left)
               </span>
             )}
           </div>
@@ -1613,8 +1981,62 @@ export const OrganizationMemberFees: React.FC = () => {
       )}
 
       {/* Filters panel */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-3xs select-none overflow-x-auto max-w-full" id="fees-filters-bar">
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 max-w-full overflow-x-auto no-scrollbar pb-1 sm:pb-0">
+      <div className="flex flex-col gap-3 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-3xs select-none max-w-full" id="fees-filters-bar">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Dedicated Text Filter by Due Name / Payment Purpose */}
+          <div className="relative">
+            <TagIcon className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600 dark:text-emerald-400 pointer-events-none" />
+            <input
+              type="text"
+              list="due-names-datalist"
+              placeholder="Filter by Due Name / Payment Purpose (e.g. Monthly Share, 2026-W20)..."
+              value={dueNameFilter}
+              onChange={(e) => setDueNameFilter(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/30 focus:border-emerald-600 font-medium"
+              id="input-filter-due-name"
+            />
+            <datalist id="due-names-datalist">
+              {uniqueDueNames.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+            {dueNameFilter && (
+              <button
+                type="button"
+                onClick={() => setDueNameFilter("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                title="Clear due name filter"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Search by Member Name / Method / Reference */}
+          <div className="relative">
+            <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search by Member Name, Transaction Ref, or Payment Method..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/30 focus:border-emerald-600 font-medium"
+              id="input-filter-search"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                title="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 max-w-full overflow-x-auto no-scrollbar pb-0.5">
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0">
               <Filter className="h-3 w-3" /> Cycle Type:
@@ -1663,7 +2085,29 @@ export const OrganizationMemberFees: React.FC = () => {
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
                   }`}
                 >
-                  Paid
+                  Fully Paid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("partially_paid")}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                    statusFilter === "partially_paid"
+                      ? "bg-blue-600 text-white shadow-3xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+                  }`}
+                >
+                  Partially Paid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("overdue")}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                    statusFilter === "overdue"
+                      ? "bg-rose-600 text-white shadow-3xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
+                  }`}
+                >
+                  Overdue
                 </button>
                 <button
                   type="button"
@@ -1681,7 +2125,7 @@ export const OrganizationMemberFees: React.FC = () => {
                   onClick={() => setStatusFilter("pending")}
                   className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                     statusFilter === "pending"
-                      ? "bg-rose-600 text-white shadow-3xs"
+                      ? "bg-slate-700 text-white shadow-3xs"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 font-medium"
                   }`}
                 >
@@ -1689,6 +2133,21 @@ export const OrganizationMemberFees: React.FC = () => {
                 </button>
               </div>
             </div>
+          )}
+
+          {(dueNameFilter || searchQuery || periodFilter !== "all" || statusFilter !== "all") && (
+            <button
+              type="button"
+              onClick={() => {
+                setDueNameFilter("");
+                setSearchQuery("");
+                setPeriodFilter("all");
+                setStatusFilter("all");
+              }}
+              className="text-[11px] font-bold text-slate-500 hover:text-rose-600 underline ml-auto shrink-0 cursor-pointer"
+            >
+              Reset Filters
+            </button>
           )}
         </div>
       </div>
@@ -1704,10 +2163,10 @@ export const OrganizationMemberFees: React.FC = () => {
             <table className="w-full text-left text-xs border-collapse" id="fees-ledger-rendered-table">
               <thead>
                 <tr className="bg-slate-50/80 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px] leading-normal">
-                  <th className="py-3.5 px-4">{isAccountant ? "Member Name" : "Contribution / Fee"}</th>
+                  <th className="py-3.5 px-4">{isAccountant ? "Member / Due Name" : "Due Name & Purpose"}</th>
                   <th className="py-3.5 px-4">Allocated period</th>
                   <th className="py-3.5 px-4">Dues Cycle</th>
-                  <th className="py-3.5 px-4">Amount Invoice</th>
+                  <th className="py-3.5 px-4">Amount & Progress</th>
                   <th className="py-3.5 px-4">Settlement Info</th>
                   <th className="py-3.5 px-4">Overall Status</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
@@ -1716,218 +2175,411 @@ export const OrganizationMemberFees: React.FC = () => {
               <tbody className="divide-y divide-gray-200/70 dark:divide-slate-800/80 text-stone-800 dark:text-slate-100 font-medium">
                 {filteredFees.map((fee) => {
                   const isMyOwn = !isAccountant || myMemberIds.has(fee.member_id) || fee.member_id === activeMember?.id;
+                  const bal = getFeeBalances(fee);
+                  const dueName = getFeeDueName(fee);
+                  const deadlineInfo = getFeeDeadlineInfo(fee);
+                  const isExpanded = !!expandedFeeIds[fee.id];
+                  const effectiveInstallments = getEffectiveInstallments(fee);
                   
                   return (
-                    <tr key={fee.id} className={`hover:bg-gray-50/50 dark:hover:bg-slate-850/20 transition-colors ${isMyOwn ? "bg-emerald-50/20 dark:bg-emerald-950/5" : ""}`}>
-                      <td className="py-3.5 px-4 font-bold text-stone-900 dark:text-white">
-                        <div className="flex items-center gap-2">
-                          <span className={`h-2 w-2 rounded-full shrink-0 ${
-                            fee.status === "paid" 
-                              ? "bg-emerald-500" 
-                              : fee.status === "pending_confirmation" 
-                                ? "bg-amber-500 animate-ping" 
-                                : "bg-rose-500"
-                          }`} />
-                          <div className="flex flex-col">
-                            <span className="font-bold flex items-center gap-1.5">
-                              {isAccountant ? fee.member_name : `Cooperative Dues (${fee.period_date})`}
-                              {isMyOwn && isAccountant && <span className="bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 text-emerald-800 px-1 rounded text-[9px] font-black uppercase">Me</span>}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-gray-600 dark:text-gray-300 uppercase">
-                        {fee.payment_period}
-                      </td>
-                      <td className="py-3.5 px-4 font-mono font-black text-gray-500">
-                        {fee.period_date}
-                      </td>
-                      <td className="py-3.5 px-4 font-extrabold font-mono text-zinc-900 dark:text-zinc-50">
-                        {fee.amount.toLocaleString()} <span className="text-[9px] font-bold">RWF</span>
-                      </td>
-                      <td className="py-3.5 px-4 max-w-xs">
-                        {fee.status === "paid" ? (
-                          <div className="flex flex-col gap-0.5" id={`settlement-info-${fee.id}`}>
-                            <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
-                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> Verified: {fee.paid_by_method || "Direct gateway"}
-                            </span>
-                            {fee.transaction_reference && (
-                              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 pl-5">
-                                Ref: {fee.transaction_reference}
+                    <React.Fragment key={fee.id}>
+                      <tr className={`hover:bg-gray-50/50 dark:hover:bg-slate-850/20 transition-colors ${isMyOwn ? "bg-emerald-50/20 dark:bg-emerald-950/5" : ""} ${isExpanded ? "bg-slate-50/70 dark:bg-slate-800/30" : ""}`}>
+                        <td className="py-3.5 px-4 font-bold text-stone-900 dark:text-white">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              id={`btn-expand-history-${fee.id}`}
+                              onClick={() => toggleExpandFee(fee.id)}
+                              aria-expanded={isExpanded}
+                              title={isExpanded ? "Collapse payment history" : "Expand partial payment history"}
+                              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-colors shrink-0 cursor-pointer"
+                            >
+                              <ChevronDown className={`h-4 w-4 transition-transform duration-150 ${isExpanded ? "rotate-180 text-emerald-600 dark:text-emerald-400" : ""}`} />
+                            </button>
+                            <div className="flex flex-col">
+                              <span className="font-bold flex items-center gap-1.5">
+                                {isAccountant ? fee.member_name : dueName}
+                                {isMyOwn && isAccountant && <span className="bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 text-emerald-800 px-1 rounded text-[9px] font-black uppercase">Me</span>}
                               </span>
+                              <div className="flex items-center gap-2 text-[11px]">
+                                {isAccountant && (
+                                  <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                                    {dueName}
+                                  </span>
+                                )}
+                                {effectiveInstallments.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleExpandFee(fee.id)}
+                                    className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                                  >
+                                    {effectiveInstallments.length} installment{effectiveInstallments.length > 1 ? "s" : ""}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-gray-600 dark:text-gray-300 uppercase">
+                          {fee.payment_period}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-black text-gray-500">
+                          {fee.period_date}
+                        </td>
+                        <td className="py-3.5 px-4 font-extrabold font-mono tabular-nums text-zinc-900 dark:text-zinc-50 min-w-[155px]">
+                          <div className="flex flex-col gap-1">
+                            <span>
+                              {bal.totalDueAmount.toLocaleString()} <span className="text-[9px] font-bold">RWF</span>
+                            </span>
+                            {(bal.paidAmount > 0 && bal.remainingBalance > 0) && (
+                              <div className="space-y-0.5 font-sans">
+                                <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-blue-600 rounded-full"
+                                    style={{ width: `${bal.percentPaid}%` }}
+                                  />
+                                </div>
+                                <div className="text-[10px] font-semibold flex items-center justify-between gap-2 tabular-nums">
+                                  <span className="text-emerald-700 dark:text-emerald-400">Paid: {bal.paidAmount.toLocaleString()}</span>
+                                  <span className="text-rose-600 dark:text-rose-400">Left: {bal.remainingBalance.toLocaleString()}</span>
+                                </div>
+                              </div>
                             )}
                           </div>
-                        ) : fee.status === "pending_confirmation" ? (
-                          <div className="flex flex-col gap-0.5" id={`settlement-info-${fee.id}`}>
-                            <span className="text-xs font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
-                              <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" /> Reported via {fee.paid_by_method}
-                            </span>
-                            <span className="text-[11px] text-slate-400 dark:text-slate-500 pl-5">
-                              Awaiting supervisor validation
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col gap-0.5" id={`settlement-info-${fee.id}`}>
-                            {(() => {
-                              const info = getFeeDeadlineInfo(fee);
-                              if (info.isFlexible) {
-                                return (
-                                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" />
-                                    Flexible (Settle anytime)
-                                  </span>
-                                );
-                              }
-                              if (info.isOverdue) {
+                        </td>
+                        <td className="py-3.5 px-4 max-w-xs">
+                          {fee.status === "paid" ? (
+                            <div className="flex flex-col gap-0.5" id={`settlement-info-${fee.id}`}>
+                              <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> Verified: {fee.paid_by_method || "Direct gateway"}
+                              </span>
+                              {fee.transaction_reference && (
+                                <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 pl-5">
+                                  Ref: {fee.transaction_reference}
+                                </span>
+                              )}
+                            </div>
+                          ) : fee.status === "pending_confirmation" ? (
+                            <div className="flex flex-col gap-0.5" id={`settlement-info-${fee.id}`}>
+                              <span className="text-xs font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                                <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" /> Reported {(bal.pendingInstallmentAmount || bal.remainingBalance).toLocaleString()} RWF via {fee.paid_by_method}
+                              </span>
+                              <span className="text-[11px] text-slate-400 dark:text-slate-500 pl-5">
+                                Awaiting supervisor validation
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-0.5" id={`settlement-info-${fee.id}`}>
+                              {fee.status === "partially_paid" && (
+                                <span className="text-[11px] font-bold text-blue-700 dark:text-blue-400">
+                                  {effectiveInstallments.length || 1} installment(s) paid · {bal.remainingBalance.toLocaleString()} RWF left
+                                </span>
+                              )}
+                              {(() => {
+                                if (deadlineInfo.isFlexible) {
+                                  return (
+                                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                      Flexible (Settle anytime)
+                                    </span>
+                                  );
+                                }
+                                if (deadlineInfo.isOverdue) {
+                                  return (
+                                    <div className="flex flex-col">
+                                      <span className="text-xs font-medium text-rose-600 dark:text-rose-400">
+                                        Overdue by {deadlineInfo.overdueDays}d
+                                      </span>
+                                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                        Due {deadlineInfo.formattedDate}
+                                      </span>
+                                    </div>
+                                  );
+                                }
+                                if (deadlineInfo.daysLeft === 0) {
+                                  return (
+                                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                                      Due Today ({deadlineInfo.formattedDate})
+                                    </span>
+                                  );
+                                }
                                 return (
                                   <div className="flex flex-col">
-                                    <span className="text-xs font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
-                                      <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
-                                      Overdue by {info.overdueDays}d
+                                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                                      Due {deadlineInfo.formattedDate}
                                     </span>
-                                    <span className="text-[11px] text-slate-500 dark:text-slate-400 pl-3">
-                                      Due {info.formattedDate}
+                                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                                      {deadlineInfo.daysLeft} days left
                                     </span>
                                   </div>
                                 );
-                              }
-                              if (info.daysLeft === 0) {
-                                return (
-                                  <span className="text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                                    Due Today ({info.formattedDate})
-                                  </span>
-                                );
-                              }
-                              return (
-                                <div className="flex flex-col">
-                                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
-                                    Due {info.formattedDate}
-                                  </span>
-                                  <span className="text-[11px] text-slate-400 dark:text-slate-500 pl-3">
-                                    {info.daysLeft} days left
-                                  </span>
-                                </div>
-                              );
-                            })()}
-                            {fee.is_recurring && (
-                              <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1 mt-0.5 select-none pl-3">
-                                <Repeat className="h-2.5 w-2.5 text-slate-400 shrink-0" /> Auto-recurring cycle
+                              })()}
+                              {fee.is_recurring && (
+                                <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1 mt-0.5 select-none">
+                                  <Repeat className="h-2.5 w-2.5 text-slate-400 shrink-0" /> Auto-recurring cycle
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 select-none">
+                          <FeeStatusBadge
+                            fee={fee}
+                            isOverdue={deadlineInfo.isOverdue}
+                            overdueDays={deadlineInfo.overdueDays}
+                            formattedDueDate={deadlineInfo.formattedDate}
+                          />
+                        </td>
+                        <td className="py-3.5 px-4 text-right selection:none shrink-0 border-l border-slate-100 dark:border-slate-800/80">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* Member side pay button */}
+                            {(fee.status === "pending" || fee.status === "partially_paid") && isMyOwn && (
+                              <button 
+                                id={`btn-member-pay-${fee.id}`}
+                                onClick={() => {
+                                  setSelectedFeeToPay(fee);
+                                  setPayMethod("MTN MoMo / Airtel");
+                                  setPaymentMode("full");
+                                  setCustomPayAmount(String(Math.max(1, Math.round(bal.remainingBalance / 2))));
+                                }}
+                                className="h-7 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium inline-flex items-center gap-1.5 shadow-2xs transition whitespace-nowrap"
+                              >
+                                <Smartphone className="h-3.5 w-3.5" /> {fee.status === "partially_paid" ? "Pay Balance" : "Pay"}
+                              </button>
+                            )}
+
+                            {/* Member slip under review indicator */}
+                            {!isAccountant && fee.status === "pending_confirmation" && (
+                              <span className="h-7 px-2.5 text-[11px] text-amber-700 dark:text-amber-400 font-medium inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 rounded-lg border border-amber-200 dark:border-amber-900/40">
+                                <Clock className="h-3 w-3 animate-spin text-amber-600" /> Slip Under Review
                               </span>
                             )}
+
+                            {/* Accountant Review & Verify actions */}
+                            {isAccountant && (fee.status === "pending_confirmation" || fee.status === "pending" || fee.status === "partially_paid") && (
+                              <button
+                                id={`btn-admin-review-${fee.id}`}
+                                onClick={() => {
+                                  setReviewingFee(fee);
+                                  setAdminNoteInput("");
+                                  setVerifiedInstallmentAmount(String(bal.pendingInstallmentAmount > 0 ? bal.pendingInstallmentAmount : bal.remainingBalance));
+                                }}
+                                className={`h-7 px-2.5 text-xs font-medium rounded-lg inline-flex items-center gap-1.5 transition shadow-2xs text-white whitespace-nowrap ${
+                                  fee.status === "pending_confirmation"
+                                    ? "bg-amber-600 hover:bg-amber-700"
+                                    : "bg-emerald-600 hover:bg-emerald-700"
+                                }`}
+                              >
+                                <ShieldCheck className="h-3.5 w-3.5" />
+                                {fee.status === "pending_confirmation" ? "Review Slip" : fee.status === "partially_paid" ? "Verify Balance" : "Verify Payment"}
+                              </button>
+                            )}
+
+                            {/* Payment History modal trigger */}
+                            <button
+                              id={`btn-history-${fee.id}`}
+                              type="button"
+                              onClick={() => setViewingHistoryFee(fee)}
+                              className="h-7 px-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium rounded-lg inline-flex items-center gap-1.5 transition whitespace-nowrap cursor-pointer"
+                              title="View installment payment history"
+                            >
+                              <History className="h-3.5 w-3.5 text-slate-500" />
+                              <span>History</span>
+                              {effectiveInstallments.length > 0 && (
+                                <span className="font-mono text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                                  ({effectiveInstallments.length})
+                                </span>
+                              )}
+                            </button>
+
+                            {/* View Official Receipt button for paid or partially paid dues */}
+                            {(fee.status === "paid" || bal.paidAmount > 0) && (
+                              <button
+                                id={`btn-receipt-${fee.id}`}
+                                onClick={() => setViewingReceiptFee(fee)}
+                                className="h-7 px-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium rounded-lg inline-flex items-center gap-1.5 transition"
+                              >
+                                <Receipt className="h-3.5 w-3.5 text-slate-500" /> Receipt
+                              </button>
+                            )}
+
+                            {/* Edit Due for accountants only */}
+                            {isAccountant && (
+                              <button
+                                id={`btn-edit-fee-${fee.id}`}
+                                onClick={() => openEditModal(fee)}
+                                className="h-7 px-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium rounded-lg inline-flex items-center gap-1 transition"
+                                title="Edit Details"
+                              >
+                                <Pencil className="h-3 w-3" /> Edit
+                              </button>
+                            )}
+
+                            {/* Delete Due for accountants only */}
+                            {isAccountant && (
+                              <button
+                                id={`btn-delete-fee-${fee.id}`}
+                                onClick={() => setDeletingFee(fee)}
+                                className="h-7 px-2 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-900 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 text-xs font-medium rounded-lg inline-flex items-center gap-1 transition"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-3 w-3" /> Delete
+                              </button>
+                            )}
+
+                            {/* Quick Accountant Toggle status */}
+                            {isAccountant && (
+                              <button
+                                id={`btn-admin-toggle-legacy-${fee.id}`}
+                                onClick={() => handleToggleStatusLegacy(fee)}
+                                className="h-7 w-7 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg inline-flex items-center justify-center transition"
+                                title="Toggle Cleared / Unpaid"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                           </div>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 select-none">
-                        {fee.status === "paid" ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-                            Cleared
-                          </span>
-                        ) : fee.status === "pending_confirmation" ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
-                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                            Under Review
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400">
-                            <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
-                            Unpaid
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 text-right selection:none shrink-0 border-l border-slate-100 dark:border-slate-800/80">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* Member side pay button */}
-                          {fee.status === "pending" && isMyOwn && (
-                            <button 
-                              id={`btn-member-pay-${fee.id}`}
-                              onClick={() => {
-                                setSelectedFeeToPay(fee);
-                                setPayMethod("MTN MoMo / Airtel");
-                              }}
-                              className="h-7 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium inline-flex items-center gap-1.5 shadow-2xs transition"
-                            >
-                              <Smartphone className="h-3.5 w-3.5" /> Pay
-                            </button>
-                          )}
+                        </td>
+                      </tr>
 
-                          {/* Member slip under review indicator */}
-                          {!isAccountant && fee.status === "pending_confirmation" && (
-                            <span className="h-7 px-2.5 text-[11px] text-amber-700 dark:text-amber-400 font-medium inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 rounded-lg border border-amber-200 dark:border-amber-900/40">
-                              <Clock className="h-3 w-3 animate-spin text-amber-600" /> Slip Under Review
-                            </span>
-                          )}
+                      {isExpanded && (
+                        <tr key={`${fee.id}-history-row`} className="bg-slate-50/90 dark:bg-slate-950/60" id={`expanded-history-row-${fee.id}`}>
+                          <td colSpan={7} className="px-6 py-4 border-t border-slate-200/80 dark:border-slate-800">
+                            <div className="space-y-3">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 text-xs">
+                                  <History className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                  <span className="font-bold text-slate-900 dark:text-white">
+                                    Payment History · {dueName}
+                                  </span>
+                                  <span className="text-slate-400" aria-hidden="true">·</span>
+                                  <span className="text-slate-500 dark:text-slate-400">
+                                    {effectiveInstallments.length} recorded installment{effectiveInstallments.length === 1 ? "" : "s"}
+                                  </span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono tabular-nums">
+                                  <span className="text-emerald-700 dark:text-emerald-400 font-bold">
+                                    Paid: {bal.paidAmount.toLocaleString()} RWF
+                                  </span>
+                                  <span className="text-slate-400">/</span>
+                                  <span className="text-slate-700 dark:text-slate-300 font-semibold">
+                                    Total: {bal.totalDueAmount.toLocaleString()} RWF
+                                  </span>
+                                  <span className="text-slate-400">·</span>
+                                  <span className={`font-bold ${bal.remainingBalance > 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-700 dark:text-emerald-400"}`}>
+                                    Remaining: {bal.remainingBalance.toLocaleString()} RWF
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setViewingHistoryFee(fee)}
+                                    className="font-sans ml-1 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold transition cursor-pointer"
+                                  >
+                                    Open Full History Modal
+                                  </button>
+                                </div>
+                              </div>
 
-                          {/* Accountant Review & Verify actions */}
-                          {isAccountant && (fee.status === "pending_confirmation" || fee.status === "pending") && (
-                            <button
-                              id={`btn-admin-review-${fee.id}`}
-                              onClick={() => {
-                                setReviewingFee(fee);
-                                setAdminNoteInput("");
-                              }}
-                              className={`h-7 px-2.5 text-xs font-medium rounded-lg inline-flex items-center gap-1.5 transition shadow-2xs text-white ${
-                                fee.status === "pending_confirmation"
-                                  ? "bg-amber-600 hover:bg-amber-700"
-                                  : "bg-emerald-600 hover:bg-emerald-700"
-                              }`}
-                            >
-                              <ShieldCheck className="h-3.5 w-3.5" />
-                              {fee.status === "pending_confirmation" ? "Review Slip" : "Verify Payment"}
-                            </button>
-                          )}
-
-                          {/* View Official Receipt button for paid dues */}
-                          {fee.status === "paid" && (
-                            <button
-                              id={`btn-receipt-${fee.id}`}
-                              onClick={() => setViewingReceiptFee(fee)}
-                              className="h-7 px-2.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium rounded-lg inline-flex items-center gap-1.5 transition"
-                            >
-                              <Receipt className="h-3.5 w-3.5 text-slate-500" /> Receipt
-                            </button>
-                          )}
-
-                          {/* Edit Due for accountants only */}
-                          {isAccountant && (
-                            <button
-                              id={`btn-edit-fee-${fee.id}`}
-                              onClick={() => openEditModal(fee)}
-                              className="h-7 px-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium rounded-lg inline-flex items-center gap-1 transition"
-                              title="Edit Details"
-                            >
-                              <Pencil className="h-3 w-3" /> Edit
-                            </button>
-                          )}
-
-                          {/* Delete Due for accountants only */}
-                          {isAccountant && (
-                            <button
-                              id={`btn-delete-fee-${fee.id}`}
-                              onClick={() => setDeletingFee(fee)}
-                              className="h-7 px-2 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-900 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 text-xs font-medium rounded-lg inline-flex items-center gap-1 transition"
-                              title="Delete"
-                            >
-                              <Trash2 className="h-3 w-3" /> Delete
-                            </button>
-                          )}
-
-                          {/* Quick Accountant Toggle status */}
-                          {isAccountant && (
-                            <button
-                              id={`btn-admin-toggle-legacy-${fee.id}`}
-                              onClick={() => handleToggleStatusLegacy(fee)}
-                              className="h-7 w-7 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg inline-flex items-center justify-center transition"
-                              title="Toggle Cleared / Unpaid"
-                            >
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                              {effectiveInstallments.length > 0 ? (
+                                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-x-auto">
+                                  <table className="w-full text-left text-[11px] border-collapse">
+                                    <thead>
+                                      <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 text-slate-500 dark:text-slate-400 font-semibold">
+                                        <th className="py-2 px-3">#</th>
+                                        <th className="py-2 px-3">Date</th>
+                                        <th className="py-2 px-3">Amount</th>
+                                        <th className="py-2 px-3">Reference</th>
+                                        <th className="py-2 px-3">Method</th>
+                                        <th className="py-2 px-3">Verified By / Notes</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                      {effectiveInstallments.map((inst, idx) => (
+                                        <tr key={inst.id || idx} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                                          <td className="py-2 px-3 font-mono font-bold text-slate-400">#{idx + 1}</td>
+                                          <td className="py-2 px-3 text-slate-700 dark:text-slate-200 whitespace-nowrap tabular-nums">
+                                            {inst.paid_at
+                                              ? new Date(inst.paid_at).toLocaleString("en-GB", {
+                                                  day: "2-digit",
+                                                  month: "short",
+                                                  year: "numeric",
+                                                  hour: "2-digit",
+                                                  minute: "2-digit",
+                                                })
+                                              : "—"}
+                                          </td>
+                                          <td className="py-2 px-3 font-mono font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap tabular-nums">
+                                            +{Number(inst.amount || 0).toLocaleString()} RWF
+                                          </td>
+                                          <td className="py-2 px-3 font-mono text-slate-700 dark:text-slate-300">
+                                            {inst.reference || "—"}
+                                          </td>
+                                          <td className="py-2 px-3 text-slate-600 dark:text-slate-300">
+                                            {inst.method || "Payment"}
+                                          </td>
+                                          <td className="py-2 px-3 text-slate-500 dark:text-slate-400">
+                                            {inst.verified_by ? `${inst.verified_by}` : "Verified"}
+                                            {inst.note ? ` · ${inst.note}` : ""}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                      {fee.status === "pending_confirmation" && bal.pendingInstallmentAmount > 0 && (
+                                        <tr className="bg-amber-50/60 dark:bg-amber-950/20">
+                                          <td className="py-2 px-3 font-mono font-bold text-amber-600">Pending</td>
+                                          <td className="py-2 px-3 text-amber-800 dark:text-amber-300 whitespace-nowrap tabular-nums">
+                                            {fee.reported_at
+                                              ? new Date(fee.reported_at).toLocaleString("en-GB", {
+                                                  day: "2-digit",
+                                                  month: "short",
+                                                  year: "numeric",
+                                                  hour: "2-digit",
+                                                  minute: "2-digit",
+                                                })
+                                              : "Awaiting review"}
+                                          </td>
+                                          <td className="py-2 px-3 font-mono font-bold text-amber-700 dark:text-amber-400 whitespace-nowrap tabular-nums">
+                                            {bal.pendingInstallmentAmount.toLocaleString()} RWF
+                                          </td>
+                                          <td className="py-2 px-3 font-mono text-amber-800 dark:text-amber-300">
+                                            {fee.transaction_reference || "—"}
+                                          </td>
+                                          <td className="py-2 px-3 text-amber-700 dark:text-amber-300">
+                                            {fee.paid_by_method || "Reported Slip"}
+                                          </td>
+                                          <td className="py-2 px-3 text-amber-700 dark:text-amber-300 font-medium">
+                                            Submitted · Awaiting accountant confirmation
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ) : (
+                                <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+                                  <span>
+                                    {fee.status === "pending_confirmation"
+                                      ? `Installment of ${(bal.pendingInstallmentAmount || bal.remainingBalance).toLocaleString()} RWF (Ref: ${fee.transaction_reference || "Pending"}) is awaiting accountant verification.`
+                                      : "No partial or full installments have been recorded for this fee yet."}
+                                  </span>
+                                  {(fee.status === "pending" || fee.status === "partially_paid") && isMyOwn && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedFeeToPay(fee);
+                                        setPayMethod("MTN MoMo / Airtel");
+                                        setPaymentMode("full");
+                                        setCustomPayAmount(String(Math.max(1, Math.round(bal.remainingBalance / 2))));
+                                      }}
+                                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition cursor-pointer"
+                                    >
+                                      Record First Payment
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -2018,6 +2670,14 @@ export const OrganizationMemberFees: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              <Input
+                label="Due Name / Payment Purpose"
+                placeholder="e.g. Monthly Share Savings, Forest Maintenance Fee, May 2026 Dues"
+                value={formDueName}
+                onChange={(e) => setFormDueName(e.target.value)}
+                id="input-charge-due-name"
+              />
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -2212,25 +2872,120 @@ export const OrganizationMemberFees: React.FC = () => {
                 />
               ) : (
                 <>
-                  {!feePaymentSuccess && (
+                  {!feePaymentSuccess && selectedFeeBalances && (
                     <>
-                      {/* Target summary card */}
-                      <div className="p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg flex items-center justify-between">
-                        <div>
-                          <span className="text-xs text-slate-500 font-medium">Invoice period</span>
-                          <p className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">
-                            {selectedFeeToPay.payment_period}
-                          </p>
-                          <p className="text-xs text-slate-500 font-mono mt-0.5">
-                            Date: {selectedFeeToPay.period_date}
-                          </p>
+                      {/* Target summary card with partial payment breakdown */}
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="text-[11px] text-slate-500 font-medium block">Due name & cycle</span>
+                            <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
+                              {getFeeDueName(selectedFeeToPay)}
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-mono mt-0.5 uppercase">
+                              {selectedFeeToPay.payment_period} · {selectedFeeToPay.period_date}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[11px] text-slate-500 block">Remaining balance</span>
+                            <span className="text-base font-bold font-mono text-rose-600 dark:text-rose-400 mt-0.5 tabular-nums">
+                              {selectedFeeBalances.remainingBalance.toLocaleString()} RWF
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <span className="text-xs text-slate-500 block">Amount due</span>
-                          <span className="text-base font-semibold font-mono text-slate-900 dark:text-white mt-0.5 tabular-nums">
-                            {selectedFeeToPay.amount.toLocaleString()} RWF
+
+                        {selectedFeeBalances.paidAmount > 0 && (
+                          <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5">
+                            <div className="flex items-center justify-between text-[11px] font-semibold">
+                              <span className="text-slate-600 dark:text-slate-400">
+                                Total Due: <span className="font-mono text-slate-900 dark:text-white">{selectedFeeBalances.totalDueAmount.toLocaleString()} RWF</span>
+                              </span>
+                              <span className="text-emerald-700 dark:text-emerald-400">
+                                Already Paid: <span className="font-mono">{selectedFeeBalances.paidAmount.toLocaleString()} RWF ({selectedFeeBalances.percentPaid}%)</span>
+                              </span>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                              <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${selectedFeeBalances.percentPaid}%` }} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Installment / Part Payment Selector */}
+                      <div className="p-3 bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-900/50 rounded-xl space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                            Payment Amount Option
+                          </label>
+                          <span className="text-[11px] font-mono font-bold text-blue-700 dark:text-blue-300">
+                            Paying: {resolvedPayAmount.toLocaleString()} RWF
                           </span>
                         </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            id="btn-pay-mode-full"
+                            onClick={() => setPaymentMode("full")}
+                            className={`p-2 rounded-lg border text-left transition cursor-pointer ${
+                              paymentMode === "full"
+                                ? "border-emerald-600 bg-white dark:bg-slate-900 text-emerald-800 dark:text-emerald-300 shadow-2xs"
+                                : "border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-950 text-slate-600 dark:text-slate-400"
+                            }`}
+                          >
+                            <span className="text-xs font-bold block">Pay Full Remaining</span>
+                            <span className="text-[10px] font-mono">{selectedFeeBalances.remainingBalance.toLocaleString()} RWF</span>
+                          </button>
+                          <button
+                            type="button"
+                            id="btn-pay-mode-partial"
+                            onClick={() => {
+                              setPaymentMode("partial");
+                              if (!customPayAmount || Number(customPayAmount) <= 0 || Number(customPayAmount) > selectedFeeBalances.remainingBalance) {
+                                setCustomPayAmount(String(Math.max(1, Math.round(selectedFeeBalances.remainingBalance / 2))));
+                              }
+                            }}
+                            className={`p-2 rounded-lg border text-left transition cursor-pointer ${
+                              paymentMode === "partial"
+                                ? "border-blue-600 bg-white dark:bg-slate-900 text-blue-800 dark:text-blue-300 shadow-2xs"
+                                : "border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-950 text-slate-600 dark:text-slate-400"
+                            }`}
+                          >
+                            <span className="text-xs font-bold block">Pay in Parts (Partial)</span>
+                            <span className="text-[10px]">Half or custom installment</span>
+                          </button>
+                        </div>
+
+                        {paymentMode === "partial" && (
+                          <div className="space-y-1.5 pt-1">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min={1}
+                                max={selectedFeeBalances.remainingBalance}
+                                value={customPayAmount}
+                                onChange={(e) => setCustomPayAmount(e.target.value)}
+                                placeholder="Enter installment amount in RWF"
+                                className="flex-1 text-xs rounded-lg border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-950 px-3 py-2 font-mono font-bold text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-blue-600"
+                                id="input-partial-pay-amount"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setCustomPayAmount(String(Math.max(1, Math.round(selectedFeeBalances.remainingBalance / 2))))}
+                                className="px-2.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shrink-0 cursor-pointer"
+                                id="btn-partial-pay-half"
+                              >
+                                Half (50%)
+                              </button>
+                            </div>
+                            <p className="text-[10px] text-slate-600 dark:text-slate-400 font-medium">
+                              Remaining balance after this payment:{" "}
+                              <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
+                                {Math.max(0, selectedFeeBalances.remainingBalance - resolvedPayAmount).toLocaleString()} RWF
+                              </span>{" "}
+                              (you will continue seeing a reminder until fully paid).
+                            </p>
+                          </div>
+                        )}
                       </div>
 
                       {/* Selector for payment reported method */}
@@ -2267,8 +3022,8 @@ export const OrganizationMemberFees: React.FC = () => {
                   {payMethod === "MTN MoMo / Airtel" ? (
                     <PaymentGatewaySection
                       targetType="organization"
-                      itemName={`Dues: ${selectedFeeToPay.payment_period.toUpperCase()} Cycle`}
-                      amountRwf={selectedFeeToPay.amount}
+                      itemName={`Dues: ${getFeeDueName(selectedFeeToPay)}`}
+                      amountRwf={resolvedPayAmount || selectedFeeBalances?.remainingBalance || selectedFeeToPay.amount}
                       phone={momoPhoneNumber}
                       onPhoneChange={setMomoPhoneNumber}
                       senderName={manualSenderInfo}
@@ -2389,43 +3144,76 @@ export const OrganizationMemberFees: React.FC = () => {
       </Modal>
 
       {/* MoMo Push Payment Modal for Member Dues */}
-      {selectedFeeToPay && (
+      {selectedFeeToPay && selectedFeeBalances && (
         <MoMoPushPaymentModal
           isOpen={openMoMoPushPromptModal}
           onClose={() => {
             setOpenMoMoPushPromptModal(false);
             setSelectedFeeToPay(null);
           }}
-          title={`Pay Dues: ${selectedFeeToPay.payment_period.toUpperCase()} Cycle`}
+          title={`Pay Dues: ${getFeeDueName(selectedFeeToPay)}`}
           description="Enter your phone number to receive an instant USSD PIN authorization prompt on your handset."
-          amountRwf={selectedFeeToPay.amount}
+          amountRwf={resolvedPayAmount || selectedFeeBalances.remainingBalance}
           orgId={activeOrg?.id}
           defaultPayerPhone={(user as any)?.phone || user?.phone_number || (activeMember as any)?.phone || (activeMember as any)?.user?.phone_number || momoPhoneNumber}
           defaultPayerName={user?.full_name || (activeMember as any)?.user?.full_name || selectedFeeToPay.member_name}
           itemType="dues"
-          itemName={`${activeOrg?.name || "Cooperative"} - Dues ${selectedFeeToPay.payment_period} (${selectedFeeToPay.amount.toLocaleString()} RWF)`}
+          itemName={`${activeOrg?.name || "Cooperative"} - ${getFeeDueName(selectedFeeToPay)} (${(resolvedPayAmount || selectedFeeBalances.remainingBalance).toLocaleString()} RWF)`}
           recipientName={activeOrg?.dues_account_name || activeOrg?.donation_account_name || activeOrg?.name || "Cooperative Treasury"}
           recipientMtnNumber={activeOrg?.dues_mtn_number || activeOrg?.donation_mtn_number || ""}
           recipientAirtelNumber={activeOrg?.dues_airtel_number || activeOrg?.donation_airtel_number || ""}
           recipientMerchantCode={activeOrg?.momo_merchant_code}
+          allowedDisplayMethods={getOrgMomoDisplayMethods(activeOrg)}
           isPlatformFee={false}
           onSuccess={async (data: MoMoPaymentSuccessData) => {
             try {
               const generatedTxRef = data.providerTransactionId || data.depositId;
+              const bal = getFeeBalances(selectedFeeToPay);
+              const dueName = getFeeDueName(selectedFeeToPay);
+              const paidNow = resolvedPayAmount > 0 ? resolvedPayAmount : bal.remainingBalance;
+              const isDirectVerified = data.method === "pawapay_push";
+              const nowIso = new Date().toISOString();
+
+              const newPaidAmount = isDirectVerified ? Math.min(bal.totalDueAmount, bal.paidAmount + paidNow) : bal.paidAmount;
+              const remainingAfter = Math.max(0, bal.totalDueAmount - newPaidAmount);
+              const targetStatus: "paid" | "partially_paid" | "pending_confirmation" = isDirectVerified
+                ? (remainingAfter <= 0 ? "paid" : "partially_paid")
+                : "pending_confirmation";
+              const updatedHistory: MemberFeeInstallment[] = isDirectVerified
+                ? [
+                    ...bal.installments,
+                    {
+                      id: `inst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                      amount: paidNow,
+                      method: data.provider || "MTN MoMo",
+                      reference: generatedTxRef,
+                      paid_at: nowIso,
+                      verified_by: "PawaPay Gateway",
+                      note: data.comment || "Member dues installment",
+                    },
+                  ]
+                : bal.installments;
+
               await updateFeeStatusMutation.mutateAsync({
                 id: selectedFeeToPay.id,
                 org_id: activeOrg!.id,
                 member_id: selectedFeeToPay.member_id,
-                amount: selectedFeeToPay.amount,
+                due_name: dueName,
+                amount: bal.totalDueAmount,
+                total_due_amount: bal.totalDueAmount,
+                paid_amount: newPaidAmount,
+                pending_installment_amount: isDirectVerified ? 0 : paidNow,
+                installment_amount: isDirectVerified ? paidNow : 0,
+                payment_history: updatedHistory,
                 payment_period: selectedFeeToPay.payment_period,
                 period_date: selectedFeeToPay.period_date,
-                status: data.method === "pawapay_push" ? "paid" : "pending_confirmation",
+                status: targetStatus,
                 paid_by_method: data.provider || "MTN MoMo",
                 transaction_reference: generatedTxRef,
                 sender_info: `PawaPay MoMo Phone: ${data.payerPhone}, Name: ${data.payerName}`,
-                reported_at: new Date().toISOString(),
-                paid_at: data.method === "pawapay_push" ? new Date().toISOString() : undefined,
-                report_note: `[PAWAPAY-VERIFIED] Deposit ID: ${data.depositId}\nPayer: ${data.payerName}\nComment: ${data.comment || "Member dues settlement"}\nProvider TxId: ${data.providerTransactionId || "Pending telco broadcast"}`,
+                reported_at: nowIso,
+                paid_at: isDirectVerified ? nowIso : undefined,
+                report_note: `[INSTALLMENT: ${paidNow.toLocaleString()} RWF of ${bal.totalDueAmount.toLocaleString()} RWF]\n[PAWAPAY-VERIFIED] Deposit ID: ${data.depositId}\nPayer: ${data.payerName}\nComment: ${data.comment || "Member dues settlement"}\nProvider TxId: ${data.providerTransactionId || "Pending telco broadcast"}`,
                 proof_url: data.proofText || `PawaPay Instant Deposit ID: ${data.depositId}`
               });
 
@@ -2436,16 +3224,18 @@ export const OrganizationMemberFees: React.FC = () => {
                   sent_by: activeMember?.id || activeOrg!.id,
                   recipient_group: "accountants_and_admins",
                   recipient_count: 1,
-                  body_text: `Payment ${data.method === "pawapay_push" ? "Confirmed" : "Reported"}: Member ${data.payerName} paid ${selectedFeeToPay.amount.toLocaleString()} RWF for ${selectedFeeToPay.payment_period.toUpperCase()} cycle via PawaPay. Ref: ${generatedTxRef}.`
+                  body_text: `Payment ${isDirectVerified ? "Confirmed" : "Reported"}: Member ${data.payerName} paid ${paidNow.toLocaleString()} RWF for "${dueName}" via PawaPay.${remainingAfter > 0 && isDirectVerified ? ` Remaining: ${remainingAfter.toLocaleString()} RWF.` : ""} Ref: ${generatedTxRef}.`
                 });
               } catch (notifErr) {
                 console.warn("[Payment Report] Broadcast error:", notifErr);
               }
 
               addToast(
-                data.method === "pawapay_push" 
-                  ? "Payment successfully confirmed on telecom gateway! Dues recorded as paid." 
-                  : "Payment report submitted! The accountant will verify shortly.", 
+                isDirectVerified
+                  ? (remainingAfter > 0
+                      ? `Installment of ${paidNow.toLocaleString()} RWF confirmed! Remaining balance: ${remainingAfter.toLocaleString()} RWF.`
+                      : "Payment successfully confirmed on telecom gateway! Dues recorded as paid.")
+                  : "Payment report submitted! The accountant will verify shortly.",
                 "success"
               );
             } catch (err: any) {
@@ -2459,13 +3249,21 @@ export const OrganizationMemberFees: React.FC = () => {
 
 
       {/* Accountant Review / Resolve Payment Report Modal */}
-      {reviewingFee && isAccountant && (
+      {reviewingFee && isAccountant && (() => {
+        const reviewBal = getFeeBalances(reviewingFee);
+        const reviewDueName = getFeeDueName(reviewingFee);
+        const parsedVerifyAmt = Math.min(
+          reviewBal.remainingBalance || reviewBal.totalDueAmount,
+          Math.max(0, Math.round(Number(verifiedInstallmentAmount) || 0))
+        );
+        const projectedRemaining = Math.max(0, reviewBal.remainingBalance - parsedVerifyAmt);
+        return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in" id="admin-review-modal">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95">
             <div className="px-5 py-4 bg-slate-100 dark:bg-slate-950 border-b dark:border-slate-850 flex items-center justify-between select-none shrink-0">
               <div className="flex flex-col">
                 <span className="text-[10px] uppercase font-black text-amber-600 tracking-wider">Pending Slip Verification</span>
-                <span className="font-extrabold text-sm text-stone-900 dark:text-white mt-0.5">Audit reported member check-in</span>
+                <span className="font-extrabold text-sm text-stone-900 dark:text-white mt-0.5">Verify payment or partial installment</span>
               </div>
               <button 
                 onClick={() => setReviewingFee(null)}
@@ -2477,20 +3275,28 @@ export const OrganizationMemberFees: React.FC = () => {
             </div>
 
             <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
-              <div className="bg-amber-50 dark:bg-amber-950/15 border border-amber-100 p-3.5 rounded-xl flex flex-col gap-2 font-semibold">
-                <div className="flex items-center gap-1.5 text-xs text-amber-850 dark:text-amber-400">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>PAYMENT REPORT SLIP</span>
+              <div className="bg-amber-50 dark:bg-amber-950/15 border border-amber-100 dark:border-amber-900/40 p-3.5 rounded-xl flex flex-col gap-2 font-semibold">
+                <div className="flex items-center justify-between gap-1.5 text-xs text-amber-850 dark:text-amber-400">
+                  <span className="flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    PAYMENT REPORT SLIP
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">{reviewDueName}</span>
                 </div>
                 
-                <div className="text-[11px] grid grid-cols-2 gap-y-2 gap-x-4 border-t border-amber-100 pt-2.5 text-stone-750 dark:text-slate-300">
+                <div className="text-[11px] grid grid-cols-2 gap-y-2 gap-x-4 border-t border-amber-100 dark:border-amber-900/40 pt-2.5 text-stone-750 dark:text-slate-300">
                   <div>
                     <span className="text-[9px] text-gray-400 block uppercase font-extrabold">Reported Member:</span>
                     <span className="font-black text-black dark:text-white">{reviewingFee.member_name}</span>
                   </div>
                   <div>
-                    <span className="text-[9px] text-gray-400 block uppercase font-extrabold">Invoiced Amount:</span>
-                    <span className="font-black text-black dark:text-white font-mono">{reviewingFee.amount.toLocaleString()} RWF</span>
+                    <span className="text-[9px] text-gray-400 block uppercase font-extrabold">Total Due / Paid So Far:</span>
+                    <span className="font-black text-black dark:text-white font-mono">
+                      {reviewBal.totalDueAmount.toLocaleString()} RWF
+                    </span>
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400 block font-mono">
+                      Paid: {reviewBal.paidAmount.toLocaleString()} · Left: {reviewBal.remainingBalance.toLocaleString()}
+                    </span>
                   </div>
                   <div>
                     <span className="text-[9px] text-gray-400 block uppercase font-extrabold">Selected Method:</span>
@@ -2498,8 +3304,16 @@ export const OrganizationMemberFees: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-[9px] text-gray-400 block uppercase font-extrabold">Reference ID Code:</span>
-                    <span className="font-mono bg-white dark:bg-slate-950 text-stone-900 px-1 rounded block">{reviewingFee.transaction_reference || "N/A (Direct Verification)"}</span>
+                    <span className="font-mono bg-white dark:bg-slate-950 text-stone-900 dark:text-slate-100 px-1 rounded block">{reviewingFee.transaction_reference || "N/A (Direct Verification)"}</span>
                   </div>
+                  {reviewBal.pendingInstallmentAmount > 0 && (
+                    <div className="col-span-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-lg p-2">
+                      <span className="text-[9px] text-blue-700 dark:text-blue-300 block uppercase font-extrabold">Member Reported Installment Amount:</span>
+                      <span className="font-mono font-black text-xs text-blue-900 dark:text-blue-200">
+                        {reviewBal.pendingInstallmentAmount.toLocaleString()} RWF
+                      </span>
+                    </div>
+                  )}
                   <div className="col-span-2">
                     <span className="text-[9px] text-gray-400 block uppercase font-extrabold">Depositor Sender info:</span>
                     <span className="font-mono">{reviewingFee.sender_info || "Verified directly with member"}</span>
@@ -2535,8 +3349,59 @@ export const OrganizationMemberFees: React.FC = () => {
                 </div>
               </div>
 
+              {reviewBal.installments.length > 0 && (
+                <div className="p-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-slate-500 block">Previous Verified Installments</span>
+                  {reviewBal.installments.map((inst) => (
+                    <div key={inst.id} className="flex items-center justify-between text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                      <span>{new Date(inst.paid_at).toLocaleDateString()} · {inst.method}</span>
+                      <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">{Number(inst.amount).toLocaleString()} RWF</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Verified Installment Amount Input (allows recording half / partial or full) */}
+              <div className="space-y-1.5 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Verified Installment Amount (RWF)
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setVerifiedInstallmentAmount(String(Math.max(1, Math.round(reviewBal.remainingBalance / 2))))}
+                      className="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 cursor-pointer"
+                    >
+                      Half ({Math.round(reviewBal.remainingBalance / 2).toLocaleString()})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVerifiedInstallmentAmount(String(reviewBal.remainingBalance))}
+                      className="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 cursor-pointer"
+                    >
+                      Full ({reviewBal.remainingBalance.toLocaleString()})
+                    </button>
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  min={1}
+                  max={reviewBal.remainingBalance || reviewBal.totalDueAmount}
+                  value={verifiedInstallmentAmount}
+                  onChange={(e) => setVerifiedInstallmentAmount(e.target.value)}
+                  className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700 p-2.5 font-mono font-bold outline-none focus:ring-1 focus:ring-emerald-700 text-stone-900 dark:text-white"
+                  id="input-review-verified-amount"
+                />
+                <p className="text-[10px] text-slate-500 font-semibold">
+                  {projectedRemaining > 0
+                    ? `Approving ${parsedVerifyAmt.toLocaleString()} RWF sets status to PARTIALLY PAID with ${projectedRemaining.toLocaleString()} RWF remaining.`
+                    : `Approving ${parsedVerifyAmt.toLocaleString()} RWF settles this due in full (PAID).`}
+                </p>
+              </div>
+
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-751">Supervisor Audit Justification note:</label>
+                <label className="text-xs font-bold text-gray-751 dark:text-slate-300">Supervisor Audit Justification note:</label>
                 <textarea
                   rows={2}
                   placeholder="e.g. Transaction matching MoMo portal balance sheet index. Approved and synchronized status live."
@@ -2563,13 +3428,14 @@ export const OrganizationMemberFees: React.FC = () => {
                   onClick={() => handleResolvePaymentReport(true)}
                   disabled={isSubmittingReview}
                 >
-                  <Check className="h-4 w-4" /> Confirm & Approve
+                  <Check className="h-4 w-4" /> {projectedRemaining > 0 ? "Approve Partial" : "Confirm & Approve"}
                 </Button>
               </div>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Manage All Dues Modal */}
       {showAllDuesModal && isAccountant && (
@@ -2622,14 +3488,26 @@ export const OrganizationMemberFees: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
-                <span className="text-gray-400">Cleared:</span>
+                <span className="text-gray-400">Fully Paid:</span>
                 <span className="font-bold font-mono bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/40">
                   {fees?.filter((f) => f.status === "paid").length || 0}
                 </span>
               </div>
+              <div className="flex items-center gap-1.5 font-medium text-blue-700 dark:text-blue-400">
+                <span className="text-gray-400">Partially Paid:</span>
+                <span className="font-bold font-mono bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800/40">
+                  {fees?.filter((f) => f.status === "partially_paid").length || 0}
+                </span>
+              </div>
               <div className="flex items-center gap-1.5 font-medium text-rose-700 dark:text-rose-400">
-                <span className="text-gray-400">Unpaid / Pending:</span>
+                <span className="text-gray-400">Overdue:</span>
                 <span className="font-bold font-mono bg-rose-50 dark:bg-rose-950/50 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800/40">
+                  {fees?.filter((f) => !getFeeBalances(f).isFullyPaid && getFeeDeadlineInfo(f).isOverdue).length || 0}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-300">
+                <span className="text-gray-400">Unpaid / Pending:</span>
+                <span className="font-bold font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700">
                   {fees?.filter((f) => f.status === "pending").length || 0}
                 </span>
               </div>
@@ -2642,25 +3520,48 @@ export const OrganizationMemberFees: React.FC = () => {
             </div>
 
             {/* Filter & Search Bar */}
-            <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white dark:bg-slate-900 shrink-0">
-              <div className="relative flex-1">
-                <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search member, cycle, payment reference, remarks..."
-                  value={allDuesSearch}
-                  onChange={(e) => setAllDuesSearch(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-stone-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-emerald-600"
-                  id="input-all-dues-search"
-                />
-                {allDuesSearch && (
-                  <button
-                    onClick={() => setAllDuesSearch("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-stone-700 dark:hover:text-slate-200"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
+            <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-slate-800 flex flex-col gap-3 bg-white dark:bg-slate-900 shrink-0">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                <div className="relative">
+                  <TagIcon className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600" />
+                  <input
+                    type="text"
+                    list="due-names-datalist"
+                    placeholder="Filter by Due Name / Purpose..."
+                    value={allDuesDueNameFilter}
+                    onChange={(e) => setAllDuesDueNameFilter(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-stone-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                    id="input-all-dues-due-name-filter"
+                  />
+                  {allDuesDueNameFilter && (
+                    <button
+                      onClick={() => setAllDuesDueNameFilter("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-stone-700 dark:hover:text-slate-200"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search member, cycle, payment reference, remarks..."
+                    value={allDuesSearch}
+                    onChange={(e) => setAllDuesSearch(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-stone-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                    id="input-all-dues-search"
+                  />
+                  {allDuesSearch && (
+                    <button
+                      onClick={() => setAllDuesSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-stone-700 dark:hover:text-slate-200"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -2672,7 +3573,9 @@ export const OrganizationMemberFees: React.FC = () => {
                 >
                   <option value="all">All Statuses</option>
                   <option value="pending">Unpaid (Pending)</option>
-                  <option value="paid">Cleared (Paid)</option>
+                  <option value="partially_paid">Partially Paid</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="paid">Fully Paid (Cleared)</option>
                   <option value="pending_confirmation">Pending Slip Review</option>
                 </select>
 
@@ -2759,6 +3662,7 @@ export const OrganizationMemberFees: React.FC = () => {
                     className="mt-4 text-xs font-bold"
                     onClick={() => {
                       setAllDuesSearch("");
+                      setAllDuesDueNameFilter("");
                       setAllDuesStatusFilter("all");
                       setAllDuesPeriodFilter("all");
                     }}
@@ -2796,6 +3700,8 @@ export const OrganizationMemberFees: React.FC = () => {
                     {allDuesFilteredList.map((fee) => {
                       const isSelected = selectedBulkFeeIds.includes(fee.id);
                       const deadlineInfo = getFeeDeadlineInfo(fee);
+                      const bal = getFeeBalances(fee);
+                      const dueName = getFeeDueName(fee);
                       return (
                         <tr
                           key={fee.id}
@@ -2831,15 +3737,20 @@ export const OrganizationMemberFees: React.FC = () => {
                           <td className="py-3 px-4">
                             <div className="flex flex-col gap-0.5">
                               <span className="font-bold text-stone-800 dark:text-slate-200">
-                                {fee.period_date || "Standard Cycle"}
+                                {dueName}
                               </span>
                               <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
-                                {fee.payment_period || "weekly"}
+                                {fee.payment_period || "weekly"} · {fee.period_date || "Standard"}
                               </span>
                             </div>
                           </td>
-                          <td className="py-3 px-4 font-mono font-extrabold text-stone-900 dark:text-white">
-                            {fee.amount.toLocaleString()} <span className="text-[9px] font-bold text-gray-500">RWF</span>
+                          <td className="py-3 px-4 font-mono tabular-nums font-extrabold text-stone-900 dark:text-white">
+                            <div>{bal.totalDueAmount.toLocaleString()} <span className="text-[9px] font-bold text-gray-500">RWF</span></div>
+                            {bal.paidAmount > 0 && bal.remainingBalance > 0 && (
+                              <div className="text-[10px] font-sans font-semibold text-blue-700 dark:text-blue-400">
+                                Paid {bal.paidAmount.toLocaleString()} · Left {bal.remainingBalance.toLocaleString()}
+                              </div>
+                            )}
                           </td>
                           <td className="py-3 px-4">
                             {fee.status === "paid" ? (
@@ -2848,7 +3759,6 @@ export const OrganizationMemberFees: React.FC = () => {
                               </span>
                             ) : deadlineInfo.isOverdue ? (
                               <span className="text-xs text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1.5">
-                                <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
                                 Overdue · {fee.due_date ? new Date(fee.due_date).toLocaleDateString() : deadlineInfo.formattedDate}
                               </span>
                             ) : (
@@ -2859,25 +3769,25 @@ export const OrganizationMemberFees: React.FC = () => {
                             )}
                           </td>
                           <td className="py-3 px-4">
-                            {fee.status === "paid" ? (
-                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-                                Cleared
-                              </span>
-                            ) : fee.status === "pending_confirmation" ? (
-                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
-                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                                Under Review
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400">
-                                <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" />
-                                Unpaid
-                              </span>
-                            )}
+                            <FeeStatusBadge
+                              fee={fee}
+                              isOverdue={deadlineInfo.isOverdue}
+                              overdueDays={deadlineInfo.overdueDays}
+                              formattedDueDate={deadlineInfo.formattedDate}
+                            />
                           </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1">
+                              {/* Payment History */}
+                              <button
+                                id={`btn-all-dues-history-${fee.id}`}
+                                onClick={() => setViewingHistoryFee(fee)}
+                                className="p-1.5 text-slate-600 hover:text-emerald-700 dark:text-slate-300 dark:hover:text-emerald-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-1 font-bold text-[10px] cursor-pointer"
+                                title="View Payment History"
+                              >
+                                <History className="h-3.5 w-3.5" /> History
+                              </button>
+
                               {/* Edit Fee */}
                               <button
                                 id={`btn-all-dues-edit-${fee.id}`}
@@ -3002,13 +3912,33 @@ export const OrganizationMemberFees: React.FC = () => {
 
             <form onSubmit={handleSaveEditFee} className="space-y-4">
               <Input
-                label="Fee Amount (RWF)"
-                type="number"
+                label="Due Name / Purpose"
                 required
-                value={editAmount}
-                onChange={(e) => setEditAmount(e.target.value)}
-                id="input-edit-fee-amount"
+                value={editDueName}
+                onChange={(e) => setEditDueName(e.target.value)}
+                id="input-edit-fee-due-name"
               />
+
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Total Due Amount (RWF)"
+                  type="number"
+                  required
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  id="input-edit-fee-amount"
+                />
+                {!editApplyToAllUsers && (
+                  <Input
+                    label="Paid So Far (RWF)"
+                    type="number"
+                    min={0}
+                    value={editPaidAmount}
+                    onChange={(e) => setEditPaidAmount(e.target.value)}
+                    id="input-edit-fee-paid-amount"
+                  />
+                )}
+              </div>
 
               <Input
                 label="Period / Cycle Label"
@@ -3045,6 +3975,7 @@ export const OrganizationMemberFees: React.FC = () => {
                   id="select-edit-fee-status"
                 >
                   <option value="pending">Unpaid (Pending)</option>
+                  <option value="partially_paid">Partially Paid</option>
                   <option value="pending_confirmation">Pending Review</option>
                   <option value="paid">Cleared / Paid</option>
                 </select>
@@ -3226,7 +4157,10 @@ export const OrganizationMemberFees: React.FC = () => {
       )}
 
       {/* Official Payment Receipt Modal */}
-      {viewingReceiptFee && (
+      {viewingReceiptFee && (() => {
+        const recBal = getFeeBalances(viewingReceiptFee);
+        const recDueName = getFeeDueName(viewingReceiptFee);
+        return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[85] animate-in fade-in" id="view-receipt-modal">
           <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] relative animate-in zoom-in-95">
             {/* Header */}
@@ -3256,9 +4190,15 @@ export const OrganizationMemberFees: React.FC = () => {
             <div className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto flex-1">
               <div className="flex items-center justify-between pb-3 border-b border-dashed dark:border-slate-800">
                 <span className="text-stone-500 dark:text-slate-400 font-medium">Payment Status:</span>
-                <span className="inline-flex items-center gap-1 font-black text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/40">
-                  <CheckCircle2 className="h-3 w-3" /> SETTLED & VERIFIED
-                </span>
+                {recBal.isFullyPaid ? (
+                  <span className="inline-flex items-center gap-1 font-black text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/40">
+                    <CheckCircle2 className="h-3 w-3" /> SETTLED & VERIFIED
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 font-black text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2.5 py-0.5 rounded-full border border-blue-200 dark:border-blue-800/40">
+                    <Clock className="h-3 w-3" /> PARTIALLY PAID ({recBal.percentPaid}%)
+                  </span>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3 py-1">
@@ -3269,8 +4209,11 @@ export const OrganizationMemberFees: React.FC = () => {
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-stone-400 uppercase font-bold block">Dues Cycle</span>
-                  <span className="text-sm font-bold font-mono text-stone-900 dark:text-white mt-0.5 block">
+                  <span className="text-[10px] text-stone-400 uppercase font-bold block">Due Name / Cycle</span>
+                  <span className="text-sm font-bold text-stone-900 dark:text-white mt-0.5 block">
+                    {recDueName}
+                  </span>
+                  <span className="text-[10px] font-mono text-stone-500 block">
                     {viewingReceiptFee.period_date}
                   </span>
                 </div>
@@ -3287,25 +4230,60 @@ export const OrganizationMemberFees: React.FC = () => {
                 </div>
                 {viewingReceiptFee.transaction_reference && (
                   <div className="flex justify-between items-center text-stone-600 dark:text-slate-400">
-                    <span>Transaction Reference:</span>
+                    <span>Latest Reference:</span>
                     <span className="font-mono font-bold text-stone-900 dark:text-white">{viewingReceiptFee.transaction_reference}</span>
                   </div>
                 )}
                 {viewingReceiptFee.paid_at && (
                   <div className="flex justify-between items-center text-stone-600 dark:text-slate-400">
-                    <span>Payment Date:</span>
+                    <span>Latest Payment Date:</span>
                     <span className="font-medium text-stone-800 dark:text-slate-200">
                       {new Date(viewingReceiptFee.paid_at).toLocaleDateString("en-RW", { year: "numeric", month: "short", day: "numeric" })}
                     </span>
                   </div>
                 )}
-                <div className="border-t border-dashed dark:border-slate-800 pt-2 flex justify-between items-center font-extrabold">
-                  <span className="text-stone-800 dark:text-slate-200">Amount Paid:</span>
-                  <span className="text-base text-emerald-700 dark:text-emerald-400 font-mono">
-                    {viewingReceiptFee.amount.toLocaleString()} RWF
+                <div className="border-t border-dashed dark:border-slate-800 pt-2 flex justify-between items-center font-semibold">
+                  <span className="text-stone-600 dark:text-slate-400">Total Due Amount:</span>
+                  <span className="font-mono text-stone-900 dark:text-white">
+                    {recBal.totalDueAmount.toLocaleString()} RWF
                   </span>
                 </div>
+                <div className="flex justify-between items-center font-extrabold">
+                  <span className="text-stone-800 dark:text-slate-200">Total Paid So Far:</span>
+                  <span className="text-base text-emerald-700 dark:text-emerald-400 font-mono">
+                    {recBal.paidAmount.toLocaleString()} RWF
+                  </span>
+                </div>
+                {recBal.remainingBalance > 0 && (
+                  <div className="flex justify-between items-center font-extrabold text-rose-600 dark:text-rose-400">
+                    <span>Remaining Balance:</span>
+                    <span className="font-mono">{recBal.remainingBalance.toLocaleString()} RWF</span>
+                  </div>
+                )}
               </div>
+
+              {recBal.installments.length > 0 && (
+                <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                    Installment Breakdown ({recBal.installments.length})
+                  </span>
+                  {recBal.installments.map((inst, idx) => (
+                    <div key={inst.id || idx} className="flex items-center justify-between text-[11px] py-1 border-b last:border-b-0 border-slate-200/70 dark:border-slate-800">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-stone-800 dark:text-slate-200">
+                          #{idx + 1} · {inst.method}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {new Date(inst.paid_at).toLocaleDateString()} {inst.reference ? `· ${inst.reference}` : ""}
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                        {Number(inst.amount).toLocaleString()} RWF
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {viewingReceiptFee.admin_note && (
                 <div className="text-[11px] p-2.5 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-900/40 text-blue-900 dark:text-blue-300">
@@ -3323,7 +4301,7 @@ export const OrganizationMemberFees: React.FC = () => {
             <div className="p-4 bg-stone-50 dark:bg-slate-950/80 border-t dark:border-slate-800 flex items-center justify-end gap-2 shrink-0">
               <Button
                 variant="outline"
-                size="xs"
+                size="sm"
                 onClick={() => setViewingReceiptFee(null)}
                 className="px-4 py-2 font-bold"
               >
@@ -3332,7 +4310,255 @@ export const OrganizationMemberFees: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
+
+      {/* Payment History Modal */}
+      {viewingHistoryFee && (() => {
+        const histBal = getFeeBalances(viewingHistoryFee);
+        const histDueName = getFeeDueName(viewingHistoryFee);
+        const histDeadline = getFeeDeadlineInfo(viewingHistoryFee);
+        const histInstallments = getEffectiveInstallments(viewingHistoryFee);
+        const histIsMyOwn = !isAccountant || myMemberIds.has(viewingHistoryFee.member_id) || viewingHistoryFee.member_id === activeMember?.id;
+
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[90] animate-in fade-in" id="payment-history-modal">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] relative animate-in zoom-in-95">
+              {/* Header */}
+              <div className="p-5 sm:p-6 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4 bg-slate-50/70 dark:bg-slate-950/70 shrink-0">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                    <History className="h-4 w-4 shrink-0" />
+                    <span>Installment Payment History</span>
+                  </div>
+                  <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                    {histDueName}
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">
+                      {viewingHistoryFee.member_name || "Cooperative Member"}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span className="uppercase font-mono">{viewingHistoryFee.payment_period}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className="font-mono">{viewingHistoryFee.period_date}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <FeeStatusBadge
+                    fee={viewingHistoryFee}
+                    isOverdue={histDeadline.isOverdue}
+                    overdueDays={histDeadline.overdueDays}
+                    formattedDueDate={histDeadline.formattedDate}
+                  />
+                  <button
+                    type="button"
+                    id="btn-close-history-modal"
+                    onClick={() => setViewingHistoryFee(null)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition cursor-pointer"
+                    aria-label="Close payment history"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1">
+                {/* Summary Strip */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60">
+                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">
+                      Total Due Amount
+                    </span>
+                    <span className="text-base font-extrabold font-mono tabular-nums text-slate-900 dark:text-white mt-0.5 block">
+                      {histBal.totalDueAmount.toLocaleString()} RWF
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-950/20">
+                    <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 block">
+                      Total Paid ({histBal.percentPaid}%)
+                    </span>
+                    <span className="text-base font-extrabold font-mono tabular-nums text-emerald-700 dark:text-emerald-400 mt-0.5 block">
+                      {histBal.paidAmount.toLocaleString()} RWF
+                    </span>
+                  </div>
+                  <div className={`p-3.5 rounded-xl border ${histBal.remainingBalance > 0 ? "border-rose-200/80 dark:border-rose-900/50 bg-rose-50/60 dark:bg-rose-950/20" : "border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60"}`}>
+                    <span className={`text-[11px] font-semibold block ${histBal.remainingBalance > 0 ? "text-rose-700 dark:text-rose-400" : "text-slate-500 dark:text-slate-400"}`}>
+                      Remaining Balance
+                    </span>
+                    <span className={`text-base font-extrabold font-mono tabular-nums mt-0.5 block ${histBal.remainingBalance > 0 ? "text-rose-700 dark:text-rose-400" : "text-emerald-700 dark:text-emerald-400"}`}>
+                      {histBal.remainingBalance.toLocaleString()} RWF
+                    </span>
+                  </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300 font-semibold">
+                    <span>Settlement Progress</span>
+                    <span className="font-mono tabular-nums">{histBal.percentPaid}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${histBal.isFullyPaid ? "bg-emerald-600" : "bg-blue-600"}`}
+                      style={{ width: `${histBal.percentPaid}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Pending confirmation callout */}
+                {viewingHistoryFee.status === "pending_confirmation" && (
+                  <div className="p-3.5 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/30 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2.5 text-amber-900 dark:text-amber-200">
+                      <Clock className="h-4 w-4 text-amber-600 shrink-0" />
+                      <div>
+                        <p className="font-bold">
+                          Pending Installment Submitted: {(histBal.pendingInstallmentAmount || histBal.remainingBalance).toLocaleString()} RWF
+                        </p>
+                        <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                          Ref: <span className="font-mono font-semibold">{viewingHistoryFee.transaction_reference || "N/A"}</span> · Method: {viewingHistoryFee.paid_by_method || "Manual Slip"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Installments Table */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Recorded Partial Payments ({histInstallments.length})
+                    </h3>
+                  </div>
+
+                  {histInstallments.length > 0 ? (
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold text-[11px]">
+                            <th className="py-2.5 px-3">#</th>
+                            <th className="py-2.5 px-3">Date</th>
+                            <th className="py-2.5 px-3">Amount</th>
+                            <th className="py-2.5 px-3">Reference</th>
+                            <th className="py-2.5 px-3">Method & Verified By</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {histInstallments.map((inst, idx) => (
+                            <tr key={inst.id || idx} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30">
+                              <td className="py-3 px-3 font-mono font-bold text-slate-400">#{idx + 1}</td>
+                              <td className="py-3 px-3 text-slate-700 dark:text-slate-200 whitespace-nowrap tabular-nums">
+                                {inst.paid_at
+                                  ? new Date(inst.paid_at).toLocaleString("en-GB", {
+                                      day: "2-digit",
+                                      month: "short",
+                                      year: "numeric",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })
+                                  : "—"}
+                              </td>
+                              <td className="py-3 px-3 font-mono font-extrabold text-emerald-700 dark:text-emerald-400 whitespace-nowrap tabular-nums">
+                                +{Number(inst.amount || 0).toLocaleString()} RWF
+                              </td>
+                              <td className="py-3 px-3 font-mono text-slate-700 dark:text-slate-300">
+                                {inst.reference || "—"}
+                              </td>
+                              <td className="py-3 px-3">
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-slate-800 dark:text-slate-200">
+                                    {inst.method || "Direct Payment"}
+                                  </span>
+                                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                    {inst.verified_by ? `Verified by ${inst.verified_by}` : "Verified"}
+                                    {inst.note ? ` · ${inst.note}` : ""}
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="py-10 px-4 text-center rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
+                      <History className="h-8 w-8 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
+                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        No partial or full payments have been recorded yet
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                        Each confirmed installment will appear here with its date, amount, and transaction reference.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-950/80 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-end gap-2 shrink-0">
+                {(viewingHistoryFee.status === "pending" || viewingHistoryFee.status === "partially_paid") && histIsMyOwn && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      const target = viewingHistoryFee;
+                      setViewingHistoryFee(null);
+                      setSelectedFeeToPay(target);
+                      setPayMethod("MTN MoMo / Airtel");
+                      setPaymentMode("full");
+                      setCustomPayAmount(String(Math.max(1, Math.round(histBal.remainingBalance / 2))));
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                  >
+                    <Smartphone className="h-3.5 w-3.5" /> Pay Remaining Balance
+                  </Button>
+                )}
+
+                {isAccountant && !histBal.isFullyPaid && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const target = viewingHistoryFee;
+                      setViewingHistoryFee(null);
+                      setReviewingFee(target);
+                      setAdminNoteInput("");
+                      setVerifiedInstallmentAmount(String(histBal.pendingInstallmentAmount > 0 ? histBal.pendingInstallmentAmount : histBal.remainingBalance));
+                    }}
+                    className="font-bold"
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Record / Verify Installment
+                  </Button>
+                )}
+
+                {(viewingHistoryFee.status === "paid" || histBal.paidAmount > 0) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const target = viewingHistoryFee;
+                      setViewingHistoryFee(null);
+                      setViewingReceiptFee(target);
+                    }}
+                    className="font-bold"
+                  >
+                    <Receipt className="h-3.5 w-3.5" /> View Receipt
+                  </Button>
+                )}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewingHistoryFee(null)}
+                  className="font-bold"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

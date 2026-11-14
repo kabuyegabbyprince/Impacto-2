@@ -77,7 +77,12 @@ router.post("/create", async (req, res) => {
       id,
       org_id,
       member_id,
+      due_name,
       amount,
+      total_due_amount,
+      paid_amount,
+      pending_installment_amount,
+      payment_history,
       currency,
       payment_period,
       period_date,
@@ -182,11 +187,22 @@ router.post("/create", async (req, res) => {
       safeDueDate = due_date.trim().slice(0, 10);
     }
 
+    const resolvedAmount = Number(total_due_amount ?? amount) || 0;
+    const resolvedPaidAmount =
+      status === "paid"
+        ? resolvedAmount
+        : Math.min(resolvedAmount, Math.max(0, Number(paid_amount) || 0));
+
     const feePayload: any = {
       id: feeId,
       org_id,
       member_id: resolvedMemberId,
-      amount: Number(amount) || 0,
+      due_name: (due_name && String(due_name).trim()) || period_date || "Standard Due",
+      amount: resolvedAmount,
+      total_due_amount: resolvedAmount,
+      paid_amount: resolvedPaidAmount,
+      pending_installment_amount: Math.max(0, Number(pending_installment_amount) || 0),
+      payment_history: Array.isArray(payment_history) ? payment_history : [],
       currency: currency || "RWF",
       payment_period: payment_period || "monthly",
       period_date: period_date || new Date().toISOString().slice(0, 7),
@@ -207,17 +223,38 @@ router.post("/create", async (req, res) => {
     if (error) {
       console.warn("[Fees API] Create notice:", error.message || error);
 
-      // Schema mismatch: table missing extended columns (due_date, is_recurring, admin_note, proof_url)
+      // Schema mismatch: table missing extended columns
       if (
         error.code === "42703" || 
         error.message?.toLowerCase().includes("column") || 
         error.message?.toLowerCase().includes("schema cache")
       ) {
+        const legacyPayload = {
+          id: feeId,
+          org_id,
+          member_id: resolvedMemberId,
+          amount: resolvedAmount,
+          currency: currency || "RWF",
+          payment_period: payment_period || "monthly",
+          period_date: period_date || new Date().toISOString().slice(0, 7),
+          status: status || "pending",
+          paid_at: paid_at || null,
+          due_date: safeDueDate,
+          is_recurring: is_recurring ?? true,
+          admin_note: admin_note || null,
+          proof_url: proof_url || null,
+          created_at: feePayload.created_at
+        };
+        const retryLegacy = await supabaseService.from("member_fees").upsert(legacyPayload).select();
+        if (!retryLegacy.error) {
+          return res.json({ success: true, fee: { ...feePayload, ...(retryLegacy.data?.[0] || {}) } });
+        }
+
         const corePayload = {
           id: feeId,
           org_id,
           member_id: resolvedMemberId,
-          amount: Number(amount) || 0,
+          amount: resolvedAmount,
           currency: currency || "RWF",
           payment_period: payment_period || "monthly",
           period_date: period_date || new Date().toISOString().slice(0, 7),
@@ -226,7 +263,7 @@ router.post("/create", async (req, res) => {
         };
         const retryRes = await supabaseService.from("member_fees").upsert(corePayload).select();
         if (!retryRes.error) {
-          return res.json({ success: true, fee: retryRes.data?.[0] || feePayload });
+          return res.json({ success: true, fee: { ...feePayload, ...(retryRes.data?.[0] || {}) } });
         }
         console.warn("[Fees API] Core retry notice:", retryRes.error.message || retryRes.error);
       }
@@ -253,7 +290,12 @@ router.post("/update", async (req, res) => {
       id,
       org_id,
       member_id,
+      due_name,
       amount,
+      total_due_amount,
+      paid_amount,
+      pending_installment_amount,
+      payment_history,
       payment_period,
       period_date,
       status,
@@ -330,7 +372,17 @@ router.post("/update", async (req, res) => {
 
     if (org_id) updateData.org_id = org_id;
     if (member_id) updateData.member_id = member_id;
+    if (due_name !== undefined) updateData.due_name = due_name;
     if (amount !== undefined) updateData.amount = amount;
+    if (total_due_amount !== undefined) {
+      updateData.total_due_amount = total_due_amount;
+      if (amount === undefined) updateData.amount = total_due_amount;
+    }
+    if (paid_amount !== undefined) updateData.paid_amount = Number(paid_amount) || 0;
+    if (pending_installment_amount !== undefined) {
+      updateData.pending_installment_amount = Number(pending_installment_amount) || 0;
+    }
+    if (payment_history !== undefined) updateData.payment_history = payment_history;
     if (payment_period) updateData.payment_period = payment_period;
     if (period_date) updateData.period_date = period_date;
 
@@ -341,13 +393,35 @@ router.post("/update", async (req, res) => {
       .eq("id", id)
       .select();
 
+    // Graceful fallback if new columns are not yet migrated on remote Supabase
+    if (
+      error &&
+      (error.code === "42703" ||
+        error.message?.toLowerCase().includes("column") ||
+        error.message?.toLowerCase().includes("schema cache"))
+    ) {
+      const legacyUpdateData = { ...updateData };
+      delete legacyUpdateData.due_name;
+      delete legacyUpdateData.total_due_amount;
+      delete legacyUpdateData.paid_amount;
+      delete legacyUpdateData.pending_installment_amount;
+      delete legacyUpdateData.payment_history;
+      const retryUpdate = await supabaseService
+        .from("member_fees")
+        .update(legacyUpdateData)
+        .eq("id", id)
+        .select();
+      data = retryUpdate.data;
+      error = retryUpdate.error;
+    }
+
     // If no row updated, perform upsert fallback
     if (!error && (!data || data.length === 0)) {
       const fullPayload = {
         id,
         org_id: org_id || "default-org",
         member_id: member_id || "default-mem",
-        amount: amount || 0,
+        amount: total_due_amount ?? amount ?? 0,
         currency: "RWF",
         payment_period: payment_period || "monthly",
         period_date: period_date || new Date().toISOString().slice(0, 7),
@@ -383,7 +457,9 @@ router.post("/update-batch", async (req, res) => {
       org_id,
       period_date,
       payment_period,
+      due_name,
       amount,
+      total_due_amount,
       due_date,
       admin_note,
       only_pending = true,
@@ -408,7 +484,14 @@ router.post("/update-batch", async (req, res) => {
         }
 
         const updateData: any = {};
-        if (amount !== undefined) updateData.amount = amount;
+        if (due_name !== undefined) updateData.due_name = due_name || null;
+        if (total_due_amount !== undefined) {
+          updateData.total_due_amount = total_due_amount;
+          updateData.amount = amount !== undefined ? amount : total_due_amount;
+        } else if (amount !== undefined) {
+          updateData.amount = amount;
+          updateData.total_due_amount = amount;
+        }
         if (payment_period) updateData.payment_period = payment_period;
         if (due_date !== undefined) updateData.due_date = due_date || null;
         if (admin_note !== undefined) updateData.admin_note = admin_note || null;
@@ -423,7 +506,26 @@ router.post("/update-batch", async (req, res) => {
           query = query.neq("status", "paid");
         }
 
-        const { data, error } = await query.select();
+        let { data, error } = await query.select();
+        if (
+          error &&
+          (error.code === "42703" ||
+            error.message?.toLowerCase().includes("column") ||
+            error.message?.toLowerCase().includes("schema cache"))
+        ) {
+          const legacyUpdate = { ...updateData };
+          delete legacyUpdate.due_name;
+          delete legacyUpdate.total_due_amount;
+          let retryQ = supabaseService
+            .from("member_fees")
+            .update(legacyUpdate)
+            .eq("org_id", org_id)
+            .eq("period_date", period_date);
+          if (only_pending) retryQ = retryQ.neq("status", "paid");
+          const retryRes = await retryQ.select();
+          data = retryRes.data;
+          error = retryRes.error;
+        }
         if (error) {
           console.warn("[Fees API] Batch update warning:", error.message);
         } else {

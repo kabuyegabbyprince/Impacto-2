@@ -25,6 +25,8 @@ export interface User {
   referred_by_user_id?: string;
 }
 
+export type MomoDisplayMethod = "merchant_code" | "mtn_phone" | "airtel_phone";
+
 export interface Organization {
   id: string;
   name: string;
@@ -48,6 +50,7 @@ export interface Organization {
   dues_airtel_number?: string;
   dues_account_name?: string;
   momo_merchant_code?: string;
+  momo_display_methods?: MomoDisplayMethod[];
   default_dues_amount?: number;
   owner_id?: string;
   subscription_status: "trial" | "active" | "expired";
@@ -819,15 +822,30 @@ export interface SupportMessage {
   created_at: string;
 }
 
+export interface MemberFeeInstallment {
+  id: string;
+  amount: number;
+  method: string;
+  reference?: string;
+  paid_at: string;
+  verified_by?: string;
+  note?: string;
+}
+
 export interface MemberFee {
   id: string;
   org_id: string;
   member_id: string;
+  due_name?: string;
   amount: number;
+  total_due_amount?: number;
+  paid_amount?: number;
+  pending_installment_amount?: number;
+  payment_history?: MemberFeeInstallment[];
   currency: string;
   payment_period: "weekly" | "monthly" | "flexible";
   period_date: string; // e.g. "2026-W22", "2026-05"
-  status: "paid" | "pending" | "pending_confirmation";
+  status: "paid" | "partially_paid" | "pending" | "pending_confirmation";
   paid_at?: string;
   created_at: string;
   member_name?: string; // virtual / joined

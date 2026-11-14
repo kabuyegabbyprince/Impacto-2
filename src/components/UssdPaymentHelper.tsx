@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   PhoneCall,
   Store,
@@ -12,6 +13,42 @@ import {
   Info
 } from "lucide-react";
 import { useToast } from "./Toast";
+import type { MomoDisplayMethod, Organization } from "../types";
+
+export type { MomoDisplayMethod };
+
+export const DEFAULT_MOMO_DISPLAY_METHODS: MomoDisplayMethod[] = ["merchant_code"];
+
+const VALID_MOMO_DISPLAY_METHODS: MomoDisplayMethod[] = ["merchant_code", "mtn_phone", "airtel_phone"];
+
+/**
+ * Resolves which MoMo payment channels should be shown to members when paying an organization.
+ * Always defaults to displaying Merchant Code only unless configured otherwise in MoMo Carrier Portals.
+ */
+export function getOrgMomoDisplayMethods(org?: Partial<Organization> | null): MomoDisplayMethod[] {
+  const sanitize = (list: unknown): MomoDisplayMethod[] | null => {
+    if (!Array.isArray(list)) return null;
+    const valid = list.filter((m): m is MomoDisplayMethod =>
+      typeof m === "string" && (VALID_MOMO_DISPLAY_METHODS as string[]).includes(m)
+    );
+    return valid.length > 0 ? Array.from(new Set(valid)) : null;
+  };
+
+  const fromOrg = sanitize(org?.momo_display_methods);
+  if (fromOrg) return fromOrg;
+
+  if (org?.id) {
+    try {
+      const raw = localStorage.getItem(`impacto_org_momo_display_methods_${org.id}`);
+      if (raw) {
+        const parsed = sanitize(JSON.parse(raw));
+        if (parsed) return parsed;
+      }
+    } catch {}
+  }
+
+  return [...DEFAULT_MOMO_DISPLAY_METHODS];
+}
 
 export interface UssdPaymentHelperProps {
   targetType: "organization" | "platform";
@@ -25,6 +62,7 @@ export interface UssdPaymentHelperProps {
   className?: string;
   isDonation?: boolean;
   compact?: boolean;
+  allowedMethods?: MomoDisplayMethod[];
 }
 
 /**
@@ -101,8 +139,10 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
   onRequestAdmin,
   className = "",
   isDonation = false,
-  compact = false
+  compact = false,
+  allowedMethods,
 }) => {
+  const { t } = useTranslation();
   const { addToast } = useToast();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isRequestingAdmin, setIsRequestingAdmin] = useState(false);
@@ -114,9 +154,25 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
       : (merchantCode || getEffectivePaymentCode(undefined, undefined, "platform"));
   const hasExplicitMtn = Boolean(mtnNumber && mtnNumber.trim() && mtnNumber !== "0788300000");
   const hasExplicitAirtel = Boolean(airtelNumber && airtelNumber.trim() && airtelNumber !== "0728300000");
-  const cleanNum = hasExplicitMtn ? cleanPhoneNumber(mtnNumber) : "";
-  const cleanMCode = cleanMerchantCode(effectiveMCode);
-  const cleanAirtel = hasExplicitAirtel ? cleanPhoneNumber(airtelNumber) : "";
+
+  // For organizations, default to showing Merchant Code only unless additional channels are enabled in MoMo Carrier Portals
+  const effectiveAllowedMethods: MomoDisplayMethod[] =
+    targetType === "organization"
+      ? (allowedMethods && allowedMethods.length > 0 ? allowedMethods : DEFAULT_MOMO_DISPLAY_METHODS)
+      : VALID_MOMO_DISPLAY_METHODS;
+
+  const cleanNum =
+    hasExplicitMtn && effectiveAllowedMethods.includes("mtn_phone")
+      ? cleanPhoneNumber(mtnNumber)
+      : "";
+  const cleanMCode =
+    effectiveAllowedMethods.includes("merchant_code")
+      ? cleanMerchantCode(effectiveMCode)
+      : "";
+  const cleanAirtel =
+    hasExplicitAirtel && effectiveAllowedMethods.includes("airtel_phone")
+      ? cleanPhoneNumber(airtelNumber)
+      : "";
   // For donations, contributions are random so no fixed amount is attached to the USSD dial code
   const formattedAmount = isDonation ? null : (amountRwf && amountRwf > 0 ? Math.round(amountRwf) : null);
 
@@ -155,10 +211,10 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
         document.body.removeChild(textArea);
       }
       setCopiedKey(key);
-      addToast(`${label} copied: ${text}`, "success");
+      addToast(`${label}: ${text}`, "success");
       setTimeout(() => setCopiedKey(null), 2500);
     } catch {
-      addToast(`Could not copy. Please manually dial: ${text}`, "info");
+      addToast(`${text}`, "info");
     }
   };
 
@@ -215,15 +271,14 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
                 <div className="space-y-2 min-w-0">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
                     <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 shrink-0">
-                      <Store className="h-4 w-4 text-amber-500 shrink-0" /> MTN MoMo Code
+                      <Store className="h-4 w-4 text-amber-500 shrink-0" /> {t("payments.merchant_code_label")}
                     </span>
                     <button
                       type="button"
-                      onClick={() => copyToClipboard(cleanMCode, "code_raw", "Merchant code")}
+                      onClick={() => copyToClipboard(cleanMCode, "code_raw", t("payments.merchant_code_label"))}
                       className="font-mono text-slate-700 dark:text-slate-300 hover:text-emerald-600 cursor-pointer text-xs font-bold px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded shrink-0"
-                      title="Click to copy merchant code"
                     >
-                      {copiedKey === "code_raw" ? "Copied" : cleanMCode}
+                      {copiedKey === "code_raw" ? t("common.copied") : cleanMCode}
                     </button>
                   </div>
 
@@ -241,13 +296,13 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
 
                   {merchantUssdWithAmount && (
                     <div className="text-[11px] text-slate-500 font-mono flex items-center justify-between gap-2 min-w-0">
-                      <span className="break-all min-w-0">Base: <span className="select-all text-slate-700 dark:text-slate-300 font-semibold">{merchantUssdBase}</span></span>
+                      <span className="break-all min-w-0"><span className="select-all text-slate-700 dark:text-slate-300 font-semibold">{merchantUssdBase}</span></span>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard(merchantUssdBase, "merchant_base", "Base merchant code")}
+                        onClick={() => copyToClipboard(merchantUssdBase, "merchant_base", t("payments.copy_code"))}
                         className="text-slate-600 dark:text-slate-400 hover:text-emerald-600 text-[11px] shrink-0 cursor-pointer font-semibold underline"
                       >
-                        {copiedKey === "merchant_base" ? "Copied" : "Copy"}
+                        {copiedKey === "merchant_base" ? t("common.copied") : t("common.copy")}
                       </button>
                     </div>
                   )}
@@ -256,18 +311,18 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
                 <div className="flex flex-wrap items-center gap-2 pt-1 min-w-0">
                   <button
                     type="button"
-                    onClick={() => copyToClipboard(merchantUssdPrimary, "merchant", "USSD code")}
-                    className="flex-1 min-h-[38px] min-w-0 whitespace-nowrap py-1.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200/80 dark:border-slate-700"
+                    onClick={() => copyToClipboard(merchantUssdPrimary, "merchant", t("payments.ussd_copied_toast"))}
+                    className="flex-1 min-h-[38px] min-w-0 text-center leading-tight py-1.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200/80 dark:border-slate-700"
                   >
                     {copiedKey === "merchant" ? <Check className="h-4 w-4 text-emerald-600 shrink-0" /> : <Copy className="h-4 w-4 shrink-0" />}
-                    <span>{copiedKey === "merchant" ? "Copied" : "Copy USSD"}</span>
+                    <span>{copiedKey === "merchant" ? t("common.copied") : t("layout.copy_ussd")}</span>
                   </button>
                   <a
                     href={`tel:${encodeURIComponent(merchantUssdPrimary)}`}
-                    className="min-h-[38px] whitespace-nowrap shrink-0 py-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+                    className="min-h-[38px] min-w-0 text-center leading-tight shrink-0 py-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
                   >
                     <Smartphone className="h-4 w-4 shrink-0" />
-                    <span>Dial</span>
+                    <span>{t("layout.dial")}</span>
                   </a>
                 </div>
               </div>
@@ -279,15 +334,14 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
                 <div className="space-y-2 min-w-0">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
                     <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 shrink-0">
-                      <PhoneCall className="h-4 w-4 text-yellow-500 shrink-0" /> MTN Phone
+                      <PhoneCall className="h-4 w-4 text-yellow-500 shrink-0" /> {t("payments.phone_number_label")}
                     </span>
                     <button
                       type="button"
-                      onClick={() => copyToClipboard(cleanNum, "phone_raw", "Phone number")}
+                      onClick={() => copyToClipboard(cleanNum, "phone_raw", t("payments.phone_number_label"))}
                       className="font-mono text-slate-700 dark:text-slate-300 hover:text-emerald-600 cursor-pointer text-xs font-bold px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded shrink-0"
-                      title="Click to copy phone number"
                     >
-                      {copiedKey === "phone_raw" ? "Copied" : cleanNum}
+                      {copiedKey === "phone_raw" ? t("common.copied") : cleanNum}
                     </button>
                   </div>
 
@@ -305,13 +359,13 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
 
                   {p2pUssdWithAmount && (
                     <div className="text-[11px] text-slate-500 font-mono flex items-center justify-between gap-2 min-w-0">
-                      <span className="break-all min-w-0">Base: <span className="select-all text-slate-700 dark:text-slate-300 font-semibold">{p2pUssdBase}</span></span>
+                      <span className="break-all min-w-0"><span className="select-all text-slate-700 dark:text-slate-300 font-semibold">{p2pUssdBase}</span></span>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard(p2pUssdBase, "p2p_base", "Base phone code")}
+                        onClick={() => copyToClipboard(p2pUssdBase, "p2p_base", t("payments.copy_code"))}
                         className="text-slate-600 dark:text-slate-400 hover:text-emerald-600 text-[11px] shrink-0 cursor-pointer font-semibold underline"
                       >
-                        {copiedKey === "p2p_base" ? "Copied" : "Copy"}
+                        {copiedKey === "p2p_base" ? t("common.copied") : t("common.copy")}
                       </button>
                     </div>
                   )}
@@ -320,18 +374,18 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
                 <div className="flex flex-wrap items-center gap-2 pt-1 min-w-0">
                   <button
                     type="button"
-                    onClick={() => copyToClipboard(p2pUssdPrimary, "p2p", "USSD code")}
-                    className="flex-1 min-h-[38px] min-w-0 whitespace-nowrap py-1.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200/80 dark:border-slate-700"
+                    onClick={() => copyToClipboard(p2pUssdPrimary, "p2p", t("payments.ussd_copied_toast"))}
+                    className="flex-1 min-h-[38px] min-w-0 text-center leading-tight py-1.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200/80 dark:border-slate-700"
                   >
                     {copiedKey === "p2p" ? <Check className="h-4 w-4 text-emerald-600 shrink-0" /> : <Copy className="h-4 w-4 shrink-0" />}
-                    <span>{copiedKey === "p2p" ? "Copied" : "Copy USSD"}</span>
+                    <span>{copiedKey === "p2p" ? t("common.copied") : t("layout.copy_ussd")}</span>
                   </button>
                   <a
                     href={`tel:${encodeURIComponent(p2pUssdPrimary)}`}
-                    className="min-h-[38px] whitespace-nowrap shrink-0 py-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+                    className="min-h-[38px] min-w-0 text-center leading-tight shrink-0 py-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
                   >
                     <Smartphone className="h-4 w-4 shrink-0" />
-                    <span>Dial</span>
+                    <span>{t("layout.dial")}</span>
                   </a>
                 </div>
               </div>
@@ -347,11 +401,10 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
                     </span>
                     <button
                       type="button"
-                      onClick={() => copyToClipboard(cleanAirtel, "airtel_raw", "Airtel number")}
+                      onClick={() => copyToClipboard(cleanAirtel, "airtel_raw", "Airtel")}
                       className="font-mono text-slate-700 dark:text-slate-300 hover:text-emerald-600 cursor-pointer text-xs font-bold px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded shrink-0"
-                      title="Copy Airtel number"
                     >
-                      {copiedKey === "airtel_raw" ? "Copied" : cleanAirtel}
+                      {copiedKey === "airtel_raw" ? t("common.copied") : cleanAirtel}
                     </button>
                   </div>
 
@@ -369,13 +422,13 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
 
                   {airtelUssdWithAmount && (
                     <div className="text-[11px] text-slate-500 font-mono flex items-center justify-between gap-2 min-w-0">
-                      <span className="break-all min-w-0">Base: <span className="select-all text-slate-700 dark:text-slate-300 font-semibold">{airtelUssdBase}</span></span>
+                      <span className="break-all min-w-0"><span className="select-all text-slate-700 dark:text-slate-300 font-semibold">{airtelUssdBase}</span></span>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard(airtelUssdBase, "airtel_base", "Base Airtel code")}
+                        onClick={() => copyToClipboard(airtelUssdBase, "airtel_base", t("payments.copy_code"))}
                         className="text-slate-600 dark:text-slate-400 hover:text-emerald-600 text-[11px] shrink-0 cursor-pointer font-semibold underline"
                       >
-                        {copiedKey === "airtel_base" ? "Copied" : "Copy"}
+                        {copiedKey === "airtel_base" ? t("common.copied") : t("common.copy")}
                       </button>
                     </div>
                   )}
@@ -384,18 +437,18 @@ export const UssdPaymentHelper: React.FC<UssdPaymentHelperProps> = ({
                 <div className="flex flex-wrap items-center gap-2 pt-1 min-w-0">
                   <button
                     type="button"
-                    onClick={() => copyToClipboard(airtelUssdPrimary, "airtel", "USSD code")}
-                    className="flex-1 min-h-[38px] min-w-0 whitespace-nowrap py-1.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200/80 dark:border-slate-700"
+                    onClick={() => copyToClipboard(airtelUssdPrimary, "airtel", t("payments.ussd_copied_toast"))}
+                    className="flex-1 min-h-[38px] min-w-0 text-center leading-tight py-1.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200/80 dark:border-slate-700"
                   >
                     {copiedKey === "airtel" ? <Check className="h-4 w-4 text-emerald-600 shrink-0" /> : <Copy className="h-4 w-4 shrink-0" />}
-                    <span>{copiedKey === "airtel" ? "Copied" : "Copy USSD"}</span>
+                    <span>{copiedKey === "airtel" ? t("common.copied") : t("layout.copy_ussd")}</span>
                   </button>
                   <a
                     href={`tel:${encodeURIComponent(airtelUssdPrimary)}`}
-                    className="min-h-[38px] whitespace-nowrap shrink-0 py-1.5 px-3.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+                    className="min-h-[38px] min-w-0 text-center leading-tight shrink-0 py-1.5 px-3.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
                   >
                     <Smartphone className="h-4 w-4 shrink-0" />
-                    <span>Dial</span>
+                    <span>{t("layout.dial")}</span>
                   </a>
                 </div>
               </div>

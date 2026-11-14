@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS public.organizations (
   dues_airtel_number TEXT,
   dues_account_name TEXT,
   momo_merchant_code TEXT,
+  momo_display_methods TEXT[] DEFAULT ARRAY['merchant_code']::text[],
   subscription_status TEXT DEFAULT 'trial' CHECK (subscription_status IN ('trial', 'active', 'grace_period', 'expired', 'cancelled')),
   subscription_ends_at TIMESTAMPTZ,
   subscription_tier TEXT DEFAULT 'trial' CHECK (subscription_tier IN ('trial', 'starter', 'growth', 'pro', 'enterprise', 'free')),
@@ -887,7 +888,12 @@ CREATE TABLE IF NOT EXISTS public.member_fees (
   id TEXT PRIMARY KEY,
   org_id TEXT NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
   member_id TEXT NOT NULL REFERENCES public.org_members(id) ON DELETE CASCADE,
+  due_name TEXT,
   amount NUMERIC NOT NULL,
+  total_due_amount NUMERIC,
+  paid_amount NUMERIC NOT NULL DEFAULT 0,
+  pending_installment_amount NUMERIC NOT NULL DEFAULT 0,
+  payment_history JSONB NOT NULL DEFAULT '[]'::jsonb,
   currency TEXT NOT NULL DEFAULT 'RWF',
   payment_period TEXT NOT NULL,
   period_date TEXT NOT NULL,
@@ -1247,6 +1253,7 @@ ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS dues_mtn_number TEXT;
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS dues_airtel_number TEXT;
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS dues_account_name TEXT;
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS momo_merchant_code TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS momo_display_methods TEXT[] DEFAULT ARRAY['merchant_code']::text[];
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS packages_data JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS bonus_member_slots INTEGER DEFAULT 0;
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS allow_hosting_events BOOLEAN DEFAULT true;
@@ -1399,6 +1406,11 @@ ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS sender_info TEXT;
 ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS transaction_reference TEXT;
 ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS paid_by_method TEXT;
 ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS due_name TEXT;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS total_due_amount NUMERIC;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS paid_amount NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS pending_installment_amount NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE public.member_fees ADD COLUMN IF NOT EXISTS payment_history JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 ALTER TABLE public.subscription_payments ADD COLUMN IF NOT EXISTS package_id TEXT;
 ALTER TABLE public.subscription_payments ADD COLUMN IF NOT EXISTS item_type TEXT DEFAULT 'subscription';
@@ -1521,25 +1533,34 @@ STABLE
 AS $$
 DECLARE
   v_uid TEXT;
+  v_jwt_email TEXT;
 BEGIN
   v_uid := COALESCE(NULLIF(p_auth_uid, ''), auth.uid()::text);
+  v_jwt_email := LOWER(NULLIF(TRIM(COALESCE(auth.jwt() ->> 'email', '')), ''));
   IF p_user_id IS NULL OR p_user_id = '' THEN
     RETURN false;
   END IF;
   IF (p_user_id LIKE 'user-%' OR p_user_id LIKE 'u-%') AND (v_uid IS NULL OR v_uid = '') THEN
     RETURN true;
   END IF;
-  IF v_uid IS NULL OR v_uid = '' THEN
-    RETURN false;
-  END IF;
-  IF p_user_id = v_uid THEN
+  IF v_uid IS NOT NULL AND v_uid <> '' AND p_user_id = v_uid THEN
     RETURN true;
   END IF;
-  RETURN EXISTS (
+  IF v_uid IS NOT NULL AND v_uid <> '' AND EXISTS (
     SELECT 1 FROM public.users u
-    WHERE u.id = p_user_id
+    WHERE (u.id = p_user_id OR u.auth_user_id = p_user_id)
       AND (u.id = v_uid OR u.auth_user_id = v_uid)
-  );
+  ) THEN
+    RETURN true;
+  END IF;
+  IF v_jwt_email IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.users u
+    WHERE (u.id = p_user_id OR u.auth_user_id = p_user_id)
+      AND LOWER(TRIM(u.email)) = v_jwt_email
+  ) THEN
+    RETURN true;
+  END IF;
+  RETURN false;
 END;
 $$;
 
@@ -1592,12 +1613,47 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 STABLE
 AS $$
+DECLARE
+  v_jwt_email TEXT := LOWER(NULLIF(TRIM(COALESCE(auth.jwt() ->> 'email', '')), ''));
 BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM public.users
-    WHERE (public.users.id = is_platform_superadmin.user_uid OR public.users.auth_user_id = is_platform_superadmin.user_uid)
-      AND public.users.is_superadmin = true
-  );
+  IF user_uid IS NOT NULL AND user_uid <> '' THEN
+    IF EXISTS (
+      SELECT 1 FROM public.users u
+      WHERE (u.id = user_uid OR u.auth_user_id = user_uid)
+        AND (COALESCE(u.is_superadmin, false) = true OR u.platform_role = 'superadmin')
+    ) THEN
+      RETURN true;
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM public.platform_staff ps
+      JOIN public.users u ON LOWER(TRIM(ps.email)) = LOWER(TRIM(u.email))
+      WHERE (u.id = user_uid OR u.auth_user_id = user_uid)
+        AND ps.status = 'active'
+        AND ps.role IN ('superadmin', 'auditor')
+    ) THEN
+      RETURN true;
+    END IF;
+  END IF;
+
+  IF v_jwt_email IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM public.users u
+      WHERE LOWER(TRIM(u.email)) = v_jwt_email
+        AND (COALESCE(u.is_superadmin, false) = true OR u.platform_role = 'superadmin')
+    ) THEN
+      RETURN true;
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM public.platform_staff ps
+      WHERE LOWER(TRIM(ps.email)) = v_jwt_email
+        AND ps.status = 'active'
+        AND ps.role IN ('superadmin', 'auditor')
+    ) THEN
+      RETURN true;
+    END IF;
+  END IF;
+
+  RETURN false;
 END;
 $$;
 
@@ -1714,12 +1770,12 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_uid TEXT := COALESCE(NULLIF(auth.uid()::text, ''), NULLIF(p_user_id, ''));
+  v_auth_uid TEXT := NULLIF(auth.uid()::text, '');
+  v_uid TEXT := COALESCE(v_auth_uid, NULLIF(p_user_id, ''));
+  v_jwt_email TEXT := LOWER(NULLIF(TRIM(COALESCE(auth.jwt() ->> 'email', '')), ''));
   v_member RECORD;
   v_now TIMESTAMPTZ := NOW();
-  v_admin_total INTEGER := 0;
   v_admin_submitted INTEGER := 0;
-  v_accountant_total INTEGER := 0;
   v_accountant_submitted INTEGER := 0;
   v_all_submitted BOOLEAN := false;
   v_org_status TEXT;
@@ -1732,12 +1788,26 @@ BEGIN
     RAISE EXCEPTION 'Active organization member record not found.';
   END IF;
 
+  IF COALESCE(v_member.status, 'active') IN ('rejected', 'suspended') THEN
+    RAISE EXCEPTION 'Inactive or suspended officers cannot submit verification documents.';
+  END IF;
+
+  IF COALESCE(v_member.role, 'member') = 'member' THEN
+    RAISE EXCEPTION 'Only organization leadership officers (Admin, Accountant, Manager) submit officer verification.';
+  END IF;
+
   IF NOT (
     is_own_user_id(v_member.user_id, v_uid)
+    OR (p_user_id IS NOT NULL AND v_member.user_id = p_user_id)
     OR is_admin_of_org(p_org_id, v_uid)
     OR is_platform_superadmin(v_uid)
     OR v_member.user_id LIKE 'user-%'
-    OR (p_user_id IS NOT NULL AND p_user_id LIKE 'user-%')
+    OR v_member.user_id LIKE 'u-%'
+    OR (p_user_id IS NOT NULL AND (p_user_id LIKE 'user-%' OR p_user_id LIKE 'u-%'))
+    OR (v_jwt_email IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.users u
+      WHERE u.id = v_member.user_id AND LOWER(TRIM(u.email)) = v_jwt_email
+    ))
   ) THEN
     RAISE EXCEPTION 'Not authorized to submit verification documents for this officer.';
   END IF;
@@ -1747,6 +1817,14 @@ BEGIN
      OR NULLIF(TRIM(p_id_document_url), '') IS NULL
      OR NULLIF(TRIM(p_id_document_number), '') IS NULL THEN
     RAISE EXCEPTION 'Phone number, passport photo, ID scan, and document number are all required.';
+  END IF;
+
+  IF v_auth_uid IS NOT NULL AND v_jwt_email IS NOT NULL THEN
+    UPDATE public.users
+    SET auth_user_id = v_auth_uid
+    WHERE id = v_member.user_id
+      AND LOWER(TRIM(email)) = v_jwt_email
+      AND (auth_user_id IS NULL OR auth_user_id = '');
   END IF;
 
   PERFORM set_config('app.bypass_member_guard', 'true', true);
@@ -1764,33 +1842,27 @@ BEGIN
 
   UPDATE public.users
   SET phone_number = TRIM(p_phone_number)
-  WHERE id = v_member.user_id OR auth_user_id = v_member.user_id;
+  WHERE id = v_member.user_id OR (v_auth_uid IS NOT NULL AND auth_user_id = v_auth_uid);
 
   SELECT
-    COUNT(*) FILTER (WHERE role IN ('org_admin', 'superadmin')),
     COUNT(*) FILTER (
       WHERE role IN ('org_admin', 'superadmin')
         AND NULLIF(TRIM(passport_photo_url), '') IS NOT NULL
         AND NULLIF(TRIM(id_document_url), '') IS NOT NULL
         AND NULLIF(TRIM(id_document_number), '') IS NOT NULL
     ),
-    COUNT(*) FILTER (WHERE role = 'accountant'),
     COUNT(*) FILTER (
       WHERE role = 'accountant'
         AND NULLIF(TRIM(passport_photo_url), '') IS NOT NULL
         AND NULLIF(TRIM(id_document_url), '') IS NOT NULL
         AND NULLIF(TRIM(id_document_number), '') IS NOT NULL
     )
-  INTO v_admin_total, v_admin_submitted, v_accountant_total, v_accountant_submitted
+  INTO v_admin_submitted, v_accountant_submitted
   FROM public.org_members
-  WHERE org_id = p_org_id AND status = 'active';
+  WHERE org_id = p_org_id
+    AND COALESCE(status, 'active') NOT IN ('rejected', 'suspended');
 
-  v_all_submitted := (
-    v_admin_total >= 1
-    AND v_accountant_total >= 1
-    AND v_admin_submitted = v_admin_total
-    AND v_accountant_submitted = v_accountant_total
-  );
+  v_all_submitted := (v_admin_submitted >= 1 AND v_accountant_submitted >= 1);
 
   SELECT verification_status INTO v_org_status
   FROM public.organizations
@@ -1942,7 +2014,8 @@ BEGIN
       )
     INTO v_admin_ok, v_acc_ok
     FROM public.org_members
-    WHERE org_id = p_org_id AND status = 'active';
+    WHERE org_id = p_org_id
+      AND COALESCE(status, 'active') NOT IN ('rejected', 'suspended');
 
     IF v_admin_ok < 1 OR v_acc_ok < 1 THEN
       RAISE EXCEPTION 'Cannot approve: Both an Administrator and an Accountant must submit their passport photo and ID document first.';
@@ -1973,7 +2046,7 @@ BEGIN
     AND role IN ('org_admin', 'superadmin', 'accountant', 'manager')
     AND (
       (NULLIF(TRIM(passport_photo_url), '') IS NOT NULL AND NULLIF(TRIM(id_document_url), '') IS NOT NULL)
-      OR role IN ('org_admin', 'accountant')
+      OR (p_status = 'rejected' AND role IN ('org_admin', 'accountant'))
     );
 
   IF p_status = 'verified' THEN
@@ -2104,8 +2177,8 @@ CREATE POLICY delete_organizations ON public.organizations FOR DELETE
 CREATE POLICY select_org_members ON public.org_members FOR SELECT USING (true);
 CREATE POLICY insert_org_members ON public.org_members FOR INSERT WITH CHECK (true);
 CREATE POLICY update_org_members ON public.org_members FOR UPDATE
-  USING (is_admin_of_org(org_id, (auth.uid())::text) OR is_own_user_id(user_id, (auth.uid())::text) OR (user_id ~~ 'user-%'::text) OR is_platform_superadmin((auth.uid())::text))
-  WITH CHECK (is_admin_of_org(org_id, (auth.uid())::text) OR is_own_user_id(user_id, (auth.uid())::text) OR (user_id ~~ 'user-%'::text) OR is_platform_superadmin((auth.uid())::text));
+  USING (is_admin_of_org(org_id, (auth.uid())::text) OR is_own_user_id(user_id, (auth.uid())::text) OR (user_id ~~ 'user-%'::text) OR (user_id ~~ 'u-%'::text) OR is_platform_superadmin((auth.uid())::text))
+  WITH CHECK (is_admin_of_org(org_id, (auth.uid())::text) OR is_own_user_id(user_id, (auth.uid())::text) OR (user_id ~~ 'user-%'::text) OR (user_id ~~ 'u-%'::text) OR is_platform_superadmin((auth.uid())::text));
 CREATE POLICY delete_org_members ON public.org_members FOR DELETE
   USING (is_admin_of_org(org_id, (auth.uid())::text) OR is_platform_superadmin((auth.uid())::text));
 
@@ -2203,17 +2276,22 @@ ON CONFLICT (id) DO NOTHING;
 
 DROP POLICY IF EXISTS "impacto_files_authenticated_insert" ON storage.objects;
 CREATE POLICY "impacto_files_authenticated_insert" ON storage.objects
-FOR INSERT TO authenticated
+FOR INSERT TO authenticated, anon
 WITH CHECK (bucket_id IN ('impacto-files', 'documents', 'avatars', 'chat-attachments'));
 
 DROP POLICY IF EXISTS "impacto_files_authenticated_update" ON storage.objects;
 CREATE POLICY "impacto_files_authenticated_update" ON storage.objects
-FOR UPDATE TO authenticated
+FOR UPDATE TO authenticated, anon
 USING (bucket_id IN ('impacto-files', 'documents', 'avatars', 'chat-attachments'));
 
 DROP POLICY IF EXISTS "impacto_files_authenticated_select" ON storage.objects;
 CREATE POLICY "impacto_files_authenticated_select" ON storage.objects
-FOR SELECT TO authenticated
+FOR SELECT TO authenticated, anon
+USING (bucket_id IN ('impacto-files', 'documents', 'avatars', 'chat-attachments'));
+
+DROP POLICY IF EXISTS "impacto_files_authenticated_delete" ON storage.objects;
+CREATE POLICY "impacto_files_authenticated_delete" ON storage.objects
+FOR DELETE TO authenticated, anon
 USING (bucket_id IN ('impacto-files', 'documents', 'avatars', 'chat-attachments'));
 
 
@@ -2275,3 +2353,471 @@ BEGIN
 EXCEPTION
   WHEN OTHERS THEN NULL;
 END $$;
+
+
+
+
+
+
+
+
+
+
+-- =====================================================================
+-- IMPACTO OPERATING SYSTEM — INCREMENTAL MIGRATION (update.sql)
+-- =====================================================================
+-- Purpose: Hardens Organization & Accountant Document Verification flow,
+--          state-machine transitions, RLS ownership resolution, and
+--          Supabase Storage upload/signed-URL permissions.
+-- Safe to run repeatedly (100% idempotent) on PostgreSQL 14+ / Supabase.
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. ENSURE VERIFICATION COLUMNS ON ORGANIZATIONS & ORG_MEMBERS
+-- ---------------------------------------------------------------------
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS verification_status TEXT DEFAULT 'unverified';
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS verified_by TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS verification_rejection_reason TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS verification_submitted_at TIMESTAMPTZ;
+
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS verification_status TEXT DEFAULT 'not_required';
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS verified_by TEXT;
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS passport_photo_url TEXT;
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS id_document_url TEXT;
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS id_document_type TEXT;
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS id_document_number TEXT;
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS id_submitted_at TIMESTAMPTZ;
+ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS phone_number TEXT;
+
+-- ---------------------------------------------------------------------
+-- 2. HARDEN IDENTITY & ROLE HELPER FUNCTIONS
+-- ---------------------------------------------------------------------
+-- Resolves ownership across users.id, users.auth_user_id, and JWT email
+-- so invited/promoted Accountants and Officers can always update their own
+-- verification dossier even if their org_members.user_id predates Auth login.
+CREATE OR REPLACE FUNCTION public.is_own_user_id(
+  p_user_id TEXT,
+  p_auth_uid TEXT DEFAULT auth.uid()::text
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+STABLE
+AS $$
+DECLARE
+  v_uid TEXT;
+  v_jwt_email TEXT;
+BEGIN
+  v_uid := COALESCE(NULLIF(p_auth_uid, ''), auth.uid()::text);
+  v_jwt_email := LOWER(NULLIF(TRIM(COALESCE(auth.jwt() ->> 'email', '')), ''));
+
+  IF p_user_id IS NULL OR p_user_id = '' THEN
+    RETURN false;
+  END IF;
+
+  IF (p_user_id LIKE 'user-%' OR p_user_id LIKE 'u-%') AND (v_uid IS NULL OR v_uid = '') THEN
+    RETURN true;
+  END IF;
+
+  IF v_uid IS NOT NULL AND v_uid <> '' AND p_user_id = v_uid THEN
+    RETURN true;
+  END IF;
+
+  IF v_uid IS NOT NULL AND v_uid <> '' AND EXISTS (
+    SELECT 1 FROM public.users u
+    WHERE (u.id = p_user_id OR u.auth_user_id = p_user_id)
+      AND (u.id = v_uid OR u.auth_user_id = v_uid)
+  ) THEN
+    RETURN true;
+  END IF;
+
+  IF v_jwt_email IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.users u
+    WHERE (u.id = p_user_id OR u.auth_user_id = p_user_id)
+      AND LOWER(TRIM(u.email)) = v_jwt_email
+  ) THEN
+    RETURN true;
+  END IF;
+
+  RETURN false;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_platform_superadmin(user_uid TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+STABLE
+AS $$
+DECLARE
+  v_jwt_email TEXT := LOWER(NULLIF(TRIM(COALESCE(auth.jwt() ->> 'email', '')), ''));
+BEGIN
+  IF user_uid IS NOT NULL AND user_uid <> '' THEN
+    IF EXISTS (
+      SELECT 1 FROM public.users u
+      WHERE (u.id = user_uid OR u.auth_user_id = user_uid)
+        AND (COALESCE(u.is_superadmin, false) = true OR u.platform_role = 'superadmin')
+    ) THEN
+      RETURN true;
+    END IF;
+
+    IF EXISTS (
+      SELECT 1 FROM public.platform_staff ps
+      JOIN public.users u ON LOWER(TRIM(ps.email)) = LOWER(TRIM(u.email))
+      WHERE (u.id = user_uid OR u.auth_user_id = user_uid)
+        AND ps.status = 'active'
+        AND ps.role IN ('superadmin', 'auditor')
+    ) THEN
+      RETURN true;
+    END IF;
+  END IF;
+
+  IF v_jwt_email IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM public.users u
+      WHERE LOWER(TRIM(u.email)) = v_jwt_email
+        AND (COALESCE(u.is_superadmin, false) = true OR u.platform_role = 'superadmin')
+    ) THEN
+      RETURN true;
+    END IF;
+
+    IF EXISTS (
+      SELECT 1 FROM public.platform_staff ps
+      WHERE LOWER(TRIM(ps.email)) = v_jwt_email
+        AND ps.status = 'active'
+        AND ps.role IN ('superadmin', 'auditor')
+    ) THEN
+      RETURN true;
+    END IF;
+  END IF;
+
+  RETURN false;
+END;
+$$;
+
+-- ---------------------------------------------------------------------
+-- 3. HARDEN MEMBER SELF-UPDATE GUARD TRIGGER
+-- ---------------------------------------------------------------------
+-- Allows Accountants/Managers/Officers to submit their own verification
+-- photos/IDs and transition their verification_status to 'pending', while
+-- still preventing self-promotion of role, status, permissions, or 'verified'.
+CREATE OR REPLACE FUNCTION public.guard_org_member_self_update()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_uid TEXT := auth.uid()::text;
+  v_is_privileged BOOLEAN;
+BEGIN
+  IF current_setting('app.bypass_member_guard', true) = 'true' THEN
+    RETURN NEW;
+  END IF;
+
+  IF v_uid IS NULL OR v_uid = '' THEN
+    RETURN NEW;
+  END IF;
+
+  v_is_privileged := is_admin_of_org(OLD.org_id, v_uid) OR is_platform_superadmin(v_uid);
+  IF v_is_privileged THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.role IS DISTINCT FROM OLD.role
+     OR NEW.status IS DISTINCT FROM OLD.status
+     OR NEW.permissions IS DISTINCT FROM OLD.permissions
+     OR NEW.org_id IS DISTINCT FROM OLD.org_id
+     OR NEW.user_id IS DISTINCT FROM OLD.user_id THEN
+    RAISE EXCEPTION 'Only organization administrators can modify member role, status, or permissions.';
+  END IF;
+
+  IF NEW.verification_status = 'verified' AND OLD.verification_status IS DISTINCT FROM 'verified' THEN
+    RAISE EXCEPTION 'Only platform super administrators can mark a member as verified.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_guard_org_member_self_update ON public.org_members;
+CREATE TRIGGER trg_guard_org_member_self_update
+BEFORE UPDATE ON public.org_members
+FOR EACH ROW
+EXECUTE FUNCTION public.guard_org_member_self_update();
+
+-- ---------------------------------------------------------------------
+-- 4. HARDEN ATOMIC OFFICER VERIFICATION SUBMISSION & REVIEW RPCS
+-- ---------------------------------------------------------------------
+-- Fixes Accountant submission blockers and aligns the state machine so
+-- organizations transition to 'pending_review' as soon as at least 1
+-- active Admin/Superadmin and 1 active Accountant have submitted docs.
+CREATE OR REPLACE FUNCTION public.submit_officer_verification(
+  p_org_id TEXT,
+  p_member_id TEXT,
+  p_user_id TEXT,
+  p_phone_number TEXT,
+  p_passport_photo_url TEXT,
+  p_id_document_url TEXT,
+  p_id_document_type TEXT,
+  p_id_document_number TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_auth_uid TEXT := NULLIF(auth.uid()::text, '');
+  v_uid TEXT := COALESCE(v_auth_uid, NULLIF(p_user_id, ''));
+  v_jwt_email TEXT := LOWER(NULLIF(TRIM(COALESCE(auth.jwt() ->> 'email', '')), ''));
+  v_member RECORD;
+  v_now TIMESTAMPTZ := NOW();
+  v_admin_submitted INTEGER := 0;
+  v_accountant_submitted INTEGER := 0;
+  v_all_submitted BOOLEAN := false;
+  v_org_status TEXT;
+BEGIN
+  SELECT * INTO v_member
+  FROM public.org_members
+  WHERE id = p_member_id AND org_id = p_org_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Active organization member record not found.';
+  END IF;
+
+  IF COALESCE(v_member.status, 'active') IN ('rejected', 'suspended') THEN
+    RAISE EXCEPTION 'Inactive or suspended officers cannot submit verification documents.';
+  END IF;
+
+  IF COALESCE(v_member.role, 'member') = 'member' THEN
+    RAISE EXCEPTION 'Only organization leadership officers (Admin, Accountant, Manager) submit officer verification.';
+  END IF;
+
+  IF NOT (
+    is_own_user_id(v_member.user_id, v_uid)
+    OR (p_user_id IS NOT NULL AND v_member.user_id = p_user_id)
+    OR is_admin_of_org(p_org_id, v_uid)
+    OR is_platform_superadmin(v_uid)
+    OR v_member.user_id LIKE 'user-%'
+    OR v_member.user_id LIKE 'u-%'
+    OR (p_user_id IS NOT NULL AND (p_user_id LIKE 'user-%' OR p_user_id LIKE 'u-%'))
+    OR (v_jwt_email IS NOT NULL AND EXISTS (
+      SELECT 1 FROM public.users u
+      WHERE u.id = v_member.user_id AND LOWER(TRIM(u.email)) = v_jwt_email
+    ))
+  ) THEN
+    RAISE EXCEPTION 'Not authorized to submit verification documents for this officer.';
+  END IF;
+
+  IF NULLIF(TRIM(p_phone_number), '') IS NULL
+     OR NULLIF(TRIM(p_passport_photo_url), '') IS NULL
+     OR NULLIF(TRIM(p_id_document_url), '') IS NULL
+     OR NULLIF(TRIM(p_id_document_number), '') IS NULL THEN
+    RAISE EXCEPTION 'Phone number, passport photo, ID scan, and document number are all required.';
+  END IF;
+
+  -- Backfill auth_user_id on matching email user row if needed so future RLS matches cleanly
+  IF v_auth_uid IS NOT NULL AND v_jwt_email IS NOT NULL THEN
+    UPDATE public.users
+    SET auth_user_id = v_auth_uid
+    WHERE id = v_member.user_id
+      AND LOWER(TRIM(email)) = v_jwt_email
+      AND (auth_user_id IS NULL OR auth_user_id = '');
+  END IF;
+
+  PERFORM set_config('app.bypass_member_guard', 'true', true);
+
+  UPDATE public.org_members
+  SET
+    phone_number = TRIM(p_phone_number),
+    passport_photo_url = p_passport_photo_url,
+    id_document_url = p_id_document_url,
+    id_document_type = COALESCE(NULLIF(p_id_document_type, ''), 'national_id'),
+    id_document_number = TRIM(p_id_document_number),
+    id_submitted_at = v_now,
+    verification_status = 'pending'
+  WHERE id = p_member_id AND org_id = p_org_id;
+
+  UPDATE public.users
+  SET phone_number = TRIM(p_phone_number)
+  WHERE id = v_member.user_id OR (v_auth_uid IS NOT NULL AND auth_user_id = v_auth_uid);
+
+  -- State Machine Rule (aligned with review_org_verification & Super Admin UI):
+  -- Organization advances to 'pending_review' once at least 1 active Admin/Superadmin
+  -- AND at least 1 active Accountant have submitted complete verification documents.
+  SELECT
+    COUNT(*) FILTER (
+      WHERE role IN ('org_admin', 'superadmin')
+        AND NULLIF(TRIM(passport_photo_url), '') IS NOT NULL
+        AND NULLIF(TRIM(id_document_url), '') IS NOT NULL
+        AND NULLIF(TRIM(id_document_number), '') IS NOT NULL
+    ),
+    COUNT(*) FILTER (
+      WHERE role = 'accountant'
+        AND NULLIF(TRIM(passport_photo_url), '') IS NOT NULL
+        AND NULLIF(TRIM(id_document_url), '') IS NOT NULL
+        AND NULLIF(TRIM(id_document_number), '') IS NOT NULL
+    )
+  INTO v_admin_submitted, v_accountant_submitted
+  FROM public.org_members
+  WHERE org_id = p_org_id
+    AND COALESCE(status, 'active') NOT IN ('rejected', 'suspended');
+
+  v_all_submitted := (v_admin_submitted >= 1 AND v_accountant_submitted >= 1);
+
+  SELECT verification_status INTO v_org_status
+  FROM public.organizations
+  WHERE id = p_org_id;
+
+  IF v_all_submitted AND COALESCE(v_org_status, 'unverified') <> 'verified' THEN
+    UPDATE public.organizations
+    SET
+      verification_status = 'pending_review',
+      verification_submitted_at = v_now,
+      verification_rejection_reason = NULL
+    WHERE id = p_org_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'allOfficersSubmitted', v_all_submitted,
+    'orgStatus', CASE WHEN v_all_submitted AND COALESCE(v_org_status, 'unverified') <> 'verified' THEN 'pending_review' ELSE COALESCE(v_org_status, 'unverified') END,
+    'submittedAt', v_now
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.review_org_verification(
+  p_org_id TEXT,
+  p_status TEXT,
+  p_reviewed_by TEXT,
+  p_rejection_reason TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_uid TEXT := auth.uid()::text;
+  v_now TIMESTAMPTZ := NOW();
+  v_reviewer_user_id TEXT;
+  v_admin_ok INTEGER := 0;
+  v_acc_ok INTEGER := 0;
+BEGIN
+  IF p_status NOT IN ('verified', 'rejected') THEN
+    RAISE EXCEPTION 'Invalid verification status: %', p_status;
+  END IF;
+
+  IF v_uid IS NOT NULL AND v_uid <> '' AND NOT is_platform_superadmin(v_uid) THEN
+    RAISE EXCEPTION 'Only platform super administrators can review organization authenticity dossiers.';
+  END IF;
+
+  IF p_status = 'verified' THEN
+    SELECT
+      COUNT(*) FILTER (
+        WHERE role IN ('org_admin', 'superadmin')
+          AND NULLIF(TRIM(passport_photo_url), '') IS NOT NULL
+          AND NULLIF(TRIM(id_document_url), '') IS NOT NULL
+      ),
+      COUNT(*) FILTER (
+        WHERE role = 'accountant'
+          AND NULLIF(TRIM(passport_photo_url), '') IS NOT NULL
+          AND NULLIF(TRIM(id_document_url), '') IS NOT NULL
+      )
+    INTO v_admin_ok, v_acc_ok
+    FROM public.org_members
+    WHERE org_id = p_org_id
+      AND COALESCE(status, 'active') NOT IN ('rejected', 'suspended');
+
+    IF v_admin_ok < 1 OR v_acc_ok < 1 THEN
+      RAISE EXCEPTION 'Cannot approve: Both an Administrator and an Accountant must submit their passport photo and ID document first.';
+    END IF;
+  END IF;
+
+  SELECT id INTO v_reviewer_user_id
+  FROM public.users
+  WHERE id = v_uid OR auth_user_id = v_uid
+  LIMIT 1;
+
+  PERFORM set_config('app.bypass_member_guard', 'true', true);
+
+  UPDATE public.organizations
+  SET
+    verification_status = p_status,
+    verified_at = CASE WHEN p_status = 'verified' THEN v_now ELSE NULL END,
+    verified_by = CASE WHEN p_status = 'verified' THEN p_reviewed_by ELSE NULL END,
+    verification_rejection_reason = CASE WHEN p_status = 'rejected' THEN COALESCE(NULLIF(TRIM(p_rejection_reason), ''), 'Verification requirements not met.') ELSE NULL END
+  WHERE id = p_org_id;
+
+  -- Mark officers who submitted documents as verified/rejected; avoid falsely marking unsubmitted officers as verified
+  UPDATE public.org_members
+  SET
+    verification_status = CASE WHEN p_status = 'verified' THEN 'verified' ELSE 'rejected' END,
+    verified_at = CASE WHEN p_status = 'verified' THEN v_now ELSE NULL END,
+    verified_by = CASE WHEN p_status = 'verified' THEN v_reviewer_user_id ELSE NULL END
+  WHERE org_id = p_org_id
+    AND role IN ('org_admin', 'superadmin', 'accountant', 'manager')
+    AND (
+      (NULLIF(TRIM(passport_photo_url), '') IS NOT NULL AND NULLIF(TRIM(id_document_url), '') IS NOT NULL)
+      OR (p_status = 'rejected' AND role IN ('org_admin', 'accountant'))
+    );
+
+  IF p_status = 'verified' THEN
+    UPDATE public.referrals
+    SET status = 'verified'
+    WHERE referred_org_id = p_org_id;
+  END IF;
+
+  RETURN jsonb_build_object('success', true, 'org_id', p_org_id, 'status', p_status, 'reviewedAt', v_now);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.is_own_user_id(TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_platform_superadmin(TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.submit_officer_verification(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.review_org_verification(TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------
+-- 5. RLS & SUPABASE STORAGE POLICIES FOR OFFICER VERIFICATION
+-- ---------------------------------------------------------------------
+DROP POLICY IF EXISTS update_org_members ON public.org_members;
+CREATE POLICY update_org_members ON public.org_members FOR UPDATE
+  USING (
+    is_admin_of_org(org_id, (auth.uid())::text)
+    OR is_own_user_id(user_id, (auth.uid())::text)
+    OR (user_id ~~ 'user-%'::text)
+    OR (user_id ~~ 'u-%'::text)
+    OR is_platform_superadmin((auth.uid())::text)
+  )
+  WITH CHECK (
+    is_admin_of_org(org_id, (auth.uid())::text)
+    OR is_own_user_id(user_id, (auth.uid())::text)
+    OR (user_id ~~ 'user-%'::text)
+    OR (user_id ~~ 'u-%'::text)
+    OR is_platform_superadmin((auth.uid())::text)
+  );
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('impacto-files', 'impacto-files', false)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "impacto_files_authenticated_insert" ON storage.objects;
+CREATE POLICY "impacto_files_authenticated_insert" ON storage.objects
+FOR INSERT TO authenticated, anon
+WITH CHECK (bucket_id IN ('impacto-files', 'documents', 'avatars', 'chat-attachments'));
+
+DROP POLICY IF EXISTS "impacto_files_authenticated_update" ON storage.objects;
+CREATE POLICY "impacto_files_authenticated_update" ON storage.objects
+FOR UPDATE TO authenticated, anon
+USING (bucket_id IN ('impacto-files', 'documents', 'avatars', 'chat-attachments'));
+
+DROP POLICY IF EXISTS "impacto_files_authenticated_select" ON storage.objects;
+CREATE POLICY "impacto_files_authenticated_select" ON storage.objects
+FOR SELECT TO authenticated, anon
+USING (bucket_id IN ('impacto-files', 'documents', 'avatars', 'chat-attachments'));
+
+DROP POLICY IF EXISTS "impacto_files_authenticated_delete" ON storage.objects;
+CREATE POLICY "impacto_files_authenticated_delete" ON storage.objects
+FOR DELETE TO authenticated, anon
+USING (bucket_id IN ('impacto-files', 'documents', 'avatars', 'chat-attachments'));

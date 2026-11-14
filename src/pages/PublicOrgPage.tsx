@@ -60,7 +60,7 @@ import { useToast } from "../components/Toast";
 import { useAuthStore } from "../store/authStore";
 import { useOrgStore } from "../store/orgStore";
 import { MoMoPushPaymentModal, MoMoPaymentSuccessData } from "../components/MoMoPushPaymentModal";
-import { cleanMerchantCode, cleanPhoneNumber } from "../components/UssdPaymentHelper";
+import { cleanMerchantCode, cleanPhoneNumber, getOrgMomoDisplayMethods } from "../components/UssdPaymentHelper";
 import { useCreateDonation } from "../hooks/useImpactoData";
 import { resolveFileUrl } from "../lib/storageService";
 import { canAccessFeature } from "../lib/subscriptionMatrix";
@@ -723,11 +723,14 @@ export const PublicOrgPage: React.FC = () => {
   // Gallery URLs list
   const rawGallery = org?.gallery_urls && org.gallery_urls.length > 0 ? org.gallery_urls : [];
 
-  // Payment credentials configured by organization
+  // Payment credentials configured by organization (Merchant Code only by default unless enabled in MoMo Carrier Portals)
+  const orgDisplayMethods = getOrgMomoDisplayMethods(org);
   const donationMCode = cleanMerchantCode(org?.momo_merchant_code || "");
   const donationPhone = cleanPhoneNumber(org?.donation_mtn_number || org?.dues_mtn_number || "");
-  const codeUssd = donationMCode ? `*182*8*1*${donationMCode}#` : "";
-  const phoneUssd = donationPhone ? `*182*1*1*${donationPhone}#` : "";
+  const donationAirtelPhone = cleanPhoneNumber(org?.donation_airtel_number || org?.dues_airtel_number || "");
+  const codeUssd = orgDisplayMethods.includes("merchant_code") && donationMCode ? `*182*8*1*${donationMCode}#` : "";
+  const phoneUssd = orgDisplayMethods.includes("mtn_phone") && donationPhone ? `*182*1*1*${donationPhone}#` : "";
+  const airtelUssd = orgDisplayMethods.includes("airtel_phone") && donationAirtelPhone ? `*182*1*1*${donationAirtelPhone}#` : "";
 
   const adminMomoCode = org?.momo_merchant_code || donationMCode;
 
@@ -1843,8 +1846,8 @@ export const PublicOrgPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Direct USSD Payment Code and Phone to Pay */}
-                {(codeUssd || phoneUssd) && (
+                {/* Direct USSD Payment Code and Phone to Pay (filtered by MoMo Carrier Portals) */}
+                {(codeUssd || phoneUssd || airtelUssd) && (
                   <div className="w-full grid grid-cols-1 gap-3 text-left min-w-0">
                     {/* Option 1: MoMo Pay Merchant Code */}
                     {codeUssd ? (
@@ -1879,13 +1882,13 @@ export const PublicOrgPage: React.FC = () => {
                       </div>
                     ) : null}
 
-                    {/* Option 2: Pay to Phone Number */}
+                    {/* Option 2: Pay to MTN Phone Number */}
                     {phoneUssd ? (
                       <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-col justify-between gap-2.5 min-w-0 overflow-hidden">
                         <div className="min-w-0">
                           <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400 mb-1.5">
                             <span className="flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-200">
-                              <PhoneCall className="h-3.5 w-3.5 text-slate-500 shrink-0" /> Phone Number
+                              <PhoneCall className="h-3.5 w-3.5 text-slate-500 shrink-0" /> MTN Phone Number
                             </span>
                           </div>
                           <div className="font-mono text-xs text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 select-all break-all leading-relaxed overflow-hidden min-w-0">
@@ -1911,11 +1914,44 @@ export const PublicOrgPage: React.FC = () => {
                         </div>
                       </div>
                     ) : null}
+
+                    {/* Option 3: Pay to Airtel Money Phone Number */}
+                    {airtelUssd ? (
+                      <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-col justify-between gap-2.5 min-w-0 overflow-hidden">
+                        <div className="min-w-0">
+                          <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400 mb-1.5">
+                            <span className="flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-200">
+                              <PhoneCall className="h-3.5 w-3.5 text-rose-500 shrink-0" /> Airtel Money Number
+                            </span>
+                          </div>
+                          <div className="font-mono text-xs text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 select-all break-all leading-relaxed overflow-hidden min-w-0">
+                            <span>{airtelUssd}</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(airtelUssd, "Airtel USSD Code")}
+                            className="flex-1 min-w-0 whitespace-nowrap py-1.5 px-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            {copiedField === "Airtel USSD Code" ? <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
+                            <span>{copiedField === "Airtel USSD Code" ? "Copied" : "Copy USSD"}</span>
+                          </button>
+                          <a
+                            href={`tel:${encodeURIComponent(airtelUssd)}`}
+                            className="whitespace-nowrap shrink-0 py-1.5 px-3 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <Smartphone className="h-3.5 w-3.5 shrink-0" />
+                            <span>Dial</span>
+                          </a>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 )}
 
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Voluntary contribution: Dial either code and enter your chosen contribution amount when prompted by MTN Mobile Money.
+                  Voluntary contribution: Dial the displayed code and enter your chosen contribution amount when prompted by Mobile Money.
                 </p>
 
                 <button
@@ -2007,6 +2043,7 @@ export const PublicOrgPage: React.FC = () => {
         recipientMerchantCode={donationMCode}
         recipientMtnNumber={donationPhone}
         recipientAirtelNumber={org.donation_airtel_number || org.dues_airtel_number || ""}
+        allowedDisplayMethods={orgDisplayMethods}
         onSuccess={async (data: MoMoPaymentSuccessData) => {
           try {
             await createDonationMutation.mutateAsync({

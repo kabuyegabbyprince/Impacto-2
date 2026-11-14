@@ -134,6 +134,16 @@ export function useOrganizations() {
         const localMomoMerchant = localStorage.getItem(
           `impacto_org_momo_merchant_code_${org.id}`,
         );
+        const localMomoDisplayMethods = localStorage.getItem(
+          `impacto_org_momo_display_methods_${org.id}`,
+        );
+        let parsedMomoDisplayMethods: any[] | undefined;
+        try {
+          if (localMomoDisplayMethods) {
+            const parsed = JSON.parse(localMomoDisplayMethods);
+            if (Array.isArray(parsed) && parsed.length > 0) parsedMomoDisplayMethods = parsed;
+          }
+        } catch {}
         return {
           ...org,
           dues_account_name:
@@ -154,6 +164,11 @@ export function useOrganizations() {
             org.momo_merchant_code ||
             (org as any).momo_merchant_code ||
             "",
+          momo_display_methods:
+            parsedMomoDisplayMethods ||
+            (Array.isArray(org.momo_display_methods) && org.momo_display_methods.length > 0
+              ? org.momo_display_methods
+              : ["merchant_code"]),
           exit_survey_enabled:
             localExitSurveyEnabled !== null
               ? JSON.parse(localExitSurveyEnabled)
@@ -300,8 +315,23 @@ export function useOrganization(slug: string | undefined) {
         const localExitSurveyQuestions = localStorage.getItem(
           `impacto_org_exit_survey_questions_${org.id}`,
         );
+        const localMomoDisplayMethods = localStorage.getItem(
+          `impacto_org_momo_display_methods_${org.id}`,
+        );
+        let parsedMomoDisplayMethods: any[] | undefined;
+        try {
+          if (localMomoDisplayMethods) {
+            const parsed = JSON.parse(localMomoDisplayMethods);
+            if (Array.isArray(parsed) && parsed.length > 0) parsedMomoDisplayMethods = parsed;
+          }
+        } catch {}
         org = {
           ...org,
+          momo_display_methods:
+            parsedMomoDisplayMethods ||
+            (Array.isArray(org.momo_display_methods) && org.momo_display_methods.length > 0
+              ? org.momo_display_methods
+              : ["merchant_code"]),
           exit_survey_enabled:
             localExitSurveyEnabled !== null
               ? JSON.parse(localExitSurveyEnabled)
@@ -404,6 +434,7 @@ export function useUpdateOrganization() {
         dues_mtn_number,
         dues_airtel_number,
         momo_merchant_code,
+        momo_display_methods,
         active_packages,
         packages_data,
         ...rest
@@ -431,6 +462,16 @@ export function useUpdateOrganization() {
         localStorage.setItem(
           `impacto_org_momo_merchant_code_${id}`,
           momo_merchant_code || "",
+        );
+      }
+      if (momo_display_methods !== undefined) {
+        const sanitized =
+          Array.isArray(momo_display_methods) && momo_display_methods.length > 0
+            ? momo_display_methods
+            : ["merchant_code"];
+        localStorage.setItem(
+          `impacto_org_momo_display_methods_${id}`,
+          JSON.stringify(sanitized),
         );
       }
 
@@ -529,6 +570,12 @@ export function useUpdateOrganization() {
         if (momo_merchant_code !== undefined) {
           updateData.momo_merchant_code = momo_merchant_code;
         }
+        if (momo_display_methods !== undefined) {
+          updateData.momo_display_methods =
+            Array.isArray(momo_display_methods) && momo_display_methods.length > 0
+              ? momo_display_methods
+              : ["merchant_code"];
+        }
 
         // Auto-prune loop for any non-existent columns in Supabase schema cache
         for (let attempt = 0; attempt < 6; attempt++) {
@@ -625,6 +672,16 @@ export function useUpdateOrganization() {
         const localMomoMerchant = localStorage.getItem(
           `impacto_org_momo_merchant_code_${id}`,
         );
+        const localMomoDisplayMethods = localStorage.getItem(
+          `impacto_org_momo_display_methods_${id}`,
+        );
+        let parsedMomoDisplayMethods: any[] | undefined;
+        try {
+          if (localMomoDisplayMethods) {
+            const parsed = JSON.parse(localMomoDisplayMethods);
+            if (Array.isArray(parsed) && parsed.length > 0) parsedMomoDisplayMethods = parsed;
+          }
+        } catch {}
         return {
           ...updatedOrg,
           dues_account_name:
@@ -648,6 +705,13 @@ export function useUpdateOrganization() {
             momo_merchant_code ||
             (updatedOrg as any).momo_merchant_code ||
             "",
+          momo_display_methods:
+            parsedMomoDisplayMethods ||
+            (Array.isArray(momo_display_methods) && momo_display_methods.length > 0
+              ? momo_display_methods
+              : Array.isArray(updatedOrg.momo_display_methods) && updatedOrg.momo_display_methods.length > 0
+                ? updatedOrg.momo_display_methods
+                : ["merchant_code"]),
           exit_survey_enabled:
             localExitSurveyEnabled !== null
               ? JSON.parse(localExitSurveyEnabled)
@@ -765,6 +829,44 @@ export function useMembers(orgId: string | undefined) {
               .eq("org_id", orgId);
             data = retryRes.data;
             error = retryRes.error;
+          }
+          if (error) {
+            // 3rd plain fallback without PostgREST FK embed, hydrating users separately
+            const plainRes = await supabase
+              .from("org_members")
+              .select("*")
+              .eq("org_id", orgId);
+            if (!plainRes.error && plainRes.data) {
+              const userIds = Array.from(
+                new Set(plainRes.data.map((m: any) => m.user_id).filter(Boolean))
+              );
+              let usersList: any[] = [];
+              if (userIds.length > 0) {
+                const uRes = await supabase
+                  .from("users")
+                  .select("id, email, full_name, avatar_url, phone_number, auth_user_id")
+                  .in("id", userIds);
+                if (uRes.error) {
+                  const uRetry = await supabase
+                    .from("users")
+                    .select("id, email, full_name, avatar_url")
+                    .in("id", userIds);
+                  usersList = uRetry.data || [];
+                } else {
+                  usersList = uRes.data || [];
+                }
+              }
+              data = plainRes.data.map((m: any) => ({
+                ...m,
+                user:
+                  usersList.find(
+                    (u: any) => u.id === m.user_id || u.auth_user_id === m.user_id
+                  ) || undefined,
+              }));
+              error = null;
+            } else {
+              error = plainRes.error;
+            }
           }
           if (error) {
             console.warn("Supabase members query notice, using local cache:", error);
@@ -3972,10 +4074,26 @@ export function usePlatformVerificationData(enabled: boolean = true) {
             error = retryRes.error;
           }
 
+          if (error) {
+            const plainRes = await supabase
+              .from("org_members")
+              .select("*")
+              .neq("role", "member");
+            officerRows = plainRes.data;
+            error = plainRes.error;
+          }
+
           if (!error && officerRows) {
-            const { data: usersRows } = await supabase
+            let { data: usersRows, error: usersErr } = await supabase
               .from("users")
               .select("id, email, full_name, avatar_url, phone_number, auth_user_id");
+
+            if (usersErr) {
+              const usersRetry = await supabase
+                .from("users")
+                .select("id, email, full_name, avatar_url");
+              usersRows = usersRetry.data as any;
+            }
 
             return {
               officers: officerRows as OrgMember[],
@@ -5732,22 +5850,24 @@ export function useSubmitOfficerVerification() {
           const { data: liveOfficers, error: fetchErr } = await supabase
             .from("org_members")
             .select("id, role, status, passport_photo_url, id_document_url, id_document_number")
-            .eq("org_id", payload.org_id)
-            .eq("status", "active");
+            .eq("org_id", payload.org_id);
 
           if (fetchErr) {
             throw new Error(fetchErr.message || "Could not verify leadership dossier completeness.");
           }
 
-          const admins = (liveOfficers || []).filter(
+          const activeOfficers = (liveOfficers || []).filter(
+            (m: any) => m.status !== "rejected" && m.status !== "suspended"
+          );
+          const admins = activeOfficers.filter(
             (m: any) => m.role === "org_admin" || m.role === "superadmin"
           );
-          const accountants = (liveOfficers || []).filter(
+          const accountants = activeOfficers.filter(
             (m: any) => m.role === "accountant"
           );
           const allAdminsReady =
             admins.length >= 1 &&
-            admins.every(
+            admins.some(
               (m: any) =>
                 Boolean(m.passport_photo_url) &&
                 Boolean(m.id_document_url) &&
@@ -5755,7 +5875,7 @@ export function useSubmitOfficerVerification() {
             );
           const allAccountantsReady =
             accountants.length >= 1 &&
-            accountants.every(
+            accountants.some(
               (m: any) =>
                 Boolean(m.passport_photo_url) &&
                 Boolean(m.id_document_url) &&
@@ -5813,7 +5933,10 @@ export function useSubmitOfficerVerification() {
 
       if (!isSupabaseConfigured) {
         const activeOfficers = members.filter(
-          (m) => m.org_id === payload.org_id && m.status === "active"
+          (m) =>
+            m.org_id === payload.org_id &&
+            m.status !== "rejected" &&
+            m.status !== "suspended"
         );
         const admins = activeOfficers.filter(
           (m) => m.role === "org_admin" || m.role === "superadmin"
@@ -5822,8 +5945,12 @@ export function useSubmitOfficerVerification() {
         allOfficersSubmitted =
           admins.length >= 1 &&
           accountants.length >= 1 &&
-          admins.every((m) => !!m.passport_photo_url && !!m.id_document_url) &&
-          accountants.every((m) => !!m.passport_photo_url && !!m.id_document_url);
+          admins.some(
+            (m) => !!m.passport_photo_url && !!m.id_document_url && !!m.id_document_number
+          ) &&
+          accountants.some(
+            (m) => !!m.passport_photo_url && !!m.id_document_url && !!m.id_document_number
+          );
       }
 
       if (allOfficersSubmitted) {
@@ -6154,19 +6281,21 @@ export function useReviewOrgVerification() {
             const { data: liveOfficers, error: fetchErr } = await supabase
               .from("org_members")
               .select("id, role, status, passport_photo_url, id_document_url")
-              .eq("org_id", payload.org_id)
-              .eq("status", "active");
+              .eq("org_id", payload.org_id);
 
             if (fetchErr) {
               throw new Error(fetchErr.message || "Could not verify leadership officer documents.");
             }
-            const hasAdmin = (liveOfficers || []).some(
+            const activeOfficers = (liveOfficers || []).filter(
+              (m: any) => m.status !== "rejected" && m.status !== "suspended"
+            );
+            const hasAdmin = activeOfficers.some(
               (m: any) =>
                 (m.role === "org_admin" || m.role === "superadmin") &&
                 Boolean(m.passport_photo_url) &&
                 Boolean(m.id_document_url)
             );
-            const hasAccountant = (liveOfficers || []).some(
+            const hasAccountant = activeOfficers.some(
               (m: any) =>
                 m.role === "accountant" &&
                 Boolean(m.passport_photo_url) &&
@@ -6207,11 +6336,19 @@ export function useReviewOrgVerification() {
             memberUpdate.verified_by = payload.reviewed_by_user_id;
           }
 
-          const { error: memErr } = await supabase
+          let memQuery = supabase
             .from("org_members")
             .update(memberUpdate)
             .eq("org_id", payload.org_id)
             .in("role", ["org_admin", "accountant", "superadmin", "manager"]);
+
+          if (payload.status === "verified") {
+            memQuery = memQuery
+              .not("passport_photo_url", "is", null)
+              .not("id_document_url", "is", null);
+          }
+
+          const { error: memErr } = await memQuery;
 
           if (memErr) {
             console.warn("Supabase member verification status sync notice:", memErr);
@@ -7189,14 +7326,29 @@ export function useMemberFees(orgId: string | undefined) {
             );
           };
 
+          const normalizeFee = (raw: any, memberName: string): MemberFee => {
+            const totalDue = Number(raw.total_due_amount ?? raw.amount) || 0;
+            const rawPaid = Number(raw.paid_amount ?? 0) || 0;
+            const paidAmt =
+              raw.status === "paid" && rawPaid <= 0
+                ? totalDue
+                : Math.min(totalDue, Math.max(0, rawPaid));
+            return {
+              ...raw,
+              due_name: raw.due_name || raw.period_date || "",
+              amount: totalDue,
+              total_due_amount: totalDue,
+              paid_amount: paidAmt,
+              pending_installment_amount: Number(raw.pending_installment_amount) || 0,
+              payment_history: Array.isArray(raw.payment_history) ? raw.payment_history : [],
+              member_name: memberName,
+            } as MemberFee;
+          };
+
           currentFees.forEach((f) => {
             if (deletedIds.has(f.id)) return;
             const memberName = resolveMemberName(f);
-            resultMap.set(f.id, {
-              ...f,
-              amount: Number(f.amount) || 0,
-              member_name: memberName,
-            } as MemberFee);
+            resultMap.set(f.id, normalizeFee(f, memberName));
           });
 
           // Merge local fees for this specific organization (excluding deleted fees)
@@ -7206,19 +7358,20 @@ export function useMemberFees(orgId: string | undefined) {
             const memberName = resolveMemberName(mf);
             if (resultMap.has(mf.id)) {
               const existing = resultMap.get(mf.id)!;
-              resultMap.set(mf.id, {
+              const merged = {
                 ...existing,
                 ...mf,
                 amount: Number(mf.amount !== undefined ? mf.amount : existing.amount) || 0,
+                total_due_amount: Number(mf.total_due_amount ?? mf.amount ?? existing.total_due_amount ?? existing.amount) || 0,
+                paid_amount: Number(mf.paid_amount !== undefined ? mf.paid_amount : existing.paid_amount) || 0,
+                pending_installment_amount: Number(mf.pending_installment_amount !== undefined ? mf.pending_installment_amount : existing.pending_installment_amount) || 0,
+                payment_history: Array.isArray(mf.payment_history) && mf.payment_history.length > 0 ? mf.payment_history : (existing.payment_history || []),
+                due_name: mf.due_name || existing.due_name || existing.period_date || "",
                 status: mf.status || existing.status,
-                member_name: memberName || existing.member_name,
-              });
+              };
+              resultMap.set(mf.id, normalizeFee(merged, memberName || existing.member_name || "Cooperative Member"));
             } else {
-              resultMap.set(mf.id, {
-                ...mf,
-                amount: Number(mf.amount) || 0,
-                member_name: memberName,
-              });
+              resultMap.set(mf.id, normalizeFee(mf, memberName));
             }
           });
 
@@ -7256,9 +7409,17 @@ export function useMemberFees(orgId: string | undefined) {
           (matchedMem as any)?.user?.email ||
           f.member_name ||
           "Cooperative Member";
+        const totalDue = Number(f.total_due_amount ?? f.amount) || 0;
+        const rawPaid = Number(f.paid_amount ?? 0) || 0;
+        const paidAmt = f.status === "paid" && rawPaid <= 0 ? totalDue : Math.min(totalDue, Math.max(0, rawPaid));
         return {
           ...f,
-          amount: Number(f.amount) || 0,
+          due_name: f.due_name || f.period_date || "",
+          amount: totalDue,
+          total_due_amount: totalDue,
+          paid_amount: paidAmt,
+          pending_installment_amount: Number(f.pending_installment_amount) || 0,
+          payment_history: Array.isArray(f.payment_history) ? f.payment_history : [],
           member_name: memberName,
         } as MemberFee;
       });
@@ -7274,7 +7435,22 @@ export function useCreateMemberFee() {
       const newId = `fee-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
       const createdAt = new Date().toISOString();
       const { user_id, actor_name, ...restPayload } = payload;
-      const feeRow = { ...restPayload, id: newId, created_at: createdAt };
+      const totalDue = Number(restPayload.total_due_amount ?? restPayload.amount) || 0;
+      const initialPaid =
+        restPayload.status === "paid"
+          ? totalDue
+          : Math.min(totalDue, Math.max(0, Number(restPayload.paid_amount) || 0));
+      const feeRow: MemberFee = {
+        ...restPayload,
+        id: newId,
+        due_name: (restPayload.due_name || "").trim() || restPayload.period_date || "Standard Due",
+        amount: totalDue,
+        total_due_amount: totalDue,
+        paid_amount: initialPaid,
+        pending_installment_amount: Number(restPayload.pending_installment_amount) || 0,
+        payment_history: Array.isArray(restPayload.payment_history) ? restPayload.payment_history : [],
+        created_at: createdAt,
+      };
 
       if (isSupabaseConfigured) {
         try {
@@ -7286,7 +7462,7 @@ export function useCreateMemberFee() {
 
           if (resp.ok) {
             const resData = await resp.json();
-            const createdFee = resData.fee || feeRow;
+            const createdFee = { ...feeRow, ...(resData.fee || {}) };
 
             // Maintain local sync
             const list = MockDB.getMemberFees();
@@ -7302,8 +7478,8 @@ export function useCreateMemberFee() {
                 user_id: user_id || null,
                 actor_name: actor_name || "Accountant",
                 action_type: "fee_created",
-                description: `Created ${payload.payment_period} dues charge of ${Number(payload.amount).toLocaleString()} RWF for period ${payload.period_date || "N/A"}`,
-                metadata_json: { fee_id: newId, amount: payload.amount, member_id: payload.member_id },
+                description: `Created "${feeRow.due_name}" (${payload.payment_period}) dues charge of ${totalDue.toLocaleString()} RWF for period ${payload.period_date || "N/A"}`,
+                metadata_json: { fee_id: newId, due_name: feeRow.due_name, amount: totalDue, member_id: payload.member_id },
               }),
             }).catch(() => {});
 
@@ -7327,8 +7503,8 @@ export function useCreateMemberFee() {
         user_id: user_id || "admin",
         actor_name: actor_name || "Accountant",
         action_type: "fee_created",
-        description: `Created ${payload.payment_period} dues charge of ${Number(payload.amount).toLocaleString()} RWF for period ${payload.period_date || "N/A"}`,
-        metadata_json: { fee_id: newId, amount: payload.amount, member_id: payload.member_id },
+        description: `Created "${feeRow.due_name}" (${payload.payment_period}) dues charge of ${totalDue.toLocaleString()} RWF for period ${payload.period_date || "N/A"}`,
+        metadata_json: { fee_id: newId, due_name: feeRow.due_name, amount: totalDue, member_id: payload.member_id },
         created_at: new Date().toISOString(),
       });
       MockDB.saveAuditLogs(auditLogs);
@@ -7339,7 +7515,7 @@ export function useCreateMemberFee() {
         const matchedMem = members.find((m) => m.id === payload.member_id);
         const matchedUser = matchedMem ? users.find((u) => u.id === matchedMem.user_id) : null;
         const memberName = matchedUser?.full_name || matchedMem?.user?.full_name || "Cooperative Member";
-        const desc = `Member Fee Paid (${payload.payment_period.toUpperCase()}) - ${memberName} - Period: ${payload.period_date || 'N/A'}`;
+        const desc = `Member Fee Paid (${feeRow.due_name || payload.payment_period.toUpperCase()}) - ${memberName} - Period: ${payload.period_date || 'N/A'}`;
         const ref = `FEE-${newId.slice(0, 8)}`;
         const dateVal = payload.paid_at ? payload.paid_at.split("T")[0] : new Date().toISOString().split("T")[0];
 
@@ -7348,7 +7524,7 @@ export function useCreateMemberFee() {
           id: "led-fee-" + Math.random().toString(36).substring(2, 9),
           org_id: payload.org_id,
           type: "income",
-          amount: payload.amount,
+          amount: totalDue,
           currency: payload.currency || "RWF",
           category: "membership_fee",
           description: desc,
@@ -7377,7 +7553,13 @@ export function useUpdateMemberFeeStatus() {
       id,
       org_id,
       member_id,
+      due_name,
       amount,
+      total_due_amount,
+      paid_amount,
+      pending_installment_amount,
+      payment_history,
+      installment_amount,
       payment_period,
       period_date,
       status,
@@ -7395,10 +7577,16 @@ export function useUpdateMemberFeeStatus() {
       id: string;
       org_id: string;
       member_id?: string;
+      due_name?: string;
       amount?: number;
+      total_due_amount?: number;
+      paid_amount?: number;
+      pending_installment_amount?: number;
+      payment_history?: import("../types").MemberFeeInstallment[];
+      installment_amount?: number;
       payment_period?: string;
       period_date?: string;
-      status: "paid" | "pending" | "pending_confirmation";
+      status: "paid" | "partially_paid" | "pending" | "pending_confirmation";
       paid_at?: string;
       paid_by_method?: "MTN MoMo" | "Airtel Money" | "Bank Transfer" | "Cash" | string;
       transaction_reference?: string;
@@ -7425,11 +7613,30 @@ export function useUpdateMemberFeeStatus() {
           };
           if (org_id) updatePayload.org_id = org_id;
           if (member_id) updatePayload.member_id = member_id;
+          if (due_name !== undefined) updatePayload.due_name = due_name;
           if (amount !== undefined) updatePayload.amount = amount;
+          if (total_due_amount !== undefined) updatePayload.total_due_amount = total_due_amount;
+          if (paid_amount !== undefined) updatePayload.paid_amount = paid_amount;
+          if (pending_installment_amount !== undefined) updatePayload.pending_installment_amount = pending_installment_amount;
+          if (payment_history !== undefined) updatePayload.payment_history = payment_history;
           if (payment_period) updatePayload.payment_period = payment_period;
           if (period_date) updatePayload.period_date = period_date;
 
-          await supabase.from("member_fees").update(updatePayload).eq("id", id);
+          const { error: directErr } = await supabase.from("member_fees").update(updatePayload).eq("id", id);
+          if (
+            directErr &&
+            (directErr.code === "42703" ||
+              directErr.message?.toLowerCase().includes("column") ||
+              directErr.message?.toLowerCase().includes("schema cache"))
+          ) {
+            const legacyPayload = { ...updatePayload };
+            delete legacyPayload.due_name;
+            delete legacyPayload.total_due_amount;
+            delete legacyPayload.paid_amount;
+            delete legacyPayload.pending_installment_amount;
+            delete legacyPayload.payment_history;
+            await supabase.from("member_fees").update(legacyPayload).eq("id", id);
+          }
         } catch (sErr) {
           console.warn("[Fees Supabase Direct] Direct update warning:", sErr);
         }
@@ -7446,7 +7653,12 @@ export function useUpdateMemberFeeStatus() {
               id,
               org_id,
               member_id,
+              due_name,
               amount,
+              total_due_amount,
+              paid_amount,
+              pending_installment_amount,
+              payment_history,
               payment_period,
               period_date,
               status,
@@ -7465,11 +7677,12 @@ export function useUpdateMemberFeeStatus() {
         }
 
         // Audit log dispatch for status change
+        const verifiedAmtForLog = Number(installment_amount ?? paid_amount ?? amount ?? 0);
         const actionDesc =
-          status === "paid"
-            ? `Verified and approved fee payment (${Number(amount || 0).toLocaleString()} RWF) via ${paid_by_method || "Payment"}`
+          status === "paid" || status === "partially_paid"
+            ? `${status === "partially_paid" ? "Recorded partial installment" : "Verified and cleared full fee payment"} (${verifiedAmtForLog.toLocaleString()} RWF) via ${paid_by_method || "Payment"}`
             : status === "pending_confirmation"
-            ? `Reported fee payment slip for verification (Ref: ${transaction_reference || "N/A"})`
+            ? `Reported installment payment slip (${Number(pending_installment_amount ?? amount ?? 0).toLocaleString()} RWF) for verification (Ref: ${transaction_reference || "N/A"})`
             : `Updated fee status to ${status}`;
 
         fetch("/api/audit-logs/create", {
@@ -7478,10 +7691,10 @@ export function useUpdateMemberFeeStatus() {
           body: JSON.stringify({
             org_id,
             user_id: user_id || null,
-            actor_name: actor_name || (status === "paid" ? "Accountant" : "Member"),
-            action_type: status === "paid" ? "fee_verified" : "fee_reported",
+            actor_name: actor_name || (status === "paid" || status === "partially_paid" ? "Accountant" : "Member"),
+            action_type: status === "paid" || status === "partially_paid" ? "fee_verified" : "fee_reported",
             description: actionDesc,
-            metadata_json: { fee_id: id, status, amount, ref: transaction_reference },
+            metadata_json: { fee_id: id, status, amount, paid_amount, installment_amount, ref: transaction_reference },
           }),
         }).catch(() => {});
       }
@@ -7494,6 +7707,15 @@ export function useUpdateMemberFeeStatus() {
         const prevFee = list[idx];
         updatedFee = {
           ...prevFee,
+          due_name: due_name !== undefined ? due_name : prevFee.due_name,
+          amount: total_due_amount ?? amount ?? prevFee.amount,
+          total_due_amount: total_due_amount ?? amount ?? prevFee.total_due_amount ?? prevFee.amount,
+          paid_amount: paid_amount !== undefined ? paid_amount : prevFee.paid_amount,
+          pending_installment_amount:
+            pending_installment_amount !== undefined
+              ? pending_installment_amount
+              : prevFee.pending_installment_amount,
+          payment_history: payment_history !== undefined ? payment_history : prevFee.payment_history,
           status,
           paid_at: paid_at || prevFee.paid_at,
           paid_by_method: (paid_by_method as any) || prevFee.paid_by_method,
@@ -7506,11 +7728,17 @@ export function useUpdateMemberFeeStatus() {
         };
         list[idx] = updatedFee;
       } else {
+        const resolvedTotal = total_due_amount ?? amount ?? 0;
         updatedFee = {
           id,
           org_id,
           member_id: member_id || "",
-          amount: amount || 0,
+          due_name: due_name || period_date || "Standard Due",
+          amount: resolvedTotal,
+          total_due_amount: resolvedTotal,
+          paid_amount: paid_amount ?? (status === "paid" ? resolvedTotal : 0),
+          pending_installment_amount: pending_installment_amount ?? 0,
+          payment_history: payment_history || [],
           currency: "RWF",
           payment_period: (payment_period as any) || "monthly",
           period_date: period_date || new Date().toISOString().slice(0, 7),
@@ -7530,24 +7758,33 @@ export function useUpdateMemberFeeStatus() {
       MockDB.saveMemberFees(list);
 
       // Local audit log
+      const verifiedAmtForLocal = Number(installment_amount ?? paid_amount ?? amount ?? 0);
       const auditLogs = MockDB.getAuditLogs();
       auditLogs.unshift({
         id: "audit-" + Math.random().toString(36).substring(2, 9),
         org_id,
         user_id: user_id || "system",
-        actor_name: actor_name || (status === "paid" ? "Accountant" : "Member"),
-        action_type: status === "paid" ? "fee_verified" : "fee_reported",
+        actor_name: actor_name || (status === "paid" || status === "partially_paid" ? "Accountant" : "Member"),
+        action_type: status === "paid" || status === "partially_paid" ? "fee_verified" : "fee_reported",
         description:
-          status === "paid"
-            ? `Verified and approved fee payment (${Number(amount || 0).toLocaleString()} RWF) via ${paid_by_method || "Payment"}`
+          status === "paid" || status === "partially_paid"
+            ? `${status === "partially_paid" ? "Verified partial installment" : "Verified and approved fee payment"} (${verifiedAmtForLocal.toLocaleString()} RWF) via ${paid_by_method || "Payment"}`
             : `Updated fee status to ${status}`,
-        metadata_json: { fee_id: id, status, amount, ref: transaction_reference },
+        metadata_json: { fee_id: id, status, amount, paid_amount, installment_amount, ref: transaction_reference },
         created_at: new Date().toISOString(),
       });
       MockDB.saveAuditLogs(auditLogs);
 
-      // If status turned to 'paid', document in accounting Ledger
-      if (status === "paid") {
+      // Record verified installment or full settlement in accounting Ledger
+      const ledgerAmountNum = Number(
+        installment_amount !== undefined
+          ? installment_amount
+          : status === "paid"
+          ? updatedFee.total_due_amount ?? updatedFee.amount
+          : 0
+      ) || 0;
+
+      if ((status === "paid" || status === "partially_paid") && ledgerAmountNum > 0) {
         const members = MockDB.getMembers();
         const users = MockDB.getUsers();
         const matchedMem = members.find((m) => m.id === updatedFee.member_id || m.user_id === updatedFee.member_id);
@@ -7560,9 +7797,18 @@ export function useUpdateMemberFeeStatus() {
           updatedFee.member_name ||
           "Cooperative Member";
 
-        const feeAmountNum = Number(updatedFee.amount) || Number(amount) || 0;
-        const desc = `Member Fee Paid (${(updatedFee.payment_period || 'fee').toUpperCase()}) - ${memberName} - Period: ${updatedFee.period_date || 'N/A'}`;
-        const ref = transaction_reference || updatedFee.transaction_reference || `FEE-${id.slice(0, 8)}`;
+        const dueLabel = updatedFee.due_name || updatedFee.period_date || "N/A";
+        const instIndex = Array.isArray(updatedFee.payment_history) && updatedFee.payment_history.length > 0
+          ? updatedFee.payment_history.length
+          : 1;
+        const desc =
+          status === "partially_paid"
+            ? `Member Fee Partial Payment #${instIndex} (${dueLabel}) - ${memberName}`
+            : `Member Fee Paid (${dueLabel}) - ${memberName} - Period: ${updatedFee.period_date || 'N/A'}`;
+        const ref =
+          transaction_reference ||
+          updatedFee.transaction_reference ||
+          `FEE-${id.slice(0, 8)}-P${instIndex}`;
         const dateVal = paid_at ? paid_at.split("T")[0] : (updatedFee.paid_at ? updatedFee.paid_at.split("T")[0] : new Date().toISOString().split("T")[0]);
 
         if (isSupabaseConfigured) {
@@ -7570,7 +7816,7 @@ export function useUpdateMemberFeeStatus() {
             await supabase.from("ledger_entries").insert({
               org_id: org_id,
               type: "income",
-              amount: feeAmountNum,
+              amount: ledgerAmountNum,
               currency: updatedFee.currency || "RWF",
               category: "membership_fee",
               description: desc,
@@ -7583,13 +7829,13 @@ export function useUpdateMemberFeeStatus() {
         }
 
         const ledger = MockDB.getLedger();
-        const exists = ledger.some((l) => l.reference === ref && Number(l.amount) === feeAmountNum);
+        const exists = ledger.some((l) => l.reference === ref && Number(l.amount) === ledgerAmountNum);
         if (!exists) {
           ledger.push({
             id: "led-fee-" + Math.random().toString(36).substring(2, 9),
             org_id: org_id,
             type: "income",
-            amount: feeAmountNum,
+            amount: ledgerAmountNum,
             currency: updatedFee.currency || "RWF",
             category: "membership_fee",
             description: desc,
@@ -7735,7 +7981,9 @@ export function useUpdateAllMemberDues() {
       org_id,
       payment_period,
       period_date,
+      due_name,
       amount,
+      total_due_amount,
       due_date,
       admin_note,
       only_pending = true,
@@ -7743,15 +7991,22 @@ export function useUpdateAllMemberDues() {
       org_id: string;
       payment_period?: string;
       period_date: string;
+      due_name?: string;
       amount?: number;
+      total_due_amount?: number;
       due_date?: string;
       admin_note?: string;
       only_pending?: boolean;
     }) => {
+      const resolvedTotal = total_due_amount !== undefined ? total_due_amount : amount;
       if (isSupabaseConfigured) {
         try {
           const updateData: any = {};
-          if (amount !== undefined) updateData.amount = amount;
+          if (due_name !== undefined) updateData.due_name = due_name || null;
+          if (resolvedTotal !== undefined) {
+            updateData.amount = resolvedTotal;
+            updateData.total_due_amount = resolvedTotal;
+          }
           if (payment_period) updateData.payment_period = payment_period;
           if (due_date !== undefined) updateData.due_date = due_date || null;
           if (admin_note !== undefined) updateData.admin_note = admin_note || null;
@@ -7766,7 +8021,20 @@ export function useUpdateAllMemberDues() {
             query = query.neq("status", "paid");
           }
 
-          const { error } = await query;
+          let { error } = await query;
+          if (error && (error.code === "42703" || error.message?.toLowerCase().includes("column") || error.message?.toLowerCase().includes("schema cache"))) {
+            const legacyUpdateData = { ...updateData };
+            delete legacyUpdateData.due_name;
+            delete legacyUpdateData.total_due_amount;
+            let retryQ = supabase
+              .from("member_fees")
+              .update(legacyUpdateData)
+              .eq("org_id", org_id)
+              .eq("period_date", period_date);
+            if (only_pending) retryQ = retryQ.neq("status", "paid");
+            const retryRes = await retryQ;
+            error = retryRes.error;
+          }
           if (error) console.warn("[Update All Dues] Direct client update notice:", error);
 
           // Server batch API
@@ -7777,7 +8045,9 @@ export function useUpdateAllMemberDues() {
               org_id,
               period_date,
               payment_period,
-              amount,
+              due_name,
+              amount: resolvedTotal,
+              total_due_amount: resolvedTotal,
               due_date,
               admin_note,
               only_pending,
@@ -7797,7 +8067,8 @@ export function useUpdateAllMemberDues() {
             updatedCount++;
             return {
               ...f,
-              ...(amount !== undefined ? { amount } : {}),
+              ...(due_name !== undefined ? { due_name } : {}),
+              ...(resolvedTotal !== undefined ? { amount: resolvedTotal, total_due_amount: resolvedTotal } : {}),
               ...(payment_period ? { payment_period: payment_period as any } : {}),
               ...(due_date !== undefined ? { due_date } : {}),
               ...(admin_note !== undefined ? { admin_note } : {}),
@@ -7825,7 +8096,12 @@ export function useUpdateMemberFee() {
     mutationFn: async ({
       id,
       org_id,
+      due_name,
       amount,
+      total_due_amount,
+      paid_amount,
+      pending_installment_amount,
+      payment_history,
       payment_period,
       period_date,
       status,
@@ -7835,25 +8111,52 @@ export function useUpdateMemberFee() {
     }: {
       id: string;
       org_id: string;
+      due_name?: string;
       amount?: number;
+      total_due_amount?: number;
+      paid_amount?: number;
+      pending_installment_amount?: number;
+      payment_history?: import("../types").MemberFeeInstallment[];
       payment_period?: string;
       period_date?: string;
-      status?: "paid" | "pending" | "pending_confirmation";
+      status?: "paid" | "partially_paid" | "pending" | "pending_confirmation";
       title?: string;
       due_date?: string;
       admin_note?: string;
     }) => {
+      const resolvedTotal = total_due_amount ?? amount;
       if (isSupabaseConfigured) {
         try {
           const updateObj: any = {};
-          if (amount !== undefined) updateObj.amount = amount;
+          if (due_name !== undefined) updateObj.due_name = due_name;
+          if (resolvedTotal !== undefined) {
+            updateObj.amount = resolvedTotal;
+            updateObj.total_due_amount = resolvedTotal;
+          }
+          if (paid_amount !== undefined) updateObj.paid_amount = paid_amount;
+          if (pending_installment_amount !== undefined) updateObj.pending_installment_amount = pending_installment_amount;
+          if (payment_history !== undefined) updateObj.payment_history = payment_history;
           if (payment_period) updateObj.payment_period = payment_period;
           if (period_date) updateObj.period_date = period_date;
           if (status) updateObj.status = status;
           if (title) updateObj.title = title;
           if (due_date !== undefined) updateObj.due_date = due_date || null;
           if (admin_note !== undefined) updateObj.admin_note = admin_note || null;
-          await supabase.from("member_fees").update(updateObj).eq("id", id);
+          const { error: updErr } = await supabase.from("member_fees").update(updateObj).eq("id", id);
+          if (
+            updErr &&
+            (updErr.code === "42703" ||
+              updErr.message?.toLowerCase().includes("column") ||
+              updErr.message?.toLowerCase().includes("schema cache"))
+          ) {
+            const legacyObj = { ...updateObj };
+            delete legacyObj.due_name;
+            delete legacyObj.total_due_amount;
+            delete legacyObj.paid_amount;
+            delete legacyObj.pending_installment_amount;
+            delete legacyObj.payment_history;
+            await supabase.from("member_fees").update(legacyObj).eq("id", id);
+          }
         } catch (e) {
           console.warn("[Fees API] Remote fee update error", e);
         }
@@ -7864,7 +8167,11 @@ export function useUpdateMemberFee() {
       if (idx !== -1) {
         list[idx] = {
           ...list[idx],
-          ...(amount !== undefined ? { amount } : {}),
+          ...(due_name !== undefined ? { due_name } : {}),
+          ...(resolvedTotal !== undefined ? { amount: resolvedTotal, total_due_amount: resolvedTotal } : {}),
+          ...(paid_amount !== undefined ? { paid_amount } : {}),
+          ...(pending_installment_amount !== undefined ? { pending_installment_amount } : {}),
+          ...(payment_history !== undefined ? { payment_history } : {}),
           ...(payment_period ? { payment_period: payment_period as any } : {}),
           ...(period_date ? { period_date } : {}),
           ...(status ? { status } : {}),

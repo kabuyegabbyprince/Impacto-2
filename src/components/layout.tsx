@@ -425,7 +425,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
               <div className="fixed inset-0 z-40" onClick={() => setCurrencyOpen(false)} />
               <div className="absolute right-0 top-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl w-36 overflow-hidden shrink-0 z-50 py-1">
                 <div className="px-2.5 py-1.5 border-b text-[9px] uppercase tracking-wider font-mono text-slate-400 font-bold dark:border-slate-700">
-                  Active Currency
+                  {t("layout.currency")}
                 </div>
                 {(["RWF", "USD", "EUR", "KES"] as const).map((code) => (
                   <button
@@ -461,8 +461,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
               setNotificationOpen(false);
               setOrgSwitcherOpen(false);
             }}
-            aria-label="Personal Language and Accessibility Selector"
-            title="Choose your personal language preference"
+            aria-label={t("layout.language")}
+            title={t("layout.language")}
             className="flex items-center gap-1 px-1.5 sm:px-2.5 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 transition h-8 sm:h-8.5 cursor-pointer shadow-3xs shrink-0"
           >
             <Globe className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
@@ -476,7 +476,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
               <div className="absolute right-0 top-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl w-48 sm:w-52 max-w-[calc(100vw-2rem)] overflow-hidden shrink-0 z-50 py-1">
                 <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-700">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400">
-                    Personal Language
+                    {t("layout.language")}
                   </span>
                 </div>
                 {[
@@ -547,9 +547,9 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setNotificationOpen(false)} />
                 <div className="absolute right-0 top-10 w-72 sm:w-80 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-2xl py-3.5 z-50 text-sm shrink-0 flex flex-col gap-2">
-                  <div className="px-4 pb-2 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
-                    <span className="font-bold text-gray-950 dark:text-white">Announcements & Notices</span>
-                    <Badge color={hasNewNotification ? "red" : "blue"}>{hasNewNotification ? "New" : "All Read"}</Badge>
+                  <div className="px-4 pb-2 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center gap-2">
+                    <span className="font-bold text-gray-950 dark:text-white truncate">{t("layout.notifications")}</span>
+                    <Badge color={hasNewNotification ? "red" : "blue"}>{hasNewNotification ? t("nav.news") : t("layout.mark_all_read")}</Badge>
                   </div>
 
                   <div className="max-h-72 overflow-y-auto px-2 flex flex-col gap-1.5">
@@ -594,28 +594,28 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                     ) : (
                       <div className="py-8 text-center text-xs text-gray-450 font-semibold gap-1.5 flex flex-col items-center">
                         <Bell className="h-6 w-6 text-gray-400" />
-                        <span>No announcements posted yet.</span>
+                        <span>{t("layout.no_notifications")}</span>
                       </div>
                     )}
                   </div>
-                  <div className="border-t border-gray-100 dark:border-slate-700 pt-2.5 px-3.5 flex justify-between select-none">
+                  <div className="border-t border-gray-100 dark:border-slate-700 pt-2.5 px-3.5 flex justify-between gap-2 select-none">
                     <button
                       onClick={() => {
                         setNotificationOpen(false);
                         navigate("/dashboard/news");
                       }}
-                      className="text-[11px] text-emerald-600 hover:underline font-bold"
+                      className="text-[11px] text-emerald-600 hover:underline font-bold text-left"
                     >
-                      View all news →
+                      {t("nav.news")} →
                     </button>
                     <button
                       onClick={() => {
                         setNotificationOpen(false);
                         navigate("/dashboard/chat");
                       }}
-                      className="text-[11px] text-gray-400 hover:underline font-bold"
+                      className="text-[11px] text-gray-400 hover:underline font-bold text-right"
                     >
-                      Open Chat Rooms
+                      {t("nav.chat")}
                     </button>
                   </div>
                 </div>
@@ -639,7 +639,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
             {userMenuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
-                <div className="absolute right-0 top-10 w-48 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl py-2 z-50 overflow-hidden text-sm shrink-0">
+                <div className="absolute right-0 top-10 w-56 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl py-2 z-50 overflow-hidden text-sm shrink-0">
                   <div className="px-4 py-2 border-b border-gray-100 dark:border-slate-700">
                     <p className="font-semibold text-gray-900 dark:text-white truncate">
                       {user.full_name}
@@ -652,8 +652,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                     onClick={() => setUserMenuOpen(false)}
                     className="w-full text-left px-4 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 flex items-center gap-2 text-xs font-semibold"
                   >
-                    <User className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                    {t("nav.my_profile", "My Profile")}
+                    <User className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="break-words">{t("nav.my_profile", "My Profile")}</span>
                   </Link>
 
                   <button
@@ -663,8 +663,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                     }}
                     className="w-full text-left px-4 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 flex items-center gap-2 text-xs font-semibold"
                   >
-                    <HeartHandshake className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                    Referral & Promoter Hub
+                    <HeartHandshake className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="break-words">{t("plans.referral_hub")}</span>
                   </button>
 
                   {activeOrg && (
@@ -675,8 +675,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                       }}
                       className="w-full text-left px-4 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 text-gray-700 dark:text-slate-300 flex items-center gap-2 text-xs font-semibold"
                     >
-                      <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                      Organization Authenticity
+                      <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span className="break-words">{t("plans.org_verification")}</span>
                     </button>
                   )}
 
@@ -688,8 +688,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                       }}
                       className="w-full text-left px-4 py-2 text-xs flex items-center gap-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
                     >
-                      <Shield className="h-3.5 w-3.5" />
-                      {t("nav.platform_admin")}
+                      <Shield className="h-3.5 w-3.5 shrink-0" />
+                      <span className="break-words">{t("nav.platform_admin")}</span>
                     </button>
                   )}
 
@@ -700,8 +700,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                     }}
                     className="w-full text-left px-4 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300 flex items-center gap-2 text-xs font-semibold"
                   >
-                    <Compass className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                    Workspace Tour
+                    <Compass className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="break-words">{t("layout.take_tour")}</span>
                   </button>
 
                   <a
@@ -710,7 +710,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                     onClick={() => setUserMenuOpen(false)}
                     className="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-300 text-xs"
                   >
-                    Get Apk
+                    Android APK
                   </a>
 
                   <button
@@ -721,8 +721,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                     }}
                     className="w-full text-left px-4 py-2 hover:bg-red-50 dark:hover:bg-red-950/20 text-red-600 flex items-center gap-2 border-t border-gray-100 dark:border-slate-700 font-semibold"
                   >
-                    <LogOut className="h-3.5 w-3.5" />
-                    {t("auth.logout")}
+                    <LogOut className="h-3.5 w-3.5 shrink-0" />
+                    <span>{t("auth.logout")}</span>
                   </button>
                 </div>
               </>
@@ -730,7 +730,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
           </div>
         ) : (
           <Link to="/login" className="text-xs font-semibold hover:underline text-gray-500">
-            Sign In
+            {t("auth.login")}
           </Link>
         )}
       </div>
@@ -775,21 +775,21 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; onStartTo
     { name: t("nav.events"), path: "/dashboard/events", icon: Calendar },
     { name: t("nav.goals"), path: "/dashboard/goals", icon: Target },
     { name: t("nav.documents"), path: "/dashboard/documents", icon: FolderOpen },
-    { name: "Member Fees", path: "/dashboard/fees", icon: Coins },
+    { name: t("nav.fees"), path: "/dashboard/fees", icon: Coins },
     ...(activeOrg?.marketplace_enabled !== false
-      ? [{ name: "Marketplace", path: "/dashboard/marketplace", icon: ShoppingBag }]
+      ? [{ name: t("nav.marketplace"), path: "/dashboard/marketplace", icon: ShoppingBag }]
       : [])
   ];
 
   const managementNav = [
-    { name: "Organization Profile", path: "/dashboard/org-profile", icon: Building2, allowed: true },
+    { name: t("nav.org_profile"), path: "/dashboard/org-profile", icon: Building2, allowed: true },
     { name: t("nav.members"), path: "/dashboard/members", icon: Users, allowed: isStaff },
-    { name: "Asset & Stock Management", path: "/dashboard/assets", icon: PackageCheck, allowed: isStaff },
+    { name: t("nav.assets"), path: "/dashboard/assets", icon: PackageCheck, allowed: isStaff },
     { name: t("nav.ledger"), path: "/dashboard/ledger", icon: Coins, allowed: isAccountant },
     { name: t("nav.grants"), path: "/dashboard/grants", icon: Award, allowed: isAccountant },
     { name: t("nav.reports"), path: "/dashboard/reports", icon: FileBarChart, allowed: isAdmin },
-    { name: "Audit Logs", path: "/dashboard/audit-logs", icon: ShieldCheck, allowed: isAdmin },
-    { name: t("nav.settings", "Workspace Settings"), path: "/dashboard/settings", icon: Settings, allowed: isAdmin },
+    { name: t("nav.audit_logs"), path: "/dashboard/audit-logs", icon: ShieldCheck, allowed: isAdmin },
+    { name: t("nav.settings"), path: "/dashboard/settings", icon: Settings, allowed: isAdmin },
   ].filter(item => item.allowed);
 
   // Check if current route is within the management section
@@ -958,10 +958,10 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; onStartTo
                   onClose();
                   onStartTour();
                 }}
-                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200/70 dark:border-emerald-800/60 rounded-xl text-xs font-bold text-emerald-800 dark:text-emerald-300 transition cursor-pointer shadow-3xs"
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200/70 dark:border-emerald-800/60 rounded-xl text-xs font-bold text-emerald-800 dark:text-emerald-300 transition cursor-pointer shadow-3xs text-center leading-tight"
               >
                 <Compass className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 animate-spin-slow" />
-                <span>Take Workspace Tour</span>
+                <span className="break-words">{t("layout.take_tour")}</span>
               </button>
             )}
             <div className="px-2 flex items-center justify-between">
@@ -971,7 +971,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; onStartTo
                 </span>
                 <span className="text-[9px] text-gray-400 font-mono block">v1.0.1 • 2026</span>
               </div>
-              <span className="h-2 w-2 rounded-full bg-[#22c06b] ring-4 ring-[#22c06b]/20 shrink-0" title="Connected" />
+              <span className="h-2 w-2 rounded-full bg-[#22c06b] ring-4 ring-[#22c06b]/20 shrink-0" title={t("layout.connected")} />
             </div>
           </div>
         </div>
@@ -984,6 +984,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; onStartTo
 // 4. MAIN DASHBOARD LAYOUT COMPONENT WITH EXPIRED SHIELD
 // ==========================================
 export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { t } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { activeOrg, activeMember, setActiveOrg } = useOrgStore();
   const { user } = useAuthStore();
@@ -1326,14 +1327,14 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs sm:text-sm font-semibold text-white">
-                  Workspace Read-Only Mode
+                  {t("layout.read_only_mode")}
                 </span>
                 <span className="text-xs text-slate-400">
-                  · Preserved Archive
+                  · {t("layout.preserved_archive")}
                 </span>
               </div>
-              <p className="text-xs text-slate-300 truncate mt-0.5">
-                All records, rosters, and documents are preserved. Settle renewal below to restore full editing and exports.
+              <p className="text-xs text-slate-300 break-words mt-0.5">
+                {t("layout.preserved_desc")}
               </p>
             </div>
           </div>
@@ -1353,33 +1354,33 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       type="button"
                       onClick={() => {
                         navigator.clipboard?.writeText(activeDockUssd);
-                        addToast(`USSD Code copied: ${activeDockUssd}`, "success");
+                        addToast(t("layout.ussd_copied", { code: activeDockUssd }), "success");
                       }}
                       className="hover:text-amber-300 p-0.5 ml-1 text-slate-300 cursor-pointer shrink-0"
-                      title="Copy USSD"
+                      title={t("layout.copy_ussd")}
                     >
                       <Copy className="h-3 w-3" />
                     </button>
                   </div>
                 ) : null}
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
                   {activeDockUssd ? (
                     <a
                       href={`tel:${encodeURIComponent(activeDockUssd)}`}
-                      className="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center gap-1 transition shadow-xs cursor-pointer"
+                      className="min-h-[32px] px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center gap-1 transition shadow-xs cursor-pointer"
                     >
-                      <Smartphone className="h-3.5 w-3.5" />
-                      <span>Dial</span>
+                      <Smartphone className="h-3.5 w-3.5 shrink-0" />
+                      <span>{t("layout.dial")}</span>
                     </a>
                   ) : null}
 
                   <Button
                     size="sm"
                     onClick={() => setIsPeekMode(false)}
-                    className="h-8 bg-white hover:bg-slate-100 text-slate-900 font-medium text-xs px-3.5 rounded-lg flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
+                    className="min-h-[32px] bg-white hover:bg-slate-100 text-slate-900 font-medium text-xs px-3.5 rounded-lg flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer"
                   >
-                    <span>Restore Full Access</span>
+                    <span>{t("layout.restore_access")}</span>
                   </Button>
                 </div>
               </div>
@@ -1718,24 +1719,24 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         onClose={() => setSidebarOpen(false)} 
         onStartTour={() => handleStartTour(0)} 
       />
-      <main className="flex-1 md:pl-52 min-w-0 flex flex-col transition-all duration-200">
-        <div className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-7xl mx-auto">
+      <main className="flex-1 md:pl-56 min-w-0 flex flex-col transition-all duration-200">
+        <div className="flex-1 p-4 md:p-8 overflow-y-auto overflow-x-hidden w-full max-w-7xl mx-auto min-w-0">
           {lifecycle.isInGracePeriod && (
             <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-250 dark:border-amber-900 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in">
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3 min-w-0">
                 <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200">
-                    3-Day Grace Period Active — {lifecycle.graceDaysRemaining} day{lifecycle.graceDaysRemaining === 1 ? "" : "s"} remaining
+                <div className="min-w-0">
+                  <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200 break-words">
+                    {t("layout.grace_period_active", { days: lifecycle.graceDaysRemaining })}
                   </h4>
-                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-                    Your 30-day Growth Plan trial has concluded. Upgrade now to preserve full Growth capabilities (up to 250 members, DocumentOffice, attendance) before Free Forever limits take effect.
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5 break-words">
+                    {t("layout.grace_period_desc")}
                   </p>
                 </div>
               </div>
-              <Link to="/dashboard/settings?tab=subscription">
-                <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-9 px-4 rounded-xl whitespace-nowrap">
-                  Upgrade Plan →
+              <Link to="/dashboard/settings?tab=subscription" className="shrink-0">
+                <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs min-h-[36px] px-4 rounded-xl">
+                  {t("layout.upgrade_now")} →
                 </Button>
               </Link>
             </div>
@@ -1743,20 +1744,20 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
 
           {lifecycle.isReadOnlyMode && (
             <div className="mb-6 p-4 bg-amber-50/90 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in">
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3 min-w-0">
                 <ShieldAlert className="h-5 w-5 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200">
-                    Free Plan Safe Mode Active ({lifecycle.activeMemberCount}/{lifecycle.memberLimit} members)
+                <div className="min-w-0">
+                  <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200 break-words">
+                    {t("layout.read_only_mode")} ({lifecycle.activeMemberCount}/{lifecycle.memberLimit})
                   </h4>
-                  <p className="text-xs text-amber-800 dark:text-amber-400 mt-0.5">
-                    All records are securely preserved without data deletion. Because active member count exceeds the Free Forever limit of 30, excess records have entered safe read-only mode. Upgrade to Growth or Pro to resume full write privileges.
+                  <p className="text-xs text-amber-800 dark:text-amber-400 mt-0.5 break-words">
+                    {t("layout.records_preserved_desc")}
                   </p>
                 </div>
               </div>
-              <Link to="/dashboard/settings?tab=subscription">
-                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-4 rounded-xl whitespace-nowrap">
-                  Upgrade to Growth (250 members)
+              <Link to="/dashboard/settings?tab=subscription" className="shrink-0">
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs min-h-[36px] px-4 rounded-xl">
+                  {t("layout.upgrade_now")}
                 </Button>
               </Link>
             </div>

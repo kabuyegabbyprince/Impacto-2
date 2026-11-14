@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { KeyRound, AlertTriangle, Copy, Check, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button, Input } from "./ui";
@@ -8,6 +9,7 @@ import { useOrgStore } from "../store/orgStore";
 import {
   UssdPaymentHelper,
   getEffectivePaymentCode,
+  getOrgMomoDisplayMethods,
   cleanMerchantCode,
   cleanPhoneNumber
 } from "./UssdPaymentHelper";
@@ -96,6 +98,7 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
   smsPlaceholder,
   className = ""
 }) => {
+  const { t } = useTranslation();
   const { addToast } = useToast();
   const { data: fetchedPlatformSettings } = usePlatformSettings();
   const { activeOrg: storeOrg, activeMember } = useOrgStore();
@@ -125,12 +128,17 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
     ? effectivePlatformSettings?.payment_name || "VIRELLIX INC"
     : effectiveOrg?.dues_account_name || effectiveOrg?.donation_account_name || effectiveOrg?.name || "Organization Treasury";
 
+  const orgDisplayMethods = !isPlatform ? getOrgMomoDisplayMethods(effectiveOrg) : undefined;
+  const allowMerchantCode = isPlatform || orgDisplayMethods!.includes("merchant_code");
+  const allowMtnPhone = isPlatform || orgDisplayMethods!.includes("mtn_phone");
+  const allowAirtelPhone = isPlatform || orgDisplayMethods!.includes("airtel_phone");
+
   const hasOrgPaymentConfigured =
     isPlatform ||
     Boolean(
-      cleanMerchantCode(effectiveOrg?.momo_merchant_code || "") ||
-        cleanPhoneNumber(resolvedMtnNumber) ||
-        cleanPhoneNumber(resolvedAirtelNumber)
+      (allowMerchantCode && cleanMerchantCode(resolvedMerchantCode)) ||
+        (allowMtnPhone && cleanPhoneNumber(resolvedMtnNumber)) ||
+        (allowAirtelPhone && cleanPhoneNumber(resolvedAirtelNumber))
     );
 
   const isOrgAdminOrAccountant =
@@ -198,7 +206,7 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
             </span>
           </div>
 
-          {resolvedMerchantCode && (
+          {allowMerchantCode && resolvedMerchantCode && (
             <div className="bg-white dark:bg-slate-950 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 min-w-0 overflow-hidden">
               <div className="min-w-0 flex-1">
                 <span className="text-[10px] uppercase font-mono text-slate-400 block">
@@ -211,10 +219,10 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
               <button
                 type="button"
                 onClick={handleCopyCode}
-                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold transition flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold transition flex items-center gap-1 shrink-0 min-h-[30px] cursor-pointer"
               >
                 {copiedCode ? <Check className="h-3.5 w-3.5 shrink-0" /> : <Copy className="h-3.5 w-3.5 shrink-0" />}
-                <span>{copiedCode ? "Copied" : "Copy Code"}</span>
+                <span>{copiedCode ? t("common.copied") : t("payments.copy_code")}</span>
               </button>
             </div>
           )}
@@ -222,7 +230,7 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
           <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
             {isPlatform
               ? "Configured from the Super Admin Dashboard. Transfer to this merchant code via USSD or mobile money before submitting proof."
-              : `Configured for ${effectiveOrg?.name || "this organization"}. All members, admins, and accountants can collect and pay dues using these details.`}
+              : `Configured for ${effectiveOrg?.name || "this organization"}. Use the enabled payment channel${orgDisplayMethods && orgDisplayMethods.length > 1 ? "s" : ""} below to settle dues or contributions.`}
           </p>
         </div>
       ) : (
@@ -234,11 +242,11 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
                 Organization Payment Code Not Configured Yet
               </span>
               <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
-                This organization has not saved its MTN MoMo merchant code or receiving phone numbers yet.
+                This organization has not saved its MTN MoMo merchant code or enabled a receiving phone channel in MoMo Carrier Portals yet.
               </p>
               {isOrgAdminOrAccountant && (
                 <Link
-                  to="/dashboard/settings?tab=payments"
+                  to="/dashboard/settings?tab=momo"
                   className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline pt-0.5"
                 >
                   <span>Configure Organization Payment Code in Settings</span>
@@ -261,6 +269,7 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
           amountRwf={amountRwf}
           itemName={itemName}
           onRequestAdmin={onRequestAdmin}
+          allowedMethods={orgDisplayMethods}
           compact
         />
       )}
@@ -274,10 +283,10 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div className="flex flex-col gap-1">
               <Input
-                label="Sender Phone (MTN 078/079 or Airtel 072/073)"
+                label={t("payments.payer_phone")}
                 value={phone}
                 onChange={(e) => onPhoneChange?.(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                placeholder="078... or 072/073..."
+                placeholder="078... / 072..."
               />
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span className="text-[10px] text-slate-400 font-mono">Prefix:</span>
@@ -301,7 +310,7 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
 
             {showSenderName ? (
               <Input
-                label="Sender's Registered Full Name"
+                label={t("auth.full_name")}
                 value={senderName}
                 onChange={(e) => onSenderNameChange?.(e.target.value)}
                 placeholder="e.g. Jean Pierre N."
@@ -309,7 +318,7 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
               />
             ) : showReferenceInput ? (
               <Input
-                label="MoMo Transaction Ref ID"
+                label={t("payments.tx_ref")}
                 value={reference}
                 onChange={(e) => onReferenceChange?.(e.target.value)}
                 placeholder="e.g. TXN2468135"
@@ -319,7 +328,7 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
 
           {showSenderName && showReferenceInput && (
             <Input
-              label="MoMo Transaction Ref ID (Optional)"
+              label={`${t("payments.tx_ref")} (${t("common.optional")})`}
               value={reference}
               onChange={(e) => onReferenceChange?.(e.target.value)}
               placeholder="e.g. TXN2468135"
@@ -328,7 +337,7 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
 
           <div className="flex flex-col gap-1.5 w-full">
             <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-              MTN or Airtel Money confirmation SMS text proof <span className="text-rose-500">*</span>
+              {t("payments.sms_proof")}
             </label>
             <textarea
               className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-600 focus:outline-none font-mono"
@@ -336,7 +345,7 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
               onChange={(e) => onSmsProofChange?.(e.target.value)}
               placeholder={
                 smsPlaceholder ||
-                "Paste raw SMS text transaction copy, e.g. TxId: 4810294. Yello! You have sent 14,000 RWF to..."
+                "TxId: 4810294..."
               }
               rows={3}
               required
@@ -346,11 +355,11 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
           {showNoteInput && (
             <div className="flex flex-col gap-1.5 w-full">
               <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Optional Verification Note
+                {t("Note")} ({t("common.optional")})
               </label>
               <textarea
                 rows={2}
-                placeholder="e.g. Sent via agent, please verify ledger balance."
+                placeholder={t("Note")}
                 value={note}
                 onChange={(e) => onNoteChange?.(e.target.value)}
                 className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-600 focus:outline-none"
@@ -359,10 +368,10 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
           )}
 
           {!hideDefaultActions && (
-            <div className="flex items-center gap-3 border-t border-slate-200 dark:border-slate-800 pt-3">
+            <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 dark:border-slate-800 pt-3">
               {onBack && (
                 <Button type="button" variant="outline" className="flex-1" onClick={onBack}>
-                  {backLabel}
+                  {backLabel === "Back" ? t("common.back") : backLabel}
                 </Button>
               )}
               <Button
@@ -370,7 +379,7 @@ export const PaymentGatewaySection: React.FC<PaymentGatewaySectionProps> = ({
                 loading={submitting}
                 className={`${onBack ? "flex-1" : "w-full"} bg-emerald-600 hover:bg-emerald-700 text-white font-semibold`}
               >
-                {submitLabel}
+                {submitLabel === "Submit Payment Receipt Proof" ? t("btn_submit_receipt") : submitLabel}
               </Button>
             </div>
           )}

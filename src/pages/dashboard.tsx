@@ -6,6 +6,7 @@ import { ChatVideoMeetModal, getCanonicalMeetRoomId, isMeetHostOrAdmin } from ".
 import { MeetingHistoryModal } from "../components/MeetingHistoryModal";
 import { getTaskDeadlineNotice, useTaskProgressSync } from "../hooks/useTaskProgressSync";
 import { MyTasksWorkspaceModal } from "../components/MyTasksWorkspaceModal";
+import { getFeeBalances, getFeeDueName } from "../lib/feeUtils";
 
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -583,8 +584,12 @@ export const DashboardHome: React.FC = () => {
 
   const myPendingDues = React.useMemo(() => {
     if (!fees) return [];
-    return fees.filter((f) => f.status === "pending" && isFeeForMe(f));
+    return fees.filter((f) => (f.status === "pending" || f.status === "partially_paid") && isFeeForMe(f));
   }, [fees, isFeeForMe]);
+
+  const myPartialDues = React.useMemo(() => {
+    return myPendingDues.filter((f) => getFeeBalances(f).isPartiallyPaid);
+  }, [myPendingDues]);
 
   const myAwaitingConfirmationDues = React.useMemo(() => {
     if (!fees) return [];
@@ -595,7 +600,7 @@ export const DashboardHome: React.FC = () => {
     const roleStr = (activeMember?.role as string) || "";
     const isAccountant = roleStr === "accountant" || roleStr === "org_admin" || roleStr === "admin" || roleStr === "president" || roleStr === "treasurer" || roleStr === "manager" || !!user?.is_superadmin;
     if (!fees || !isAccountant) return [];
-    return fees.filter((f) => f.status === "pending_confirmation" || f.status === "pending");
+    return fees.filter((f) => f.status === "pending_confirmation" || f.status === "pending" || f.status === "partially_paid");
   }, [fees, activeMember, user]);
 
   // Tasks assigned to the logged-in member across all events
@@ -835,18 +840,19 @@ export const DashboardHome: React.FC = () => {
   // 2. Financial Health & Dues Standing
   const financialStats = React.useMemo(() => {
     if (!fees) return { totalInvoiced: 0, totalPaid: 0, collectionRate: 100, pendingCount: 0, pendingReviewCount: 0 };
-    const totalInvoiced = fees.reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
-    const totalPaid = fees.filter(f => f.status === "paid").reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
-    const pendingCount = fees.filter(f => f.status === "pending").length;
+    const totalInvoiced = fees.reduce((sum, f) => sum + getFeeBalances(f).totalDueAmount, 0);
+    const totalPaid = fees.reduce((sum, f) => sum + getFeeBalances(f).paidAmount, 0);
+    const pendingCount = fees.filter(f => f.status === "pending" || f.status === "partially_paid").length;
     const pendingReviewCount = fees.filter(f => f.status === "pending_confirmation").length;
     const collectionRate = totalInvoiced > 0 ? Math.round((totalPaid / totalInvoiced) * 100) : 100;
     return { totalInvoiced, totalPaid, collectionRate, pendingCount, pendingReviewCount };
   }, [fees]);
 
   const myFeeStats = React.useMemo(() => {
-    const myPaidList = (fees || []).filter(f => f.status === "paid" && isFeeForMe(f));
-    const myPaidTotal = myPaidList.reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
-    const myPendingTotal = myPendingDues.reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
+    const myFeesAll = (fees || []).filter(f => isFeeForMe(f));
+    const myPaidList = myFeesAll.filter(f => getFeeBalances(f).paidAmount > 0);
+    const myPaidTotal = myFeesAll.reduce((sum, f) => sum + getFeeBalances(f).paidAmount, 0);
+    const myPendingTotal = myPendingDues.reduce((sum, f) => sum + getFeeBalances(f).remainingBalance, 0);
     const isGoodStanding = myPendingDues.length === 0;
     return { myPaidTotal, myPendingTotal, isGoodStanding, paidCount: myPaidList.length };
   }, [fees, isFeeForMe, myPendingDues]);
@@ -898,14 +904,14 @@ export const DashboardHome: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col gap-8 select-none font-sans">
+    <div className="flex flex-col gap-8 select-none font-sans min-w-0 overflow-hidden">
       {/* Dynamic Welcome Heading */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 dark:border-slate-800 pb-5">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold font-display leading-none tracking-tight text-gray-905 dark:text-white flex items-center">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 dark:border-slate-800 pb-5 min-w-0">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl md:text-3xl font-extrabold font-display leading-tight tracking-tight text-gray-905 dark:text-white flex flex-wrap items-center gap-x-2 break-words">
             {t("dashboard_labels.welcome_title")} {user?.full_name?.split(" ")[0] || "User"}!
           </h1>
-          <p className="text-xs md:text-sm text-gray-500 mt-1 dark:text-slate-400 font-medium">
+          <p className="text-xs md:text-sm text-gray-500 mt-1 dark:text-slate-400 font-medium break-words">
             {t("dashboard_labels.welcome_subtitle", { orgName: activeOrg?.name || "your" })}
           </p>
         </div>
@@ -921,17 +927,38 @@ export const DashboardHome: React.FC = () => {
 
       {/* High priority fee warning barrier */}
       {myPendingDues.length > 0 && (
-        <div className="bg-red-50 dark:bg-rose-950/20 border-l-4 border-rose-600 p-4.5 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-4 shadow-sm shrink-0" id="dashboard-due-fees-reminder">
-          <div className="flex items-start gap-3">
+        <div className="bg-red-50 dark:bg-rose-950/20 border-l-4 border-rose-600 p-4.5 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-4 shadow-sm shrink-0 min-w-0 overflow-hidden" id="dashboard-due-fees-reminder">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
             <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
-            <div className="flex flex-col">
-              <span className="font-extrabold text-[10px] uppercase tracking-wider text-rose-800 dark:text-rose-450">{t("URGENT REMINDER")}: {t("OUTSTANDING BALANCE DETECTED")}</span>
-              <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1">
-                {activeOrg?.fee_notification || "Cooperative dues have been invoiced for your membership account."}
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="font-extrabold text-[10px] uppercase tracking-wider text-rose-800 dark:text-rose-450 break-words">
+                {t("URGENT REMINDER")}: {myPartialDues.length > 0 ? t("REMAINING INSTALLMENT BALANCE DUE") : t("OUTSTANDING BALANCE DETECTED")}
+              </span>
+              <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1 break-words">
+                {activeOrg?.fee_notification || (myPartialDues.length > 0
+                  ? "You have partially paid dues with a remaining balance still waiting to be completed."
+                  : "Cooperative dues have been invoiced for your membership account.")}
               </p>
-              <p className="text-[10px] text-gray-500 mt-0.5 leading-normal font-semibold">
-                {t("You have")} <span className="font-black text-rose-600">{myPendingDues.length} {t("pending micro-payment invoices")}</span> ({formatAmount(myFeeStats.myPendingTotal)}) {t("awaiting settlement. Keep your active status in green compliance by clearing them.")}
+              <p className="text-[10px] text-gray-500 mt-0.5 leading-normal font-semibold break-words">
+                {t("You have")} <span className="font-black text-rose-600">{myPendingDues.length} {t("pending micro-payment invoices")}</span> ({formatAmount(myFeeStats.myPendingTotal)} remaining) {t("awaiting settlement. Keep your active status in green compliance by clearing them.")}
               </p>
+              {myPartialDues.length > 0 && (
+                <div className="mt-2 space-y-1 bg-white/80 dark:bg-slate-900/70 p-2.5 rounded-xl border border-rose-200/80 dark:border-rose-900/40 min-w-0">
+                  {myPartialDues.slice(0, 3).map((pf) => {
+                    const bal = getFeeBalances(pf);
+                    return (
+                      <div key={pf.id} className="flex flex-wrap items-center justify-between gap-2 text-[11px] min-w-0">
+                        <span className="font-bold text-stone-800 dark:text-slate-200 truncate">
+                          {getFeeDueName(pf)} ({bal.percentPaid}% paid)
+                        </span>
+                        <span className="font-mono text-rose-700 dark:text-rose-400 font-bold">
+                          Paid {formatAmount(bal.paidAmount)} / {formatAmount(bal.totalDueAmount)} · Left: {formatAmount(bal.remainingBalance)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
           <button 
@@ -939,30 +966,30 @@ export const DashboardHome: React.FC = () => {
             className="self-start md:self-center bg-rose-600 hover:bg-rose-700 text-white font-extrabold px-5 py-2 rounded-xl text-xs flex items-center gap-1.5 shrink-0 transition cursor-pointer"
             onClick={() => navigate("/dashboard/fees")}
           >
-            {t("btn_pay_now_direct", "Pay My Dues")} →
+            {myPartialDues.length > 0 ? t("Pay Remaining Balance") : t("btn_pay_now_direct", "Pay My Dues")} →
           </button>
         </div>
       )}
 
       {/* Active Online Attendance Broadcast Alerts for Members */}
       {pendingOnlineConfirmations.length > 0 && (
-        <div className="flex flex-col gap-3 shrink-0" id="online-attendance-broadcasts">
+        <div className="flex flex-col gap-3 shrink-0 min-w-0" id="online-attendance-broadcasts">
           {pendingOnlineConfirmations.map((item) => (
             <div 
               key={item.id} 
-              className="bg-blue-50 dark:bg-blue-950/20 border-l-4 border-blue-600 p-4.5 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm animate-pulse"
+              className="bg-blue-50 dark:bg-blue-950/20 border-l-4 border-blue-600 p-4.5 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm animate-pulse min-w-0 overflow-hidden"
             >
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
                 <Megaphone className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
-                <div className="flex flex-col">
+                <div className="flex flex-col min-w-0">
                   <span className="font-extrabold text-[10px] uppercase tracking-wider text-blue-800 dark:text-blue-450">
                     ACTIVE VIRTUAL ATTENDANCE BROADCAST
                   </span>
-                  <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1">
+                  <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1 break-words">
                     Please confirm your attendance presence for the scheduled online session:{" "}
                     <span className="text-blue-700 dark:text-blue-400 font-black">"{item.title}"</span>
                   </p>
-                  <p className="text-[10px] text-gray-500 mt-0.5 leading-normal font-semibold">
+                  <p className="text-[10px] text-gray-500 mt-0.5 leading-normal font-semibold break-words">
                     The session admin has broadcasted an active attendance alert. Confirming your presence logs you on the register.
                   </p>
                 </div>
@@ -983,17 +1010,17 @@ export const DashboardHome: React.FC = () => {
 
       {/* Administrator Pending Password Reset Override Banner */}
       {isAdmin && pendingPwResetCount > 0 && (
-        <div className="bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 p-4.5 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-4 shadow-sm shrink-0">
-          <div className="flex items-start gap-3">
+        <div className="bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 p-4.5 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-4 shadow-sm shrink-0 min-w-0 overflow-hidden">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
             <KeyRound className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="flex flex-col">
+            <div className="flex flex-col min-w-0">
               <span className="font-extrabold text-[10px] uppercase tracking-wider text-amber-800 dark:text-amber-400">
                 WORKSPACE ADMINISTRATOR ALERT: PASSWORD RESET REQUEST
               </span>
-              <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1">
+              <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1 break-words">
                 You have {pendingPwResetCount} pending password reset override request{pendingPwResetCount > 1 ? "s" : ""} awaiting your administrator approval.
               </p>
-              <p className="text-[10px] text-gray-500 mt-0.5 leading-normal font-semibold">
+              <p className="text-[10px] text-gray-500 mt-0.5 leading-normal font-semibold break-words">
                 Members can request password resets directly from the sign-in screen without relying on external email reset links.
               </p>
             </div>
@@ -1010,28 +1037,34 @@ export const DashboardHome: React.FC = () => {
 
       {/* Member Reported Payment Confirmation Status Block */}
       {!isAccountant && myAwaitingConfirmationDues.length > 0 && (
-        <div className="bg-amber-50/50 dark:bg-amber-950/20 border-l-4 border-amber-500 p-4.5 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm shrink-0" id="member-momo-confirmation-status">
-          <div className="flex items-start gap-3">
+        <div className="bg-amber-50/50 dark:bg-amber-950/20 border-l-4 border-amber-500 p-4.5 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm shrink-0 min-w-0 overflow-hidden" id="member-momo-confirmation-status">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
             <Clock className="h-5 w-5 text-amber-500 shrink-0 mt-0.5 animate-pulse" />
-            <div className="flex flex-col">
+            <div className="flex flex-col min-w-0 flex-1">
               <span className="font-extrabold text-[10px] uppercase tracking-wider text-amber-800 dark:text-amber-400">
                 ⌛ {t("PAYMENT UNDER REVIEW")}
               </span>
-              <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1">
+              <p className="text-xs text-stone-900 dark:text-slate-100 font-extrabold mt-1 break-words">
                 You have {myAwaitingConfirmationDues.length} payment {myAwaitingConfirmationDues.length === 1 ? 'report' : 'reports'} awaiting supervisor verification.
               </p>
-              <div className="text-[10px] text-gray-500 mt-1.5 space-y-1 bg-white dark:bg-slate-900 p-3 rounded-xl border dark:border-slate-800">
-                {myAwaitingConfirmationDues.map((f) => (
-                  <div key={f.id} className="flex flex-wrap items-center gap-2">
-                    <span className="font-bold text-gray-700 dark:text-slate-300">{f.payment_period} - {f.period_date} ({f.amount.toLocaleString()} RWF)</span>
-                    <span className="bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 text-amber-800 px-1.5 py-0.5 rounded text-[8px] font-black uppercase">
-                      Reported via {f.paid_by_method}
-                    </span>
-                    {f.transaction_reference && (
-                      <span className="font-mono text-gray-400">Ref: {f.transaction_reference}</span>
-                    )}
-                  </div>
-                ))}
+              <div className="text-[10px] text-gray-500 mt-1.5 space-y-1 bg-white dark:bg-slate-900 p-3 rounded-xl border dark:border-slate-800 min-w-0 overflow-hidden">
+                {myAwaitingConfirmationDues.map((f) => {
+                  const bal = getFeeBalances(f);
+                  const submittedAmt = bal.pendingInstallmentAmount > 0 ? bal.pendingInstallmentAmount : bal.remainingBalance || bal.totalDueAmount;
+                  return (
+                    <div key={f.id} className="flex flex-wrap items-center gap-2 min-w-0">
+                      <span className="font-bold text-gray-700 dark:text-slate-300 break-words">
+                        {getFeeDueName(f)} - {f.period_date} ({submittedAmt.toLocaleString()} RWF{bal.paidAmount > 0 ? ` of ${bal.totalDueAmount.toLocaleString()} RWF` : ""})
+                      </span>
+                      <span className="bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 text-amber-800 px-1.5 py-0.5 rounded text-[8px] font-black uppercase shrink-0">
+                        Reported via {f.paid_by_method}
+                      </span>
+                      {f.transaction_reference && (
+                        <span className="font-mono text-gray-400 break-all">Ref: {f.transaction_reference}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1048,7 +1081,7 @@ export const DashboardHome: React.FC = () => {
       {/* Organization Authenticity Status & Verification Card (Hidden once organization is verified) */}
       {activeOrg && activeOrg.verification_status !== "verified" && (
         <div
-          className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs transition min-w-0 ${
+          className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs transition min-w-0 overflow-hidden ${
             activeOrg.verification_status === "pending_review"
               ? "bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60"
               : activeOrg.verification_status === "rejected"
@@ -1273,23 +1306,23 @@ export const DashboardHome: React.FC = () => {
               navigate("/dashboard/events");
             }
           }}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700 rounded-2xl p-5 shadow-xs transition cursor-pointer group"
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700 rounded-2xl p-5 shadow-xs transition cursor-pointer group min-w-0 overflow-hidden"
         >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="h-10 w-10 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
                 <CheckSquare className="h-5 w-5" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm md:text-base font-bold text-slate-900 dark:text-white">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
+                  <h3 className="text-sm md:text-base font-bold text-slate-900 dark:text-white truncate">
                     My Assigned Tasks & Action Deliverables
                   </h3>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 shrink-0">
                     {myAssignedTasks.filter(item => item.task.progress >= 100).length}/{myAssignedTasks.length} Completed
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 break-words">
                   Action items assigned to you. Click to view all events, update your task progress, and submit performance reports.
                 </p>
               </div>
@@ -1310,21 +1343,21 @@ export const DashboardHome: React.FC = () => {
       {/* ========================================== */}
       {/* 0. PRIMARY WORKSPACE METRICS ROW */}
       {/* ========================================== */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 min-w-0">
         {/* Metric 1: Active Members */}
         <div
           onClick={() => navigate("/dashboard/members")}
-          className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition"
+          className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition min-w-0 overflow-hidden"
         >
-          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-            <span>Active Members</span>
-            <Users className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+          <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 min-w-0">
+            <span className="truncate">Active Members</span>
+            <Users className="h-4 w-4 text-slate-400 dark:text-slate-500 shrink-0" />
           </div>
-          <div className="mt-3">
-            <span className="text-2xl sm:text-3xl font-bold font-display text-slate-900 dark:text-white tabular-nums">
+          <div className="mt-3 min-w-0">
+            <span className="text-2xl sm:text-3xl font-bold font-display text-slate-900 dark:text-white tabular-nums block truncate">
               {members?.length || 0}
             </span>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-1 truncate">
               of {(activeOrg as any)?.member_limit || 100} member capacity
             </p>
           </div>
@@ -1333,17 +1366,17 @@ export const DashboardHome: React.FC = () => {
         {/* Metric 2: Strategic Goals */}
         <div
           onClick={() => navigate("/dashboard/goals")}
-          className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition"
+          className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition min-w-0 overflow-hidden"
         >
-          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-            <span>Strategic Goals</span>
-            <Target className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+          <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 min-w-0">
+            <span className="truncate">Strategic Goals</span>
+            <Target className="h-4 w-4 text-slate-400 dark:text-slate-500 shrink-0" />
           </div>
-          <div className="mt-3">
-            <span className="text-2xl sm:text-3xl font-bold font-display text-slate-900 dark:text-white tabular-nums">
+          <div className="mt-3 min-w-0">
+            <span className="text-2xl sm:text-3xl font-bold font-display text-slate-900 dark:text-white tabular-nums block truncate">
               {goals?.length || 0}
             </span>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-1 truncate">
               {goals?.filter(g => g.status !== 'completed').length || 0} active this cycle
             </p>
           </div>
@@ -1352,17 +1385,17 @@ export const DashboardHome: React.FC = () => {
         {/* Metric 3: MoMo Collected */}
         <div
           onClick={() => navigate("/dashboard/fees")}
-          className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition"
+          className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs cursor-pointer flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition min-w-0 overflow-hidden"
         >
-          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-            <span>MoMo Contributions</span>
-            <Coins className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+          <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 min-w-0">
+            <span className="truncate">MoMo Contributions</span>
+            <Coins className="h-4 w-4 text-slate-400 dark:text-slate-500 shrink-0" />
           </div>
-          <div className="mt-3">
-            <span className="text-2xl sm:text-3xl font-bold font-display text-slate-900 dark:text-white tabular-nums">
+          <div className="mt-3 min-w-0">
+            <span className="text-2xl sm:text-3xl font-bold font-display text-slate-900 dark:text-white tabular-nums block truncate">
               {(financialStats.totalPaid || myFeeStats.myPaidTotal || 0).toLocaleString()} <span className="text-xs font-mono font-normal text-slate-500">RWF</span>
             </span>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-1 truncate">
               recorded collections
             </p>
           </div>
@@ -1372,15 +1405,15 @@ export const DashboardHome: React.FC = () => {
       {/* ========================================== */}
       {/* 1. FINANCIAL STANDING & DUES HEALTH */}
       {/* ========================================== */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4 mb-4">
-          <div className="flex items-center gap-3">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs min-w-0 overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4 mb-4 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="h-9 w-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
               <Wallet className="h-4.5 w-4.5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white truncate">
                   {isAccountant || isAdmin ? "Cooperative Dues Health and Collection" : "Personal Dues Standing and Compliance"}
                 </h3>
                 {isAccountant || isAdmin ? (
@@ -1393,7 +1426,7 @@ export const DashboardHome: React.FC = () => {
                   <Badge color="amber">Action Needed</Badge>
                 )}
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 break-words">
                 {isAccountant || isAdmin
                   ? "Real-time aggregation of invoiced periodic contributions across all registered accounts."
                   : "Account balance and settlement status for your membership account."}
@@ -1401,7 +1434,7 @@ export const DashboardHome: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+          <div className="flex flex-wrap items-center gap-3 self-start md:self-auto shrink-0">
             {(isAccountant || isAdmin) && (
               <button
                 type="button"
@@ -1425,48 +1458,48 @@ export const DashboardHome: React.FC = () => {
         </div>
 
         {isAccountant || isAdmin ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750">
-                <span className="text-[10px] font-mono uppercase text-gray-400 block font-bold">Total Invoiced</span>
-                <span className="text-lg font-bold text-gray-900 dark:text-white font-display mt-0.5 block">
+          <div className="space-y-4 min-w-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 min-w-0">
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750 min-w-0 overflow-hidden">
+                <span className="text-[10px] font-mono uppercase text-gray-400 block font-bold truncate">Total Invoiced</span>
+                <span className="text-lg font-bold text-gray-900 dark:text-white font-display mt-0.5 block truncate">
                   {formatAmount(financialStats.totalInvoiced)}
                 </span>
-                <span className="text-[10px] text-gray-450 mt-0.5 block">Across all members</span>
+                <span className="text-[10px] text-gray-450 mt-0.5 block truncate">Across all members</span>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750">
-                <span className="text-[10px] font-mono uppercase text-emerald-600 block font-bold">Collected & Settled</span>
-                <span className="text-lg font-bold text-emerald-600 font-display mt-0.5 block">
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750 min-w-0 overflow-hidden">
+                <span className="text-[10px] font-mono uppercase text-emerald-600 block font-bold truncate">Collected & Settled</span>
+                <span className="text-lg font-bold text-emerald-600 font-display mt-0.5 block truncate">
                   {formatAmount(financialStats.totalPaid)}
                 </span>
-                <span className="text-[10px] text-gray-450 mt-0.5 block">{financialStats.collectionRate}% of total invoiced</span>
+                <span className="text-[10px] text-gray-450 mt-0.5 block truncate">{financialStats.collectionRate}% of total invoiced</span>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750">
-                <span className="text-[10px] font-mono uppercase text-amber-600 block font-bold">Pending Collection</span>
-                <span className="text-lg font-bold text-amber-600 font-display mt-0.5 block">
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750 min-w-0 overflow-hidden">
+                <span className="text-[10px] font-mono uppercase text-amber-600 block font-bold truncate">Pending Collection</span>
+                <span className="text-lg font-bold text-amber-600 font-display mt-0.5 block truncate">
                   {formatAmount(Math.max(0, financialStats.totalInvoiced - financialStats.totalPaid))}
                 </span>
-                <span className="text-[10px] text-gray-450 mt-0.5 block">{financialStats.pendingCount} unpaid fees</span>
+                <span className="text-[10px] text-gray-450 mt-0.5 block truncate">{financialStats.pendingCount} unpaid fees</span>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750">
-                <span className="text-[10px] font-mono uppercase text-blue-600 block font-bold">Awaiting Verification</span>
-                <span className="text-lg font-bold text-blue-600 font-display mt-0.5 block">
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750 min-w-0 overflow-hidden">
+                <span className="text-[10px] font-mono uppercase text-blue-600 block font-bold truncate">Awaiting Verification</span>
+                <span className="text-lg font-bold text-blue-600 font-display mt-0.5 block truncate">
                   {financialStats.pendingReviewCount}
                 </span>
-                <span className="text-[10px] text-gray-450 mt-0.5 block">MoMo / Bank slips submitted</span>
+                <span className="text-[10px] text-gray-450 mt-0.5 block truncate">MoMo / Bank slips submitted</span>
               </div>
             </div>
 
             {/* If admin also has personal pending dues */}
             {myPendingDues.length > 0 && (
-              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 p-3 rounded-xl flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
+              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 p-3 rounded-xl flex flex-wrap items-center justify-between gap-3 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <Coins className="h-4 w-4 text-amber-600 shrink-0" />
-                  <span className="text-xs text-amber-850 dark:text-amber-300 font-medium">
-                    You have <strong>{myPendingDues.length} personal dues invoice(s)</strong> pending ({formatAmount(myFeeStats.myPendingTotal)}).
+                  <span className="text-xs text-amber-850 dark:text-amber-300 font-medium break-words">
+                    You have <strong>{myPendingDues.length} personal dues invoice(s)</strong> with <strong>{formatAmount(myFeeStats.myPendingTotal)}</strong> remaining balance{myPartialDues.length > 0 ? ` (${myPartialDues.length} partially paid)` : ""}.
                   </span>
                 </div>
                 <button
@@ -1474,39 +1507,39 @@ export const DashboardHome: React.FC = () => {
                   onClick={() => navigate("/dashboard/fees")}
                   className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shrink-0 transition"
                 >
-                  Pay My Dues
+                  {myPartialDues.length > 0 ? "Pay Remaining Balance" : "Pay My Dues"}
                 </button>
               </div>
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
-            <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750">
-              <span className="text-[10px] font-mono uppercase text-gray-400 block font-bold">Total Settled Contributions</span>
-              <span className="text-lg font-bold text-emerald-600 font-display mt-0.5 block">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center min-w-0">
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750 min-w-0 overflow-hidden">
+              <span className="text-[10px] font-mono uppercase text-gray-400 block font-bold truncate">Total Settled Contributions</span>
+              <span className="text-lg font-bold text-emerald-600 font-display mt-0.5 block truncate">
                 {formatAmount(myFeeStats.myPaidTotal)}
               </span>
-              <span className="text-[10px] text-gray-450 mt-0.5 block">{myFeeStats.paidCount} verified payment cycles</span>
+              <span className="text-[10px] text-gray-450 mt-0.5 block truncate">{myFeeStats.paidCount} verified payment cycles</span>
             </div>
 
-            <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750">
-              <span className="text-[10px] font-mono uppercase text-gray-400 block font-bold">Outstanding Balance</span>
-              <span className={`text-lg font-bold font-display mt-0.5 block ${myFeeStats.myPendingTotal > 0 ? "text-rose-600" : "text-gray-900 dark:text-white"}`}>
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-gray-100 dark:border-slate-750 min-w-0 overflow-hidden">
+              <span className="text-[10px] font-mono uppercase text-gray-400 block font-bold truncate">Outstanding Balance</span>
+              <span className={`text-lg font-bold font-display mt-0.5 block truncate ${myFeeStats.myPendingTotal > 0 ? "text-rose-600" : "text-gray-900 dark:text-white"}`}>
                 {formatAmount(myFeeStats.myPendingTotal)}
               </span>
-              <span className="text-[10px] text-gray-450 mt-0.5 block">
+              <span className="text-[10px] text-gray-450 mt-0.5 block truncate">
                 {myFeeStats.isGoodStanding ? "No dues currently pending" : `${myPendingDues.length} invoices to clear`}
               </span>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 min-w-0">
               <button
                 type="button"
                 onClick={() => navigate("/dashboard/fees")}
                 className="w-full bg-[var(--org-primary)] text-white font-bold py-2.5 px-4 rounded-xl text-xs hover:opacity-90 transition flex items-center justify-center gap-2 cursor-pointer shadow-3xs"
               >
-                <Coins className="h-4 w-4" />
-                {myFeeStats.myPendingTotal > 0 ? "Pay Outstanding Dues" : "View Payment History"}
+                <Coins className="h-4 w-4 shrink-0" />
+                <span className="truncate">{myFeeStats.myPendingTotal > 0 ? "Pay Outstanding Dues" : "View Payment History"}</span>
               </button>
             </div>
           </div>
@@ -1516,8 +1549,8 @@ export const DashboardHome: React.FC = () => {
       {/* ========================================== */}
       {/* 3. MAIN DASHBOARD CONTENT GRID */}
       {/* ========================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 flex flex-col gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0">
+        <div className="lg:col-span-2 flex flex-col gap-8 min-w-0">
           {/* Identity Trust Compliance Status Block for Volunteers (Only when on Enterprise plan AND initiated by admin) */}
           {!isAdmin && (activeOrg?.subscription_tier === "enterprise" || activeOrg?.subscription_status === "trial") && (typedMember?.verification_requested || typedMember?.verification_status === "pending" || typedMember?.verification_status === "verified" || typedMember?.verification_status === "rejected") && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 select-none leading-none">
@@ -1553,58 +1586,60 @@ export const DashboardHome: React.FC = () => {
           )}
 
           {/* 4. Strategic Goals Card (Image 5) */}
-          <div className="card card-glow bg-white dark:bg-slate-850 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-3xs p-6">
-            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-slate-800">
-              <div>
-                <h3 className="font-display font-bold text-base text-gray-900 dark:text-white">
+          <div className="card card-glow bg-white dark:bg-slate-850 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-3xs p-6 min-w-0 overflow-hidden">
+            <div className="flex items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-slate-800 min-w-0">
+              <div className="min-w-0">
+                <h3 className="font-display font-bold text-base text-gray-900 dark:text-white truncate">
                   Strategic Goals
                 </h3>
-                <p className="text-xs text-[#4a6357] dark:text-slate-400 mt-0.5">
+                <p className="text-xs text-[#4a6357] dark:text-slate-400 mt-0.5 truncate">
                   Pinned integrity goals this quarter
                 </p>
               </div>
-              <Link to="/dashboard/goals" className="text-xs font-bold text-[#156c45] dark:text-emerald-400 hover:underline flex items-center gap-1">
+              <Link to="/dashboard/goals" className="text-xs font-bold text-[#156c45] dark:text-emerald-400 hover:underline flex items-center gap-1 shrink-0">
                 View all →
               </Link>
             </div>
 
-            <div className="pt-4 flex flex-col gap-4">
+            <div className="pt-4 flex flex-col gap-4 min-w-0">
               {/* Member Personal Action Tasks with Live Countdown */}
               {myAssignedGoalTasks.length > 0 && (
-                <div className="p-3.5 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/80 dark:border-emerald-900/40 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
-                      <Target className="h-3.5 w-3.5 text-emerald-600" />
-                      <span>My Assigned Goal Tasks ({myAssignedGoalTasks.length})</span>
+                <div className="p-3.5 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/80 dark:border-emerald-900/40 space-y-3 min-w-0 overflow-hidden">
+                  <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+                    <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1.5 min-w-0 truncate">
+                      <Target className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      <span className="truncate">My Assigned Goal Tasks ({myAssignedGoalTasks.length})</span>
                     </span>
                     <Link
                       to="/dashboard/goals"
-                      className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline"
+                      className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline shrink-0"
                     >
                       Log Notes →
                     </Link>
                   </div>
 
-                  <div className="space-y-2.5">
+                  <div className="space-y-2.5 min-w-0">
                     {myAssignedGoalTasks.slice(0, 2).map(({ goal, task }) => (
                       <div
                         key={task.id}
                         onClick={() => navigate("/dashboard/goals")}
-                        className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-emerald-100 dark:border-emerald-950/80 hover:border-emerald-300 transition cursor-pointer shadow-3xs"
+                        className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-emerald-100 dark:border-emerald-950/80 hover:border-emerald-300 transition cursor-pointer shadow-3xs min-w-0 overflow-hidden"
                       >
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <span className="font-bold text-xs text-slate-800 dark:text-slate-100 truncate">
+                        <div className="flex items-center justify-between gap-2 mb-1.5 min-w-0">
+                          <span className="font-bold text-xs text-slate-800 dark:text-slate-100 truncate min-w-0">
                             {task.title}
                           </span>
-                          <RealtimeTaskCountdown
-                            deadline={task.deadline}
-                            isCompleted={task.status === "completed" || (task.progress || 0) >= 100}
-                            compact
-                          />
+                          <div className="shrink-0">
+                            <RealtimeTaskCountdown
+                              deadline={task.deadline}
+                              isCompleted={task.status === "completed" || (task.progress || 0) >= 100}
+                              compact
+                            />
+                          </div>
                         </div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
-                          <span>Goal: {goal.title}</span>
-                          <span className="font-mono font-bold text-emerald-600">{task.progress || 0}%</span>
+                        <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500 mb-1 min-w-0">
+                          <span className="truncate min-w-0">Goal: {goal.title}</span>
+                          <span className="font-mono font-bold text-emerald-600 shrink-0">{task.progress || 0}%</span>
                         </div>
                         <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                           <div
@@ -1619,17 +1654,17 @@ export const DashboardHome: React.FC = () => {
               )}
 
               {displayGoals.length > 0 ? (
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-4 min-w-0">
                   {displayGoals.map((g) => {
                     const pct = Math.min(100, Math.round((g.current_progress / (g.target || 1)) * 100));
                     return (
-                      <div key={g.id} className="flex flex-col gap-2 p-3.5 bg-slate-50/70 dark:bg-slate-800/40 rounded-xl border border-gray-100 dark:border-slate-800 hover:border-emerald-200 dark:hover:border-emerald-900/50 transition">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-xs text-gray-900 dark:text-white flex items-center gap-2">
+                      <div key={g.id} className="flex flex-col gap-2 p-3.5 bg-slate-50/70 dark:bg-slate-800/40 rounded-xl border border-gray-100 dark:border-slate-800 hover:border-emerald-200 dark:hover:border-emerald-900/50 transition min-w-0 overflow-hidden">
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                          <span className="font-bold text-xs text-gray-900 dark:text-white flex items-center gap-2 min-w-0 truncate">
                             <span className="h-2 w-2 rounded-full bg-[#156c45] dark:bg-emerald-400 shrink-0" />
-                            {g.title}
+                            <span className="truncate">{g.title}</span>
                           </span>
-                          <span className="text-xs font-bold text-[#156c45] dark:text-emerald-400 font-mono">
+                          <span className="text-xs font-bold text-[#156c45] dark:text-emerald-400 font-mono shrink-0">
                             {pct}%
                           </span>
                         </div>
@@ -1639,9 +1674,9 @@ export const DashboardHome: React.FC = () => {
                             style={{ width: `${pct}%` }}
                           />
                         </div>
-                        <div className="flex items-center justify-between text-[11px] text-[#4a6357] dark:text-slate-400 font-medium">
-                          <span>{g.current_progress.toLocaleString()} / {g.target.toLocaleString()} {g.unit || "milestones"}</span>
-                          <span className="font-mono text-[10px] text-gray-400">Quarterly Target</span>
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-[#4a6357] dark:text-slate-400 font-medium min-w-0">
+                          <span className="truncate">{g.current_progress.toLocaleString()} / {g.target.toLocaleString()} {g.unit || "milestones"}</span>
+                          <span className="font-mono text-[10px] text-gray-400 shrink-0">Quarterly Target</span>
                         </div>
                       </div>
                     );
@@ -1670,49 +1705,53 @@ export const DashboardHome: React.FC = () => {
         </div>
 
         {/* Sidebar Widgets - Weekly Schedule & Attendance Radar (Image 5) */}
-        <div className="flex flex-col gap-8">
-          <div className="card card-glow bg-white dark:bg-slate-850 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-3xs p-5">
-            <div className="flex items-center justify-between pb-3.5 border-b border-gray-100 dark:border-slate-800">
-              <div>
-                <h3 className="font-display font-bold text-sm text-gray-900 dark:text-white">
+        <div className="flex flex-col gap-8 min-w-0">
+          <div className="card card-glow bg-white dark:bg-slate-850 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-3xs p-5 min-w-0 overflow-hidden">
+            <div className="flex items-center justify-between gap-2 pb-3.5 border-b border-gray-100 dark:border-slate-800 min-w-0">
+              <div className="min-w-0">
+                <h3 className="font-display font-bold text-sm text-gray-900 dark:text-white truncate">
                   This Week
                 </h3>
-                <p className="text-[11px] text-[#4a6357] dark:text-slate-400 mt-0.5">
+                <p className="text-[11px] text-[#4a6357] dark:text-slate-400 mt-0.5 truncate">
                   Upcoming sessions & deadlines
                 </p>
               </div>
-              <Link to="/dashboard/events" className="text-xs font-bold text-[#156c45] dark:text-emerald-400 hover:underline flex items-center gap-1">
+              <Link to="/dashboard/events" className="text-xs font-bold text-[#156c45] dark:text-emerald-400 hover:underline flex items-center gap-1 shrink-0">
                 Calendar →
               </Link>
             </div>
 
-            <div className="pt-3.5">
+            <div className="pt-3.5 min-w-0">
               {nextUpcomingItems.length > 0 ? (
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 min-w-0">
                   {nextUpcomingItems.map((item) => {
                     const eventDate = new Date(item.date_time);
                     const isToday = new Date().toDateString() === eventDate.toDateString();
                     return (
                       <div
                         key={item.id}
-                        className="p-3 bg-slate-50/70 dark:bg-slate-800/60 rounded-xl border border-gray-100 dark:border-slate-800 flex flex-col gap-1.5 hover:border-emerald-200 transition"
+                        className="p-3 bg-slate-50/70 dark:bg-slate-800/60 rounded-xl border border-gray-100 dark:border-slate-800 flex flex-col gap-1.5 hover:border-emerald-200 transition min-w-0 overflow-hidden"
                       >
-                        <div className="flex justify-between items-start gap-2">
-                          <span className="font-bold text-xs text-gray-900 dark:text-white line-clamp-1">
+                        <div className="flex justify-between items-start gap-2 min-w-0">
+                          <span className="font-bold text-xs text-gray-900 dark:text-white line-clamp-1 min-w-0">
                             {item.title}
                           </span>
-                          <Badge color={item.type === "meeting" ? "purple" : "blue"}>
-                            {item.type === "meeting" ? "Meeting" : "Event"}
-                          </Badge>
+                          <div className="shrink-0">
+                            <Badge color={item.type === "meeting" ? "purple" : "blue"}>
+                              {item.type === "meeting" ? "Meeting" : "Event"}
+                            </Badge>
+                          </div>
                         </div>
 
-                        <div className="flex items-center justify-between text-[11px] text-gray-500 font-medium">
-                          <div className="flex items-center gap-1 font-mono">
-                            <Clock className="h-3 w-3 text-gray-400" />
-                            {isToday ? "Today at " : `${eventDate.toLocaleDateString([], { month: "short", day: "numeric" })} at `}
-                            {eventDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500 font-medium min-w-0">
+                          <div className="flex items-center gap-1 font-mono truncate min-w-0">
+                            <Clock className="h-3 w-3 text-gray-400 shrink-0" />
+                            <span className="truncate">
+                              {isToday ? "Today at " : `${eventDate.toLocaleDateString([], { month: "short", day: "numeric" })} at `}
+                              {eventDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </span>
                           </div>
-                          <span className="text-[10px] truncate max-w-[120px] text-gray-400 font-mono">
+                          <span className="text-[10px] truncate max-w-[120px] text-gray-400 font-mono shrink-0">
                             {item.venue}
                           </span>
                         </div>
@@ -1740,13 +1779,13 @@ export const DashboardHome: React.FC = () => {
           <Card
             title="Official Documents"
             action={
-              <Link to="/dashboard/documents" className="text-xs text-[var(--org-primary)] font-bold hover:underline flex items-center gap-1">
+              <Link to="/dashboard/documents" className="text-xs text-[var(--org-primary)] font-bold hover:underline flex items-center gap-1 shrink-0">
                 Vault <ArrowRight className="h-3 w-3" />
               </Link>
             }
           >
             {recentDocs.length > 0 ? (
-              <div className="flex flex-col divide-y divide-gray-100 dark:divide-slate-800 text-xs">
+              <div className="flex flex-col divide-y divide-gray-100 dark:divide-slate-800 text-xs min-w-0">
                 {recentDocs.map((doc) => {
                   const docTitle = doc.name || (doc as any).title || "Untitled Document";
                   const isExcel = doc.file_type === "excel";
@@ -1766,13 +1805,13 @@ export const DashboardHome: React.FC = () => {
                           navigate("/dashboard/documents");
                         }
                       }}
-                      className="py-2.5 px-2 -mx-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition flex items-center justify-between gap-3 cursor-pointer group"
+                      className="py-2.5 px-2 -mx-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition flex items-center justify-between gap-3 cursor-pointer group min-w-0"
                     >
-                      <div className="flex items-center gap-2.5 truncate min-w-0">
+                      <div className="flex items-center gap-2.5 truncate min-w-0 flex-1">
                         <div className={`p-1.5 rounded-lg shrink-0 ${isExcel ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600" : isLetter ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600" : "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600"}`}>
                           {isExcel ? <FileSpreadsheet className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
                         </div>
-                        <div className="flex flex-col truncate">
+                        <div className="flex flex-col truncate min-w-0">
                           <span className="font-bold text-gray-900 dark:text-slate-100 truncate group-hover:text-[var(--org-primary)] transition">
                             {docTitle}
                           </span>
@@ -6973,11 +7012,11 @@ const _unusedOldImpactTracker = () => {
     return actAttendanceCount + eventAttCount;
   }, [activities, allEventAttData]);
 
-  // 3. Financial Leverage KPI: donations & member_fees (amount, status ("confirmed" donations & "paid" fees))
+  // 3. Financial Leverage KPI: donations & member_fees (confirmed donations & paid/partially_paid fee installments)
   const totalLeverageDonations = React.useMemo(() => {
     const confirmedDons = donations?.filter((d) => d.status === "confirmed") || [];
     const donationsSum = confirmedDons.reduce((acc, d) => acc + Number(d.amount || 0), 0);
-    const paidFeesSum = feeLedger?.filter(f => f.status === "paid")?.reduce((acc, f) => acc + Number(f.amount || 0), 0) || 0;
+    const paidFeesSum = feeLedger?.reduce((acc, f) => acc + getFeeBalances(f).paidAmount, 0) || 0;
     return donationsSum + paidFeesSum;
   }, [donations, feeLedger]);
 

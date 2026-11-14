@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, Eye, EyeOff, X, UploadCloud } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { uploadFileToSupabase, resolveFileUrl, fileToDataURL } from "../lib/storageService";
@@ -20,7 +21,7 @@ export const getLucideIcon = (iconName: string): React.ComponentType<any> | null
 // ==========================================
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "outline" | "ghost" | "danger";
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   loading?: boolean;
   icon?: React.ReactNode;
 }
@@ -35,7 +36,7 @@ export const Button: React.FC<ButtonProps> = ({
   disabled,
   ...props
 }) => {
-  const baseStyle = "inline-flex items-center justify-center font-bold rounded-xl transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#156c45] text-xs md:text-sm cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap";
+  const baseStyle = "inline-flex items-center justify-center font-bold rounded-xl transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#156c45] text-xs md:text-sm cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed min-w-0 max-w-full text-center leading-snug";
 
   const variants = {
     primary: "bg-[#156c45] hover:bg-[#105536] text-white shadow-3xs hover:shadow-xs",
@@ -46,9 +47,10 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   const sizes = {
-    sm: "px-3 py-1.5 gap-1.5 text-xs h-8.5",
-    md: "px-4 py-2 gap-2 text-xs md:text-sm h-9.5",
-    lg: "px-5 py-2.5 gap-2 text-sm md:text-base h-11"
+    xs: "px-2.5 py-1 gap-1 text-[11px] min-h-[28px]",
+    sm: "px-3 py-1.5 gap-1.5 text-xs min-h-[34px]",
+    md: "px-4 py-2 gap-2 text-xs md:text-sm min-h-[38px]",
+    lg: "px-5 py-2.5 gap-2 text-sm md:text-base min-h-[44px]"
   };
 
   return (
@@ -57,7 +59,7 @@ export const Button: React.FC<ButtonProps> = ({
       className={`${baseStyle} ${variants[variant]} ${sizes[size]} ${className}`}
       {...props}
     >
-      {loading ? <Spinner size="sm" /> : icon}
+      {loading ? <Spinner size="sm" /> : icon ? <span className="shrink-0 flex items-center">{icon}</span> : null}
       {children}
     </button>
   );
@@ -80,6 +82,7 @@ export const ImageUploadInput: React.FC<{
   onChange: (url: string) => void;
   placeholder?: string;
 }> = ({ label, value, onChange, placeholder }) => {
+  const { t } = useTranslation();
   const [dragOver, setDragOver] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
   const [resolvedUrl, setResolvedUrl] = React.useState("");
@@ -104,11 +107,11 @@ export const ImageUploadInput: React.FC<{
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
       if (file.size > 50 * 1024 * 1024) {
-        alert("File too large. Maximum size is 50MB.");
+        alert(t("ui.file_too_large", "File too large. Maximum size is 50MB."));
         return;
       }
       if (file.size > 30 * 1024 * 1024) {
-        alert("Warning: File is large (>30MB).");
+        alert(t("ui.file_large_warning", "Warning: File is large (>30MB)."));
       }
       if (file.type.startsWith("image/")) {
         try {
@@ -139,11 +142,11 @@ export const ImageUploadInput: React.FC<{
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       if (file.size > 50 * 1024 * 1024) {
-        alert("File too large. Maximum size is 50MB.");
+        alert(t("ui.file_too_large", "File too large. Maximum size is 50MB."));
         return;
       }
       if (file.size > 30 * 1024 * 1024) {
-        alert("Warning: File is large (>30MB).");
+        alert(t("ui.file_large_warning", "Warning: File is large (>30MB)."));
       }
       if (file.type.startsWith("image/")) {
         try {
@@ -195,23 +198,23 @@ export const ImageUploadInput: React.FC<{
                 type="button"
                 onClick={() => onChange("")}
                 className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded shrink-0 ml-1 cursor-pointer transition"
-                title="Clear input"
-                aria-label="Clear input"
+                title={t("ui.clear_input", "Clear input")}
+                aria-label={t("ui.clear_input", "Clear input")}
               >
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
-          <label className="shrink-0 px-3.5 py-2 sm:py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold rounded-xl cursor-pointer transition text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 border border-slate-200/80 dark:border-slate-700 select-none whitespace-nowrap shadow-3xs">
+          <label className="shrink-0 px-3.5 py-2 sm:py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold rounded-xl cursor-pointer transition text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1.5 border border-slate-200/80 dark:border-slate-700 select-none min-h-[34px] text-center shadow-3xs">
             {uploading ? (
               <>
-                <Spinner size="sm" className="scale-75" />
-                <span>Uploading...</span>
+                <Spinner size="sm" className="scale-75 shrink-0" />
+                <span>{t("ui.uploading", "Uploading...")}</span>
               </>
             ) : (
               <>
-                <UploadCloud className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-                <span>Upload File</span>
+                <UploadCloud className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
+                <span>{t("ui.upload_file", "Upload File")}</span>
               </>
             )}
             <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} disabled={uploading} />
@@ -244,6 +247,7 @@ export const Input: React.FC<InputProps> = ({
   type,
   ...props
 }) => {
+  const { t } = useTranslation();
   const [showPassword, setShowPassword] = React.useState(false);
   const isPassword = type === "password";
   const actualType = isPassword ? (showPassword ? "text" : "password") : type;
@@ -300,7 +304,7 @@ export const Input: React.FC<InputProps> = ({
             tabIndex={-1}
             onClick={() => setShowPassword((prev) => !prev)}
             className="absolute right-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-0.5 rounded focus:outline-none cursor-pointer select-none"
-            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-label={showPassword ? t("ui.hide_password", "Hide password") : t("ui.show_password", "Show password")}
           >
             {showPassword ? (
               <EyeOff className="h-4 w-4" />
@@ -342,20 +346,20 @@ export const Card: React.FC<CardProps> = ({
 }) => {
   return (
     <div
-      className={`card card-glow bg-white dark:bg-slate-850 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-3xs ${className}`}
+      className={`card card-glow bg-white dark:bg-slate-850 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-3xs min-w-0 overflow-hidden ${className}`}
       {...props}
     >
       {(title || action) && (
-        <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 gap-2">
+        <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 gap-2 min-w-0">
           {title && (
-            <h3 className="font-bold text-sm md:text-base text-slate-900 dark:text-slate-100 tracking-tight text-center w-full">
+            <h3 className="font-bold text-sm md:text-base text-slate-900 dark:text-slate-100 tracking-tight text-center sm:text-left w-full min-w-0 break-words leading-snug">
               {title}
             </h3>
           )}
-          {action && <div>{action}</div>}
+          {action && <div className="shrink-0">{action}</div>}
         </div>
       )}
-      <div className={padding ? "p-6" : ""}>{children}</div>
+      <div className={`${padding ? "p-6" : ""} min-w-0`}>{children}</div>
     </div>
   );
 };
@@ -370,6 +374,7 @@ export interface ModalProps {
   title?: string;
   children: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl" | "full";
+  maxWidth?: string;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -378,8 +383,10 @@ export const Modal: React.FC<ModalProps> = ({
   onClose,
   title,
   children,
-  size = "md"
+  size = "md",
+  maxWidth
 }) => {
+  const { t } = useTranslation();
   const isModalVisible = open ?? isOpen ?? false;
   if (!isModalVisible) return null;
 
@@ -401,20 +408,20 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Content wrapper */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`relative bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-full ${sizes[size]} shadow-2xl flex flex-col overflow-hidden max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh] my-auto animate-in fade-in zoom-in-[0.98] duration-200 border border-gray-200 dark:border-slate-800`}
+        className={`relative bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-full ${maxWidth || sizes[size]} shadow-2xl flex flex-col overflow-hidden max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh] my-auto animate-in fade-in zoom-in-[0.98] duration-200 border border-gray-200 dark:border-slate-800`}
       >
-        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-gray-100 dark:border-slate-800 shrink-0">
-          <h3 className="font-display font-bold text-base sm:text-lg text-gray-900 dark:text-slate-100">
-            {title || "Modal"}
+        <div className="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 border-b border-gray-100 dark:border-slate-800 shrink-0 min-w-0">
+          <h3 className="font-display font-bold text-base sm:text-lg text-gray-900 dark:text-slate-100 min-w-0 break-words leading-snug pr-2">
+            {title || t("ui.modal_default_title", "Details")}
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition shrink-0"
           >
             &#x2715;
           </button>
         </div>
-        <div className="p-4 sm:p-6 overflow-y-auto w-full flex-1 flex flex-col modal-scroll-area overscroll-contain">{children}</div>
+        <div className="p-4 sm:p-6 overflow-y-auto w-full flex-1 flex flex-col min-w-0 modal-scroll-area overscroll-contain">{children}</div>
       </div>
     </div>
   );
@@ -425,17 +432,22 @@ export const Modal: React.FC<ModalProps> = ({
 // ==========================================
 export interface BadgeProps {
   children: React.ReactNode;
-  color?: "green" | "amber" | "blue" | "red" | "gray" | "purple";
+  color?: "green" | "emerald" | "amber" | "blue" | "red" | "gray" | "purple";
+  variant?: "solid" | "outline";
+  className?: string;
   dot?: boolean;
 }
 
 export const Badge: React.FC<BadgeProps> = ({
   children,
   color = "gray",
+  variant = "solid",
+  className = "",
   dot = false
 }) => {
   const styles = {
     green: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30",
+    emerald: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30",
     amber: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30",
     blue: "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30",
     red: "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400 border border-red-100 dark:border-red-900/30",
@@ -445,6 +457,7 @@ export const Badge: React.FC<BadgeProps> = ({
 
   const dots = {
     green: "bg-emerald-500",
+    emerald: "bg-emerald-500",
     amber: "bg-amber-500",
     blue: "bg-blue-500",
     red: "bg-red-500",
@@ -452,11 +465,13 @@ export const Badge: React.FC<BadgeProps> = ({
     purple: "bg-purple-500"
   };
 
+  const variantStyle = variant === "outline" ? "bg-transparent border" : styles[color];
+
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full select-none ${styles[color]}`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full select-none max-w-full text-center leading-tight ${variantStyle} ${className}`}
     >
-      {dot && <span className={`h-1.5 w-1.5 rounded-full ${dots[color]}`} />}
+      {dot && <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dots[color]}`} />}
       {children}
     </span>
   );
@@ -553,15 +568,17 @@ export const Table: React.FC<TableProps> = ({
   columns,
   data = [],
   loading = false,
-  emptyMessage = "No records found"
+  emptyMessage
 }) => {
+  const { t } = useTranslation();
+  const resolvedEmpty = emptyMessage || t("ui.no_records", "No records found");
   return (
     <div className="w-full overflow-x-auto border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800">
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="bg-gray-50 dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 text-xs font-semibold text-gray-500 uppercase tracking-wider">
             {columns.map((col, idx) => (
-              <th key={idx} className="px-6 py-4.5">
+              <th key={idx} className="px-4 sm:px-6 py-3.5 whitespace-normal min-w-[90px]">
                 {col.header}
               </th>
             ))}
@@ -585,7 +602,7 @@ export const Table: React.FC<TableProps> = ({
                 colSpan={columns.length}
                 className="px-6 py-12 text-center text-gray-500"
               >
-                {emptyMessage}
+                {resolvedEmpty}
               </td>
             </motion.tr>
           ) : (
@@ -746,12 +763,13 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   value,
   max = 100
 }) => {
+  const { t } = useTranslation();
   const percentage = Math.min(Math.round((value / max) * 100), 100);
 
   return (
     <div className="w-full">
       <div className="flex items-center justify-between mb-1 text-[10px] md:text-xs text-gray-500 font-semibold uppercase">
-        <span>Progress</span>
+        <span>{t("ui.progress", "Progress")}</span>
         <span>{percentage}%</span>
       </div>
       <div className="w-full bg-gray-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
@@ -786,7 +804,7 @@ export const Tabs: React.FC<TabsProps> = ({
           <button
             key={tab.id}
             onClick={() => onChange(tab.id)}
-            className={`pb-3.5 text-xs md:text-sm font-semibold tracking-wide border-b-2 hover:text-gray-900 transition-all cursor-pointer ${
+            className={`pb-3.5 text-xs md:text-sm font-semibold tracking-wide border-b-2 hover:text-gray-900 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               isActive
                 ? "border-[var(--org-primary)] text-[var(--org-primary)] font-bold"
                 : "border-transparent text-gray-500 hover:border-gray-300"
@@ -820,16 +838,17 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onCancel,
   danger = false
 }) => {
+  const { t } = useTranslation();
   return (
     <Modal open={open} onClose={onCancel} title={title} size="sm">
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-gray-500">{message}</p>
-        <div className="flex items-center justify-end gap-3 mt-4">
+        <p className="text-sm text-gray-500 break-words">{message}</p>
+        <div className="flex flex-wrap items-center justify-end gap-3 mt-4">
           <Button variant="outline" onClick={onCancel}>
-            Cancel
+            {t("ui.cancel", "Cancel")}
           </Button>
           <Button variant={danger ? "danger" : "primary"} onClick={onConfirm}>
-            Confirm
+            {t("ui.confirm", "Confirm")}
           </Button>
         </div>
       </div>

@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { Button, Input } from "./ui";
 import { useCurrencyStore } from "../store/currencyStore";
-import { UssdPaymentHelper } from "./UssdPaymentHelper";
+import { UssdPaymentHelper, DEFAULT_MOMO_DISPLAY_METHODS, MomoDisplayMethod } from "./UssdPaymentHelper";
 import { PaymentSuccessPulse } from "./PaymentSuccessPulse";
 
 export interface MoMoPaymentSuccessData {
@@ -74,6 +74,7 @@ interface MoMoPushPaymentModalProps {
   recipientMtnNumber?: string;
   recipientAirtelNumber?: string;
   recipientMerchantCode?: string;
+  allowedDisplayMethods?: MomoDisplayMethod[];
   isPlatformFee?: boolean;
   onSuccess: (data: MoMoPaymentSuccessData) => Promise<void> | void;
 }
@@ -97,6 +98,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
   recipientMtnNumber,
   recipientAirtelNumber,
   recipientMerchantCode,
+  allowedDisplayMethods,
   isPlatformFee,
   onSuccess,
 }) => {
@@ -116,6 +118,13 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
   const isPlatformTarget = isPlatformFee !== undefined 
     ? isPlatformFee 
     : (itemType === "subscription" || itemType === "package");
+
+  const effectiveAllowedMethods: MomoDisplayMethod[] =
+    isPlatformTarget
+      ? ["merchant_code", "mtn_phone", "airtel_phone"]
+      : (allowedDisplayMethods && allowedDisplayMethods.length > 0
+          ? allowedDisplayMethods
+          : DEFAULT_MOMO_DISPLAY_METHODS);
 
   const finalRecipientName = recipientName || (isPlatformTarget ? "Impacto Platform Administration" : "Organization Treasury");
   const finalMtnNumber = recipientMtnNumber || "";
@@ -475,18 +484,18 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                 <span className="text-[10px] font-bold uppercase text-slate-400 font-sans">
                   Settlement:
                 </span>
-                {finalMtnNumber && (
+                {finalMtnNumber && effectiveAllowedMethods.includes("mtn_phone") && (
                   <span className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded-md font-bold text-[10px]">
                     MTN {finalMtnNumber}
                   </span>
                 )}
-                {finalAirtelNumber && (
+                {finalAirtelNumber && effectiveAllowedMethods.includes("airtel_phone") && (
                   <span className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded-md font-bold text-[10px]">
                     Airtel {finalAirtelNumber}
                   </span>
                 )}
               </div>
-              {finalMerchantCode && (
+              {finalMerchantCode && effectiveAllowedMethods.includes("merchant_code") && (
                 <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2 py-0.5 rounded-md text-[#156c45] dark:text-emerald-400 font-bold text-[10px]">
                   <span>Code: {finalMerchantCode}</span>
                   <button
@@ -514,6 +523,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                   amountRwf={itemType === "donation" ? undefined : amountRwf}
                   isDonation={itemType === "donation"}
                   itemName={itemName}
+                  allowedMethods={isPlatformTarget ? undefined : effectiveAllowedMethods}
                   compact
                 />
               </div>
@@ -846,6 +856,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                 amountRwf={itemType === "donation" ? undefined : amountRwf}
                 isDonation={itemType === "donation"}
                 itemName={itemName}
+                allowedMethods={isPlatformTarget ? undefined : effectiveAllowedMethods}
                 compact
               />
 

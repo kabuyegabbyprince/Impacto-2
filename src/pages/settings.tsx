@@ -65,7 +65,7 @@ import { useToast } from "../components/Toast";
 import { Button, Input, Card, Badge, Modal, Avatar, ImageUploadInput, getLucideIcon } from "../components/ui";
 import { ResolvedImage } from "../components/ResolvedMedia";
 import { V2AdvancedFeatures } from "../components/V2AdvancedFeatures";
-import { UssdPaymentHelper, getEffectivePaymentCode } from "../components/UssdPaymentHelper";
+import { getOrgMomoDisplayMethods, MomoDisplayMethod } from "../components/UssdPaymentHelper";
 import { PaymentGatewaySection, PaymentGatewaySuccessState } from "../components/PaymentGatewaySection";
 import { SubscriptionPaymentDashboard } from "../components/SubscriptionPaymentDashboard";
 import { OrganizationVerificationModal } from "../components/OrganizationVerificationModal";
@@ -407,6 +407,7 @@ export const OrganizationSettingsPage: React.FC = () => {
   const [mtnNum, setMtnNum] = useState(activeOrg?.dues_mtn_number || activeOrg?.donation_mtn_number || "");
   const [airtelNum, setAirtelNum] = useState(activeOrg?.dues_airtel_number || activeOrg?.donation_airtel_number || "");
   const [momoMerchantCode, setMomoMerchantCode] = useState(activeOrg?.momo_merchant_code || "");
+  const [momoDisplayMethods, setMomoDisplayMethods] = useState<MomoDisplayMethod[]>(() => getOrgMomoDisplayMethods(activeOrg));
   const [enableDonations, setEnableDonations] = useState(activeOrg?.donations_enabled || false);
 
   // Manual Subscription payment modal form
@@ -503,6 +504,7 @@ export const OrganizationSettingsPage: React.FC = () => {
       setMtnNum(activeOrg.dues_mtn_number || activeOrg.donation_mtn_number || "");
       setAirtelNum(activeOrg.dues_airtel_number || activeOrg.donation_airtel_number || "");
       setMomoMerchantCode(activeOrg.momo_merchant_code || "");
+      setMomoDisplayMethods(getOrgMomoDisplayMethods(activeOrg));
       setEnableDonations(activeOrg.donations_enabled || false);
       setExitSurveyEnabled(activeOrg.exit_survey_enabled ?? true);
       setExitSurveyTitle(activeOrg.exit_survey_title || "Member Departure & Offboarding Survey");
@@ -726,6 +728,19 @@ export const OrganizationSettingsPage: React.FC = () => {
     addToast("Reset to recommended standard exit survey questions.", "info");
   };
 
+  const handleToggleMomoDisplayMethod = (method: MomoDisplayMethod) => {
+    setMomoDisplayMethods((prev) => {
+      if (prev.includes(method)) {
+        if (prev.length === 1) {
+          addToast("Keep at least one MoMo payment display channel active for members.", "warning");
+          return prev;
+        }
+        return prev.filter((m) => m !== method);
+      }
+      return [...prev, method];
+    });
+  };
+
   const handleSaveMomo = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanMtn = mtnNum ? mtnNum.replace(/\D/g, "") : "";
@@ -737,6 +752,8 @@ export const OrganizationSettingsPage: React.FC = () => {
       addToast("Error: Airtel Collection number must be 10 digits and start with 07 (e.g. 073xxxxxxx)", "error");
       return;
     }
+    const resolvedDisplayMethods: MomoDisplayMethod[] =
+      momoDisplayMethods.length > 0 ? momoDisplayMethods : ["merchant_code"];
     try {
       const updated = await updateMutation.mutateAsync({
         id: activeOrg?.id || "",
@@ -747,7 +764,8 @@ export const OrganizationSettingsPage: React.FC = () => {
         dues_account_name: mName,
         dues_mtn_number: cleanMtn || mtnNum,
         dues_airtel_number: airtelNum,
-        momo_merchant_code: momoMerchantCode
+        momo_merchant_code: momoMerchantCode,
+        momo_display_methods: resolvedDisplayMethods
       });
       setActiveOrg(updated, useOrgStore.getState().activeMember);
       if (activeOrg?.id) {
@@ -758,6 +776,10 @@ export const OrganizationSettingsPage: React.FC = () => {
           } else {
             localStorage.removeItem(`impacto_org_momo_merchant_code_${activeOrg.id}`);
           }
+          localStorage.setItem(
+            `impacto_org_momo_display_methods_${activeOrg.id}`,
+            JSON.stringify(resolvedDisplayMethods)
+          );
         } catch (e) {}
       }
       addToast("Organization Mobile Money payment receiving credentials synced successfully!", "success");
@@ -1788,6 +1810,91 @@ export const OrganizationSettingsPage: React.FC = () => {
                 />
               </div>
 
+              {/* Member Checkout Carrier Display Selector */}
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-extrabold text-slate-900 dark:text-white">
+                      Member Checkout Carrier Display
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Choose which payment channels members see when paying dues or contributions. By default, only the Merchant Code is displayed.
+                    </p>
+                  </div>
+                  {(momoDisplayMethods.length !== 1 || momoDisplayMethods[0] !== "merchant_code") && (
+                    <button
+                      type="button"
+                      onClick={() => setMomoDisplayMethods(["merchant_code"])}
+                      className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
+                    >
+                      Reset to Merchant Code Only
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {[
+                    {
+                      id: "merchant_code" as MomoDisplayMethod,
+                      title: "Merchant Code",
+                      subtitle: "Default (*182*8*1*code#)",
+                      configured: Boolean((momoMerchantCode || "").trim()),
+                    },
+                    {
+                      id: "mtn_phone" as MomoDisplayMethod,
+                      title: "MTN Phone Number",
+                      subtitle: "078 / 079 direct transfer",
+                      configured: Boolean((mtnNum || "").trim()),
+                    },
+                    {
+                      id: "airtel_phone" as MomoDisplayMethod,
+                      title: "Airtel Money Phone",
+                      subtitle: "072 / 073 direct transfer",
+                      configured: Boolean((airtelNum || "").trim()),
+                    },
+                  ].map((option) => {
+                    const checked = momoDisplayMethods.includes(option.id);
+                    return (
+                      <label
+                        key={option.id}
+                        className={`flex items-start gap-2.5 p-3 rounded-xl border transition cursor-pointer select-none ${
+                          checked
+                            ? "bg-emerald-50/90 dark:bg-emerald-950/30 border-emerald-400 dark:border-emerald-700"
+                            : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => handleToggleMomoDisplayMethod(option.id)}
+                          className="mt-0.5 h-4 w-4 text-emerald-600 rounded border-slate-300 cursor-pointer"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                              {option.title}
+                            </span>
+                            {option.id === "merchant_code" && (
+                              <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 font-bold shrink-0">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10.5px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                            {option.subtitle}
+                          </span>
+                          {!option.configured && checked && (
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold block mt-1">
+                              Enter value above before saving
+                            </span>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="flex items-center gap-3 select-none py-3 border-t border-slate-200 dark:border-slate-800">
                 <input
                   type="checkbox"
@@ -1805,22 +1912,6 @@ export const OrganizationSettingsPage: React.FC = () => {
                 Save Organization Settlement Numbers
               </Button>
             </form>
-
-            <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
-              <PaymentGatewaySection
-                targetType="organization"
-                itemName={`${activeOrg?.name || "Organization"} Active Collection Gateway`}
-                amountRwf={activeOrg?.default_dues_amount || 1000}
-                activeOrg={{
-                  ...(activeOrg as any),
-                  momo_merchant_code: momoMerchantCode || activeOrg?.momo_merchant_code,
-                  dues_mtn_number: mtnNum || activeOrg?.dues_mtn_number,
-                  dues_airtel_number: airtelNum || activeOrg?.dues_airtel_number,
-                  dues_account_name: mName || activeOrg?.dues_account_name
-                }}
-                readOnlyPreview
-              />
-            </div>
           </Card>
         )}
 

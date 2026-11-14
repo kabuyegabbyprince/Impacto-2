@@ -48,7 +48,12 @@ i18n
       fr: { translation: fr },
       rw: { translation: rw },
     },
+    supportedLngs: ["en", "fr", "rw"],
+    nonExplicitSupportedLngs: true,
+    load: "languageOnly",
     fallbackLng: "en",
+    nsSeparator: false,
+    keySeparator: ".",
     interpolation: {
       escapeValue: false, // react already safes from xss
     },
@@ -57,5 +62,14 @@ i18n
       caches: ["localStorage"],
     },
   });
+
+const syncHtmlLang = (lng?: string) => {
+  if (typeof document === "undefined" || !lng) return;
+  const short = lng.split("-")[0].toLowerCase();
+  document.documentElement.lang = ["en", "fr", "rw"].includes(short) ? short : "en";
+};
+
+syncHtmlLang(i18n.resolvedLanguage || i18n.language);
+i18n.on("languageChanged", syncHtmlLang);
 
 export default i18n;

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Wifi, WifiOff, RefreshCw, Layers, CheckCircle2, AlertCircle, Trash2, ArrowUpRight } from "lucide-react";
 import { OfflineSyncService } from "../lib/offlineSyncService";
 import { OfflineSyncQueueItem } from "../types";
 
 export const OfflineSyncIndicator: React.FC = () => {
+  const { t } = useTranslation();
   const [isOnline, setIsOnline] = useState(OfflineSyncService.isOnline());
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -57,17 +59,17 @@ export const OfflineSyncIndicator: React.FC = () => {
         {!isOnline ? (
           <>
             <WifiOff className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300 shrink-0" />
-            <span>Offline Mode {pendingCount > 0 && `(${pendingCount})`}</span>
+            <span>{t("offline.offline_banner")} {pendingCount > 0 && `(${pendingCount})`}</span>
           </>
         ) : pendingCount > 0 ? (
           <>
             <RefreshCw className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 animate-spin shrink-0" />
-            <span>Syncing ({pendingCount})</span>
+            <span>{t("offline.syncing", { count: pendingCount })}</span>
           </>
         ) : (
           <>
             <Wifi className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <span>PWA Online</span>
+            <span>{t("offline.synced")}</span>
           </>
         )}
       </button>
@@ -119,23 +121,22 @@ export const OfflineSyncIndicator: React.FC = () => {
                     className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition shadow-sm"
                   >
                     <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-                    Sync Now
+                    {t("offline.retry_sync")}
                   </button>
                 </div>
               </div>
 
               {syncResult && (
                 <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
-                  <span>Synced {syncResult.synced} item(s) successfully!</span>
-                  {syncResult.failed > 0 && <span className="text-rose-600 font-semibold">{syncResult.failed} failed</span>}
+                  <span>{t("offline.synced")} ({syncResult.synced})</span>
+                  {syncResult.failed > 0 && <span className="text-rose-600 font-semibold">{syncResult.failed}</span>}
                 </div>
               )}
 
               {queueItems.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
                   <CheckCircle2 className="h-10 w-10 mx-auto mb-2 text-emerald-500 opacity-80" />
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">All Field Actions Synced</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Any attendance checks or asset logs recorded offline will appear here.</p>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t("offline.synced")}</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -157,7 +158,7 @@ export const OfflineSyncIndicator: React.FC = () => {
                           {JSON.stringify(item.payload).substring(0, 75)}...
                         </p>
                         <span className="text-[10px] text-gray-400 mt-1 block">
-                          Logged: {new Date(item.timestamp).toLocaleTimeString()}
+                          {new Date(item.timestamp).toLocaleTimeString()}
                         </span>
                       </div>
                       <span
@@ -184,7 +185,7 @@ export const OfflineSyncIndicator: React.FC = () => {
                 onClick={() => setShowModal(false)}
                 className="px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-xl transition"
               >
-                Close Window
+                {t("common.close")}
               </button>
             </div>
           </div>

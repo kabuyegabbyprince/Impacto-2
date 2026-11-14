@@ -39,26 +39,26 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
       <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-3xs flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div>
-            <h4 className="text-sm font-black font-display text-slate-900 dark:text-white flex items-center gap-2">
-              <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              {t("Organization Payment Ledger & MoMo Records", "Organization Payment Ledger & MoMo Records")}
+            <h4 className="text-sm font-black font-display text-slate-900 dark:text-white flex items-center gap-2 min-w-0 break-words">
+              <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>{t("Organization Payment Ledger & MoMo Records")}</span>
             </h4>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Real-time synchronization with platform audit logs and mobile money collection ledger.
+            <p className="text-xs text-slate-500 mt-0.5 break-words">
+              {t("payments.history_sub")}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
             <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">
-              {payments.length} {payments.length === 1 ? "entry" : "entries"}
+              {payments.length}
             </span>
             {onOpenRenewModal && (
               <Button
                 size="sm"
                 onClick={() => onOpenRenewModal()}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 px-3 rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs min-h-[32px] px-3 rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
-                <Receipt className="h-3.5 w-3.5" />
-                Submit Receipt Proof
+                <Receipt className="h-3.5 w-3.5 shrink-0" />
+                <span>{t("btn_submit_receipt")}</span>
               </Button>
             )}
           </div>
@@ -69,13 +69,12 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-mono text-[10px] uppercase border-b border-slate-200/80 dark:border-slate-800">
                 <tr>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Item / Category</th>
-                  <th className="px-4 py-3">Gateway & MoMo Phone</th>
-                  <th className="px-4 py-3">Reference</th>
-                  <th className="px-4 py-3">Amount</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Action</th>
+                  <th className="px-4 py-3">{t("payments.col_date")}</th>
+                  <th className="px-4 py-3">{t("payments.col_method")}</th>
+                  <th className="px-4 py-3">{t("payments.col_ref")}</th>
+                  <th className="px-4 py-3">{t("payments.col_amount")}</th>
+                  <th className="px-4 py-3">{t("payments.col_status")}</th>
+                  <th className="px-4 py-3 text-right">{t("common.actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -90,20 +89,14 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
                   return (
                     <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
                       <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                        {pDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">
-                        <div className="flex items-center gap-1.5">
+                        <div>{pDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</div>
+                        <div className="flex items-center gap-1.5 font-sans font-medium text-slate-900 dark:text-white mt-0.5">
                           {isPkg ? (
-                            <span className="p-1 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-600">
-                              <Package className="h-3.5 w-3.5" />
-                            </span>
+                            <Package className="h-3 w-3 text-purple-600 shrink-0" />
                           ) : (
-                            <span className="p-1 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600">
-                              <Crown className="h-3.5 w-3.5" />
-                            </span>
+                            <Crown className="h-3 w-3 text-emerald-600 shrink-0" />
                           )}
-                          <span className="truncate max-w-[200px]">{itemTitle}</span>
+                          <span className="truncate max-w-[180px]">{itemTitle}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-slate-600 dark:text-slate-300 font-mono whitespace-nowrap">
@@ -123,11 +116,11 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {p.status === "approved" ? (
-                          <Badge color="green">APPROVED</Badge>
+                          <Badge color="green">{t("payments.verified")}</Badge>
                         ) : p.status === "awaiting_approval" ? (
-                          <Badge color="yellow">AWAITING REVIEW</Badge>
+                          <Badge color="amber">{t("payments.pending")}</Badge>
                         ) : (
-                          <Badge color="red">REJECTED</Badge>
+                          <Badge color="red">{t("payments.rejected")}</Badge>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
@@ -135,9 +128,9 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
                           size="sm"
                           variant="outline"
                           onClick={() => setSelectedPaymentDetail(p)}
-                          className="h-7 text-[11px] px-2.5 rounded-lg cursor-pointer"
+                          className="min-h-[28px] text-[11px] px-2.5 rounded-lg cursor-pointer"
                         >
-                          View Receipt
+                          {t("fees_btn_review_slip")}
                         </Button>
                       </td>
                     </tr>
@@ -149,9 +142,9 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
         ) : (
           <div className="p-8 text-center bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center gap-2">
             <Coins className="h-8 w-8 text-slate-400" />
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">No payment records found yet</span>
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{t("payments.no_records")}</span>
             <p className="text-[11px] text-slate-500 max-w-sm">
-              Use MTN MoMo or Airtel Money to activate your subscription plan.
+              {t("payments.no_records_desc")}
             </p>
           </div>
         )}
@@ -194,27 +187,27 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
                   {(selectedPaymentDetail.amount_local || (selectedPaymentDetail.amount_usd ? selectedPaymentDetail.amount_usd * usdRate : 33750)).toLocaleString()} RWF
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Status:</span>
-                <Badge color={selectedPaymentDetail.status === "approved" ? "green" : selectedPaymentDetail.status === "awaiting_approval" ? "yellow" : "red"}>
-                  {selectedPaymentDetail.status?.toUpperCase()}
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-400">{t("payments.col_status")}:</span>
+                <Badge color={selectedPaymentDetail.status === "approved" ? "green" : selectedPaymentDetail.status === "awaiting_approval" ? "amber" : "red"}>
+                  {selectedPaymentDetail.status === "approved" ? t("payments.verified") : selectedPaymentDetail.status === "awaiting_approval" ? t("payments.pending") : t("payments.rejected")}
                 </Badge>
               </div>
               {selectedPaymentDetail.audited_by_name && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Verified By:</span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400">{t("payments.verified")}:</span>
                   <span className="font-bold text-slate-700 dark:text-slate-300">{selectedPaymentDetail.audited_by_name}</span>
                 </div>
               )}
               {selectedPaymentDetail.audit_notes && (
                 <div className="border-t border-slate-200 dark:border-slate-700 pt-2 flex flex-col gap-1">
-                  <span className="text-slate-400">Auditor Notes:</span>
-                  <p className="italic text-slate-600 dark:text-slate-300">{selectedPaymentDetail.audit_notes}</p>
+                  <span className="text-slate-400">{t("Note")}:</span>
+                  <p className="italic text-slate-600 dark:text-slate-300 break-words">{selectedPaymentDetail.audit_notes}</p>
                 </div>
               )}
               {selectedPaymentDetail.proof_url && (
                 <div className="border-t border-slate-200 dark:border-slate-700 pt-2 flex flex-col gap-1">
-                  <span className="text-slate-400">MoMo SMS Receipt Copy / Proof:</span>
+                  <span className="text-slate-400">{t("payments.sms_proof")}:</span>
                   <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 font-mono text-[11px] text-slate-700 dark:text-slate-300 break-all">
                     {selectedPaymentDetail.proof_url}
                   </div>
@@ -223,10 +216,10 @@ export const SubscriptionPaymentDashboard: React.FC<SubscriptionPaymentDashboard
             </div>
 
             <Button
-              className="w-full bg-slate-900 dark:bg-emerald-600 text-white font-bold h-10 rounded-xl cursor-pointer"
+              className="w-full bg-slate-900 dark:bg-emerald-600 text-white font-bold min-h-[40px] rounded-xl cursor-pointer"
               onClick={() => setSelectedPaymentDetail(null)}
             >
-              Close Receipt
+              {t("common.close")}
             </Button>
           </div>
         </Modal>

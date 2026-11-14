@@ -1973,9 +1973,21 @@ export const SuperadminDashboard: React.FC = () => {
               )
             : [];
           const reviewingAdmin =
+            reviewingMembers.find(
+              (m: any) =>
+                (m.role === "org_admin" || m.role === "superadmin") &&
+                Boolean(m.passport_photo_url) &&
+                Boolean(m.id_document_url)
+            ) ||
             reviewingMembers.find((m: any) => m.role === "org_admin" || m.role === "superadmin") ||
             reviewingMembers[0];
-          const reviewingAccountant = reviewingMembers.find((m: any) => m.role === "accountant");
+          const reviewingAccountant =
+            reviewingMembers.find(
+              (m: any) =>
+                m.role === "accountant" &&
+                Boolean(m.passport_photo_url) &&
+                Boolean(m.id_document_url)
+            ) || reviewingMembers.find((m: any) => m.role === "accountant");
           const reviewingExtraOfficers = reviewingMembers.filter(
             (m: any) => m.id !== reviewingAdmin?.id && m.id !== reviewingAccountant?.id
           );
@@ -2251,9 +2263,21 @@ export const SuperadminDashboard: React.FC = () => {
                         m.role === "accountant"
                     );
                     const adminM =
+                      orgOfficers.find(
+                        (m: any) =>
+                          (m.role === "org_admin" || m.role === "superadmin") &&
+                          Boolean(m.passport_photo_url) &&
+                          Boolean(m.id_document_url)
+                      ) ||
                       orgOfficers.find((m: any) => m.role === "org_admin" || m.role === "superadmin") ||
                       orgOfficers[0];
-                    const accM = orgOfficers.find((m: any) => m.role === "accountant");
+                    const accM =
+                      orgOfficers.find(
+                        (m: any) =>
+                          m.role === "accountant" &&
+                          Boolean(m.passport_photo_url) &&
+                          Boolean(m.id_document_url)
+                      ) || orgOfficers.find((m: any) => m.role === "accountant");
                     const adminUser = resolveOfficerUser(adminM);
                     const accUser = resolveOfficerUser(accM);
                     const submittedCount = mandatoryOrgOfficers.filter(
@@ -2332,7 +2356,7 @@ export const SuperadminDashboard: React.FC = () => {
 
                           {/* Action Buttons */}
                           <div className="flex flex-wrap items-center gap-2 shrink-0">
-                            {status === "pending_review" && (
+                            {status !== "verified" && (status === "pending_review" || canGrantTick) && (
                               <Button
                                 onClick={() => handleApproveVerification(orgItem.id, orgItem.name)}
                                 disabled={!canGrantTick || reviewOrgVerificationMutation.isPending}
@@ -2397,11 +2421,19 @@ export const SuperadminDashboard: React.FC = () => {
                               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
                                 adminM?.verification_status === "verified"
                                   ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                                  : adminM?.verification_status === "rejected"
+                                  ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
                                   : adminM?.passport_photo_url && adminM?.id_document_url
                                   ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
                                   : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
                               }`}>
-                                {adminM?.verification_status === "verified" ? "Verified" : adminM?.passport_photo_url ? "Submitted" : "Missing"}
+                                {adminM?.verification_status === "verified"
+                                  ? "Verified"
+                                  : adminM?.verification_status === "rejected"
+                                  ? "Rejected"
+                                  : adminM?.passport_photo_url && adminM?.id_document_url
+                                  ? "Submitted"
+                                  : "Missing"}
                               </span>
                             </div>
 
@@ -2463,11 +2495,19 @@ export const SuperadminDashboard: React.FC = () => {
                               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
                                 accM?.verification_status === "verified"
                                   ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                                  : accM?.verification_status === "rejected"
+                                  ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
                                   : accM?.passport_photo_url && accM?.id_document_url
                                   ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
                                   : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
                               }`}>
-                                {accM?.verification_status === "verified" ? "Verified" : accM?.passport_photo_url ? "Submitted" : "Missing"}
+                                {accM?.verification_status === "verified"
+                                  ? "Verified"
+                                  : accM?.verification_status === "rejected"
+                                  ? "Rejected"
+                                  : accM?.passport_photo_url && accM?.id_document_url
+                                  ? "Submitted"
+                                  : "Missing"}
                               </span>
                             </div>
 
@@ -2673,11 +2713,19 @@ export const SuperadminDashboard: React.FC = () => {
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
                             reviewingAdmin?.verification_status === "verified"
                               ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                              : reviewingAdmin?.passport_photo_url
+                              : reviewingAdmin?.verification_status === "rejected"
+                              ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                              : reviewingAdmin?.passport_photo_url && reviewingAdmin?.id_document_url
                               ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
                               : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
                           }`}>
-                            {reviewingAdmin?.verification_status === "verified" ? "Verified" : reviewingAdmin?.passport_photo_url ? "Submitted" : "Missing"}
+                            {reviewingAdmin?.verification_status === "verified"
+                              ? "Verified"
+                              : reviewingAdmin?.verification_status === "rejected"
+                              ? "Rejected"
+                              : reviewingAdmin?.passport_photo_url && reviewingAdmin?.id_document_url
+                              ? "Submitted"
+                              : "Missing"}
                           </span>
                         </div>
 
@@ -2760,11 +2808,19 @@ export const SuperadminDashboard: React.FC = () => {
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
                             reviewingAccountant?.verification_status === "verified"
                               ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                              : reviewingAccountant?.passport_photo_url
+                              : reviewingAccountant?.verification_status === "rejected"
+                              ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                              : reviewingAccountant?.passport_photo_url && reviewingAccountant?.id_document_url
                               ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
                               : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
                           }`}>
-                            {reviewingAccountant?.verification_status === "verified" ? "Verified" : reviewingAccountant?.passport_photo_url ? "Submitted" : "Missing"}
+                            {reviewingAccountant?.verification_status === "verified"
+                              ? "Verified"
+                              : reviewingAccountant?.verification_status === "rejected"
+                              ? "Rejected"
+                              : reviewingAccountant?.passport_photo_url && reviewingAccountant?.id_document_url
+                              ? "Submitted"
+                              : "Missing"}
                           </span>
                         </div>
 
@@ -2974,18 +3030,26 @@ export const SuperadminDashboard: React.FC = () => {
                             onClick={() => setShowRejectForm(true)}
                             className="text-xs font-bold text-rose-600 border-rose-300 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950/30"
                           >
-                            Reject Dossier
+                            {reviewingOrg.verification_status === "verified"
+                              ? "Revoke Verification"
+                              : "Reject Dossier"}
                           </Button>
                         )}
-                        <Button
-                          onClick={() => handleApproveVerification(reviewingOrg.id, reviewingOrg.name)}
-                          disabled={!canReviewingApprove}
-                          loading={reviewOrgVerificationMutation.isPending}
-                          title={!canReviewingApprove ? "Both Admin and Accountant documents are required." : "Grant Green Tick"}
-                          className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5"
-                        >
-                          <CheckCircle2 className="h-4 w-4" /> Grant Green Tick Verification
-                        </Button>
+                        {reviewingOrg.verification_status === "verified" ? (
+                          <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-xs font-bold">
+                            <CheckCircle2 className="h-4 w-4" /> Verified Active
+                          </span>
+                        ) : (
+                          <Button
+                            onClick={() => handleApproveVerification(reviewingOrg.id, reviewingOrg.name)}
+                            disabled={!canReviewingApprove}
+                            loading={reviewOrgVerificationMutation.isPending}
+                            title={!canReviewingApprove ? "Both Admin and Accountant documents are required." : "Grant Green Tick"}
+                            className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5"
+                          >
+                            <CheckCircle2 className="h-4 w-4" /> Grant Green Tick Verification
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
