@@ -66,11 +66,17 @@
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <script>
-      // Global mobile virtual keyboard scroll-into-view & visual viewport adjustment
+      // Global mobile virtual keyboard scroll-into-view & visual viewport focus-lock adjustment
       (function() {
         if (typeof window === "undefined") return;
         
+        function updateVisibleHeight() {
+          var vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+          document.documentElement.style.setProperty("--app-visible-height", vh + "px");
+        }
+
         function scrollActiveIntoView() {
+          updateVisibleHeight();
           var el = document.activeElement;
           if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")) {
             setTimeout(function() {
@@ -96,11 +102,13 @@
         }, true);
 
         if (window.visualViewport) {
-          window.visualViewport.addEventListener("resize", function() {
-            // Virtual keyboard opened or resized
-            scrollActiveIntoView();
-          });
+          window.visualViewport.addEventListener("resize", scrollActiveIntoView);
+          window.visualViewport.addEventListener("scroll", updateVisibleHeight);
         }
+        window.addEventListener("resize", updateVisibleHeight);
+        window.addEventListener("load", updateVisibleHeight);
+        document.addEventListener("DOMContentLoaded", updateVisibleHeight);
+        updateVisibleHeight();
       })();
     </script>
     <title>Impacto — Organization Management System with Free Forever Plan</title>
