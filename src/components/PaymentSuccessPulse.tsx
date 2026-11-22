@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { motion, useReducedMotion } from "motion/react";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "./ui";
@@ -14,7 +15,7 @@ export interface PaymentSuccessPulseProps {
 }
 
 export const PaymentSuccessPulse: React.FC<PaymentSuccessPulseProps> = ({
-  title = "Payment Proof Submitted",
+  title,
   message,
   reference,
   amountRwf,
@@ -22,7 +23,9 @@ export const PaymentSuccessPulse: React.FC<PaymentSuccessPulseProps> = ({
   onDone,
   className = ""
 }) => {
+  const { t, i18n } = useTranslation();
   const prefersReducedMotion = useReducedMotion();
+  const resolvedTitle = title || t("payments.proof_submitted_title", "Payment Proof Submitted");
 
   return (
     <motion.div
@@ -96,25 +99,25 @@ export const PaymentSuccessPulse: React.FC<PaymentSuccessPulseProps> = ({
         </motion.div>
       </div>
 
-      <div className="relative z-10 space-y-1.5 max-w-md">
-        <h4 className="font-display font-bold text-base text-emerald-950 dark:text-emerald-100">
-          {title}
+      <div className="relative z-10 space-y-1.5 max-w-md min-w-0">
+        <h4 className="font-display font-bold text-base text-emerald-950 dark:text-emerald-100 break-words">
+          {resolvedTitle}
         </h4>
-        <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed">
+        <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed break-words">
           {message}
         </p>
       </div>
 
       {(reference || (amountRwf !== undefined && amountRwf > 0)) && (
-        <div className="relative z-10 flex flex-wrap items-center justify-center gap-2 pt-1">
+        <div className="relative z-10 flex flex-wrap items-center justify-center gap-2 pt-1 max-w-full">
           {amountRwf !== undefined && amountRwf > 0 && (
             <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 font-mono text-xs font-bold text-slate-900 dark:text-white tabular-nums">
-              {Math.round(amountRwf).toLocaleString()} RWF
+              {Math.round(amountRwf).toLocaleString(i18n.language)} RWF
             </span>
           )}
           {reference && (
-            <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 font-mono text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-              Ref: {reference}
+            <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 font-mono text-xs font-semibold text-emerald-800 dark:text-emerald-300 break-all">
+              {t("payments.ref_prefix", "Ref:")} {reference}
             </span>
           )}
         </div>

@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Plus, ArrowRight, BookOpen, Award, FileText, CheckCircle2, Coins, Building2, Users } from "lucide-react";
 import { Button } from "./ui";
 
@@ -56,7 +57,9 @@ export const LedgerIllustration: React.FC<{ className?: string }> = ({ className
   </svg>
 );
 
-export const GrantsIllustration: React.FC<{ className?: string }> = ({ className = "w-48 h-36" }) => (
+export const GrantsIllustration: React.FC<{ className?: string }> = ({ className = "w-48 h-36" }) => {
+  const { t } = useTranslation();
+  return (
   <svg
     viewBox="0 0 240 160"
     fill="none"
@@ -76,8 +79,8 @@ export const GrantsIllustration: React.FC<{ className?: string }> = ({ className
     <rect x="74" y="70" width="92" height="4" rx="2" className="fill-slate-200 dark:fill-slate-700" />
 
     {/* Funding Metric Capsule */}
-    <rect x="70" y="84" width="100" height="24" rx="6" className="fill-amber-50 dark:fill-amber-950/40 stroke-amber-400/60" strokeWidth="1" />
-    <text x="120" y="99" textAnchor="middle" fill="#b45309" fontSize="9" fontWeight="bold" fontFamily="monospace">$50,000 GRANT POOL</text>
+    <rect x="64" y="84" width="112" height="24" rx="6" className="fill-amber-50 dark:fill-amber-950/40 stroke-amber-400/60" strokeWidth="1" />
+    <text x="120" y="99" textAnchor="middle" fill="#b45309" fontSize="8" fontWeight="bold" fontFamily="monospace">{t("empty_states.grant_pool_svg", "$50,000 GRANT POOL")}</text>
 
     {/* Wax Seal / Award Ribbon */}
     <g transform="translate(162, 78)">
@@ -96,7 +99,8 @@ export const GrantsIllustration: React.FC<{ className?: string }> = ({ className
       <rect x="14" y="17" width="4" height="6" fill="#d97706" />
     </g>
   </svg>
-);
+  );
+};
 
 export const ReportsIllustration: React.FC<{ className?: string }> = ({ className = "w-48 h-36" }) => (
   <svg
@@ -159,52 +163,53 @@ export const EmptyLedgerState: React.FC<EmptyLedgerStateProps> = ({
   onAddTransaction,
   onBatchEntry
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center justify-center p-6 md:p-10 bg-gradient-to-b from-white to-stone-50/70 dark:from-slate-800/80 dark:to-slate-900/90 border border-dashed border-emerald-300 dark:border-emerald-800/70 rounded-3xl text-center shadow-3xs">
       <div className="relative mb-5">
         <LedgerIllustration className="w-44 h-32 md:w-52 md:h-36" />
       </div>
 
-      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/70 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-[11px] font-bold uppercase tracking-wider font-mono mb-2">
-        <Coins className="h-3 w-3 text-emerald-600" /> Double-Entry Accounting
+      <div className="inline-flex flex-wrap items-center justify-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/70 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-[11px] font-bold uppercase tracking-wider font-mono mb-2 break-words">
+        <Coins className="h-3 w-3 text-emerald-600 shrink-0" /> {t("empty_states.ledger_badge", "Double-Entry Accounting")}
       </div>
 
-      <h3 className="text-lg md:text-xl font-bold font-display text-slate-900 dark:text-white">
-        No Financial Transactions Recorded Yet
+      <h3 className="text-lg md:text-xl font-bold font-display text-slate-900 dark:text-white break-words">
+        {t("empty_states.ledger_title", "No Financial Transactions Recorded Yet")}
       </h3>
-      <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 max-w-lg mt-1.5 mb-6 leading-relaxed">
-        Establish audit-ready financial transparency for your cooperative. Track all operational income, farm equipment assets, donor grants, and expense vouchers with real-time balance sheet balancing.
+      <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 max-w-lg mt-1.5 mb-6 leading-relaxed break-words">
+        {t("empty_states.ledger_desc", "Establish audit-ready financial transparency for your cooperative. Track all operational income, farm equipment assets, donor grants, and expense vouchers with real-time balance sheet balancing.")}
       </p>
 
       {/* 3 Step Onboarding Guidance Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full max-w-2xl mb-8 text-left">
-        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="h-5 w-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center justify-center font-mono">1</span>
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Select Classification</span>
+        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between min-w-0">
+          <div className="flex items-center gap-2 mb-2 min-w-0">
+            <span className="h-5 w-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center justify-center font-mono shrink-0">1</span>
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 break-words">{t("empty_states.ledger_step1_title", "Select Classification")}</span>
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-            Choose between Income (+), Expense (-), Asset (+), or Liability (+) balance sheet categories.
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug break-words">
+            {t("empty_states.ledger_step1_desc", "Choose between Income (+), Expense (-), Asset (+), or Liability (+) balance sheet categories.")}
           </p>
         </div>
 
-        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="h-5 w-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center justify-center font-mono">2</span>
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Assign Category</span>
+        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between min-w-0">
+          <div className="flex items-center gap-2 mb-2 min-w-0">
+            <span className="h-5 w-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center justify-center font-mono shrink-0">2</span>
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 break-words">{t("empty_states.ledger_step2_title", "Assign Category")}</span>
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-            Tag transactions to grants, member fees, salaries, rent, crop inputs, or operational reserves.
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug break-words">
+            {t("empty_states.ledger_step2_desc", "Tag transactions to grants, member fees, salaries, rent, crop inputs, or operational reserves.")}
           </p>
         </div>
 
-        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="h-5 w-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center justify-center font-mono">3</span>
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Link Receipts & Goals</span>
+        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between min-w-0">
+          <div className="flex items-center gap-2 mb-2 min-w-0">
+            <span className="h-5 w-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center justify-center font-mono shrink-0">3</span>
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 break-words">{t("empty_states.ledger_step3_title", "Link Receipts & Goals")}</span>
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-            Provide verifiable invoice references and link transactions directly to strategic goals.
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug break-words">
+            {t("empty_states.ledger_step3_desc", "Provide verifiable invoice references and link transactions directly to strategic goals.")}
           </p>
         </div>
       </div>
@@ -216,7 +221,7 @@ export const EmptyLedgerState: React.FC<EmptyLedgerStateProps> = ({
           icon={<Plus className="h-4 w-4" />}
           className="rounded-xl bg-emerald-700 hover:bg-emerald-800 shadow-sm text-xs font-bold"
         >
-          Record First Transaction
+          {t("empty_states.ledger_cta_add", "Record First Transaction")}
         </Button>
         {onBatchEntry && (
           <Button
@@ -225,7 +230,7 @@ export const EmptyLedgerState: React.FC<EmptyLedgerStateProps> = ({
             icon={<FileText className="h-4 w-4" />}
             className="rounded-xl text-xs font-bold"
           >
-            Multi-Row Batch Entry
+            {t("empty_states.ledger_cta_batch", "Multi-Row Batch Entry")}
           </Button>
         )}
       </div>
@@ -246,52 +251,53 @@ export const EmptyGrantsState: React.FC<EmptyGrantsStateProps> = ({
   onAddGrant,
   onAddDonation
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center justify-center p-6 md:p-10 bg-gradient-to-b from-white to-amber-50/40 dark:from-slate-800/80 dark:to-slate-900/90 border border-dashed border-amber-300 dark:border-amber-800/70 rounded-3xl text-center shadow-3xs">
       <div className="relative mb-5">
         <GrantsIllustration className="w-44 h-32 md:w-52 md:h-36" />
       </div>
 
-      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100/70 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-[11px] font-bold uppercase tracking-wider font-mono mb-2">
-        <Award className="h-3 w-3 text-amber-600" /> Capital & Funding Pipeline
+      <div className="inline-flex flex-wrap items-center justify-center gap-1.5 px-3 py-1 rounded-full bg-amber-100/70 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-[11px] font-bold uppercase tracking-wider font-mono mb-2 break-words">
+        <Award className="h-3 w-3 text-amber-600 shrink-0" /> {t("empty_states.grants_badge", "Capital & Funding Pipeline")}
       </div>
 
-      <h3 className="text-lg md:text-xl font-bold font-display text-slate-900 dark:text-white">
-        No Grant Pipelines or Funder Proposals Tracked Yet
+      <h3 className="text-lg md:text-xl font-bold font-display text-slate-900 dark:text-white break-words">
+        {t("empty_states.grants_title", "No Grant Pipelines or Funder Proposals Tracked Yet")}
       </h3>
-      <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 max-w-lg mt-1.5 mb-6 leading-relaxed">
-        Track opportunities from government bodies, philanthropic foundations, and bilateral donors. Manage proposal deadlines, compliance guidelines, and fund disbursements seamlessly.
+      <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 max-w-lg mt-1.5 mb-6 leading-relaxed break-words">
+        {t("empty_states.grants_desc", "Track opportunities from government bodies, philanthropic foundations, and bilateral donors. Manage proposal deadlines, compliance guidelines, and fund disbursements seamlessly.")}
       </p>
 
       {/* 3 Step Onboarding Guidance Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full max-w-2xl mb-8 text-left">
-        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="h-5 w-5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 text-xs font-bold flex items-center justify-center font-mono">1</span>
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Identify Funder</span>
+        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between min-w-0">
+          <div className="flex items-center gap-2 mb-2 min-w-0">
+            <span className="h-5 w-5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 text-xs font-bold flex items-center justify-center font-mono shrink-0">1</span>
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 break-words">{t("empty_states.grants_step1_title", "Identify Funder")}</span>
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-            Document granting agencies, USAID, EU bilateral funds, or private foundation partners.
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug break-words">
+            {t("empty_states.grants_step1_desc", "Document granting agencies, USAID, EU bilateral funds, or private foundation partners.")}
           </p>
         </div>
 
-        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="h-5 w-5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 text-xs font-bold flex items-center justify-center font-mono">2</span>
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Set Target Capital</span>
+        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between min-w-0">
+          <div className="flex items-center gap-2 mb-2 min-w-0">
+            <span className="h-5 w-5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 text-xs font-bold flex items-center justify-center font-mono shrink-0">2</span>
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 break-words">{t("empty_states.grants_step2_title", "Set Target Capital")}</span>
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-            Define funding range (RWF or USD), submission deadlines, and key eligibility criteria.
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug break-words">
+            {t("empty_states.grants_step2_desc", "Define funding range (RWF or USD), submission deadlines, and key eligibility criteria.")}
           </p>
         </div>
 
-        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="h-5 w-5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 text-xs font-bold flex items-center justify-center font-mono">3</span>
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Monitor Lifecycle</span>
+        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between min-w-0">
+          <div className="flex items-center gap-2 mb-2 min-w-0">
+            <span className="h-5 w-5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 text-xs font-bold flex items-center justify-center font-mono shrink-0">3</span>
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 break-words">{t("empty_states.grants_step3_title", "Monitor Lifecycle")}</span>
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-            Advance opportunities from &apos;Tracking&apos; to &apos;Applied&apos; and celebrate &apos;Successful&apos; awards.
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug break-words">
+            {t("empty_states.grants_step3_desc", "Advance opportunities from 'Tracking' to 'Applied' and celebrate 'Successful' awards.")}
           </p>
         </div>
       </div>
@@ -303,7 +309,7 @@ export const EmptyGrantsState: React.FC<EmptyGrantsStateProps> = ({
           icon={<Plus className="h-4 w-4" />}
           className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white shadow-sm text-xs font-bold"
         >
-          Track First Grant Opportunity
+          {t("empty_states.grants_cta_add", "Track First Grant Opportunity")}
         </Button>
         {onAddDonation && (
           <Button
@@ -312,7 +318,7 @@ export const EmptyGrantsState: React.FC<EmptyGrantsStateProps> = ({
             icon={<Coins className="h-4 w-4" />}
             className="rounded-xl text-xs font-bold"
           >
-            Log Sourced Donation
+            {t("empty_states.grants_cta_donation", "Log Sourced Donation")}
           </Button>
         )}
       </div>
@@ -333,52 +339,53 @@ export const EmptyReportsState: React.FC<EmptyReportsStateProps> = ({
   onGoToLedger,
   onGoToMembers
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center justify-center p-6 md:p-10 bg-gradient-to-b from-white to-blue-50/40 dark:from-slate-800/80 dark:to-slate-900/90 border border-dashed border-blue-300 dark:border-blue-800/70 rounded-3xl text-center shadow-3xs">
       <div className="relative mb-5">
         <ReportsIllustration className="w-44 h-32 md:w-52 md:h-36" />
       </div>
 
-      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100/70 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 text-[11px] font-bold uppercase tracking-wider font-mono mb-2">
-        <FileText className="h-3 w-3 text-blue-600" /> Compliance & Executive Dossier
+      <div className="inline-flex flex-wrap items-center justify-center gap-1.5 px-3 py-1 rounded-full bg-blue-100/70 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 text-[11px] font-bold uppercase tracking-wider font-mono mb-2 break-words">
+        <FileText className="h-3 w-3 text-blue-600 shrink-0" /> {t("empty_states.reports_badge", "Compliance & Executive Dossier")}
       </div>
 
-      <h3 className="text-lg md:text-xl font-bold font-display text-slate-900 dark:text-white">
-        Annual Audit & Compliance Reports Awaiting Operational Records
+      <h3 className="text-lg md:text-xl font-bold font-display text-slate-900 dark:text-white break-words">
+        {t("empty_states.reports_title", "Annual Audit & Compliance Reports Awaiting Operational Records")}
       </h3>
-      <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 max-w-lg mt-1.5 mb-6 leading-relaxed">
-        Comprehensive financial audits, cash-flow projections, and Rwanda Cooperative Agency (RCA) compliance scores compile automatically once activity data is entered into the system.
+      <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 max-w-lg mt-1.5 mb-6 leading-relaxed break-words">
+        {t("empty_states.reports_desc", "Comprehensive financial audits, cash-flow projections, and Rwanda Cooperative Agency (RCA) compliance scores compile automatically once activity data is entered into the system.")}
       </p>
 
       {/* 3 Step Guidance Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full max-w-2xl mb-8 text-left">
-        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400 text-xs font-bold flex items-center justify-center font-mono">1</span>
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Log Ledger Records</span>
+        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between min-w-0">
+          <div className="flex items-center gap-2 mb-2 min-w-0">
+            <span className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400 text-xs font-bold flex items-center justify-center font-mono shrink-0">1</span>
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 break-words">{t("empty_states.reports_step1_title", "Log Ledger Records")}</span>
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-            Record revenue, expenses, and capital reserves in the Financial Ledger to populate cash flow trends.
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug break-words">
+            {t("empty_states.reports_step1_desc", "Record revenue, expenses, and capital reserves in the Financial Ledger to populate cash flow trends.")}
           </p>
         </div>
 
-        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400 text-xs font-bold flex items-center justify-center font-mono">2</span>
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Verify Members & Shares</span>
+        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between min-w-0">
+          <div className="flex items-center gap-2 mb-2 min-w-0">
+            <span className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400 text-xs font-bold flex items-center justify-center font-mono shrink-0">2</span>
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 break-words">{t("empty_states.reports_step2_title", "Verify Members & Shares")}</span>
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-            Add member registration numbers and share capital payments to meet statutory legal reserve ratios.
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug break-words">
+            {t("empty_states.reports_step2_desc", "Add member registration numbers and share capital payments to meet statutory legal reserve ratios.")}
           </p>
         </div>
 
-        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400 text-xs font-bold flex items-center justify-center font-mono">3</span>
-            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">One-Click PDF/CSV Export</span>
+        <div className="p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-3xs flex flex-col justify-between min-w-0">
+          <div className="flex items-center gap-2 mb-2 min-w-0">
+            <span className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400 text-xs font-bold flex items-center justify-center font-mono shrink-0">3</span>
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 break-words">{t("empty_states.reports_step3_title", "One-Click PDF/CSV Export")}</span>
           </div>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-            Download certified A4 annual report packets or standardized RCA CSV data ready for general assemblies.
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug break-words">
+            {t("empty_states.reports_step3_desc", "Download certified A4 annual report packets or standardized RCA CSV data ready for general assemblies.")}
           </p>
         </div>
       </div>
@@ -390,7 +397,7 @@ export const EmptyReportsState: React.FC<EmptyReportsStateProps> = ({
           icon={<Coins className="h-4 w-4" />}
           className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm text-xs font-bold"
         >
-          Open Financial Ledger
+          {t("empty_states.reports_cta_ledger", "Open Financial Ledger")}
         </Button>
         {onGoToMembers && (
           <Button
@@ -399,7 +406,7 @@ export const EmptyReportsState: React.FC<EmptyReportsStateProps> = ({
             icon={<Users className="h-4 w-4" />}
             className="rounded-xl text-xs font-bold"
           >
-            Manage Member Shares
+            {t("empty_states.reports_cta_members", "Manage Member Shares")}
           </Button>
         )}
       </div>

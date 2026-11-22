@@ -88,7 +88,7 @@ import {
 } from "../hooks/useImpactoData";
 import { Promoter } from "../types";
 import { useAuthStore } from "../store/authStore";
-import { Button, Input, Card, Badge, Table, Modal, EmptyState, Avatar, getLucideIcon } from "../components/ui";
+import { Button, Input, Card, Badge, Table, Modal, EmptyState, Avatar, getLucideIcon, ConfirmDialog } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { notifyPlanOrPackageGranted } from "../lib/crossTabSync";
 import { MockDB } from "../lib/mockData";
@@ -171,9 +171,12 @@ const SubscriptionTierCell: React.FC<{
 };
 
 export const SuperadminDashboard: React.FC = () => {
+  const { t } = useTranslation();
   const { user, logout } = useAuthStore();
   const { data: platformData, refetch } = usePlatformAdminData();
   const { addToast } = useToast();
+  const [confirmRemoveStaff, setConfirmRemoveStaff] = useState<{ id: string; name: string } | null>(null);
+  const [confirmRemovePromoter, setConfirmRemovePromoter] = useState<Promoter | null>(null);
 
   const orgs = platformData?.orgs || [];
   const errors = platformData?.errors || [];
@@ -607,11 +610,17 @@ export const SuperadminDashboard: React.FC = () => {
     }
   };
 
-  const handleDeleteStaff = async (staffId: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to remove staff member "${name}"?`)) return;
+  const handleDeleteStaff = (staffId: string, name: string) => {
+    setConfirmRemoveStaff({ id: staffId, name });
+  };
+
+  const executeDeleteStaff = async () => {
+    if (!confirmRemoveStaff) return;
+    const { id: staffId, name } = confirmRemoveStaff;
     try {
       await deleteStaffMutation.mutateAsync(staffId);
       addToast(`Staff account for ${name} removed`, "info");
+      setConfirmRemoveStaff(null);
     } catch (err) {
       console.error(err);
       addToast("Failed to remove staff member", "error");
@@ -3176,15 +3185,8 @@ export const SuperadminDashboard: React.FC = () => {
             }
           };
 
-          const handleDeletePromoter = async (promoter: Promoter) => {
-            if (window.confirm(`Are you sure you want to remove promoter "${promoter.name}" (${promoter.code})?`)) {
-              try {
-                await deletePromoterMutation.mutateAsync(promoter.id);
-                addToast(`Promoter ${promoter.name} removed.`, "info");
-              } catch (err: any) {
-                addToast(err?.message || "Failed to delete promoter", "error");
-              }
-            }
+          const handleDeletePromoter = (promoter: Promoter) => {
+            setConfirmRemovePromoter(promoter);
           };
 
           // Filter promoters list
@@ -4496,6 +4498,40 @@ export const SuperadminDashboard: React.FC = () => {
       <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-6 px-6 text-center text-xs text-slate-500 font-medium">
         IMPACTO Platform Superadmin Governance Console • Secure Multi-Tenant Operations & Billing Gateway
       </footer>
+
+      <ConfirmDialog
+        open={!!confirmRemoveStaff}
+        title={t("superadmin.confirm_remove_staff_title", "Remove Staff Member")}
+        message={t("superadmin.confirm_remove_staff_msg", {
+          name: confirmRemoveStaff?.name || "",
+          defaultValue: "Are you sure you want to remove staff member \"{{name}}\"?"
+        })}
+        onConfirm={executeDeleteStaff}
+        onCancel={() => setConfirmRemoveStaff(null)}
+        danger
+      />
+
+      <ConfirmDialog
+        open={!!confirmRemovePromoter}
+        title={t("superadmin.confirm_remove_promoter_title", "Remove Promoter")}
+        message={t("superadmin.confirm_remove_promoter_msg", {
+          name: confirmRemovePromoter?.name || "",
+          code: confirmRemovePromoter?.code || "",
+          defaultValue: "Are you sure you want to remove promoter \"{{name}}\" ({{code}})?"
+        })}
+        onConfirm={async () => {
+          if (!confirmRemovePromoter) return;
+          try {
+            await deletePromoterMutation.mutateAsync(confirmRemovePromoter.id);
+            addToast(`Promoter ${confirmRemovePromoter.name} removed.`, "info");
+            setConfirmRemovePromoter(null);
+          } catch (err: any) {
+            addToast(err?.message || "Failed to delete promoter", "error");
+          }
+        }}
+        onCancel={() => setConfirmRemovePromoter(null)}
+        danger
+      />
     </div>
   );
 };

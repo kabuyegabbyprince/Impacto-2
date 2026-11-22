@@ -46,6 +46,7 @@ import { useToast } from "./Toast";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { MockDB } from "../lib/mockData";
 import { APP_CONFIG } from "../config";
+import { useTranslation } from "react-i18next";
 
 export function getCanonicalMeetRoomId(meet?: HostedMeetInfo | null, fallbackOrgId?: string): string {
   if (meet?.meetingCode) {
@@ -305,11 +306,15 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
 }) => {
   const { user } = useAuthStore();
   const { addToast } = useToast();
+  const { t, i18n } = useTranslation();
+  const tRef = useRef(t);
+  tRef.current = t;
+  const [confirmRemovePeer, setConfirmRemovePeer] = useState<{ peerId: string; name: string } | null>(null);
 
   const resolvedDisplayName = useMemo(() => {
     const candidate = displayName?.trim() || guestUser?.full_name?.trim() || user?.full_name?.trim();
-    return candidate || "Participant";
-  }, [displayName, guestUser?.full_name, user?.full_name]);
+    return candidate || t("chat_meet.participant", { defaultValue: "Participant" });
+  }, [displayName, guestUser?.full_name, user?.full_name, t]);
 
   const effectiveUser = useMemo(() => {
     if (user && !guestUser) {
@@ -341,7 +346,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
   }, [user, guestUser, activeMember, activeOrg?.id]);
 
   const [meetingName, setMeetingName] = useState<string>(
-    hostedMeetInfo?.meetingTitle || meetingTitle || `${channelName} Live Meeting`
+    hostedMeetInfo?.meetingTitle || meetingTitle || t("chat_meet.channel_live_meeting", { defaultValue: `${channelName} Live Meeting`, channel: channelName })
   );
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -352,7 +357,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     } else if (meetingTitle) {
       setMeetingName(meetingTitle);
     } else if (channelName) {
-      setMeetingName(`${channelName} Live Meeting`);
+      setMeetingName(tRef.current("chat_meet.channel_live_meeting", { defaultValue: `${channelName} Live Meeting`, channel: channelName }));
     }
   }, [hostedMeetInfo?.meetingTitle, meetingTitle, channelName]);
 
@@ -554,7 +559,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       type: "ADMIT_PEER",
       userId
     });
-    addToast(`Admitted ${userName} to the meeting.`, "success");
+    addToast(t("chat_meet.admitted_peer", { defaultValue: `Admitted ${userName} to the meeting.`, name: userName }), "success");
   };
 
   const handleDeclinePeer = (userId: string, userName: string) => {
@@ -563,7 +568,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       type: "DECLINE_PEER",
       userId
     });
-    addToast(`Declined admission for ${userName}.`, "info");
+    addToast(t("chat_meet.declined_peer", { defaultValue: `Declined admission for ${userName}.`, name: userName }), "info");
   };
 
   // Shared Document during call
@@ -1160,7 +1165,8 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         });
         if (msg.handRaised) {
           playMeetingChime("hand");
-          addToastRef.current(`${msg.name || "A participant"} raised their hand`, "info");
+          const who = msg.name || tRef.current("chat_meet.a_participant", { defaultValue: "A participant" });
+          addToastRef.current(tRef.current("chat_meet.peer_raised_hand", { defaultValue: `${who} raised their hand`, name: who }), "info");
         }
       } else if (msg.type === "REMOTE_MUTE_PEER" && msg.targetPeerId === myPeerId) {
         if (micOnRef.current) {
@@ -1171,7 +1177,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             });
           }
           playMeetingChime("mute");
-          addToastRef.current("You were muted by the meeting host", "info");
+          addToastRef.current(tRef.current("chat_meet.muted_by_host", { defaultValue: "You were muted by the meeting host" }), "info");
         }
       } else if (msg.type === "SIGNAL_OFFER" && msg.toPeerId === myPeerId) {
         let pc = peerConnectionsRef.current[msg.fromPeerId];
@@ -1255,7 +1261,8 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         });
       } else if (msg.type === "KICK_PEER") {
         if (msg.targetPeerId === myPeerId) {
-          addToastRef.current(`You were removed from this meeting by ${msg.kickedBy || "the host"}.`, "error");
+          const byWho = msg.kickedBy || tRef.current("chat_meet.the_host", { defaultValue: "the host" });
+          addToastRef.current(tRef.current("chat_meet.you_were_removed", { defaultValue: `You were removed from this meeting by ${byWho}.`, name: byWho }), "error");
           handleLeaveCall();
         } else {
           const targetId = msg.targetPeerId;
@@ -1276,8 +1283,10 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             delete next[targetId];
             return next;
           });
+          const targetLabel = msg.targetName || tRef.current("chat_meet.a_participant", { defaultValue: "A participant" });
+          const adminLabel = msg.kickedBy || tRef.current("chat_meet.the_administrator", { defaultValue: "the administrator" });
           addToastRef.current(
-            `${msg.targetName || "A participant"} was removed by ${msg.kickedBy || "the administrator"}`,
+            tRef.current("chat_meet.peer_removed_by", { defaultValue: `${targetLabel} was removed by ${adminLabel}`, target: targetLabel, admin: adminLabel }),
             "info"
           );
         }
@@ -1287,16 +1296,18 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
           if (prev.some((d) => d.id === msg.doc.id)) return prev;
           return [...prev, msg.doc];
         });
-        addToastRef.current(`${msg.presenterName || "Presenter"} is presenting "${msg.doc.name}" to everyone`, "info");
+        const presenter = msg.presenterName || tRef.current("chat_meet.presenter", { defaultValue: "Presenter" });
+        addToastRef.current(tRef.current("chat_meet.presenter_sharing_doc", { defaultValue: `${presenter} is presenting "${msg.doc.name}" to everyone`, presenter, doc: msg.doc.name }), "info");
       } else if (msg.type === "STOP_SHARED_DOC") {
         setSharedDoc(null);
-        addToastRef.current("Document presentation ended", "info");
+        addToastRef.current(tRef.current("chat_meet.doc_presentation_ended", { defaultValue: "Document presentation ended" }), "info");
       } else if (msg.type === "UPDATE_MEETING_TITLE" && msg.title) {
         setMeetingName(msg.title);
       } else if (msg.type === "REQUEST_ADMISSION" && isAdminRef.current) {
         setPendingAdmissions((prev) => {
           if (prev.some((p) => p.userId === msg.userId)) return prev;
-          addToastRef.current(`${msg.userName || "A participant"} is requesting admission to the meeting.`, "info");
+          const requester = msg.userName || tRef.current("chat_meet.a_participant", { defaultValue: "A participant" });
+          addToastRef.current(tRef.current("chat_meet.peer_requesting_admission", { defaultValue: `${requester} is requesting admission to the meeting.`, name: requester }), "info");
           return [...prev, { userId: msg.userId, userName: msg.userName, role: msg.role }];
         });
       }
@@ -1624,8 +1635,8 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       if (connectionStatus === "disconnected") {
         setHandshakeAlert({
           kind: "offline",
-          title: "Signaling connection interrupted",
-          detail: "Realtime signaling channel is disconnected. Reconnecting automatically.",
+          title: tRef.current("chat_meet.signaling_interrupted_title", { defaultValue: "Signaling connection interrupted" }),
+          detail: tRef.current("chat_meet.signaling_interrupted_detail", { defaultValue: "Realtime signaling channel is disconnected. Reconnecting automatically." }),
           peerIds: []
         });
         return;
@@ -1688,17 +1699,19 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       });
 
       if (failedPeers.length > 0) {
+        const names = failedPeers.map((p) => p.name).join(", ");
         setHandshakeAlert({
           kind: "failed",
-          title: "WebRTC peer handshake failed",
-          detail: `Audio/video handshake failed with ${failedPeers.map((p) => p.name).join(", ")}. Retry handshake to re-negotiate SDP/ICE.`,
+          title: tRef.current("chat_meet.handshake_failed_title", { defaultValue: "WebRTC peer handshake failed" }),
+          detail: tRef.current("chat_meet.handshake_failed_detail", { defaultValue: `Audio/video handshake failed with ${names}. Retry handshake to re-negotiate SDP/ICE.`, names }),
           peerIds: failedPeers.map((p) => p.peerId)
         });
       } else if (stalledPeers.length > 0) {
+        const names = stalledPeers.map((p) => p.name).join(", ");
         setHandshakeAlert({
           kind: "stalled",
-          title: "WebRTC handshake taking longer than expected",
-          detail: `Still negotiating direct media link with ${stalledPeers.map((p) => p.name).join(", ")}. Click Retry Handshake if audio/video does not appear.`,
+          title: tRef.current("chat_meet.handshake_stalled_title", { defaultValue: "WebRTC handshake taking longer than expected" }),
+          detail: tRef.current("chat_meet.handshake_stalled_detail", { defaultValue: `Still negotiating direct media link with ${names}. Click Retry Handshake if audio/video does not appear.`, names }),
           peerIds: stalledPeers.map((p) => p.peerId)
         });
       } else {
@@ -1753,9 +1766,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       handRaised: handRaisedRef.current
     });
 
-    addToast("Re-negotiating WebRTC media handshake...", "info");
+    addToast(t("chat_meet.renegotiating_handshake", { defaultValue: "Re-negotiating WebRTC media handshake..." }), "info");
     setTimeout(() => setIsRetryingHandshake(false), 1500);
-  }, [handshakeAlert, myPeerId, broadcastSignalingMessage, resolvedDisplayName, addToast]);
+  }, [handshakeAlert, myPeerId, broadcastSignalingMessage, resolvedDisplayName, addToast, t]);
 
   // Callback ref for local video element (only updates srcObject when stream reference changes)
   const handleLocalVideoRef = useCallback((el: HTMLVideoElement | null) => {
@@ -1775,11 +1788,11 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
           track.enabled = false;
         });
       }
-      addToast("Microphone muted", "info");
+      addToast(t("chat_meet.mic_muted_toast", { defaultValue: "Microphone muted" }), "info");
     } else {
       try {
         if (!navigator.mediaDevices?.getUserMedia) {
-          addToast("Your browser does not support microphone access.", "error");
+          addToast(t("chat_meet.mic_unsupported", { defaultValue: "Your browser does not support microphone access." }), "error");
           return;
         }
         let stream = localStreamRef.current;
@@ -1803,12 +1816,12 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         }
         setMicOn(true);
         playMeetingChime("unmute");
-        addToast("Microphone active", "success");
+        addToast(t("chat_meet.mic_active_toast", { defaultValue: "Microphone active" }), "success");
       } catch (err: any) {
         setMicOn(false);
         console.warn("Microphone permission error:", err);
         addToast(
-          "Microphone permission was blocked or denied by browser. Please click the camera/mic icon in your address bar to allow permissions.",
+          t("chat_meet.mic_permission_denied", { defaultValue: "Microphone permission was blocked or denied by browser. Please click the camera/mic icon in your address bar to allow permissions." }),
           "error"
         );
       }
@@ -1830,11 +1843,11 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         localVideoRef.current.srcObject = null;
       }
       await syncTrackToPeers("video", null);
-      addToast("Camera turned off", "info");
+      addToast(t("chat_meet.camera_off_toast", { defaultValue: "Camera turned off" }), "info");
     } else {
       try {
         if (!navigator.mediaDevices?.getUserMedia) {
-          addToast("Your browser or device does not support camera access.", "error");
+          addToast(t("chat_meet.camera_unsupported", { defaultValue: "Your browser or device does not support camera access." }), "error");
           return;
         }
         let videoStream: MediaStream | null = null;
@@ -1866,12 +1879,12 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         }
         await syncTrackToPeers("video", newVideoTrack, stream);
         setVideoOn(true);
-        addToast("Camera video active", "success");
+        addToast(t("chat_meet.camera_active_toast", { defaultValue: "Camera video active" }), "success");
       } catch (err: any) {
         setVideoOn(false);
         console.warn("Camera permission/device error:", err);
         addToast(
-          "Camera access was denied or unavailable on this device. Please check browser permissions and ensure no other app is using the camera.",
+          t("chat_meet.camera_permission_denied", { defaultValue: "Camera access was denied or unavailable on this device. Please check browser permissions and ensure no other app is using the camera." }),
           "error"
         );
       }
@@ -1892,11 +1905,11 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         localVideoRef.current.srcObject = null;
       }
       await syncTrackToPeers("video", null);
-      addToast("Screen sharing stopped", "info");
+      addToast(t("chat_meet.screen_share_stopped", { defaultValue: "Screen sharing stopped" }), "info");
     } else {
       try {
         if (!navigator.mediaDevices?.getDisplayMedia) {
-          addToast("Screen sharing is not supported by your device/browser.", "error");
+          addToast(t("chat_meet.screen_share_unsupported", { defaultValue: "Screen sharing is not supported by your device/browser." }), "error");
           return;
         }
         const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
@@ -1915,12 +1928,12 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
           localVideoRef.current.srcObject = screenStream;
         }
         await syncTrackToPeers("video", screenTrack, screenStream);
-        addToast("Sharing live screen to call", "success");
+        addToast(t("chat_meet.screen_share_started", { defaultValue: "Sharing live screen to call" }), "success");
         screenStream.getVideoTracks()[0].onended = () => {
           setScreenSharing(false);
           setVideoOn(false);
           void syncTrackToPeers("video", null);
-          addToast("Screen sharing ended", "info");
+          addToast(t("chat_meet.screen_share_ended", { defaultValue: "Screen sharing ended" }), "info");
         };
       } catch (e) {
         console.warn("Screen share cancelled", e);
@@ -1938,7 +1951,12 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         el.muted = nextDeafened;
       }
     });
-    addToast(nextDeafened ? "Deafened: all incoming meeting audio is muted" : "Undeafened: meeting audio restored", "info");
+    addToast(
+      nextDeafened
+        ? t("chat_meet.deafened_toast", { defaultValue: "Deafened: all incoming meeting audio is muted" })
+        : t("chat_meet.undeafened_toast", { defaultValue: "Undeafened: meeting audio restored" }),
+      "info"
+    );
   };
 
   // Toggle Raise Hand
@@ -1947,7 +1965,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     setHandRaised(nextState);
     if (nextState) {
       playMeetingChime("hand");
-      addToast("Hand raised", "info");
+      addToast(t("chat_meet.hand_raised_toast", { defaultValue: "Hand raised" }), "info");
     }
   };
 
@@ -1964,9 +1982,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
 
     const newMsg: MeetMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      sender: effectiveUser?.full_name || "You",
+      sender: effectiveUser?.full_name || t("chat_meet.you", { defaultValue: "You" }),
       text: inputMessage.trim(),
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      time: new Date().toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })
     };
 
     setCallMessages(prev => {
@@ -1987,7 +2005,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
 
   const handleOpenDocReadMode = (doc: Document) => {
     setViewingDoc(doc);
-    addToast(`Opened "${doc.name}" in Read Mode`, "info");
+    addToast(t("chat_meet.opened_read_mode", { defaultValue: `Opened "${doc.name}" in Read Mode`, name: doc.name }), "info");
   };
 
   const handleCloseReadMode = () => {
@@ -2001,16 +2019,16 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     const newPoint: AgendaPoint = {
       id: `ag-${Date.now()}`,
       title: newAgendaTitle.trim(),
-      assignee: newAgendaAssignee.trim() || "Lead Officer",
+      assignee: newAgendaAssignee.trim() || t("chat_meet.lead_officer", { defaultValue: "Lead Officer" }),
       status: "open",
-      author: effectiveUser?.full_name || "Host",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      author: effectiveUser?.full_name || t("chat_meet.host", { defaultValue: "Host" }),
+      time: new Date().toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })
     };
 
     setAgendaPoints(prev => [...prev, newPoint]);
     setNewAgendaTitle("");
     setNewAgendaAssignee("");
-    addToast("New action point recorded in meeting minutes", "success");
+    addToast(t("chat_meet.action_point_recorded", { defaultValue: "New action point recorded in meeting minutes" }), "success");
 
     broadcastSignalingMessage({
       type: "NEW_AGENDA",
@@ -2038,21 +2056,22 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       return [...prev, doc];
     });
 
+    const presenter = effectiveUser?.full_name || t("chat_meet.presenter", { defaultValue: "Presenter" });
     broadcastSignalingMessage({
       type: "SYNC_SHARED_DOC",
       fromPeerId: myPeerId,
       doc: doc,
-      presenterName: effectiveUser?.full_name || "Presenter"
+      presenterName: presenter
     });
 
-    addToast(`Presenting ${doc.name} to everyone`, "info");
+    addToast(t("chat_meet.presenting_doc_toast", { defaultValue: `Presenting ${doc.name} to everyone`, name: doc.name }), "info");
     setCallMessages(prev => [
       ...prev,
       {
         id: `msg-doc-${Date.now()}`,
-        sender: "System",
-        text: `Shared document set to "${doc.name}" by ${effectiveUser?.full_name || "Presenter"}`,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        sender: t("chat_meet.system_sender", { defaultValue: "System" }),
+        text: t("chat_meet.shared_doc_system_msg", { defaultValue: `Shared document set to "${doc.name}" by ${presenter}`, doc: doc.name, presenter }),
+        time: new Date().toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })
       }
     ]);
   };
@@ -2062,25 +2081,30 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
     broadcastSignalingMessage({
       type: "STOP_SHARED_DOC",
       fromPeerId: myPeerId,
-      presenterName: effectiveUser?.full_name || "Presenter"
+      presenterName: effectiveUser?.full_name || t("chat_meet.presenter", { defaultValue: "Presenter" })
     });
-    addToast("Document presentation ended", "info");
+    addToast(t("chat_meet.doc_presentation_ended", { defaultValue: "Document presentation ended" }), "info");
   };
 
   const handleRemoveParticipant = (targetPeerId: string, targetName: string) => {
     if (!isAdmin) {
-      addToast("Only meeting administrators can remove participants", "error");
+      addToast(t("chat_meet.only_admins_remove", { defaultValue: "Only meeting administrators can remove participants" }), "error");
       return;
     }
-    const confirmed = window.confirm(`Remove ${targetName} from the meeting?`);
-    if (!confirmed) return;
+    setConfirmRemovePeer({ peerId: targetPeerId, name: targetName });
+  };
+
+  const executeRemoveParticipant = () => {
+    if (!confirmRemovePeer) return;
+    const { peerId: targetPeerId, name: targetName } = confirmRemovePeer;
+    setConfirmRemovePeer(null);
 
     broadcastSignalingMessage({
       type: "KICK_PEER",
       fromPeerId: myPeerId,
       targetPeerId,
       targetName,
-      kickedBy: effectiveUser?.full_name || "Administrator"
+      kickedBy: effectiveUser?.full_name || t("chat_meet.administrator", { defaultValue: "Administrator" })
     });
 
     if (peerConnectionsRef.current[targetPeerId]) {
@@ -2096,7 +2120,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
       return next;
     });
 
-    addToast(`${targetName} removed from the meeting`, "info");
+    addToast(t("chat_meet.peer_removed_toast", { defaultValue: `${targetName} removed from the meeting`, name: targetName }), "info");
   };
 
   const handleLeaveCall = () => {
@@ -2428,21 +2452,21 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
           })}
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
           <span className="w-2.5 h-2.5 rounded-full bg-[#81c995] shrink-0" />
           <div className="flex flex-col min-w-0">
             <span className="font-bold text-xs text-white truncate max-w-[150px]">
               {meetingName}
             </span>
-            <span className="text-[10px] text-[#9aa0a6] font-mono">
-              Code: <strong className="text-[#81c995]">{hostedMeetInfo?.meetingCode || "Active"}</strong> • {allParticipants.length} in call
+            <span className="text-[10px] text-[#9aa0a6] font-mono truncate">
+              {t("chat_meet.code_label", { defaultValue: "Code:" })} <strong className="text-[#81c995]">{hostedMeetInfo?.meetingCode || t("chat_meet.active", { defaultValue: "Active" })}</strong> • {t("chat_meet.in_call_count", { defaultValue: `${allParticipants.length} in call`, count: allParticipants.length })}
             </span>
           </div>
         </div>
 
-        <div className="h-6 w-px bg-[#3c4043]" />
+        <div className="h-6 w-px bg-[#3c4043] shrink-0" />
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
             onClick={handleToggleMic}
@@ -2451,7 +2475,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                 ? "bg-[#3c4043] text-white hover:bg-[#4a4d52]"
                 : "bg-[#ea4335]/20 text-[#f28b82] border border-[#ea4335]/30"
             }`}
-            title={micOn ? "Mute Microphone" : "Unmute Microphone"}
+            title={micOn ? t("chat_meet.mute_mic", { defaultValue: "Mute Microphone" }) : t("chat_meet.unmute_mic", { defaultValue: "Unmute Microphone" })}
           >
             {micOn ? <Mic className="h-4 w-4 text-[#81c995]" /> : <MicOff className="h-4 w-4 text-[#f28b82]" />}
           </button>
@@ -2464,7 +2488,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                 ? "bg-[#3c4043] text-white hover:bg-[#4a4d52]"
                 : "bg-[#ea4335]/20 text-[#f28b82] border border-[#ea4335]/30"
             }`}
-            title={videoOn ? "Turn Camera Off" : "Turn Camera On"}
+            title={videoOn ? t("chat_meet.turn_camera_off", { defaultValue: "Turn Camera Off" }) : t("chat_meet.turn_camera_on", { defaultValue: "Turn Camera On" })}
           >
             {videoOn ? <Video className="h-4 w-4 text-[#81c995]" /> : <VideoOff className="h-4 w-4 text-[#f28b82]" />}
           </button>
@@ -2473,17 +2497,17 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             type="button"
             onClick={() => setIsMinimized(false)}
             className="p-2 rounded-xl bg-[#81c995] hover:bg-[#a8dab5] text-[#0d2818] font-bold transition cursor-pointer flex items-center gap-1 text-xs shadow-sm"
-            title="Maximize meeting back to full screen"
+            title={t("chat_meet.maximize_tooltip", { defaultValue: "Maximize meeting back to full screen" })}
           >
-            <Maximize2 className="h-4 w-4" />
-            <span className="hidden sm:inline font-bold">Expand</span>
+            <Maximize2 className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline font-bold">{t("chat_meet.expand", { defaultValue: "Expand" })}</span>
           </button>
 
           <button
             type="button"
             onClick={handleLeaveCall}
             className="p-2 rounded-xl bg-[#ea4335] hover:bg-[#f28b82] text-white font-bold transition cursor-pointer"
-            title="Leave Meeting"
+            title={t("chat_meet.leave_meeting", { defaultValue: "Leave Meeting" })}
           >
             <PhoneOff className="h-4 w-4" />
           </button>
@@ -2553,7 +2577,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                     type="button"
                     onClick={() => setIsEditingTitle(true)}
                     className="p-1 rounded hover:bg-[#282a2d] text-[#9aa0a6] hover:text-white transition"
-                    title="Edit meeting title"
+                    title={t("chat_meet.edit_meeting_title", { defaultValue: "Edit meeting title" })}
                   >
                     <Edit3 className="h-3 w-3" />
                   </button>
@@ -2568,38 +2592,38 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
           {/* Real-time Connection Status Indicator Badge */}
           {connectionStatus === "connected" ? (
             <span
-              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#81c995] bg-[#133020] px-2.5 py-0.5 rounded-full border border-[#1e4620]"
+              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#81c995] bg-[#133020] px-2.5 py-0.5 rounded-full border border-[#1e4620] shrink-0"
               title={`Signaling: Supabase ${supaHealth}, WebSocket ${wsHealth}`}
             >
               <Wifi className="h-3 w-3 text-[#81c995]" />
-              <span>Connected</span>
+              <span>{t("chat_meet.connected", { defaultValue: "Connected" })}</span>
             </span>
           ) : connectionStatus === "connecting" ? (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30 shrink-0">
               <RefreshCw className="h-3 w-3 animate-spin" />
-              <span>Connecting...</span>
+              <span>{t("chat_meet.connecting", { defaultValue: "Connecting..." })}</span>
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-rose-400 bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/30">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-rose-400 bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/30 shrink-0">
               <WifiOff className="h-3 w-3 text-rose-400" />
-              <span>Disconnected</span>
+              <span>{t("chat_meet.disconnected", { defaultValue: "Disconnected" })}</span>
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           {hostedMeetInfo?.meetingCode && (
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#282a2d] border border-[#3c4043] text-xs font-mono">
-              <span className="text-[#9aa0a6] text-[10px] uppercase font-sans font-semibold">Code:</span>
+              <span className="text-[#9aa0a6] text-[10px] uppercase font-sans font-semibold">{t("chat_meet.code_label", { defaultValue: "Code:" })}</span>
               <span className="text-white font-bold tracking-wider">{hostedMeetInfo.meetingCode}</span>
               <button
                 type="button"
                 onClick={() => {
                   navigator.clipboard.writeText(hostedMeetInfo.meetingCode!);
-                  addToast(`Meeting code ${hostedMeetInfo.meetingCode} copied to clipboard`, "success");
+                  addToast(t("chat_meet.code_copied", { defaultValue: `Meeting code ${hostedMeetInfo.meetingCode} copied to clipboard`, code: hostedMeetInfo.meetingCode }), "success");
                 }}
                 className="p-1 rounded hover:bg-[#3c4043] text-[#9aa0a6] hover:text-white transition cursor-pointer"
-                title="Copy meeting code"
+                title={t("chat_meet.copy_code_tooltip", { defaultValue: "Copy meeting code" })}
               >
                 <Copy className="h-3 w-3 text-[#81c995]" />
               </button>
@@ -2613,16 +2637,16 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
               const codeParam = hostedMeetInfo?.meetingCode ? `&code=${encodeURIComponent(hostedMeetInfo.meetingCode)}` : "";
               const meetingUrl = `${window.location.origin}/meet?org=${targetOrgId}${codeParam}`;
               navigator.clipboard.writeText(meetingUrl).then(() => {
-                addToast("Meeting link copied to clipboard", "success");
+                addToast(t("chat_meet.link_copied", { defaultValue: "Meeting link copied to clipboard" }), "success");
               }).catch(() => {
-                addToast("Failed to copy link", "error");
+                addToast(t("chat_meet.link_copy_failed", { defaultValue: "Failed to copy link" }), "error");
               });
             }}
             className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#282a2d] hover:bg-[#3c4043] text-xs font-medium text-[#e3e3e3] border border-[#3c4043] transition cursor-pointer"
-            title="Copy meeting link to share with organization members"
+            title={t("chat_meet.copy_link_tooltip", { defaultValue: "Copy meeting link to share with organization members" })}
           >
             <Copy className="h-3.5 w-3.5 text-[#81c995]" />
-            <span>Copy Link</span>
+            <span>{t("chat_meet.copy_link", { defaultValue: "Copy Link" })}</span>
           </button>
 
           <div className="flex items-center gap-1.5 text-xs font-mono text-[#9aa0a6]">
@@ -2634,7 +2658,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             type="button"
             onClick={() => setIsMinimized(true)}
             className="p-1.5 rounded-full hover:bg-[#2d2e31] text-[#9aa0a6] hover:text-white transition cursor-pointer"
-            title="Minimize meeting to access system and read docs"
+            title={t("chat_meet.minimize_tooltip", { defaultValue: "Minimize meeting to access system and read docs" })}
           >
             <Minus className="h-5 w-5" />
           </button>
@@ -2643,7 +2667,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             type="button"
             onClick={handleLeaveCall}
             className="p-1.5 rounded-full hover:bg-[#2d2e31] text-[#9aa0a6] hover:text-white transition cursor-pointer"
-            title="Leave Meeting"
+            title={t("chat_meet.leave_meeting", { defaultValue: "Leave Meeting" })}
           >
             <X className="h-5 w-5" />
           </button>
@@ -2652,10 +2676,10 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
 
       {/* AUDIO AUTOPLAY UNLOCK BANNER FOR SAFARI / MOBILE BROWSERS */}
       {audioPlaybackBlocked && (
-        <div className="px-4 sm:px-6 py-2 bg-amber-950/80 border-b border-amber-800/70 text-amber-100 flex items-center justify-between gap-3 text-xs shrink-0">
-          <div className="flex items-center gap-2">
+        <div className="px-4 sm:px-6 py-2 bg-amber-950/80 border-b border-amber-800/70 text-amber-100 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
             <Volume2 className="h-4 w-4 text-amber-400 shrink-0" />
-            <span>Your browser paused incoming meeting audio. Tap to unlock room sound.</span>
+            <span className="break-words">{t("chat_meet.audio_blocked_banner", { defaultValue: "Your browser paused incoming meeting audio. Tap to unlock room sound." })}</span>
           </div>
           <button
             type="button"
@@ -2669,7 +2693,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             }}
             className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition cursor-pointer shrink-0"
           >
-            Enable Call Audio
+            {t("chat_meet.enable_call_audio", { defaultValue: "Enable Call Audio" })}
           </button>
         </div>
       )}
@@ -2692,7 +2716,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                   : "text-amber-400"
               }`}
             />
-            <div className="min-w-0">
+            <div className="min-w-0 break-words">
               <span className="font-semibold">{handshakeAlert.title}: </span>
               <span className="opacity-90">{handshakeAlert.detail}</span>
             </div>
@@ -2705,7 +2729,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
               className="px-3 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white font-semibold flex items-center gap-1.5 transition cursor-pointer shrink-0 disabled:opacity-60"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isRetryingHandshake ? "animate-spin" : ""}`} />
-              <span>{isRetryingHandshake ? "Retrying..." : "Retry Handshake"}</span>
+              <span>{isRetryingHandshake ? t("chat_meet.retrying", { defaultValue: "Retrying..." }) : t("chat_meet.retry_handshake", { defaultValue: "Retry Handshake" })}</span>
             </button>
           )}
         </div>
@@ -2725,26 +2749,26 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                         <div className={`p-2 rounded-xl ${sharedDoc ? "bg-[#133020] text-[#81c995] border border-[#1e4620]" : "bg-[#1e293b] text-sky-400 border border-sky-800"}`}>
                           {sharedDoc ? <FileText className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />}
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <span className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
                             {sharedDoc ? (
                               <>
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#81c995]" />
-                                <span className="text-[#81c995]">Simultaneously Presenting to All Participants</span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#81c995] shrink-0" />
+                                <span className="text-[#81c995] break-words">{t("chat_meet.presenting_to_all", { defaultValue: "Simultaneously Presenting to All Participants" })}</span>
                               </>
                             ) : (
                               <>
-                                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-                                <span className="text-sky-400">Read Mode (Viewing in Meeting)</span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
+                                <span className="text-sky-400 break-words">{t("chat_meet.read_mode_viewing", { defaultValue: "Read Mode (Viewing in Meeting)" })}</span>
                               </>
                             )}
                           </span>
-                          <h4 className="font-bold text-sm text-white mt-0.5">{activeDisplayDoc.name}</h4>
+                          <h4 className="font-bold text-sm text-white mt-0.5 truncate">{activeDisplayDoc.name}</h4>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs text-[#9aa0a6] font-mono hidden md:inline">
-                          {activeDisplayDoc.category || "General Document"}
+                          {activeDisplayDoc.category || t("chat_meet.general_document", { defaultValue: "General Document" })}
                         </span>
                         <select
                           value={activeDisplayDoc.id}
@@ -2759,7 +2783,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                             }
                           }}
                           className="bg-[#282a2d] border border-[#3c4043] text-xs text-white rounded-lg px-2 py-1 outline-none focus:border-[#81c995] cursor-pointer max-w-[150px] sm:max-w-[200px] truncate"
-                          title="Select document from current documents list"
+                          title={t("chat_meet.select_doc_tooltip", { defaultValue: "Select document from current documents list" })}
                         >
                           {availableDocs.map(d => (
                             <option key={d.id} value={d.id} className="bg-[#1e1f20] text-white">
@@ -2772,11 +2796,11 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                           <button
                             type="button"
                             onClick={() => handleSelectDoc(viewingDoc)}
-                            className="px-2.5 py-1 rounded-lg bg-[#81c995] hover:bg-[#68b67f] text-xs font-bold text-[#121316] transition flex items-center gap-1 cursor-pointer"
-                            title="Broadcast this document to all meeting participants"
+                            className="px-2.5 py-1 rounded-lg bg-[#81c995] hover:bg-[#68b67f] text-xs font-bold text-[#121316] transition flex items-center gap-1 cursor-pointer shrink-0"
+                            title={t("chat_meet.broadcast_doc_tooltip", { defaultValue: "Broadcast this document to all meeting participants" })}
                           >
-                            <Share2 className="h-3 w-3" />
-                            <span>Present to All</span>
+                            <Share2 className="h-3 w-3 shrink-0" />
+                            <span>{t("chat_meet.present_to_all", { defaultValue: "Present to All" })}</span>
                           </button>
                         )}
 
@@ -2784,18 +2808,18 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                           <button
                             type="button"
                             onClick={handleStopPresentingDoc}
-                            className="px-2.5 py-1 rounded-lg bg-[#282a2d] hover:bg-rose-500/20 hover:text-rose-300 text-xs font-semibold text-[#e3e3e3] border border-[#3c4043] transition cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-[#282a2d] hover:bg-rose-500/20 hover:text-rose-300 text-xs font-semibold text-[#e3e3e3] border border-[#3c4043] transition cursor-pointer shrink-0"
                           >
-                            Stop Presenting
+                            {t("chat_meet.stop_presenting", { defaultValue: "Stop Presenting" })}
                           </button>
                         ) : (
                           <button
                             type="button"
                             onClick={handleCloseReadMode}
-                            className="px-2.5 py-1 rounded-lg bg-[#282a2d] hover:bg-slate-700 text-xs font-semibold text-[#e3e3e3] border border-[#3c4043] transition cursor-pointer flex items-center gap-1"
+                            className="px-2.5 py-1 rounded-lg bg-[#282a2d] hover:bg-slate-700 text-xs font-semibold text-[#e3e3e3] border border-[#3c4043] transition cursor-pointer flex items-center gap-1 shrink-0"
                           >
-                            <X className="h-3 w-3" />
-                            <span>Exit Reader</span>
+                            <X className="h-3 w-3 shrink-0" />
+                            <span>{t("chat_meet.exit_reader", { defaultValue: "Exit Reader" })}</span>
                           </button>
                         )}
                       </div>
@@ -2808,7 +2832,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                             <div className="p-8 text-center flex flex-col items-center justify-center gap-2 text-slate-400">
                               <FileText className="h-10 w-10 text-emerald-500 opacity-60" />
                               <h4 className="font-bold text-white text-sm">{activeDisplayDoc.name}</h4>
-                              <p className="text-xs text-slate-400">Official document stored in organization registry.</p>
+                              <p className="text-xs text-slate-400">{t("chat_meet.official_doc_registry", { defaultValue: "Official document stored in organization registry." })}</p>
                             </div>
                           );
                         }
@@ -2826,7 +2850,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                                         <th className="p-2 border-r border-[#3c4043] text-center w-8 text-[10px] font-mono">#</th>
                                         {grid[0]?.map((col, idx) => (
                                           <th key={idx} className="p-2 border-r border-[#3c4043] font-bold text-[11px] uppercase tracking-wider">
-                                            {col || `Col ${idx + 1}`}
+                                            {col || `${t("doc_office.col_short", { defaultValue: "Col" })} ${idx + 1}`}
                                           </th>
                                         ))}
                                       </tr>
@@ -2878,7 +2902,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                             <div>
                               <h4 className="font-bold text-sm text-white">{activeDisplayDoc.name}</h4>
                               <p className="text-xs text-[#9aa0a6] mt-0.5">
-                                {activeDisplayDoc.category || "Official Document"} • Uploaded by {activeDisplayDoc.uploader_name || "Admin"}
+                                {activeDisplayDoc.category || t("chat_meet.official_document", { defaultValue: "Official Document" })} • {t("chat_meet.uploaded_by", { defaultValue: "Uploaded by" })} {activeDisplayDoc.uploader_name || t("roles.admin", { defaultValue: "Admin" })}
                               </p>
                             </div>
                             {activeDisplayDoc.file_url && (
@@ -2889,7 +2913,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                                 className="px-4 py-2 rounded-xl bg-[#81c995] text-[#121316] font-bold text-xs hover:bg-[#68b67f] transition flex items-center gap-1.5"
                               >
                                 <Download className="h-3.5 w-3.5" />
-                                <span>Download & Review File</span>
+                                <span>{t("chat_meet.download_review_file", { defaultValue: "Download & Review File" })}</span>
                               </a>
                             )}
                           </div>
@@ -2923,8 +2947,8 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="flex items-center gap-2 z-10 p-2">
-                        <div className="h-9 w-9 rounded-full bg-[#282a2d] border border-[#3c4043] flex items-center justify-center font-bold text-xs text-[#e3e3e3]">
+                      <div className="flex items-center gap-2 z-10 p-2 min-w-0">
+                        <div className="h-9 w-9 rounded-full bg-[#282a2d] border border-[#3c4043] flex items-center justify-center font-bold text-xs text-[#e3e3e3] shrink-0">
                           {p.name.charAt(0).toUpperCase()}
                         </div>
                         <div className="text-xs truncate max-w-[90px]">
@@ -2934,9 +2958,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                       </div>
                     )}
 
-                    <div className="absolute bottom-2 left-2 z-20 bg-[#000000]/70 px-2 py-0.5 rounded text-[10px] text-[#f1f3f4] font-medium flex items-center gap-1">
-                      <span>{p.name}</span>
-                      {p.isMe && <span>(You)</span>}
+                    <div className="absolute bottom-2 left-2 z-20 bg-[#000000]/70 px-2 py-0.5 rounded text-[10px] text-[#f1f3f4] font-medium flex items-center gap-1 max-w-[85%] truncate">
+                      <span className="truncate">{p.name}</span>
+                      {p.isMe && <span className="shrink-0">({t("chat_meet.you", { defaultValue: "You" })})</span>}
                     </div>
 
                     <div className="absolute top-2 right-2 z-20">
@@ -2983,15 +3007,15 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                     />
                   ) : (
                     /* Avatar Fallback Tile */
-                    <div className="flex flex-col items-center justify-center gap-3 p-4">
-                      <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full bg-[#282a2d] border-2 border-[#3c4043] flex items-center justify-center text-2xl sm:text-3xl font-bold text-[#e3e3e3] shadow-inner">
+                    <div className="flex flex-col items-center justify-center gap-3 p-4 min-w-0">
+                      <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full bg-[#282a2d] border-2 border-[#3c4043] flex items-center justify-center text-2xl sm:text-3xl font-bold text-[#e3e3e3] shadow-inner shrink-0">
                         {p.name.charAt(0).toUpperCase()}
                       </div>
-                      <div className="text-center">
-                        <span className="text-sm font-medium text-[#f1f3f4] block">{p.name}</span>
+                      <div className="text-center min-w-0">
+                        <span className="text-sm font-medium text-[#f1f3f4] block truncate">{p.name}</span>
                         {!p.video && (
                           <span className="text-[11px] text-[#9aa0a6] flex items-center justify-center gap-1 mt-0.5">
-                            <VideoOff className="h-3 w-3" /> Camera off
+                            <VideoOff className="h-3 w-3 shrink-0" /> {t("chat_meet.camera_off", { defaultValue: "Camera off" })}
                           </span>
                         )}
                       </div>
@@ -3001,16 +3025,16 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                   {/* Hand Raised Banner */}
                   {p.handRaised && (
                     <div className="absolute top-3 left-3 bg-[#fbbc04] text-[#202124] px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-md z-20">
-                      <Hand className="h-3.5 w-3.5" />
-                      <span>Hand raised</span>
+                      <Hand className="h-3.5 w-3.5 shrink-0" />
+                      <span>{t("chat_meet.hand_raised", { defaultValue: "Hand raised" })}</span>
                     </div>
                   )}
 
                   {/* Active Speaker Animated Ring & Badge */}
                   {p.speaking && (
                     <div className="absolute top-3 right-3 bg-[#000000]/70 border border-[#81c995] px-2 py-0.5 rounded-full flex items-center gap-1 text-[10px] text-[#81c995] font-semibold z-20">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#81c995]" />
-                      <span>Speaking</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#81c995] shrink-0" />
+                      <span>{t("chat_meet.speaking", { defaultValue: "Speaking" })}</span>
                     </div>
                   )}
 
@@ -3023,16 +3047,16 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                         handleRemoveParticipant(p.peerId, p.name);
                       }}
                       className="absolute top-3 right-3 z-30 p-1.5 rounded-lg bg-[#000000]/70 hover:bg-rose-600 text-slate-300 hover:text-white transition shadow-sm border border-[#3c4043] cursor-pointer"
-                      title={`Remove ${p.name} from meeting`}
+                      title={t("chat_meet.remove_peer_tooltip", { defaultValue: `Remove ${p.name} from meeting`, name: p.name })}
                     >
                       <UserX className="h-3.5 w-3.5" />
                     </button>
                   )}
 
                   {/* Bottom Name Label */}
-                  <div className="absolute bottom-3 left-3 bg-[#000000]/75 backdrop-blur-md px-3 py-1 rounded-lg text-xs font-medium text-[#f1f3f4] flex items-center gap-2 border border-[#2d2e31] z-20">
+                  <div className="absolute bottom-3 left-3 bg-[#000000]/75 backdrop-blur-md px-3 py-1 rounded-lg text-xs font-medium text-[#f1f3f4] flex items-center gap-2 border border-[#2d2e31] z-20 max-w-[75%]">
                     <span className="truncate max-w-[140px]">{p.name}</span>
-                    {p.isMe && <span className="text-[10px] text-[#81c995] font-bold">(You)</span>}
+                    {p.isMe && <span className="text-[10px] text-[#81c995] font-bold shrink-0">({t("chat_meet.you", { defaultValue: "You" })})</span>}
                   </div>
 
                   {/* Microphone Status Indicator */}
@@ -3054,23 +3078,23 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
           <div className="w-full sm:w-80 lg:w-96 shrink-0 border-l border-[#2d2e31] bg-[#1e1f20] flex flex-col min-h-0 text-[#e3e3e3] z-30">
             
             {/* Panel Header */}
-            <div className="h-14 px-4 flex items-center justify-between border-b border-[#2d2e31] bg-[#1a1b1e]">
-              <span className="font-medium text-sm text-[#f1f3f4] flex items-center gap-2">
-                {sidePanel === "chat" && <MessageSquare className="h-4 w-4 text-[#81c995]" />}
-                {sidePanel === "participants" && <Users className="h-4 w-4 text-[#81c995]" />}
-                {sidePanel === "docs" && <FileText className="h-4 w-4 text-[#81c995]" />}
-                {sidePanel === "agenda" && <CheckCircle2 className="h-4 w-4 text-[#81c995]" />}
-                <span>
-                  {sidePanel === "chat" && "In-Call Messages"}
-                  {sidePanel === "participants" && `People (${allParticipants.length})`}
-                  {sidePanel === "docs" && "Meeting Documents"}
-                  {sidePanel === "agenda" && "Agenda & Minutes"}
+            <div className="h-14 px-4 flex items-center justify-between gap-2 border-b border-[#2d2e31] bg-[#1a1b1e] min-w-0">
+              <span className="font-medium text-sm text-[#f1f3f4] flex items-center gap-2 min-w-0 truncate">
+                {sidePanel === "chat" && <MessageSquare className="h-4 w-4 text-[#81c995] shrink-0" />}
+                {sidePanel === "participants" && <Users className="h-4 w-4 text-[#81c995] shrink-0" />}
+                {sidePanel === "docs" && <FileText className="h-4 w-4 text-[#81c995] shrink-0" />}
+                {sidePanel === "agenda" && <CheckCircle2 className="h-4 w-4 text-[#81c995] shrink-0" />}
+                <span className="truncate">
+                  {sidePanel === "chat" && t("chat_meet.in_call_messages", { defaultValue: "In-Call Messages" })}
+                  {sidePanel === "participants" && `${t("chat_meet.people", { defaultValue: "People" })} (${allParticipants.length})`}
+                  {sidePanel === "docs" && t("chat_meet.meeting_documents", { defaultValue: "Meeting Documents" })}
+                  {sidePanel === "agenda" && t("chat_meet.agenda_minutes", { defaultValue: "Agenda & Minutes" })}
                 </span>
               </span>
               <button
                 type="button"
                 onClick={() => setSidePanel(null)}
-                className="p-1 rounded-full hover:bg-[#2d2e31] text-[#9aa0a6] hover:text-white transition cursor-pointer"
+                className="p-1 rounded-full hover:bg-[#2d2e31] text-[#9aa0a6] hover:text-white transition cursor-pointer shrink-0"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -3081,32 +3105,32 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
                 {isAdmin && pendingAdmissions.length > 0 && (
                   <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs font-bold text-amber-400">
-                        Waiting Room Queue ({pendingAdmissions.length})
+                        {t("chat_meet.waiting_room_queue", { defaultValue: "Waiting Room Queue" })} ({pendingAdmissions.length})
                       </span>
-                      <span className="text-[10px] text-amber-300">Approval Required</span>
+                      <span className="text-[10px] text-amber-300">{t("chat_meet.approval_required", { defaultValue: "Approval Required" })}</span>
                     </div>
                     {pendingAdmissions.map(p => (
-                      <div key={p.userId} className="flex items-center justify-between bg-[#282a2d] p-2 rounded-lg border border-[#3c4043] text-xs">
-                        <div>
-                          <span className="font-bold text-white block">{p.userName}</span>
-                          <span className="text-[10px] text-[#9aa0a6]">{p.role}</span>
+                      <div key={p.userId} className="flex flex-wrap items-center justify-between gap-2 bg-[#282a2d] p-2 rounded-lg border border-[#3c4043] text-xs min-w-0">
+                        <div className="min-w-0">
+                          <span className="font-bold text-white block truncate">{p.userName}</span>
+                          <span className="text-[10px] text-[#9aa0a6] block truncate">{p.role}</span>
                         </div>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <button
                             type="button"
                             onClick={() => handleAdmitPeer(p.userId, p.userName)}
                             className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] transition cursor-pointer"
                           >
-                            Admit
+                            {t("chat_meet.admit", { defaultValue: "Admit" })}
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDeclinePeer(p.userId, p.userName)}
                             className="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 font-bold text-[10px] transition cursor-pointer"
                           >
-                            Decline
+                            {t("chat_meet.decline", { defaultValue: "Decline" })}
                           </button>
                         </div>
                       </div>
@@ -3114,18 +3138,18 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                   </div>
                 )}
 
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                   <span className="text-[11px] font-bold text-[#9aa0a6] uppercase tracking-wider">
-                    In Call ({allParticipants.length})
+                    {t("chat_meet.in_call", { defaultValue: "In Call" })} ({allParticipants.length})
                   </span>
                   <span className="text-[10px] text-[#81c995] bg-[#133020] px-2 py-0.5 rounded-full border border-[#1e4620]">
-                    Active Joiners Only
+                    {t("chat_meet.active_joiners_only", { defaultValue: "Active Joiners Only" })}
                   </span>
                 </div>
                  {allParticipants.map((p, idx) => (
                   <div
                     key={`in-call-peer-${p.peerId}-${idx}`}
-                    className="p-2.5 rounded-xl bg-[#282a2d] border border-[#3c4043] flex items-center justify-between text-xs gap-2"
+                    className="p-2.5 rounded-xl bg-[#282a2d] border border-[#3c4043] flex items-center justify-between text-xs gap-2 min-w-0"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="h-8 w-8 rounded-full bg-[#3c4043] flex items-center justify-center font-bold text-xs text-white shrink-0">
@@ -3133,7 +3157,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                       </div>
                       <div className="min-w-0">
                         <span className="font-medium block text-white truncate">
-                          {p.name} {p.isMe && "(You)"}
+                          {p.name} {p.isMe && `(${t("chat_meet.you", { defaultValue: "You" })})`}
                         </span>
                         <span className="text-[10px] text-[#9aa0a6] block truncate">{p.role}</span>
                       </div>
@@ -3146,7 +3170,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                         className={`p-1 rounded-md flex items-center justify-center ${
                           p.mic ? "text-[#81c995] bg-[#133020]" : "text-[#f28b82] bg-[#371e1d]"
                         }`}
-                        title={p.mic ? `${p.name}'s microphone is ON` : `${p.name} is MUTED`}
+                        title={p.mic ? t("chat_meet.peer_mic_on", { defaultValue: `${p.name}'s microphone is ON`, name: p.name }) : t("chat_meet.peer_muted", { defaultValue: `${p.name} is MUTED`, name: p.name })}
                       >
                         {p.mic ? <Mic className="h-3.5 w-3.5" /> : <MicOff className="h-3.5 w-3.5" />}
                       </span>
@@ -3156,7 +3180,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                         className={`p-1 rounded-md flex items-center justify-center ${
                           p.deafened ? "text-[#f28b82] bg-[#371e1d]" : "text-[#81c995] bg-[#133020]"
                         }`}
-                        title={p.deafened ? `${p.name} is DEAFENED (speakers muted)` : `${p.name} is LISTENING (sound on)`}
+                        title={p.deafened ? t("chat_meet.peer_deafened", { defaultValue: `${p.name} is DEAFENED (speakers muted)`, name: p.name }) : t("chat_meet.peer_listening", { defaultValue: `${p.name} is LISTENING (sound on)`, name: p.name })}
                       >
                         {p.deafened ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
                       </span>
@@ -3166,7 +3190,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                         className={`p-1 rounded-md flex items-center justify-center ${
                           p.video ? "text-[#81c995] bg-[#133020]" : "text-[#f28b82] bg-[#371e1d]"
                         }`}
-                        title={p.video ? `${p.name}'s camera is ON` : `${p.name}'s camera is DISABLED`}
+                        title={p.video ? t("chat_meet.peer_cam_on", { defaultValue: `${p.name}'s camera is ON`, name: p.name }) : t("chat_meet.peer_cam_off", { defaultValue: `${p.name}'s camera is DISABLED`, name: p.name })}
                       >
                         {p.video ? <Video className="h-3.5 w-3.5" /> : <VideoOff className="h-3.5 w-3.5" />}
                       </span>
@@ -3181,10 +3205,10 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                                 type: "REMOTE_MUTE_PEER",
                                 targetPeerId: p.peerId
                               });
-                              addToast(`Mute command sent to ${p.name}`, "info");
+                              addToast(t("chat_meet.mute_sent_toast", { defaultValue: `Mute command sent to ${p.name}`, name: p.name }), "info");
                             }}
                             className="p-1 rounded bg-[#3c4043] hover:bg-[#4a4d52] text-[#f28b82] transition cursor-pointer"
-                            title={`Remotely mute ${p.name}`}
+                            title={t("chat_meet.remotely_mute_tooltip", { defaultValue: `Remotely mute ${p.name}`, name: p.name })}
                           >
                             <MicOff className="h-3 w-3" />
                           </button>
@@ -3192,10 +3216,10 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                             type="button"
                             onClick={() => handleRemoveParticipant(p.peerId, p.name)}
                             className="px-2 py-1 rounded bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 border border-rose-500/30 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
-                            title={`Remove ${p.name} from meeting`}
+                            title={t("chat_meet.remove_peer_tooltip", { defaultValue: `Remove ${p.name} from meeting`, name: p.name })}
                           >
                             <UserX className="h-3 w-3" />
-                            <span>Remove</span>
+                            <span>{t("common.remove", { defaultValue: "Remove" })}</span>
                           </button>
                         </div>
                       )}
@@ -3209,25 +3233,26 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                   members.filter((m) => !allParticipants.some((p) => p.userId === m.user_id)).length > 0 && (
                     <div className="mt-4 pt-3 border-t border-[#3c4043] flex flex-col gap-2">
                       <span className="text-[11px] font-bold text-[#9aa0a6] uppercase tracking-wider">
-                        Invite / Allow Members to Join
+                        {t("chat_meet.invite_allow_members", { defaultValue: "Invite / Allow Members to Join" })}
                       </span>
                       {members
                         .filter((m) => !allParticipants.some((p) => p.userId === m.user_id))
                         .slice(0, 5)
                         .map((mem, idx) => (
-                          <div key={`invite-mem-${mem.id}-${idx}`} className="flex items-center justify-between bg-[#282a2d] p-2 rounded-lg border border-[#3c4043] text-xs">
+                          <div key={`invite-mem-${mem.id}-${idx}`} className="flex items-center justify-between gap-2 bg-[#282a2d] p-2 rounded-lg border border-[#3c4043] text-xs min-w-0">
                             <div className="min-w-0">
-                              <span className="font-bold text-white block truncate">{mem.user?.full_name || "Member"}</span>
-                              <span className="text-[10px] text-[#9aa0a6] capitalize">{mem.role}</span>
+                              <span className="font-bold text-white block truncate">{mem.user?.full_name || t("roles.member", { defaultValue: "Member" })}</span>
+                              <span className="text-[10px] text-[#9aa0a6] capitalize truncate block">{t(`roles.${mem.role}`, { defaultValue: mem.role })}</span>
                             </div>
                             <button
                               type="button"
                               onClick={() => {
-                                addToast(`Invitation sent to ${mem.user?.full_name || "Member"} to join the meet.`, "success");
+                                const memName = mem.user?.full_name || t("roles.member", { defaultValue: "Member" });
+                                addToast(t("chat_meet.invitation_sent_toast", { defaultValue: `Invitation sent to ${memName} to join the meet.`, name: memName }), "success");
                               }}
                               className="px-2.5 py-1 rounded bg-[#81c995] hover:bg-[#a8dab5] text-[#0d2818] font-bold text-[10px] transition cursor-pointer shrink-0"
                             >
-                              Allow / Invite
+                              {t("chat_meet.allow_invite", { defaultValue: "Allow / Invite" })}
                             </button>
                           </div>
                         ))}
@@ -3239,22 +3264,22 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             {/* Panel 2: In-Call Text Chat */}
             {sidePanel === "chat" && (
               <div className="flex-1 flex flex-col min-h-0">
-                <div className="p-3 bg-[#131314] text-[11px] text-[#9aa0a6] border-b border-[#2d2e31]">
-                  Messages can be seen only by people in the call and are deleted when the call ends.
+                <div className="p-3 bg-[#131314] text-[11px] text-[#9aa0a6] border-b border-[#2d2e31] break-words">
+                  {t("chat_meet.chat_ephemeral_notice", { defaultValue: "Messages can be seen only by people in the call and are deleted when the call ends." })}
                 </div>
                 <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3 min-h-0 text-xs">
                   {callMessages.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-[#9aa0a6] my-auto">
                       <MessageSquare className="h-8 w-8 text-[#3c4043] mb-2" />
-                      <p className="text-xs font-semibold">No in-call messages</p>
-                      <p className="text-[11px] text-[#5f6368] mt-0.5">Send a message to everyone in this meeting.</p>
+                      <p className="text-xs font-semibold">{t("chat_meet.no_in_call_messages", { defaultValue: "No in-call messages" })}</p>
+                      <p className="text-[11px] text-[#5f6368] mt-0.5 break-words">{t("chat_meet.send_message_prompt", { defaultValue: "Send a message to everyone in this meeting." })}</p>
                     </div>
                   ) : (
                     callMessages.map((msg, idx) => (
                       <div key={`meet-msg-${msg.id}-${idx}`} className="flex flex-col gap-0.5">
                         <div className="flex items-center justify-between text-[11px] text-[#9aa0a6]">
-                          <span className="font-semibold text-[#81c995]">{msg.sender}</span>
-                          <span>{msg.time}</span>
+                          <span className="font-semibold text-[#81c995] truncate">{msg.sender}</span>
+                          <span className="shrink-0">{msg.time}</span>
                         </div>
                         <p className="bg-[#282a2d] p-2.5 rounded-xl text-[#f1f3f4] break-words border border-[#3c4043]">
                           {msg.text}
@@ -3267,14 +3292,14 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                 <form onSubmit={handleSendMessage} className="p-3 border-t border-[#2d2e31] flex gap-2 bg-[#1a1b1e]">
                   <input
                     type="text"
-                    placeholder="Send a message to everyone..."
+                    placeholder={t("chat_meet.send_message_placeholder", { defaultValue: "Send a message to everyone..." })}
                     value={inputMessage}
                     onChange={e => setInputMessage(e.target.value)}
-                    className="flex-1 text-xs rounded-xl bg-[#282a2d] border border-[#3c4043] px-3 py-2 text-[#f1f3f4] outline-none focus:border-[#81c995]"
+                    className="flex-1 text-xs rounded-xl bg-[#282a2d] border border-[#3c4043] px-3 py-2 text-[#f1f3f4] outline-none focus:border-[#81c995] min-w-0"
                   />
                   <button
                     type="submit"
-                    className="p-2 rounded-xl bg-[#81c995] hover:bg-[#68b67f] text-[#121316] transition cursor-pointer"
+                    className="p-2 rounded-xl bg-[#81c995] hover:bg-[#68b67f] text-[#121316] transition cursor-pointer shrink-0"
                   >
                     <Send className="h-4 w-4" />
                   </button>
@@ -3285,13 +3310,13 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             {/* Panel 3: Documents Review */}
             {sidePanel === "docs" && (
               <div className="flex-1 flex flex-col min-h-0 p-4 gap-3 overflow-y-auto">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-[#9aa0a6] uppercase tracking-wider">
-                    Select Document ({availableDocs.length})
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-[#9aa0a6] uppercase tracking-wider truncate">
+                    {t("chat_meet.select_document", { defaultValue: "Select Document" })} ({availableDocs.length})
                   </span>
                   {sharedDoc && (
-                    <span className="text-[10px] text-[#81c995] bg-[#133020] px-2 py-0.5 rounded-full border border-[#1e4620]">
-                      1 Active
+                    <span className="text-[10px] text-[#81c995] bg-[#133020] px-2 py-0.5 rounded-full border border-[#1e4620] shrink-0">
+                      {t("chat_meet.one_active", { defaultValue: "1 Active" })}
                     </span>
                   )}
                 </div>
@@ -3301,7 +3326,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#9aa0a6]" />
                   <input
                     type="text"
-                    placeholder="Filter documents..."
+                    placeholder={t("chat_meet.filter_documents_placeholder", { defaultValue: "Filter documents..." })}
                     value={docSearchQuery}
                     onChange={e => setDocSearchQuery(e.target.value)}
                     className="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl bg-[#282a2d] border border-[#3c4043] text-white placeholder-[#9aa0a6] outline-none focus:border-[#81c995]"
@@ -3312,9 +3337,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                   {availableDocs.length === 0 ? (
                     <div className="p-6 text-center text-[#9aa0a6] rounded-xl bg-[#282a2d]/50 border border-[#3c4043] flex flex-col items-center justify-center">
                       <FileText className="h-8 w-8 text-[#5f6368] mb-2" />
-                      <p className="text-xs font-semibold text-white">No documents stored</p>
-                      <p className="text-[11px] text-[#9aa0a6] mt-1">
-                        Create or upload documents in the Document Office to share them live during meetings.
+                      <p className="text-xs font-semibold text-white">{t("chat_meet.no_docs_stored", { defaultValue: "No documents stored" })}</p>
+                      <p className="text-[11px] text-[#9aa0a6] mt-1 break-words">
+                        {t("chat_meet.no_docs_stored_desc", { defaultValue: "Create or upload documents in the Document Office to share them live during meetings." })}
                       </p>
                     </div>
                   ) : availableDocs.filter(d => {
@@ -3323,7 +3348,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                       return d.name.toLowerCase().includes(q) || (d.category && d.category.toLowerCase().includes(q));
                     }).length === 0 ? (
                     <div className="p-6 text-center text-[#9aa0a6] rounded-xl bg-[#282a2d]/30 border border-[#3c4043]">
-                      <p className="text-xs font-medium">No matching documents found</p>
+                      <p className="text-xs font-medium">{t("chat_meet.no_matching_docs", { defaultValue: "No matching documents found" })}</p>
                     </div>
                   ) : (
                     availableDocs
@@ -3346,20 +3371,20 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
                               <span className="font-semibold block truncate text-white">{d.name}</span>
-                              <span className="text-[10px] text-[#9aa0a6] block mt-0.5">{d.category || "General Document"}</span>
+                              <span className="text-[10px] text-[#9aa0a6] block mt-0.5 truncate">{d.category || t("chat_meet.general_document", { defaultValue: "General Document" })}</span>
                             </div>
                             {isCurrentlyActive && (
                               <span className="text-[10px] bg-[#81c995] text-[#121316] font-bold px-2 py-0.5 rounded-full shrink-0">
-                                Presenting
+                                {t("chat_meet.presenting_badge", { defaultValue: "Presenting" })}
                               </span>
                             )}
                           </div>
 
                           <div className="flex items-center justify-between pt-1 border-t border-[#3c4043]/60 gap-1.5 flex-wrap">
                             <span className="text-[10px] text-[#9aa0a6]">
-                              By {d.uploader_name || "Admin"}
+                              {t("chat_meet.by_author", { defaultValue: "By" })} {d.uploader_name || t("roles.admin", { defaultValue: "Admin" })}
                             </span>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               {/* Open in Read Mode for all attendees */}
                               <button
                                 type="button"
@@ -3369,10 +3394,10 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                                     ? "bg-[#1e293b] text-sky-400 border border-sky-600"
                                     : "bg-[#282a2d] hover:bg-[#3c4043] text-[#e3e3e3]"
                                 }`}
-                                title="Open this document in reader mode"
+                                title={t("chat_meet.open_reader_tooltip", { defaultValue: "Open this document in reader mode" })}
                               >
-                                <BookOpen className="h-3 w-3" />
-                                <span>{viewingDoc?.id === d.id && !isCurrentlyActive ? "Reading" : "Read Mode"}</span>
+                                <BookOpen className="h-3 w-3 shrink-0" />
+                                <span>{viewingDoc?.id === d.id && !isCurrentlyActive ? t("chat_meet.reading", { defaultValue: "Reading" }) : t("chat_meet.read_mode", { defaultValue: "Read Mode" })}</span>
                               </button>
 
                               {/* Present to Everyone */}
@@ -3382,17 +3407,17 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                                   onClick={handleStopPresentingDoc}
                                   className="px-2 py-1 rounded-lg bg-[#282a2d] hover:bg-rose-500/30 text-rose-300 text-[11px] font-semibold transition cursor-pointer"
                                 >
-                                  Stop
+                                  {t("chat_meet.stop", { defaultValue: "Stop" })}
                                 </button>
                               ) : (
                                 <button
                                   type="button"
                                   onClick={() => handleSelectDoc(d)}
                                   className="px-2 py-1 rounded-lg bg-[#81c995] hover:bg-[#68b67f] text-[#121316] text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
-                                  title="Broadcast this document to everyone in the meeting"
+                                  title={t("chat_meet.broadcast_doc_tooltip", { defaultValue: "Broadcast this document to everyone in the meeting" })}
                                 >
-                                  <Share2 className="h-3 w-3" />
-                                  <span>Present</span>
+                                  <Share2 className="h-3 w-3 shrink-0" />
+                                  <span>{t("chat_meet.present", { defaultValue: "Present" })}</span>
                                 </button>
                               )}
                             </div>
@@ -3412,8 +3437,8 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                   {agendaPoints.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-[#9aa0a6] my-auto">
                       <CheckCircle2 className="h-8 w-8 text-[#3c4043] mb-2" />
-                      <p className="text-xs font-semibold">No agenda points</p>
-                      <p className="text-[11px] text-[#5f6368] mt-0.5">Add talking points or action items below.</p>
+                      <p className="text-xs font-semibold">{t("chat_meet.no_agenda_points", { defaultValue: "No agenda points" })}</p>
+                      <p className="text-[11px] text-[#5f6368] mt-0.5 break-words">{t("chat_meet.add_talking_points_hint", { defaultValue: "Add talking points or action items below." })}</p>
                     </div>
                   ) : (
                     agendaPoints.map((pt, idx) => (
@@ -3443,15 +3468,15 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                               e.stopPropagation();
                               setAgendaPoints(prev => prev.filter(p => p.id !== pt.id));
                             }}
-                            className="text-[#9aa0a6] hover:text-rose-400 p-0.5 rounded transition cursor-pointer"
-                            title="Remove agenda point"
+                            className="text-[#9aa0a6] hover:text-rose-400 p-0.5 rounded transition cursor-pointer shrink-0"
+                            title={t("chat_meet.remove_agenda_tooltip", { defaultValue: "Remove agenda point" })}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                         <div className="flex items-center justify-between text-[10px] text-[#9aa0a6] pl-6">
-                          <span>Assignee: {pt.assignee}</span>
-                          <span>{pt.time}</span>
+                          <span className="truncate">{t("chat_meet.assignee_label", { defaultValue: "Assignee:" })} {pt.assignee}</span>
+                          <span className="shrink-0">{pt.time}</span>
                         </div>
                       </div>
                     ))
@@ -3461,7 +3486,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                 <form onSubmit={handleCreateAgendaPoint} className="p-3 border-t border-[#2d2e31] flex flex-col gap-2 bg-[#1a1b1e]">
                   <input
                     type="text"
-                    placeholder="Add talking point or task..."
+                    placeholder={t("chat_meet.agenda_title_placeholder", { defaultValue: "Add talking point or task..." })}
                     value={newAgendaTitle}
                     onChange={e => setNewAgendaTitle(e.target.value)}
                     className="text-xs rounded-xl bg-[#282a2d] border border-[#3c4043] px-3 py-2 text-[#f1f3f4] outline-none focus:border-[#81c995]"
@@ -3469,16 +3494,16 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="Assignee (e.g. Treasurer)..."
+                      placeholder={t("chat_meet.assignee_placeholder", { defaultValue: "Assignee (e.g. Treasurer)..." })}
                       value={newAgendaAssignee}
                       onChange={e => setNewAgendaAssignee(e.target.value)}
-                      className="flex-1 text-xs rounded-xl bg-[#282a2d] border border-[#3c4043] px-3 py-2 text-[#f1f3f4] outline-none focus:border-[#81c995]"
+                      className="flex-1 text-xs rounded-xl bg-[#282a2d] border border-[#3c4043] px-3 py-2 text-[#f1f3f4] outline-none focus:border-[#81c995] min-w-0"
                     />
                     <button
                       type="submit"
-                      className="py-1.5 px-3 rounded-xl bg-[#81c995] hover:bg-[#68b67f] text-[#121316] text-xs font-bold transition cursor-pointer"
+                      className="py-1.5 px-3 rounded-xl bg-[#81c995] hover:bg-[#68b67f] text-[#121316] text-xs font-bold transition cursor-pointer shrink-0"
                     >
-                      Add
+                      {t("common.add", { defaultValue: "Add" })}
                     </button>
                   </div>
                 </form>
@@ -3495,13 +3520,13 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
         
         {/* Left Side: Meeting details & Audio Wave Indicator */}
         <div className="hidden sm:flex items-center gap-3 min-w-[200px]">
-          <span className="text-xs font-medium text-[#f1f3f4]">
+          <span className="text-xs font-medium text-[#f1f3f4] truncate">
             #{channelName}
           </span>
           {micOn ? (
-            <div className="flex items-center gap-1 bg-[#133020] border border-[#1e4620] px-2 py-0.5 rounded-full text-[10px] text-[#81c995]">
-              <Volume2 className="h-3 w-3" />
-              <span>Mic on</span>
+            <div className="flex items-center gap-1 bg-[#133020] border border-[#1e4620] px-2 py-0.5 rounded-full text-[10px] text-[#81c995] shrink-0">
+              <Volume2 className="h-3 w-3 shrink-0" />
+              <span>{t("chat_meet.mic_on_label", { defaultValue: "Mic on" })}</span>
               <div className="flex items-center gap-0.5 ml-1">
                 <span
                   className="w-1 bg-[#81c995] rounded-full transition-all duration-75"
@@ -3514,9 +3539,9 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-1 bg-[#371e1d] border border-[#522927] px-2 py-0.5 rounded-full text-[10px] text-[#f28b82]">
-              <VolumeX className="h-3 w-3" />
-              <span>Mic muted</span>
+            <div className="flex items-center gap-1 bg-[#371e1d] border border-[#522927] px-2 py-0.5 rounded-full text-[10px] text-[#f28b82] shrink-0">
+              <VolumeX className="h-3 w-3 shrink-0" />
+              <span>{t("chat_meet.mic_muted_label", { defaultValue: "Mic muted" })}</span>
             </div>
           )}
         </div>
@@ -3532,7 +3557,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                 ? "bg-[#3c4043] hover:bg-[#474a4d] text-white"
                 : "bg-[#ea4335] hover:bg-[#d93025] text-white shadow-lg"
             }`}
-            title={micOn ? "Turn off microphone" : "Turn on microphone"}
+            title={micOn ? t("chat_meet.turn_off_mic", { defaultValue: "Turn off microphone" }) : t("chat_meet.turn_on_mic", { defaultValue: "Turn on microphone" })}
           >
             {micOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
           </button>
@@ -3546,7 +3571,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                 ? "bg-[#3c4043] hover:bg-[#474a4d] text-white"
                 : "bg-[#ea4335] hover:bg-[#d93025] text-white shadow-lg"
             }`}
-            title={videoOn ? "Turn off camera" : "Turn on camera"}
+            title={videoOn ? t("chat_meet.turn_off_camera", { defaultValue: "Turn off camera" }) : t("chat_meet.turn_on_camera", { defaultValue: "Turn on camera" })}
           >
             {videoOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
           </button>
@@ -3560,7 +3585,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                 ? "bg-[#ea4335] hover:bg-[#d93025] text-white shadow-lg"
                 : "bg-[#3c4043] hover:bg-[#474a4d] text-white"
             }`}
-            title={isDeafened ? "Undeafen (unmute incoming audio)" : "Deafen (mute incoming audio)"}
+            title={isDeafened ? t("chat_meet.undeafen_tooltip", { defaultValue: "Undeafen (unmute incoming audio)" }) : t("chat_meet.deafen_tooltip", { defaultValue: "Deafen (mute incoming audio)" })}
           >
             {isDeafened ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
           </button>
@@ -3574,7 +3599,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                 ? "bg-[#81c995] text-[#121316] shadow-lg"
                 : "bg-[#3c4043] hover:bg-[#474a4d] text-white"
             }`}
-            title={screenSharing ? "Stop presenting" : "Present now"}
+            title={screenSharing ? t("chat_meet.stop_presenting", { defaultValue: "Stop presenting" }) : t("chat_meet.present_now", { defaultValue: "Present now" })}
           >
             <Monitor className="h-5 w-5" />
           </button>
@@ -3588,7 +3613,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                 ? "bg-[#fbbc04] text-[#202124] shadow-lg"
                 : "bg-[#3c4043] hover:bg-[#474a4d] text-white"
             }`}
-            title={handRaised ? "Lower hand" : "Raise hand"}
+            title={handRaised ? t("chat_meet.lower_hand", { defaultValue: "Lower hand" }) : t("chat_meet.raise_hand", { defaultValue: "Raise hand" })}
           >
             <Hand className="h-5 w-5" />
           </button>
@@ -3598,10 +3623,10 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
             type="button"
             onClick={handleLeaveCall}
             className="h-11 px-5 sm:h-12 sm:px-6 rounded-full bg-[#ea4335] hover:bg-[#d93025] text-white font-medium text-xs flex items-center gap-2 transition cursor-pointer shadow-md shrink-0"
-            title="Leave call"
+            title={t("chat_meet.leave_call", { defaultValue: "Leave call" })}
           >
-            <PhoneOff className="h-5 w-5" />
-            <span className="hidden sm:inline">Leave</span>
+            <PhoneOff className="h-5 w-5 shrink-0" />
+            <span className="hidden sm:inline">{t("chat_meet.leave_btn", { defaultValue: "Leave" })}</span>
           </button>
         </div>
 
@@ -3616,7 +3641,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                 ? "bg-[#81c995] text-[#121316]"
                 : "hover:bg-[#2d2e31] text-[#9aa0a6] hover:text-white"
             }`}
-            title="People"
+            title={t("chat_meet.people", { defaultValue: "People" })}
           >
             <Users className="h-5 w-5" />
           </button>
@@ -3630,7 +3655,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                 ? "bg-[#81c995] text-[#121316]"
                 : "hover:bg-[#2d2e31] text-[#9aa0a6] hover:text-white"
             }`}
-            title="Chat with everyone"
+            title={t("chat_meet.chat_with_everyone", { defaultValue: "Chat with everyone" })}
           >
             <MessageSquare className="h-5 w-5" />
           </button>
@@ -3644,7 +3669,7 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                 ? "bg-[#81c995] text-[#121316]"
                 : "hover:bg-[#2d2e31] text-[#9aa0a6] hover:text-white"
             }`}
-            title="Meeting Documents"
+            title={t("chat_meet.meeting_documents", { defaultValue: "Meeting Documents" })}
           >
             <FileText className="h-5 w-5" />
           </button>
@@ -3658,13 +3683,50 @@ export const ChatVideoMeetModal: React.FC<ChatVideoMeetModalProps> = ({
                 ? "bg-[#81c995] text-[#121316]"
                 : "hover:bg-[#2d2e31] text-[#9aa0a6] hover:text-white"
             }`}
-            title="Agenda & Action Items"
+            title={t("chat_meet.agenda_action_items", { defaultValue: "Agenda & Action Items" })}
           >
             <CheckCircle2 className="h-5 w-5" />
           </button>
         </div>
 
       </div>
+
+      {/* IN-APP CONFIRMATION MODAL FOR REMOVING PARTICIPANT */}
+      {confirmRemovePeer && (
+        <div className="fixed inset-0 z-[70] bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto bg-[#1e1f20] border border-[#3c4043] rounded-2xl shadow-2xl p-5 flex flex-col gap-4 text-[#f1f3f4]">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400 shrink-0">
+                <UserX className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-sm font-bold text-white break-words">
+                  {t("chat_meet.confirm_remove_title", { defaultValue: "Remove Participant" })}
+                </h4>
+                <p className="text-xs text-[#9aa0a6] mt-1 break-words">
+                  {t("chat_meet.confirm_remove_desc", { defaultValue: `Remove ${confirmRemovePeer.name} from the meeting?`, name: confirmRemovePeer.name })}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-[#2d2e31]">
+              <button
+                type="button"
+                onClick={() => setConfirmRemovePeer(null)}
+                className="px-3.5 py-1.5 rounded-xl bg-[#282a2d] hover:bg-[#3c4043] text-xs font-semibold text-[#e3e3e3] transition cursor-pointer"
+              >
+                {t("common.cancel", { defaultValue: "Cancel" })}
+              </button>
+              <button
+                type="button"
+                onClick={executeRemoveParticipant}
+                className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white transition cursor-pointer"
+              >
+                {t("common.remove", { defaultValue: "Remove" })}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -27,6 +27,31 @@
     "auditor_desk": "Vérification d'audit",
     "admin_settings": "Paramètres admin"
   },
+  "search_bar": {
+    "prompt": "Que souhaitez-vous faire aujourd'hui ?",
+    "placeholder": "Rechercher des fonctionnalités (ex. réunions, cotisations, grand livre...)",
+    "no_results": "Aucune fonctionnalité correspondante trouvée",
+    "quick_shortcuts": "Raccourcis Rapides",
+    "first_time_tip": "Première visite ici ? Suivez nos suggestions guidées ou faites le tour de la page !"
+  },
+  "search_feat": {
+    "dashboard": "Aperçu de l'organisation, statistiques en direct et indicateurs épinglés.",
+    "members": "Gérer l'annuaire des membres, les documents d'identité et les dossiers de départ.",
+    "events": "Planifier des réunions d'assemblée, des liens de conférence et des portails de présence QR.",
+    "fees": "Suivre les cotisations hebdomadaires, les paiements mobile money et examiner les reçus.",
+    "ledger": "États de revenus auditable, suivi des dépenses et bilans comptables.",
+    "assets": "Suivi des stocks, attribution du matériel et audit des ressources.",
+    "goals": "Jalons stratégiques, cibles et suivi des progrès.",
+    "documents": "Statuts coopératifs partagés, directives et ressources PDF.",
+    "chat": "Canaux de messagerie sécurisés et discussions de groupe.",
+    "news": "Bulletins publiés, mises à jour et avis communautaires.",
+    "marketplace": "Parcourir les produits coopératifs, outils agricoles et exprimer son intérêt d'achat.",
+    "grants": "Suivi des délais de subvention et audits des contributions des donateurs.",
+    "reports": "Compiler des rapports PDF annuels professionnels et des états financiers.",
+    "org_profile": "Déclaration de mission, plan de vision et cartes d'identité publiques.",
+    "settings": "Personnalisateur de marque, comptes opérateurs MoMo et niveaux d'abonnement.",
+    "profile": "Informations personnelles, vérification d'identité et paramètres de compte."
+  },
   "common": {
     "save": "Enregistrer",
     "cancel": "Annuler",

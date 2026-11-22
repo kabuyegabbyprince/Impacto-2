@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useLocalTranslation } from "../locales/additional-translations";
 import { useOrgStore } from "../store/orgStore";
 import { useGoals, useCreateGoal, useUpdateGoal, useDeleteGoal, useMembers, useBroadcastNotification } from "../hooks/useImpactoData";
-import { Card, Button, Input, Badge, EmptyState, Modal } from "../components/ui";
+import { Card, Button, Input, Badge, EmptyState, Modal, ConfirmDialog } from "../components/ui";
 import { 
   Plus, 
   CheckCircle2, 
@@ -64,6 +64,7 @@ export const GoalsPage: React.FC = () => {
   const [isAddGoalOpen, setIsAddGoalOpen] = useState(false);
   const [isAddPeriodOpen, setIsAddPeriodOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const [confirmDeleteGoalId, setConfirmDeleteGoalId] = useState<string | null>(null);
 
   // New Goal Form State
   const [goalTitle, setGoalTitle] = useState("");
@@ -535,10 +536,15 @@ export const GoalsPage: React.FC = () => {
   };
 
   // Delete Goal
-  const handleDeleteGoal = async (goalId: string) => {
-    if (!window.confirm(t("goals_confirm_delete"))) return;
+  const handleDeleteGoal = (goalId: string) => {
+    setConfirmDeleteGoalId(goalId);
+  };
+
+  const executeDeleteGoal = async () => {
+    if (!confirmDeleteGoalId) return;
     try {
-      await deleteGoalMutation.mutateAsync({ id: goalId, org_id: activeOrg?.id || "" });
+      await deleteGoalMutation.mutateAsync({ id: confirmDeleteGoalId, org_id: activeOrg?.id || "" });
+      setConfirmDeleteGoalId(null);
       refetch();
     } catch (err) {
       console.error("Failed to delete goal:", err);
@@ -1435,6 +1441,15 @@ export const GoalsPage: React.FC = () => {
           </form>
         </Modal>
       )}
+
+      <ConfirmDialog
+        open={!!confirmDeleteGoalId}
+        title={t("goals_delete_title", "Delete Strategic Goal")}
+        message={t("goals_confirm_delete", "Are you sure you want to delete this goal?")}
+        onConfirm={executeDeleteGoal}
+        onCancel={() => setConfirmDeleteGoalId(null)}
+        danger
+      />
       </div>
     </PlanGatedView>
   );

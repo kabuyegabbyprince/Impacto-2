@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Clock, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 interface RealtimeTaskCountdownProps {
@@ -12,6 +13,7 @@ export const RealtimeTaskCountdown: React.FC<RealtimeTaskCountdownProps> = ({
   isCompleted = false,
   compact = false
 }) => {
+  const { t } = useTranslation();
   const [timeLeft, setTimeLeft] = useState<{
     totalMs: number;
     days: number;
@@ -74,23 +76,26 @@ export const RealtimeTaskCountdown: React.FC<RealtimeTaskCountdownProps> = ({
 
   if (isCompleted) {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/50">
-        <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-        <span>Task Completed</span>
+      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/50 break-words">
+        <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
+        <span>{t("task_countdown.completed", "Task Completed")}</span>
       </span>
     );
   }
 
   const { days, hours, minutes, seconds, isPastDue } = timeLeft;
   const pad = (n: number) => String(n).padStart(2, "0");
+  const dUnit = t("task_countdown.day_short", "d");
+  const hUnit = t("task_countdown.hour_short", "h");
+  const mUnit = t("task_countdown.min_short", "m");
 
   if (isPastDue) {
     const overdueLabel = days > 0 
-      ? `Overdue by ${days}d ${hours}h ${minutes}m` 
-      : `Overdue by ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+      ? t("task_countdown.overdue_days", "Overdue by {{days}}{{d}} {{hours}}{{h}} {{minutes}}{{m}}", { days, hours, minutes, d: dUnit, h: hUnit, m: mUnit })
+      : t("task_countdown.overdue_time", "Overdue by {{time}}", { time: `${pad(hours)}:${pad(minutes)}:${pad(seconds)}` });
 
     return (
-      <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2.5 py-1 rounded-md border border-rose-200 dark:border-rose-900 shadow-3xs animate-pulse">
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2.5 py-1 rounded-md border border-rose-200 dark:border-rose-900 shadow-3xs animate-pulse break-words">
         <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
         <span className="font-mono">{overdueLabel}</span>
       </span>
@@ -111,7 +116,7 @@ export const RealtimeTaskCountdown: React.FC<RealtimeTaskCountdownProps> = ({
           : "text-slate-600 dark:text-slate-300"
       }`}>
         <Clock className="h-3 w-3 shrink-0" />
-        {days > 0 ? `${days}d ${hours}h ${minutes}m` : `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`}
+        {days > 0 ? `${days}${dUnit} ${hours}${hUnit} ${minutes}${mUnit}` : `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`}
       </span>
     );
   }
@@ -128,9 +133,9 @@ export const RealtimeTaskCountdown: React.FC<RealtimeTaskCountdownProps> = ({
         isCritical ? "text-rose-600 animate-spin" : isUrgent ? "text-amber-600" : "text-emerald-600"
       }`} />
       <span>
-        {days > 0 && <span className="mr-1">{days}d</span>}
+        {days > 0 && <span className="mr-1">{days}{dUnit}</span>}
         <span>{pad(hours)}:{pad(minutes)}:{pad(seconds)}</span>
-        <span className="text-[10px] font-sans font-normal opacity-75 ml-1">left</span>
+        <span className="text-[10px] font-sans font-normal opacity-75 ml-1">{t("task_countdown.left", "left")}</span>
       </span>
     </div>
   );

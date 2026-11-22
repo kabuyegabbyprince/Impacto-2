@@ -86,6 +86,7 @@ export const ImageUploadInput: React.FC<{
   const [dragOver, setDragOver] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
   const [resolvedUrl, setResolvedUrl] = React.useState("");
+  const [fileNotice, setFileNotice] = React.useState<{ type: "error" | "warning"; text: string } | null>(null);
 
   React.useEffect(() => {
     if (!value) {
@@ -104,14 +105,21 @@ export const ImageUploadInput: React.FC<{
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
+    setFileNotice(null);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
       if (file.size > 50 * 1024 * 1024) {
-        alert(t("ui.file_too_large", "File too large. Maximum size is 50MB."));
+        setFileNotice({
+          type: "error",
+          text: t("ui.file_too_large", "File too large. Maximum size is 50MB.")
+        });
         return;
       }
       if (file.size > 30 * 1024 * 1024) {
-        alert(t("ui.file_large_warning", "Warning: File is large (>30MB)."));
+        setFileNotice({
+          type: "warning",
+          text: t("ui.file_large_warning", "Warning: File is large (>30MB).")
+        });
       }
       if (file.type.startsWith("image/")) {
         try {
@@ -139,14 +147,21 @@ export const ImageUploadInput: React.FC<{
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFileNotice(null);
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       if (file.size > 50 * 1024 * 1024) {
-        alert(t("ui.file_too_large", "File too large. Maximum size is 50MB."));
+        setFileNotice({
+          type: "error",
+          text: t("ui.file_too_large", "File too large. Maximum size is 50MB.")
+        });
         return;
       }
       if (file.size > 30 * 1024 * 1024) {
-        alert(t("ui.file_large_warning", "Warning: File is large (>30MB)."));
+        setFileNotice({
+          type: "warning",
+          text: t("ui.file_large_warning", "Warning: File is large (>30MB).")
+        });
       }
       if (file.type.startsWith("image/")) {
         try {
@@ -189,14 +204,20 @@ export const ImageUploadInput: React.FC<{
             <input
               type="text"
               value={value}
-              onChange={(e) => onChange(e.target.value)}
+              onChange={(e) => {
+                setFileNotice(null);
+                onChange(e.target.value);
+              }}
               className="w-full min-w-0 text-xs sm:text-sm bg-transparent border-none outline-none focus:ring-0 dark:text-white truncate"
               placeholder={placeholder || "https://..."}
             />
             {value && (
               <button
                 type="button"
-                onClick={() => onChange("")}
+                onClick={() => {
+                  setFileNotice(null);
+                  onChange("");
+                }}
                 className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded shrink-0 ml-1 cursor-pointer transition"
                 title={t("ui.clear_input", "Clear input")}
                 aria-label={t("ui.clear_input", "Clear input")}
@@ -220,11 +241,34 @@ export const ImageUploadInput: React.FC<{
             <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} disabled={uploading} />
           </label>
         </div>
+        {fileNotice && (
+          <div
+            role="alert"
+            className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium border ${
+              fileNotice.type === "error"
+                ? "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300"
+                : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300"
+            }`}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span className="break-words">{fileNotice.text}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFileNotice(null)}
+              className="p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 shrink-0"
+              aria-label={t("common.close", "Close")}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
         {resolvedUrl && (
           <div className="h-24 w-auto rounded overflow-hidden flex justify-center bg-gray-50/50 dark:bg-slate-800/50 relative">
             <img 
               src={resolvedUrl} 
-              alt="Preview" 
+              alt={t("ui.preview", "Preview")} 
               className="h-full object-contain animate-fadeIn" 
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = "none";

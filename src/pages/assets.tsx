@@ -1,45 +1,38 @@
 import React, { useState, useMemo } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { useTranslation } from "react-i18next";
 import {
-  PackageCheck,
   Plus,
   Search,
-  SlidersHorizontal,
   Trash2,
   Pencil,
   FileText,
   User,
-  Tag,
   Boxes,
   MapPin,
   CheckCircle2,
   AlertTriangle,
   Clock,
-  ShieldCheck,
   Download,
-  Info,
   Layers,
-  ArrowUpDown,
-  History,
-  X,
-  Share2
+  X
 } from "lucide-react";
 import { useOrgStore } from "../store/orgStore";
 import { useAuthStore } from "../store/authStore";
 import { useCurrencyStore } from "../store/currencyStore";
 import { useAssets, useCreateAsset, useUpdateAsset, useDeleteAsset, useMembers } from "../hooks/useImpactoData";
-import { Button, Input, Card, Badge, Modal, EmptyState } from "../components/ui";
+import { Button, Modal } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { PlanGatedView } from "../components/PlanGatedView";
 import { Asset } from "../types";
 
 export const AssetManagementPage: React.FC = () => {
+  const { t, i18n } = useTranslation();
   const { activeOrg, activeMember } = useOrgStore();
   const { user } = useAuthStore();
   const { activeCurrency, formatAmount } = useCurrencyStore();
   const { addToast } = useToast();
 
-  const { data: assets = [], isLoading } = useAssets(activeOrg?.id);
+  const { data: assets = [] } = useAssets(activeOrg?.id);
   const { data: members = [] } = useMembers(activeOrg?.id);
 
   const createMutation = useCreateAsset();
@@ -130,7 +123,7 @@ export const AssetManagementPage: React.FC = () => {
     e.preventDefault();
     if (!activeOrg?.id) return;
     if (!formData.name.trim()) {
-      addToast("Please provide an asset or item name", "error");
+      addToast(t("asset_tracker.toast_name_required", "Please provide an asset or item name"), "error");
       return;
     }
 
@@ -138,7 +131,7 @@ export const AssetManagementPage: React.FC = () => {
     let assignedName: string | undefined = undefined;
     if (formData.assigned_to_member_id) {
       const found = members.find((m) => m.id === formData.assigned_to_member_id);
-      assignedName = found?.user?.full_name || found?.member_number || "Assigned Member";
+      assignedName = found?.user?.full_name || found?.member_number || t("asset_tracker.assigned_member", "Assigned Member");
     }
 
     try {
@@ -163,7 +156,7 @@ export const AssetManagementPage: React.FC = () => {
             notes: formData.notes.trim() || undefined,
           },
         });
-        addToast("Asset/Stock record updated successfully", "success");
+        addToast(t("asset_tracker.toast_updated", "Asset/Stock record updated successfully"), "success");
       } else {
         await createMutation.mutateAsync({
           org_id: activeOrg.id,
@@ -183,12 +176,12 @@ export const AssetManagementPage: React.FC = () => {
           location: formData.location.trim() || undefined,
           notes: formData.notes.trim() || undefined,
         });
-        addToast("Asset/Stock recorded into registry", "success");
+        addToast(t("asset_tracker.toast_created", "Asset/Stock recorded into registry"), "success");
       }
       setIsRecordModalOpen(false);
       resetForm();
     } catch (err: any) {
-      addToast(err?.message || "Failed to save asset record", "error");
+      addToast(err?.message || t("asset_tracker.toast_save_failed", "Failed to save asset record"), "error");
     }
   };
 
@@ -199,10 +192,10 @@ export const AssetManagementPage: React.FC = () => {
         id: deleteConfirmAsset.id,
         orgId: activeOrg.id,
       });
-      addToast("Asset removed from register", "success");
+      addToast(t("asset_tracker.toast_deleted", "Asset removed from register"), "success");
       setDeleteConfirmAsset(null);
     } catch (err: any) {
-      addToast(err?.message || "Failed to delete asset", "error");
+      addToast(err?.message || t("asset_tracker.toast_delete_failed", "Failed to delete asset"), "error");
     }
   };
 
@@ -220,10 +213,10 @@ export const AssetManagementPage: React.FC = () => {
           notes: quickNotesText.trim(),
         },
       });
-      addToast("Notes updated", "success");
+      addToast(t("asset_tracker.toast_notes_updated", "Notes updated"), "success");
       setNotesModalAsset(null);
     } catch (err: any) {
-      addToast("Failed to update notes", "error");
+      addToast(t("asset_tracker.toast_notes_failed", "Failed to update notes"), "error");
     }
   };
 
@@ -274,7 +267,7 @@ export const AssetManagementPage: React.FC = () => {
 
   const handleExportCSV = () => {
     if (!filteredAssets.length) {
-      addToast("No assets to export", "info");
+      addToast(t("asset_tracker.toast_no_export", "No assets to export"), "info");
       return;
     }
     const headers = [
@@ -316,38 +309,38 @@ export const AssetManagementPage: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    addToast("Asset register CSV exported", "success");
+    addToast(t("asset_tracker.toast_exported", "Asset register CSV exported"), "success");
   };
 
   const getConditionBadge = (condition: Asset["condition"]) => {
     switch (condition) {
       case "new":
-        return <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Brand New</span>;
+        return <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">{t("asset_tracker.cond_new", "Brand New")}</span>;
       case "good":
-        return <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Good</span>;
+        return <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{t("asset_tracker.cond_good", "Good")}</span>;
       case "fair":
-        return <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Fair / Aging</span>;
+        return <span className="text-xs font-medium text-amber-700 dark:text-amber-400">{t("asset_tracker.cond_fair", "Fair / Aging")}</span>;
       case "needs_repair":
-        return <span className="text-xs font-medium text-rose-600 dark:text-rose-400">Needs Repair</span>;
+        return <span className="text-xs font-medium text-rose-600 dark:text-rose-400">{t("asset_tracker.cond_needs_repair", "Needs Repair")}</span>;
       case "damaged":
-        return <span className="text-xs font-medium text-rose-700 dark:text-rose-400">Damaged</span>;
+        return <span className="text-xs font-medium text-rose-700 dark:text-rose-400">{t("asset_tracker.cond_damaged", "Damaged")}</span>;
       default:
-        return <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Standard</span>;
+        return <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{t("asset_tracker.standard", "Standard")}</span>;
     }
   };
 
   const getStatusBadge = (status: Asset["status"]) => {
     switch (status) {
       case "operational":
-        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Operational</span>;
+        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>{t("asset_tracker.status_operational", "Operational")}</span>;
       case "maintenance":
-        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400"><Clock className="w-3.5 h-3.5" />Maintenance</span>;
+        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400"><Clock className="w-3.5 h-3.5" />{t("asset_tracker.status_maintenance", "Maintenance")}</span>;
       case "in_storage":
-        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400"><Boxes className="w-3.5 h-3.5" />In Storage</span>;
+        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400"><Boxes className="w-3.5 h-3.5" />{t("asset_tracker.status_in_storage", "In Storage")}</span>;
       case "decommissioned":
-        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500">Decommissioned</span>;
+        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500">{t("asset_tracker.status_decommissioned", "Decommissioned")}</span>;
       case "disposed":
-        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-600">Disposed</span>;
+        return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-600">{t("asset_tracker.status_disposed", "Disposed")}</span>;
       default:
         return <span className="text-xs font-medium text-slate-600">{status}</span>;
     }
@@ -357,29 +350,29 @@ export const AssetManagementPage: React.FC = () => {
     <PlanGatedView
       requiredTier="pro"
       featureKey="asset_tracker"
-      featureName="Asset and Stock Management"
-      customMessage="Asset and Stock Management is available on the Pro Plan ($25/mo). Upgrade to the Pro Plan to track physical equipment, warehouse stock, custody assignments, and depreciation logs."
+      featureName={t("asset_tracker.gated_feature_name", "Asset and Stock Management")}
+      customMessage={t("asset_tracker.gated_message", "Asset and Stock Management is available on the Pro Plan ($25/mo). Upgrade to the Pro Plan to track physical equipment, warehouse stock, custody assignments, and depreciation logs.")}
     >
       <div className="space-y-6 pb-16">
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Asset and Inventory Management
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 dark:text-white break-words">
+            {t("asset_tracker.page_title", "Asset and Inventory Management")}
           </h1>
-          <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-            Keep clear records of organizational equipment, inventory quantities, quality grades, market values, custody accountability, and maintenance notes.
+          <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl break-words">
+            {t("asset_tracker.page_subtitle", "Keep clear records of organizational equipment, inventory quantities, quality grades, market values, custody accountability, and maintenance notes.")}
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap shrink-0">
           <Button
             variant="outline"
             size="sm"
             onClick={handleExportCSV}
             icon={<Download className="h-3.5 w-3.5" />}
           >
-            Export CSV
+            {t("asset_tracker.export_csv", "Export CSV")}
           </Button>
 
           {isStaff && (
@@ -389,7 +382,7 @@ export const AssetManagementPage: React.FC = () => {
               onClick={handleOpenCreate}
               icon={<Plus className="h-4 w-4" />}
             >
-              Record New Asset
+              {t("asset_tracker.record_new", "Record New Asset")}
             </Button>
           )}
         </div>
@@ -397,61 +390,61 @@ export const AssetManagementPage: React.FC = () => {
 
       {/* KPI Metric Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
-          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-            <span>Total Book Value</span>
-            <Boxes className="h-4 w-4 text-slate-400" />
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs min-w-0">
+          <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span className="truncate">{t("asset_tracker.total_book_value", "Total Book Value")}</span>
+            <Boxes className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
-          <div className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-2 tabular-nums">
+          <div className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-2 tabular-nums break-words">
             {formatAmount(metrics.totalValue)}
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal">Recorded acquisition value</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal break-words">{t("asset_tracker.recorded_acq_value", "Recorded acquisition value")}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
-          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-            <span>Stock Units</span>
-            <Layers className="h-4 w-4 text-slate-400" />
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs min-w-0">
+          <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span className="truncate">{t("asset_tracker.stock_units", "Stock Units")}</span>
+            <Layers className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
-          <div className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-2 tabular-nums">
-            {metrics.totalItems} <span className="text-xs font-normal text-slate-500">({metrics.totalRecords} entries)</span>
+          <div className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-2 tabular-nums break-words">
+            {metrics.totalItems} <span className="text-xs font-normal text-slate-500">({t("asset_tracker.entries_count", { count: metrics.totalRecords, defaultValue: "{{count}} entries" })})</span>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal">Cumulative inventory</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal break-words">{t("asset_tracker.cumulative_inventory", "Cumulative inventory")}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
-          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-            <span>Assigned in Custody</span>
-            <User className="h-4 w-4 text-slate-400" />
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs min-w-0">
+          <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span className="truncate">{t("asset_tracker.assigned_custody", "Assigned in Custody")}</span>
+            <User className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-2 tabular-nums">
             {metrics.inCustodyCount} <span className="text-xs font-normal text-slate-500">/ {metrics.totalRecords}</span>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal">Under member custody</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal break-words">{t("asset_tracker.under_custody", "Under member custody")}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
-          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-            <span>Operational Rate</span>
-            <CheckCircle2 className="h-4 w-4 text-slate-400" />
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs min-w-0">
+          <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+            <span className="truncate">{t("asset_tracker.operational_rate", "Operational Rate")}</span>
+            <CheckCircle2 className="h-4 w-4 text-slate-400 shrink-0" />
           </div>
           <div className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-2 tabular-nums">
             {metrics.totalRecords > 0 ? Math.round((metrics.operationalCount / metrics.totalRecords) * 100) : 100}%
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal">{metrics.operationalCount} ready for active service</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal break-words">{t("asset_tracker.ready_active_service", { count: metrics.operationalCount, defaultValue: "{{count}} ready for active service" })}</p>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-3 shadow-xs">
-        <div className="relative w-full md:w-80">
+      <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-xs">
+        <div className="relative w-full md:w-80 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search name, identifier, custodian, notes..."
+            placeholder={t("asset_tracker.search_placeholder", "Search name, identifier, custodian, notes...")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs md:text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-600"
+            className="w-full pl-9 pr-8 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs md:text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-600"
           />
           {searchTerm && (
             <button
@@ -470,7 +463,7 @@ export const AssetManagementPage: React.FC = () => {
             onChange={(e) => setSelectedCategory(e.target.value)}
             className="px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-600"
           >
-            <option value="all">All Categories</option>
+            <option value="all">{t("asset_tracker.all_categories", "All Categories")}</option>
             {categories.filter((c) => c !== "all").map((cat) => (
               <option key={cat} value={cat}>
                 {cat}
@@ -484,12 +477,12 @@ export const AssetManagementPage: React.FC = () => {
             onChange={(e) => setSelectedCondition(e.target.value)}
             className="px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-600"
           >
-            <option value="all">All Conditions</option>
-            <option value="new">Brand New</option>
-            <option value="good">Good</option>
-            <option value="fair">Fair / Aging</option>
-            <option value="needs_repair">Needs Repair</option>
-            <option value="damaged">Damaged</option>
+            <option value="all">{t("asset_tracker.all_conditions", "All Conditions")}</option>
+            <option value="new">{t("asset_tracker.cond_new", "Brand New")}</option>
+            <option value="good">{t("asset_tracker.cond_good", "Good")}</option>
+            <option value="fair">{t("asset_tracker.cond_fair", "Fair / Aging")}</option>
+            <option value="needs_repair">{t("asset_tracker.cond_needs_repair", "Needs Repair")}</option>
+            <option value="damaged">{t("asset_tracker.cond_damaged", "Damaged")}</option>
           </select>
 
           {/* State / Status Filter */}
@@ -498,12 +491,12 @@ export const AssetManagementPage: React.FC = () => {
             onChange={(e) => setSelectedStatus(e.target.value)}
             className="px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-600"
           >
-            <option value="all">All Operational States</option>
-            <option value="operational">Operational</option>
-            <option value="maintenance">Maintenance</option>
-            <option value="in_storage">In Storage / Stock</option>
-            <option value="decommissioned">Decommissioned</option>
-            <option value="disposed">Disposed</option>
+            <option value="all">{t("asset_tracker.all_states", "All Operational States")}</option>
+            <option value="operational">{t("asset_tracker.status_operational", "Operational")}</option>
+            <option value="maintenance">{t("asset_tracker.status_maintenance", "Maintenance")}</option>
+            <option value="in_storage">{t("asset_tracker.status_in_storage_stock", "In Storage / Stock")}</option>
+            <option value="decommissioned">{t("asset_tracker.status_decommissioned", "Decommissioned")}</option>
+            <option value="disposed">{t("asset_tracker.status_disposed", "Disposed")}</option>
           </select>
         </div>
       </div>
@@ -514,15 +507,15 @@ export const AssetManagementPage: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400">
               <tr>
-                <th className="py-3 px-4">Asset / Stock Item</th>
-                <th className="py-3 px-3">Category & ID</th>
-                <th className="py-3 px-3 text-center">Qty</th>
-                <th className="py-3 px-3">Quality Grade</th>
-                <th className="py-3 px-3">Acquisition Value</th>
-                <th className="py-3 px-3">Condition & State</th>
-                <th className="py-3 px-3">Custody</th>
-                <th className="py-3 px-3">Notes</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+                <th className="py-3 px-4">{t("asset_tracker.col_item", "Asset / Stock Item")}</th>
+                <th className="py-3 px-3">{t("asset_tracker.col_category_id", "Category & ID")}</th>
+                <th className="py-3 px-3 text-center">{t("asset_tracker.col_qty", "Qty")}</th>
+                <th className="py-3 px-3">{t("asset_tracker.col_quality", "Quality Grade")}</th>
+                <th className="py-3 px-3">{t("asset_tracker.col_value", "Acquisition Value")}</th>
+                <th className="py-3 px-3">{t("asset_tracker.col_condition_state", "Condition & State")}</th>
+                <th className="py-3 px-3">{t("asset_tracker.col_custody", "Custody")}</th>
+                <th className="py-3 px-3">{t("asset_tracker.col_notes", "Notes")}</th>
+                <th className="py-3 px-4 text-right">{t("asset_tracker.col_actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -531,7 +524,7 @@ export const AssetManagementPage: React.FC = () => {
                   <td colSpan={9} className="py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Boxes className="h-8 w-8 text-slate-300 dark:text-slate-600" />
-                      <p className="font-medium">No assets or stock found matching your query.</p>
+                      <p className="font-medium">{t("asset_tracker.empty_query", "No assets or stock found matching your query.")}</p>
                       {isStaff && (
                         <Button
                           variant="outline"
@@ -539,7 +532,7 @@ export const AssetManagementPage: React.FC = () => {
                           onClick={handleOpenCreate}
                           className="mt-2"
                         >
-                          Record First Asset
+                          {t("asset_tracker.record_first", "Record First Asset")}
                         </Button>
                       )}
                     </div>
@@ -552,7 +545,7 @@ export const AssetManagementPage: React.FC = () => {
                     asset.assigned_to_name ||
                     assignedMember?.user?.full_name ||
                     assignedMember?.member_number ||
-                    (asset.assigned_to_member_id ? "Assigned Member" : "Unassigned / General Storage");
+                    (asset.assigned_to_member_id ? t("asset_tracker.assigned_member", "Assigned Member") : t("asset_tracker.unassigned_storage", "Unassigned / General Storage"));
 
                   return (
                     <tr
@@ -561,7 +554,7 @@ export const AssetManagementPage: React.FC = () => {
                     >
                       {/* Name & Location */}
                       <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-white">
-                        <div className="font-medium text-slate-900 dark:text-white">{asset.name}</div>
+                        <div className="font-medium text-slate-900 dark:text-white break-words">{asset.name}</div>
                         {asset.location && (
                           <div className="flex items-center gap-1 text-[11px] text-slate-400 font-normal mt-0.5">
                             <MapPin className="h-3 w-3 shrink-0 text-slate-400" />
@@ -573,7 +566,7 @@ export const AssetManagementPage: React.FC = () => {
                       {/* Category & Identifier */}
                       <td className="py-3.5 px-3">
                         <span className="inline-block text-xs font-medium text-slate-600 dark:text-slate-300">
-                          {asset.category || "General"}
+                          {asset.category || t("asset_tracker.general", "General")}
                         </span>
                         {asset.identifier ? (
                           <div className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded w-fit mt-0.5">
@@ -584,7 +577,7 @@ export const AssetManagementPage: React.FC = () => {
                             {asset.serial_number}
                           </div>
                         ) : (
-                          <span className="text-[10px] text-slate-400 italic block mt-0.5">No tag ID</span>
+                          <span className="text-[10px] text-slate-400 italic block mt-0.5">{t("asset_tracker.no_tag_id", "No tag ID")}</span>
                         )}
                       </td>
 
@@ -602,7 +595,7 @@ export const AssetManagementPage: React.FC = () => {
                             {asset.quality}
                           </span>
                         ) : (
-                          <span className="text-xs text-slate-400 italic">Standard</span>
+                          <span className="text-xs text-slate-400 italic">{t("asset_tracker.standard", "Standard")}</span>
                         )}
                       </td>
 
@@ -613,7 +606,7 @@ export const AssetManagementPage: React.FC = () => {
                         </div>
                         {(asset.quantity ?? 1) > 1 ? (
                           <span className="text-[10px] text-slate-400 block mt-0.5 tabular-nums">
-                            {formatAmount(asset.purchase_cost || 0)}/unit
+                            {formatAmount(asset.purchase_cost || 0)}{t("asset_tracker.per_unit", "/unit")}
                           </span>
                         ) : asset.purchase_date ? (
                           <span className="text-[10px] text-slate-400 block mt-0.5">
@@ -628,7 +621,7 @@ export const AssetManagementPage: React.FC = () => {
                         <div>{getStatusBadge(asset.status)}</div>
                       </td>
 
-                      {/* Custody (Who has it) */}
+                      {/* Custody */}
                       <td className="py-3.5 px-3">
                         {asset.assigned_to_member_id || asset.assigned_to_name ? (
                           <div className="flex items-center gap-1.5">
@@ -643,7 +636,7 @@ export const AssetManagementPage: React.FC = () => {
                           </div>
                         ) : (
                           <span className="text-xs text-slate-400 italic">
-                            In Storage
+                            {t("asset_tracker.status_in_storage", "In Storage")}
                           </span>
                         )}
                       </td>
@@ -654,7 +647,7 @@ export const AssetManagementPage: React.FC = () => {
                           <div
                             onClick={() => handleOpenNotes(asset)}
                             className="cursor-pointer group flex items-start gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                            title="Click to view and edit notes"
+                            title={t("asset_tracker.click_view_edit_notes", "Click to view and edit notes")}
                           >
                             <FileText className="h-3.5 w-3.5 shrink-0 text-slate-400 group-hover:text-emerald-600 mt-0.5" />
                             <span className="truncate">{asset.notes}</span>
@@ -664,7 +657,7 @@ export const AssetManagementPage: React.FC = () => {
                             onClick={() => handleOpenNotes(asset)}
                             className="text-xs text-slate-400 hover:text-emerald-600 flex items-center gap-1"
                           >
-                            <Plus className="h-3 w-3" /> Add notes
+                            <Plus className="h-3 w-3" /> {t("asset_tracker.add_notes", "Add notes")}
                           </button>
                         )}
                       </td>
@@ -675,7 +668,7 @@ export const AssetManagementPage: React.FC = () => {
                           <button
                             onClick={() => handleOpenNotes(asset)}
                             className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                            title="View/Edit notes"
+                            title={t("asset_tracker.view_edit_notes", "View/Edit notes")}
                           >
                             <FileText className="h-3.5 w-3.5" />
                           </button>
@@ -685,7 +678,7 @@ export const AssetManagementPage: React.FC = () => {
                               <button
                                 onClick={() => handleOpenEdit(asset)}
                                 className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                                title="Edit Asset"
+                                title={t("asset_tracker.edit_asset_btn", "Edit Asset")}
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                               </button>
@@ -693,7 +686,7 @@ export const AssetManagementPage: React.FC = () => {
                               <button
                                 onClick={() => setDeleteConfirmAsset(asset)}
                                 className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
-                                title="Remove Asset"
+                                title={t("asset_tracker.remove_asset_btn", "Remove Asset")}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -717,18 +710,18 @@ export const AssetManagementPage: React.FC = () => {
           setIsRecordModalOpen(false);
           resetForm();
         }}
-        title={editingAsset ? "Edit Asset / Custody Details" : "Record New Asset or Stock"}
+        title={editingAsset ? t("asset_tracker.modal_edit_title", "Edit Asset / Custody Details") : t("asset_tracker.modal_create_title", "Record New Asset or Stock")}
       >
         <form onSubmit={handleSaveAsset} className="space-y-4 text-xs md:text-sm">
           {/* Asset Name */}
           <div>
             <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-              Asset or Stock Name <span className="text-rose-500">*</span>
+              {t("asset_tracker.field_name", "Asset or Stock Name")} <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
               required
-              placeholder="e.g., Solar Irrigation Pump, Dell Laptop, NPK Fertilizer 50kg"
+              placeholder={t("asset_tracker.placeholder_name", "e.g., Solar Irrigation Pump, Dell Laptop, NPK Fertilizer 50kg")}
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#156c45]"
@@ -739,34 +732,34 @@ export const AssetManagementPage: React.FC = () => {
             {/* Category */}
             <div>
               <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Category
+                {t("asset_tracker.field_category", "Category")}
               </label>
               <input
                 type="text"
                 list="category-suggestions"
-                placeholder="e.g., Machinery, Stock / Supplies, IT Hardware"
+                placeholder={t("asset_tracker.placeholder_category", "e.g., Machinery, Stock / Supplies, IT Hardware")}
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#156c45]"
               />
               <datalist id="category-suggestions">
-                <option value="Machinery & Equipment" />
-                <option value="Stock / Supplies" />
-                <option value="IT Hardware" />
-                <option value="Vehicles & Transport" />
-                <option value="Office Furniture" />
-                <option value="Agricultural Tools" />
+                <option value={t("asset_tracker.cat_machinery", "Machinery & Equipment")} />
+                <option value={t("asset_tracker.cat_stock", "Stock / Supplies")} />
+                <option value={t("asset_tracker.cat_it", "IT Hardware")} />
+                <option value={t("asset_tracker.cat_vehicles", "Vehicles & Transport")} />
+                <option value={t("asset_tracker.cat_furniture", "Office Furniture")} />
+                <option value={t("asset_tracker.cat_agri", "Agricultural Tools")} />
               </datalist>
             </div>
 
-            {/* Identifier / Serial (Not required) */}
+            {/* Identifier / Serial */}
             <div>
               <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Identifier / Tag / Serial <span className="text-slate-400 font-normal">(Optional)</span>
+                {t("asset_tracker.field_identifier", "Identifier / Tag / Serial")} <span className="text-slate-400 font-normal">({t("common.optional", "Optional")})</span>
               </label>
               <input
                 type="text"
-                placeholder="e.g., TAG-2026-001 or SKU-NPK-99"
+                placeholder={t("asset_tracker.placeholder_identifier", "e.g., TAG-2026-001 or SKU-NPK-99")}
                 value={formData.identifier}
                 onChange={(e) => setFormData({ ...formData, identifier: e.target.value })}
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#156c45]"
@@ -778,7 +771,7 @@ export const AssetManagementPage: React.FC = () => {
             {/* Quantity */}
             <div>
               <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Quantity (Count)
+                {t("asset_tracker.field_quantity", "Quantity (Count)")}
               </label>
               <input
                 type="number"
@@ -792,11 +785,11 @@ export const AssetManagementPage: React.FC = () => {
             {/* Quality Grade */}
             <div>
               <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Quality Grade / Spec <span className="text-slate-400 font-normal">(Optional)</span>
+                {t("asset_tracker.field_quality", "Quality Grade / Spec")} <span className="text-slate-400 font-normal">({t("common.optional", "Optional")})</span>
               </label>
               <input
                 type="text"
-                placeholder="e.g., Grade A, Export Certified, Refurbished"
+                placeholder={t("asset_tracker.placeholder_quality", "e.g., Grade A, Export Certified, Refurbished")}
                 value={formData.quality}
                 onChange={(e) => setFormData({ ...formData, quality: e.target.value })}
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#156c45]"
@@ -808,7 +801,7 @@ export const AssetManagementPage: React.FC = () => {
             {/* Value (Cost) */}
             <div>
               <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Value / Acquisition Cost ({formData.currency})
+                {t("asset_tracker.field_value_cost", { currency: formData.currency, defaultValue: "Value / Acquisition Cost ({{currency}})" })}
               </label>
               <input
                 type="number"
@@ -823,7 +816,7 @@ export const AssetManagementPage: React.FC = () => {
             {/* Date */}
             <div>
               <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Acquisition / Stock Date
+                {t("asset_tracker.field_acq_date", "Acquisition / Stock Date")}
               </label>
               <input
                 type="date"
@@ -838,48 +831,48 @@ export const AssetManagementPage: React.FC = () => {
             {/* Condition */}
             <div>
               <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Physical Condition
+                {t("asset_tracker.field_condition", "Physical Condition")}
               </label>
               <select
                 value={formData.condition}
                 onChange={(e) => setFormData({ ...formData, condition: e.target.value as any })}
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#156c45]"
               >
-                <option value="new">Brand New</option>
-                <option value="good">Good (Normal operation)</option>
-                <option value="fair">Fair (Wear and tear)</option>
-                <option value="needs_repair">Needs Repair / Maintenance</option>
-                <option value="damaged">Damaged</option>
+                <option value="new">{t("asset_tracker.cond_new", "Brand New")}</option>
+                <option value="good">{t("asset_tracker.cond_good_opt", "Good (Normal operation)")}</option>
+                <option value="fair">{t("asset_tracker.cond_fair_opt", "Fair (Wear and tear)")}</option>
+                <option value="needs_repair">{t("asset_tracker.cond_repair_opt", "Needs Repair / Maintenance")}</option>
+                <option value="damaged">{t("asset_tracker.cond_damaged", "Damaged")}</option>
               </select>
             </div>
 
-            {/* State of each element (Operational Status) */}
+            {/* State */}
             <div>
               <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                State / Status
+                {t("asset_tracker.field_state", "State / Status")}
               </label>
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#156c45]"
               >
-                <option value="operational">Operational (In active use)</option>
-                <option value="in_storage">In Storage / Central Warehouse</option>
-                <option value="maintenance">Under Repair / Maintenance</option>
-                <option value="decommissioned">Decommissioned</option>
-                <option value="disposed">Disposed / Written Off</option>
+                <option value="operational">{t("asset_tracker.status_operational_opt", "Operational (In active use)")}</option>
+                <option value="in_storage">{t("asset_tracker.status_storage_opt", "In Storage / Central Warehouse")}</option>
+                <option value="maintenance">{t("asset_tracker.status_maintenance_opt", "Under Repair / Maintenance")}</option>
+                <option value="decommissioned">{t("asset_tracker.status_decommissioned", "Decommissioned")}</option>
+                <option value="disposed">{t("asset_tracker.status_disposed_opt", "Disposed / Written Off")}</option>
               </select>
             </div>
           </div>
 
-          {/* Custody & Member Assignment (Accountability) */}
+          {/* Custody & Member Assignment */}
           <div className="p-3.5 bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/40 rounded-xl space-y-2">
             <div className="flex items-center gap-1.5 text-purple-900 dark:text-purple-300 font-bold text-xs">
-              <User className="h-4 w-4 text-purple-600" />
-              Custody & Member Assignment (Accountability)
+              <User className="h-4 w-4 text-purple-600 shrink-0" />
+              <span className="break-words">{t("asset_tracker.custody_title", "Custody & Member Assignment (Accountability)")}</span>
             </div>
-            <p className="text-[11px] text-purple-700/80 dark:text-purple-300/80">
-              Designate who is physically holding or personally responsible for this asset or stock batch.
+            <p className="text-[11px] text-purple-700/80 dark:text-purple-300/80 break-words">
+              {t("asset_tracker.custody_desc", "Designate who is physically holding or personally responsible for this asset or stock batch.")}
             </p>
 
             <select
@@ -887,10 +880,10 @@ export const AssetManagementPage: React.FC = () => {
               onChange={(e) => setFormData({ ...formData, assigned_to_member_id: e.target.value })}
               className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
-              <option value="">-- No Specific Member (Central Storage / Communal) --</option>
+              <option value="">{t("asset_tracker.custody_none", "-- No Specific Member (Central Storage / Communal) --")}</option>
               {members.map((mem) => (
                 <option key={mem.id} value={mem.id}>
-                  {mem.user?.full_name || mem.member_number || "Member"} ({mem.role || "Member"})
+                  {mem.user?.full_name || mem.member_number || t("common.member", "Member")} ({mem.role || t("common.member", "Member")})
                 </option>
               ))}
             </select>
@@ -899,32 +892,32 @@ export const AssetManagementPage: React.FC = () => {
           {/* Storage / Location */}
           <div>
             <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-              Physical Location / Unit
+              {t("asset_tracker.field_location", "Physical Location / Unit")}
             </label>
             <input
               type="text"
-              placeholder="e.g., Central Warehouse Bay 3, Sector Office Desk 2, Field Station Huye"
+              placeholder={t("asset_tracker.placeholder_location", "e.g., Central Warehouse Bay 3, Sector Office Desk 2, Field Station Huye")}
               value={formData.location}
               onChange={(e) => setFormData({ ...formData, location: e.target.value })}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#156c45]"
             />
           </div>
 
-          {/* Notes explaining what happened */}
+          {/* Notes */}
           <div>
             <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-              Notes & Incident History (Explain what happened / service history)
+              {t("asset_tracker.field_notes", "Notes & Incident History (Explain what happened / service history)")}
             </label>
             <textarea
               rows={3}
-              placeholder="Add explanation on condition, repair history, handover circumstances, or special handling instructions..."
+              placeholder={t("asset_tracker.placeholder_notes", "Add explanation on condition, repair history, handover circumstances, or special handling instructions...")}
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#156c45]"
             />
           </div>
 
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100 dark:border-slate-800">
+          <div className="flex flex-wrap items-center justify-end gap-2.5 pt-3 border-t border-gray-100 dark:border-slate-800">
             <Button
               type="button"
               variant="outline"
@@ -933,14 +926,14 @@ export const AssetManagementPage: React.FC = () => {
                 resetForm();
               }}
             >
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button
               type="submit"
               variant="primary"
               loading={createMutation.isPending || updateMutation.isPending}
             >
-              {editingAsset ? "Save Changes" : "Save to Register"}
+              {editingAsset ? t("asset_tracker.save_changes", "Save Changes") : t("asset_tracker.save_register", "Save to Register")}
             </Button>
           </div>
         </form>
@@ -950,28 +943,28 @@ export const AssetManagementPage: React.FC = () => {
       <Modal
         isOpen={!!notesModalAsset}
         onClose={() => setNotesModalAsset(null)}
-        title={`Asset Notes & History: ${notesModalAsset?.name || ""}`}
+        title={t("asset_tracker.notes_modal_title", { name: notesModalAsset?.name || "", defaultValue: "Asset Notes & History: {{name}}" })}
       >
         <div className="space-y-4 text-xs md:text-sm">
-          <p className="text-slate-500 dark:text-slate-400">
-            Record updates, inspection notes, repair logs, or incident reports for this item.
+          <p className="text-slate-500 dark:text-slate-400 break-words">
+            {t("asset_tracker.notes_modal_desc", "Record updates, inspection notes, repair logs, or incident reports for this item.")}
           </p>
 
           <textarea
             rows={5}
             value={quickNotesText}
             onChange={(e) => setQuickNotesText(e.target.value)}
-            placeholder="Document what happened to this item, maintenance performed, or handover notes..."
+            placeholder={t("asset_tracker.notes_modal_placeholder", "Document what happened to this item, maintenance performed, or handover notes...")}
             className="w-full p-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#156c45] font-sans"
           />
 
-          <div className="flex items-center justify-between pt-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
             <span className="text-[11px] text-slate-400">
-              Last updated: {notesModalAsset?.updated_at ? new Date(notesModalAsset.updated_at).toLocaleString() : "Recently"}
+              {t("asset_tracker.last_updated", "Last updated:")} {notesModalAsset?.updated_at ? new Date(notesModalAsset.updated_at).toLocaleString(i18n.language) : t("asset_tracker.recently", "Recently")}
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => setNotesModalAsset(null)}>
-                Close
+                {t("common.close", "Close")}
               </Button>
               <Button
                 variant="primary"
@@ -979,7 +972,7 @@ export const AssetManagementPage: React.FC = () => {
                 onClick={handleSaveNotes}
                 loading={updateMutation.isPending}
               >
-                Save Notes
+                {t("asset_tracker.save_notes", "Save Notes")}
               </Button>
             </div>
           </div>
@@ -990,30 +983,33 @@ export const AssetManagementPage: React.FC = () => {
       <Modal
         isOpen={!!deleteConfirmAsset}
         onClose={() => setDeleteConfirmAsset(null)}
-        title="Remove Asset from Registry"
+        title={t("asset_tracker.delete_modal_title", "Remove Asset from Registry")}
       >
         <div className="space-y-4 text-xs md:text-sm">
           <div className="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-xl flex items-start gap-2.5 text-rose-800 dark:text-rose-300">
             <AlertTriangle className="h-5 w-5 shrink-0 text-rose-600 mt-0.5" />
-            <div>
-              <div className="font-bold">Are you sure you want to remove this asset?</div>
-              <p className="mt-1 text-xs opacity-90">
-                You are about to delete <strong>{deleteConfirmAsset?.name}</strong>{" "}
-                {deleteConfirmAsset?.identifier ? `(${deleteConfirmAsset.identifier})` : ""}. This action cannot be undone.
+            <div className="min-w-0">
+              <div className="font-bold break-words">{t("asset_tracker.delete_confirm_heading", "Are you sure you want to remove this asset?")}</div>
+              <p className="mt-1 text-xs opacity-90 break-words">
+                {t("asset_tracker.delete_confirm_desc", {
+                  name: deleteConfirmAsset?.name || "",
+                  id: deleteConfirmAsset?.identifier ? ` (${deleteConfirmAsset.identifier})` : "",
+                  defaultValue: "You are about to delete {{name}}{{id}}. This action cannot be undone."
+                })}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-2">
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setDeleteConfirmAsset(null)}>
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button
               variant="danger"
               onClick={handleDelete}
               loading={deleteMutation.isPending}
             >
-              Delete Asset
+              {t("asset_tracker.delete_btn", "Delete Asset")}
             </Button>
           </div>
         </div>

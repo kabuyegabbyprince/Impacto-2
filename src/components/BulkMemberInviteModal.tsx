@@ -20,6 +20,7 @@ import { useToast } from "./Toast";
 import { useCreateMember } from "../hooks/useImpactoData";
 import { useOrgStore } from "../store/orgStore";
 import { SubscriptionTier } from "../lib/subscriptionMatrix";
+import { useTranslation } from "react-i18next";
 
 export interface BulkMemberInviteModalProps {
   open: boolean;
@@ -54,6 +55,7 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
   orgTier,
   existingEmails
 }) => {
+  const { t } = useTranslation();
   const { addToast } = useToast();
   const { activeOrg } = useOrgStore();
   const createMemberMutation = useCreateMember();
@@ -101,14 +103,14 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
       }
 
       let errorMsg = "";
-      if (!isValidFormat) errorMsg = "Invalid email format";
-      else if (isExisting) errorMsg = "Already an active member";
-      else if (isDuplicateInBatch) errorMsg = "Duplicate in this batch";
-      else if (exceedsQuota) errorMsg = `Exceeds active tier cap (${currentLimit} seats max)`;
+      if (!isValidFormat) errorMsg = t("bulk_invite.err_invalid_email", "Invalid email format");
+      else if (isExisting) errorMsg = t("bulk_invite.err_already_member", "Already an active member");
+      else if (isDuplicateInBatch) errorMsg = t("bulk_invite.err_duplicate_batch", "Duplicate in this batch");
+      else if (exceedsQuota) errorMsg = t("bulk_invite.err_exceeds_quota", { limit: currentLimit, defaultValue: "Exceeds active tier cap ({{limit}} seats max)" });
 
       return {
         id: `cand-${idx}-${cleanEmail || Math.random().toString(36).substring(2, 7)}`,
-        fullName: item.fullName.trim() || cleanEmail.split("@")[0] || `Member ${idx + 1}`,
+        fullName: item.fullName.trim() || cleanEmail.split("@")[0] || t("bulk_invite.member_fallback", { num: idx + 1, defaultValue: "Member {{num}}" }),
         email: cleanEmail,
         role: item.role || defaultRole,
         phone: item.phone,
@@ -128,7 +130,7 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
   const parseCSVContent = (content: string) => {
     const lines = content.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0);
     if (lines.length === 0) {
-      addToast("The uploaded file appears to be empty.", "error");
+      addToast(t("bulk_invite.err_empty_file", "The uploaded file appears to be empty."), "error");
       return;
     }
 
@@ -178,18 +180,18 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
     }).filter(item => item.email.length > 0);
 
     if (items.length === 0) {
-      addToast("No valid email rows detected in CSV.", "error");
+      addToast(t("bulk_invite.err_no_csv_emails", "No valid email rows detected in CSV."), "error");
       return;
     }
 
     recomputeValidation(items);
-    addToast(`Successfully parsed ${items.length} candidate rows from CSV.`, "info");
+    addToast(t("bulk_invite.parsed_csv_toast", { count: items.length, defaultValue: "Successfully parsed {{count}} candidate rows from CSV." }), "info");
   };
 
   // Plaintext parsing (emails separated by comma, semicolon, space, or newline)
   const parseManualText = () => {
     if (!textInput.trim()) {
-      addToast("Please enter or paste at least one email address.", "error");
+      addToast(t("bulk_invite.err_enter_email", "Please enter or paste at least one email address."), "error");
       return;
     }
 
@@ -238,12 +240,12 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
     });
 
     if (items.length === 0) {
-      addToast("No email addresses identified in text input.", "error");
+      addToast(t("bulk_invite.err_no_text_emails", "No email addresses identified in text input."), "error");
       return;
     }
 
     recomputeValidation(items);
-    addToast(`Extracted ${items.length} candidate entries for validation.`, "info");
+    addToast(t("bulk_invite.extracted_text_toast", { count: items.length, defaultValue: "Extracted {{count}} candidate entries for validation." }), "info");
   };
 
   // CSV File Handler
@@ -309,7 +311,7 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
 
     // Recompute with trimmed subset
     recomputeValidation([...trimmedReady, ...invalidItems]);
-    addToast(`List adjusted to fit within your remaining tier capacity (${remainingQuota} slots).`, "info");
+    addToast(t("bulk_invite.trimmed_toast", { quota: remainingQuota, defaultValue: "List adjusted to fit within your remaining tier capacity ({{quota}} slots)." }), "info");
   };
 
   // Remove single row
@@ -336,13 +338,17 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
   // Execute bulk dispatch
   const handleDispatchBulkInvites = async () => {
     if (readyToInvite.length === 0) {
-      addToast("No eligible candidate invites found to process.", "error");
+      addToast(t("bulk_invite.err_no_eligible", "No eligible candidate invites found to process."), "error");
       return;
     }
 
     if (!isUnlimited && readyToInvite.length > remainingQuota) {
       addToast(
-        `Action Blocked: Inviting ${readyToInvite.length} members exceeds your plan capacity. Please trim to ${remainingQuota} or upgrade your tier.`,
+        t("bulk_invite.err_quota_blocked", {
+          count: readyToInvite.length,
+          quota: remainingQuota,
+          defaultValue: "Action Blocked: Inviting {{count}} members exceeds your plan capacity. Please trim to {{quota}} or upgrade your tier."
+        }),
         "error"
       );
       return;
@@ -374,7 +380,11 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
 
     if (successCount > 0) {
       addToast(
-        `Successfully invited ${successCount} new members to ${activeOrg?.name}!`,
+        t("bulk_invite.invited_success_toast", {
+          count: successCount,
+          org: activeOrg?.name || "",
+          defaultValue: "Successfully invited {{count}} new members to {{org}}!"
+        }),
         "success"
       );
       onSuccess?.();
@@ -383,7 +393,7 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
       setCandidates([]);
       setTextInput("");
     } else {
-      addToast(`Failed to dispatch member invites (${failedCount} errors).`, "error");
+      addToast(t("bulk_invite.invited_fail_toast", { count: failedCount, defaultValue: "Failed to dispatch member invites ({{count}} errors)." }), "error");
     }
   };
 
@@ -391,27 +401,29 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
     <Modal
       open={open}
       onClose={onClose}
-      title="Bulk Member Invite & Tier Capacity Validator"
+      title={t("bulk_invite.modal_title", "Bulk Member Invite & Tier Capacity Validator")}
       maxWidth="max-w-3xl"
     >
       <div className="flex flex-col gap-5 text-left font-sans select-none">
         {/* Tier Capacity Status Meter */}
         <div className="p-4 bg-slate-50 dark:bg-slate-850 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 flex flex-col gap-3 shadow-3xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider font-mono">
-                Active Tier Quota
+                {t("bulk_invite.active_tier_quota", "Active Tier Quota")}
               </span>
               <Badge color={orgTier === "growth" ? "emerald" : orgTier === "starter" ? "blue" : orgTier === "enterprise" || orgTier === "pro" ? "purple" : "amber"}>
-                {orgTier.toUpperCase()} PLAN
+                {t("bulk_invite.plan_badge", { tier: orgTier.toUpperCase(), defaultValue: "{{tier}} PLAN" })}
               </Badge>
             </div>
-            <div className="flex items-center gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-3 text-xs">
               <span className="text-slate-500 dark:text-slate-400">
-                Active: <strong className="text-slate-800 dark:text-slate-100">{activeMembersCount}</strong> / {isUnlimited ? "Unlimited" : currentLimit}
+                {t("bulk_invite.active_label", "Active:")} <strong className="text-slate-800 dark:text-slate-100">{activeMembersCount}</strong> / {isUnlimited ? t("bulk_invite.unlimited", "Unlimited") : currentLimit}
               </span>
               <span className={`font-bold ${remainingQuota > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                {isUnlimited ? "Unlimited Slots" : `${remainingQuota} Slots Available`}
+                {isUnlimited
+                  ? t("bulk_invite.unlimited_slots", "Unlimited Slots")
+                  : t("bulk_invite.slots_available", { count: remainingQuota, defaultValue: "{{count}} Slots Available" })}
               </span>
             </div>
           </div>
@@ -434,17 +446,17 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
 
           {remainingQuota === 0 && !isUnlimited && (
             <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 min-w-0">
                 <Lock className="h-4 w-4 shrink-0 text-rose-600" />
-                <span>Plan Quota Reached. Upgrade tier to invite additional cooperative members.</span>
+                <span className="break-words">{t("bulk_invite.quota_reached", "Plan Quota Reached. Upgrade tier to invite additional cooperative members.")}</span>
               </div>
             </div>
           )}
         </div>
 
         {/* Input Methods Tab Switcher */}
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700 pb-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setInputTab("csv")}
@@ -454,8 +466,8 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
                   : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
             >
-              <FileSpreadsheet className="h-3.5 w-3.5" />
-              CSV Spreadsheet Upload
+              <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
+              {t("bulk_invite.tab_csv", "CSV Spreadsheet Upload")}
             </button>
             <button
               type="button"
@@ -466,8 +478,8 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
                   : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               }`}
             >
-              <Mail className="h-3.5 w-3.5" />
-              Paste Email List
+              <Mail className="h-3.5 w-3.5 shrink-0" />
+              {t("bulk_invite.tab_paste", "Paste Email List")}
             </button>
           </div>
 
@@ -476,8 +488,8 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
             onClick={handleDownloadSampleCSV}
             className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
           >
-            <Download className="h-3 w-3" />
-            Download Sample CSV
+            <Download className="h-3 w-3 shrink-0" />
+            {t("bulk_invite.download_sample", "Download Sample CSV")}
           </button>
         </div>
 
@@ -505,10 +517,10 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
               <UploadCloud className="h-6 w-6" />
             </div>
             <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-              Drag & drop your CSV file here, or browse
+              {t("bulk_invite.drop_csv_title", "Drag & drop your CSV file here, or browse")}
             </h4>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
-              Supports standard CSV format with columns for Full Name, Email, Role, Phone, and Member Number.
+              {t("bulk_invite.drop_csv_desc", "Supports standard CSV format with columns for Full Name, Email, Role, Phone, and Member Number.")}
             </p>
             <Button
               size="sm"
@@ -516,7 +528,7 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
               onClick={() => fileInputRef.current?.click()}
               className="mt-4 rounded-xl text-xs font-bold"
             >
-              Select CSV File
+              {t("bulk_invite.select_csv_btn", "Select CSV File")}
             </Button>
           </div>
         )}
@@ -528,19 +540,19 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
               rows={5}
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
-              placeholder={"Paste multiple emails or lines, e.g.:\njohn.doe@example.com\nJane Smith <jane@example.com>\nclaudine@coop.rw, emmanuel@coop.rw"}
+              placeholder={t("bulk_invite.paste_placeholder", "Paste multiple emails or lines, e.g.:\njohn.doe@example.com\nJane Smith <jane@example.com>\nclaudine@coop.rw, emmanuel@coop.rw")}
               className="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-emerald-500 outline-none"
             />
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 font-medium">Default Assigned Role:</span>
+                <span className="text-xs text-slate-500 font-medium">{t("bulk_invite.default_role", "Default Assigned Role:")}</span>
                 <select
                   value={defaultRole}
                   onChange={(e) => setDefaultRole(e.target.value as "member" | "org_admin")}
                   className="text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-slate-800 dark:text-slate-200 outline-none"
                 >
-                  <option value="member">Standard Member</option>
-                  <option value="org_admin">Organization Administrator</option>
+                  <option value="member">{t("bulk_invite.role_standard_member", "Standard Member")}</option>
+                  <option value="org_admin">{t("bulk_invite.role_org_admin", "Organization Administrator")}</option>
                 </select>
               </div>
               <Button
@@ -549,7 +561,7 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
                 icon={<Sparkles className="h-3.5 w-3.5" />}
                 className="rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800"
               >
-                Validate & Extract List
+                {t("bulk_invite.validate_extract", "Validate & Extract List")}
               </Button>
             </div>
           </div>
@@ -560,26 +572,26 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
           <div className="flex flex-col gap-3">
             {/* Summary Bar */}
             <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <span className="font-bold text-slate-800 dark:text-slate-200">
-                  Total Parsed: {candidates.length}
+                  {t("bulk_invite.total_parsed", { count: candidates.length, defaultValue: "Total Parsed: {{count}}" })}
                 </span>
                 <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> {readyToInvite.length} Ready
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> {t("bulk_invite.ready_count", { count: readyToInvite.length, defaultValue: "{{count}} Ready" })}
                 </span>
                 {overQuotaCount > 0 && (
                   <span className="text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-1">
-                    <Lock className="h-3.5 w-3.5" /> {overQuotaCount} Exceeds Cap
+                    <Lock className="h-3.5 w-3.5 shrink-0" /> {t("bulk_invite.exceeds_cap_count", { count: overQuotaCount, defaultValue: "{{count}} Exceeds Cap" })}
                   </span>
                 )}
                 {invalidCount > 0 && (
                   <span className="text-rose-500 font-semibold flex items-center gap-1">
-                    <XCircle className="h-3.5 w-3.5" /> {invalidCount} Invalid
+                    <XCircle className="h-3.5 w-3.5 shrink-0" /> {t("bulk_invite.invalid_count", { count: invalidCount, defaultValue: "{{count}} Invalid" })}
                   </span>
                 )}
                 {duplicateCount > 0 && (
                   <span className="text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
-                    <AlertTriangle className="h-3.5 w-3.5" /> {duplicateCount} Existing/Dupes
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {t("bulk_invite.dupes_count", { count: duplicateCount, defaultValue: "{{count}} Existing/Dupes" })}
                   </span>
                 )}
               </div>
@@ -590,7 +602,7 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
                   onClick={handleAutoTrimToQuota}
                   className="px-2.5 py-1 rounded-lg bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 text-[11px] font-bold hover:bg-rose-200 transition cursor-pointer"
                 >
-                  Auto-Trim to Available Quota ({remainingQuota})
+                  {t("bulk_invite.auto_trim", { quota: remainingQuota, defaultValue: "Auto-Trim to Available Quota ({{quota}})" })}
                 </button>
               )}
             </div>
@@ -599,25 +611,30 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
             {overQuotaCount > 0 && (
               <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
                 <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <strong className="block font-bold">Plan Capacity Boundary Warning</strong>
-                  <p>
-                    Your organization plan allows {isUnlimited ? "unlimited" : currentLimit} active members. You have {remainingQuota} seats remaining, but {readyToInvite.length + overQuotaCount} eligible entries were found. Excess members cannot be processed until plan upgrade or trimming.
+                <div className="space-y-0.5 min-w-0">
+                  <strong className="block font-bold">{t("bulk_invite.capacity_warning_title", "Plan Capacity Boundary Warning")}</strong>
+                  <p className="break-words">
+                    {t("bulk_invite.capacity_warning_desc", {
+                      limit: isUnlimited ? t("bulk_invite.unlimited", "unlimited") : String(currentLimit),
+                      remaining: remainingQuota,
+                      eligible: readyToInvite.length + overQuotaCount,
+                      defaultValue: "Your organization plan allows {{limit}} active members. You have {{remaining}} seats remaining, but {{eligible}} eligible entries were found. Excess members cannot be processed until plan upgrade or trimming."
+                    })}
                   </p>
                 </div>
               </div>
             )}
 
             {/* Candidates Table */}
-            <div className="max-h-64 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900">
+            <div className="max-h-64 overflow-y-auto overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900">
               <table className="w-full text-left border-collapse text-xs">
                 <thead className="bg-slate-50 dark:bg-slate-800/80 sticky top-0 border-b border-slate-200 dark:border-slate-700 text-slate-500 font-mono uppercase text-[10px]">
                   <tr>
-                    <th className="py-2.5 px-3">Full Name</th>
-                    <th className="py-2.5 px-3">Email Address</th>
-                    <th className="py-2.5 px-3">Assigned Role</th>
-                    <th className="py-2.5 px-3">Validation Status</th>
-                    <th className="py-2.5 px-3 text-right">Action</th>
+                    <th className="py-2.5 px-3">{t("bulk_invite.col_name", "Full Name")}</th>
+                    <th className="py-2.5 px-3">{t("bulk_invite.col_email", "Email Address")}</th>
+                    <th className="py-2.5 px-3">{t("bulk_invite.col_role", "Assigned Role")}</th>
+                    <th className="py-2.5 px-3">{t("bulk_invite.col_status", "Validation Status")}</th>
+                    <th className="py-2.5 px-3 text-right">{t("bulk_invite.col_action", "Action")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -639,18 +656,18 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
                             onChange={(e) => handleRowRoleChange(cand.id, e.target.value as "member" | "org_admin")}
                             className="text-[11px] rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-0.5 text-slate-700 dark:text-slate-300"
                           >
-                            <option value="member">Member</option>
-                            <option value="org_admin">Admin</option>
+                            <option value="member">{t("roles.member", "Member")}</option>
+                            <option value="org_admin">{t("roles.admin", "Admin")}</option>
                           </select>
                         </td>
                         <td className="py-2 px-3">
                           {isOk ? (
                             <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-semibold text-[11px]">
-                              <CheckCircle2 className="h-3 w-3" /> Valid & Ready
+                              <CheckCircle2 className="h-3 w-3 shrink-0" /> {t("bulk_invite.status_valid", "Valid & Ready")}
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 font-medium text-[11px]">
-                              {cand.exceedsQuota ? <Lock className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+                              {cand.exceedsQuota ? <Lock className="h-3 w-3 shrink-0" /> : <AlertTriangle className="h-3 w-3 shrink-0" />}
                               {cand.errorMessage}
                             </span>
                           )}
@@ -660,7 +677,7 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
                             type="button"
                             onClick={() => handleRemoveRow(cand.id)}
                             className="text-slate-400 hover:text-rose-500 transition p-1"
-                            title="Remove row"
+                            title={t("bulk_invite.remove_row", "Remove row")}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -679,8 +696,8 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
           <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 flex flex-col gap-2">
             <div className="flex items-center justify-between text-xs font-bold text-emerald-800 dark:text-emerald-300">
               <span className="flex items-center gap-2">
-                <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-600" />
-                Dispatching Invites ({processedCount} of {readyToInvite.length})...
+                <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-600 shrink-0" />
+                {t("bulk_invite.dispatching_progress", { processed: processedCount, total: readyToInvite.length, defaultValue: "Dispatching Invites ({{processed}} of {{total}})..." })}
               </span>
               <span>{Math.round((processedCount / readyToInvite.length) * 100)}%</span>
             </div>
@@ -694,9 +711,9 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
         )}
 
         {/* Modal Actions Footer */}
-        <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-700">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
           <Button variant="outline" onClick={onClose} disabled={isProcessing}>
-            Cancel
+            {t("common.cancel", "Cancel")}
           </Button>
 
           <Button
@@ -706,7 +723,9 @@ export const BulkMemberInviteModal: React.FC<BulkMemberInviteModalProps> = ({
             icon={<ArrowRight className="h-4 w-4" />}
             className="rounded-xl bg-emerald-700 hover:bg-emerald-800 text-xs font-bold"
           >
-            Invite {readyToInvite.length} Member{readyToInvite.length === 1 ? "" : "s"}
+            {readyToInvite.length === 1
+              ? t("bulk_invite.invite_single_btn", { count: readyToInvite.length, defaultValue: "Invite {{count}} Member" })
+              : t("bulk_invite.invite_multi_btn", { count: readyToInvite.length, defaultValue: "Invite {{count}} Members" })}
           </Button>
         </div>
       </div>

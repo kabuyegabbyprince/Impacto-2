@@ -37,35 +37,42 @@ import { useToast } from "./Toast";
 import { useCreateEvent, useMembers, useBroadcastNotification } from "../hooks/useImpactoData";
 import { MockDB } from "../lib/mockData";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { useTranslation } from "react-i18next";
 
 export const PRESET_ROOM_IMAGES = [
   {
     name: "Modern Conference Hall",
+    nameKey: "spaces.preset_conference",
     url: "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&w=1200&q=80",
     suggestedRange: "50 - 200 people"
   },
   {
     name: "Executive Boardroom",
+    nameKey: "spaces.preset_boardroom",
     url: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80",
     suggestedRange: "10 - 25 people"
   },
   {
     name: "Digital Training Lab",
+    nameKey: "spaces.preset_lab",
     url: "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1200&q=80",
     suggestedRange: "20 - 45 people"
   },
   {
     name: "Garden Event Grounds",
+    nameKey: "spaces.preset_garden",
     url: "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=1200&q=80",
     suggestedRange: "100 - 500 people"
   },
   {
     name: "Creative Co-working Hub",
+    nameKey: "spaces.preset_coworking",
     url: "https://images.unsplash.com/photo-1527192491265-7e15c55b1ed2?auto=format&fit=crop&w=1200&q=80",
     suggestedRange: "15 - 40 people"
   },
   {
     name: "Multipurpose Pavilion",
+    nameKey: "spaces.preset_pavilion",
     url: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80",
     suggestedRange: "30 - 120 people"
   }
@@ -84,6 +91,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
   onEventCreated,
   onSwitchToCalendar
 }) => {
+  const { t } = useTranslation();
   const { addToast } = useToast();
   const { formatAmount } = useCurrencyStore();
   const { user } = useAuthStore();
@@ -91,6 +99,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
   const { data: orgMembers } = useMembers(activeOrg?.id);
   const createEventMutation = useCreateEvent();
   const broadcastMutation = useBroadcastNotification();
+  const [confirmAction, setConfirmAction] = useState<{ type: "delete_room" | "disable_rental"; roomId?: string; roomName?: string } | null>(null);
 
   const orgId = activeOrg?.id || "default";
 
@@ -185,9 +194,9 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
       }
     }
     if (enable) {
-      addToast("Space rental enabled for this organization across all devices!", "success");
+      addToast(t("spaces.toast_rental_enabled", "Space rental enabled for this organization across all devices!"), "success");
     } else {
-      addToast("Space rental disabled.", "info");
+      addToast(t("spaces.toast_rental_disabled", "Space rental disabled."), "info");
     }
   };
 
@@ -215,7 +224,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
         }
       }
     }
-    addToast(enable ? "Calendar is now visible on public page!" : "Calendar hidden from public page.", "info");
+    addToast(enable ? t("spaces.toast_cal_public", "Calendar is now visible on public page!") : t("spaces.toast_cal_hidden", "Calendar hidden from public page."), "info");
   };
 
   // Spaces tab views: 'rooms' (catalog & occupancy) | 'requests' (approval queue)
@@ -236,11 +245,11 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
   const handleSaveRoom = (e: React.FormEvent) => {
     e.preventDefault();
     if (!roomName.trim()) {
-      addToast("Room name is required.", "error");
+      addToast(t("spaces.err_room_name", "Room name is required."), "error");
       return;
     }
     if (!roomPeopleRange.trim()) {
-      addToast("People range is required (e.g. 10 - 50 people).", "error");
+      addToast(t("spaces.err_people_range", "People range is required (e.g. 10 - 50 people)."), "error");
       return;
     }
 
@@ -267,7 +276,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
           : s
       );
       setSpaces(updated);
-      addToast(`Room "${roomName.trim()}" updated successfully!`, "success");
+      addToast(t("spaces.toast_room_updated", { name: roomName.trim(), defaultValue: 'Room "{{name}}" updated successfully!' }), "success");
     } else {
       const newSpace: RentableSpace = {
         id: `space-${Date.now()}`,
@@ -284,7 +293,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
         created_at: new Date().toISOString()
       };
       setSpaces([newSpace, ...spaces]);
-      addToast(`Room "${newSpace.name}" logged successfully!`, "success");
+      addToast(t("spaces.toast_room_added", { name: newSpace.name, defaultValue: 'Room "{{name}}" logged successfully!' }), "success");
     }
 
     // Reset & Close
@@ -309,10 +318,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
   };
 
   const handleDeleteRoom = (roomId: string, name: string) => {
-    if (confirm(`Are you sure you want to remove room "${name}"?`)) {
-      setSpaces(spaces.filter((s) => s.id !== roomId));
-      addToast(`Room "${name}" removed.`, "info");
-    }
+    setConfirmAction({ type: "delete_room", roomId, roomName: name });
   };
 
   // Request approval workflow
@@ -323,7 +329,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
             ...r,
             status: "approved" as const,
             approved_at: new Date().toISOString(),
-            approved_by: user?.full_name || "Admin"
+            approved_by: user?.full_name || t("roles.org_admin", "Admin")
           }
         : r
     );
@@ -334,8 +340,8 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
       id: `notif-${Date.now()}`,
       org_id: orgId,
       recipient_email: request.requester_email || "",
-      title: "Space Rental Request Approved!",
-      body: `Your space booking for "${request.space_name}" on ${request.date} has been approved. Click 'Schedule Event' to set up your tasks and schedule.`,
+      title: t("spaces.notif_approved_title", "Space Rental Request Approved!"),
+      body: t("spaces.notif_approved_body", { space: request.space_name, date: request.date, defaultValue: 'Your space booking for "{{space}}" on {{date}} has been approved. Click \'Schedule Event\' to set up your tasks and schedule.' }),
       action: "schedule_event",
       booking_id: request.id,
       created_at: new Date().toISOString()
@@ -358,7 +364,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
       }
     } catch (e) {}
 
-    addToast(`Request for "${request.title}" approved! Requester has been notified.`, "success");
+    addToast(t("spaces.toast_request_approved", { title: request.title, defaultValue: 'Request for "{{title}}" approved! Requester has been notified.' }), "success");
   };
 
   const handleRejectRequest = (request: SpaceBookingRequest) => {
@@ -366,7 +372,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
       r.id === request.id ? { ...r, status: "rejected" as const } : r
     );
     setRequests(updated);
-    addToast(`Request for "${request.title}" was rejected.`, "info");
+    addToast(t("spaces.toast_request_rejected", { title: request.title, defaultValue: 'Request for "{{title}}" was rejected.' }), "info");
   };
 
   // Event Scheduling & To-Dos Planner Modal
@@ -384,35 +390,35 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
 
   const openScheduleFromBooking = (booking: SpaceBookingRequest) => {
     setTargetBookingForSchedule(booking);
-    setScheduleTitle(booking.title || `Event in ${booking.space_name}`);
+    setScheduleTitle(booking.title || t("spaces.default_event_title", { space: booking.space_name, defaultValue: "Event in {{space}}" }));
     const dt = booking.date && booking.start_time ? `${booking.date}T${booking.start_time}` : new Date().toISOString().slice(0, 16);
     const endDt = booking.date && booking.end_time ? `${booking.date}T${booking.end_time}` : "";
     setScheduleDateTime(dt);
     setScheduleEndTime(endDt);
     setScheduleLocation(booking.space_name);
-    setScheduleDesc(booking.notes ? `Booking notes: ${booking.notes}` : "");
+    setScheduleDesc(booking.notes ? `${t("spaces.booking_notes_prefix", "Booking notes:")} ${booking.notes}` : "");
     // Default initial tasks
     setScheduleTasks([
       {
         id: `task-${Date.now()}-1`,
-        title: "Room setup, seating arrangement & audio check",
+        title: t("spaces.default_task_1", "Room setup, seating arrangement & audio check"),
         assigned_to_member_id: user?.id || "admin",
-        assigned_to_name: user?.full_name || "Event Lead",
-        assigned_to_role: "Organizer",
+        assigned_to_name: user?.full_name || t("spaces.role_event_lead", "Event Lead"),
+        assigned_to_role: t("spaces.role_organizer", "Organizer"),
         progress: 0,
         status: "todo",
-        estimated_time: "1 hour 30 mins",
+        estimated_time: t("spaces.est_1h30", "1 hour 30 mins"),
         created_at: new Date().toISOString()
       },
       {
         id: `task-${Date.now()}-2`,
-        title: "Guest reception & attendance check-in desk",
+        title: t("spaces.default_task_2", "Guest reception & attendance check-in desk"),
         assigned_to_member_id: "volunteer-1",
-        assigned_to_name: booking.requester_name || "Front Desk Team",
-        assigned_to_role: "Host",
+        assigned_to_name: booking.requester_name || t("spaces.role_front_desk", "Front Desk Team"),
+        assigned_to_role: t("spaces.role_host", "Host"),
         progress: 0,
         status: "todo",
-        estimated_time: "2 hours",
+        estimated_time: t("spaces.est_2h", "2 hours"),
         created_at: new Date().toISOString()
       }
     ]);
@@ -421,25 +427,25 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
 
   const handleAddTaskToSchedule = () => {
     if (!newTaskTitle.trim()) {
-      addToast("Please provide task / to-do title.", "error");
+      addToast(t("spaces.err_task_title", "Please provide task / to-do title."), "error");
       return;
     }
-    const assignee = newTaskMemberName.trim() || user?.full_name || "Assigned Member";
+    const assignee = newTaskMemberName.trim() || user?.full_name || t("spaces.default_assignee", "Assigned Member");
     const task: EventTask = {
       id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       title: newTaskTitle.trim(),
       assigned_to_member_id: "member-" + Math.random().toString(36).substr(2, 6),
       assigned_to_name: assignee,
-      assigned_to_role: "Assignee",
+      assigned_to_role: t("spaces.role_assignee", "Assignee"),
       progress: 0,
       status: "todo",
-      estimated_time: newTaskEstimateTime.trim() || "1 hour",
+      estimated_time: newTaskEstimateTime.trim() || t("spaces.est_1h", "1 hour"),
       created_at: new Date().toISOString()
     };
     setScheduleTasks([...scheduleTasks, task]);
     setNewTaskTitle("");
-    setNewTaskEstimateTime("1 hour");
-    addToast("Task deliverable added to event schedule!", "success");
+    setNewTaskEstimateTime(t("spaces.est_1h", "1 hour"));
+    addToast(t("spaces.toast_task_added", "Task deliverable added to event schedule!"), "success");
   };
 
   const handleRemoveTaskFromSchedule = (taskId: string) => {
@@ -449,7 +455,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
   const handleConfirmScheduleEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!scheduleTitle.trim() || !scheduleDateTime) {
-      addToast("Event title and date are required.", "error");
+      addToast(t("spaces.err_event_fields", "Event title and date are required."), "error");
       return;
     }
 
@@ -460,7 +466,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
         description: scheduleDesc.trim(),
         date_time: new Date(scheduleDateTime).toISOString(),
         end_time: scheduleEndTime ? new Date(scheduleEndTime).toISOString() : undefined,
-        location: scheduleLocation.trim() || "Organization Facility",
+        location: scheduleLocation.trim() || t("spaces.default_location", "Organization Facility"),
         is_public: true,
         status: "upcoming",
         tasks: scheduleTasks,
@@ -482,7 +488,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
       }
 
       setOpenScheduleModal(false);
-      addToast("Event scheduled successfully with assigned tasks and estimated durations!", "success");
+      addToast(t("spaces.toast_event_scheduled", "Event scheduled successfully with assigned tasks and estimated durations!"), "success");
 
       if (onEventCreated && res) {
         onEventCreated(res);
@@ -491,7 +497,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
         onSwitchToCalendar();
       }
     } catch (err: any) {
-      addToast(err.message || "Failed to schedule event.", "error");
+      addToast(err.message || t("spaces.err_schedule_failed", "Failed to schedule event."), "error");
     }
   };
 
@@ -510,10 +516,10 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
         </div>
         <div>
           <h3 className="text-lg font-extrabold text-slate-950 dark:text-white">
-            Host External Events & Facility Space Lending requires Pro Plan
+            {t("spaces.pro_required_title", "Host External Events & Facility Space Lending requires Pro Plan")}
           </h3>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-md mx-auto leading-relaxed">
-            Monetizing organization venues, listing rooms/boardrooms on the public portal, and managing external facility reservations is available exclusively on the Pro and Enterprise plans.
+            {t("spaces.pro_required_desc", "Monetizing organization venues, listing rooms/boardrooms on the public portal, and managing external facility reservations is available exclusively on the Pro and Enterprise plans.")}
           </p>
         </div>
         <button
@@ -521,7 +527,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
           onClick={() => navigate("/dashboard/settings?tab=subscription")}
           className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs sm:text-sm transition shadow-xs cursor-pointer inline-flex items-center gap-2"
         >
-          <span>Upgrade to Pro Plan →</span>
+          <span>{t("spaces.upgrade_pro_btn", "Upgrade to Pro Plan")} →</span>
         </button>
       </div>
     );
@@ -535,11 +541,10 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
           <Building2 className="h-8 w-8" />
         </div>
         <h3 className="text-lg sm:text-xl font-extrabold text-slate-950 dark:text-white">
-          Rentable Spaces & Event Facility Lending
+          {t("spaces.onboarding_title", "Rentable Spaces & Event Facility Lending")}
         </h3>
         <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-lg leading-relaxed">
-          Does your organization have a hall, boardroom, training room, or outdoor space to rent?
-          Enable this feature to log your rooms, set capacity ranges, upload photos, and allow the community to book through your public calendar.
+          {t("spaces.onboarding_desc", "Does your organization have a hall, boardroom, training room, or outdoor space to rent? Enable this feature to log your rooms, set capacity ranges, upload photos, and allow the community to book through your public calendar.")}
         </p>
 
         <div className="mt-6 flex flex-col sm:flex-row items-center gap-3">
@@ -549,28 +554,28 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
               onClick={() => handleToggleSpaceRental(true)}
               className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm transition shadow-xs cursor-pointer flex items-center gap-2"
             >
-              <Check className="h-4 w-4" />
-              <span>We Have Space to Rent</span>
+              <Check className="h-4 w-4 shrink-0" />
+              <span>{t("spaces.btn_have_space", "We Have Space to Rent")}</span>
             </button>
           ) : (
             <span className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 text-xs font-semibold">
-              Currently disabled by organization administration.
+              {t("spaces.disabled_by_admin", "Currently disabled by organization administration.")}
             </span>
           )}
         </div>
 
         <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 w-full grid grid-cols-1 sm:grid-cols-3 gap-3 text-left text-xs text-slate-600 dark:text-slate-400">
-          <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-xl">
-            <span className="font-bold text-slate-900 dark:text-white block mb-0.5">1. Log Rooms</span>
-            <span>Record room names, people ranges, photos, and optional rental rates.</span>
+          <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-xl min-w-0">
+            <span className="font-bold text-slate-900 dark:text-white block mb-0.5">{t("spaces.step1_title", "1. Log Rooms")}</span>
+            <span>{t("spaces.step1_desc", "Record room names, people ranges, photos, and optional rental rates.")}</span>
           </div>
-          <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-xl">
-            <span className="font-bold text-slate-900 dark:text-white block mb-0.5">2. Public Booking</span>
-            <span>Visitors select dates on your public page and submit reservation requests.</span>
+          <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-xl min-w-0">
+            <span className="font-bold text-slate-900 dark:text-white block mb-0.5">{t("spaces.step2_title", "2. Public Booking")}</span>
+            <span>{t("spaces.step2_desc", "Visitors select dates on your public page and submit reservation requests.")}</span>
           </div>
-          <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-xl">
-            <span className="font-bold text-slate-900 dark:text-white block mb-0.5">3. Approve & To-Dos</span>
-            <span>Approve requests, notify members, and schedule events with assigned to-dos.</span>
+          <div className="p-3 bg-slate-50 dark:bg-slate-850 rounded-xl min-w-0">
+            <span className="font-bold text-slate-900 dark:text-white block mb-0.5">{t("spaces.step3_title", "3. Approve & To-Dos")}</span>
+            <span>{t("spaces.step3_desc", "Approve requests, notify members, and schedule events with assigned to-dos.")}</span>
           </div>
         </div>
       </div>
@@ -581,18 +586,18 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
     <div className="flex flex-col gap-5">
       {/* Top Administration Bar */}
       <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <Building2 className="h-5 w-5 text-emerald-600" />
-            <h3 className="text-base font-extrabold text-slate-950 dark:text-white">
-              Rentable Spaces & Facilities Management
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Building2 className="h-5 w-5 text-emerald-600 shrink-0" />
+            <h3 className="text-base font-extrabold text-slate-950 dark:text-white break-words">
+              {t("spaces.mgmt_title", "Rentable Spaces & Facilities Management")}
             </h3>
             <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-extrabold text-[10px]">
-              Active
+              {t("common.active", "Active")}
             </span>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Manage your rooms, people capacities, photos, and public calendar requests.
+            {t("spaces.mgmt_desc", "Manage your rooms, people capacities, photos, and public calendar requests.")}
           </p>
         </div>
 
@@ -604,13 +609,13 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                 type="checkbox"
                 checked={showSpaceCalendarPublicly}
                 onChange={(e) => handleTogglePublicCalendar(e.target.checked)}
-                className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0"
               />
               <label
                 htmlFor="public-calendar-toggle"
                 className="text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer select-none"
               >
-                Allow calendar to public page
+                {t("spaces.allow_public_cal", "Allow calendar to public page")}
               </label>
             </div>
           )}
@@ -628,31 +633,27 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
               }}
               className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition shadow-xs cursor-pointer flex items-center gap-1.5"
             >
-              <Plus className="h-4 w-4" />
-              <span>Add Room / Space</span>
+              <Plus className="h-4 w-4 shrink-0" />
+              <span>{t("spaces.btn_add_room", "Add Room / Space")}</span>
             </button>
           )}
 
           {isAdmin && (
             <button
               type="button"
-              onClick={() => {
-                if (confirm("Disable space rental mode? Rooms will be preserved in records.")) {
-                  handleToggleSpaceRental(false);
-                }
-              }}
-              className="px-2.5 py-1.5 text-xs text-slate-400 hover:text-rose-600 transition"
-              title="Disable Space Rentals"
+              onClick={() => setConfirmAction({ type: "disable_rental" })}
+              className="px-2.5 py-1.5 text-xs text-slate-400 hover:text-rose-600 transition cursor-pointer"
+              title={t("spaces.disable_title", "Disable Space Rentals")}
             >
-              Disable
+              {t("spaces.btn_disable", "Disable")}
             </button>
           )}
         </div>
       </div>
 
       {/* Sub-Views Selector */}
-      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setActiveView("rooms")}
@@ -662,8 +663,8 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                 : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}
           >
-            <Building2 className="h-3.5 w-3.5" />
-            <span>Available Rooms ({spaces.length})</span>
+            <Building2 className="h-3.5 w-3.5 shrink-0" />
+            <span>{t("spaces.tab_rooms", { count: spaces.length, defaultValue: "Available Rooms ({{count}})" })}</span>
           </button>
 
           <button
@@ -675,11 +676,11 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                 : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}
           >
-            <Clock className="h-3.5 w-3.5" />
-            <span>Booking Requests</span>
+            <Clock className="h-3.5 w-3.5 shrink-0" />
+            <span>{t("spaces.tab_requests", "Booking Requests")}</span>
             {pendingRequestsCount > 0 && (
               <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-extrabold text-[10px]">
-                {pendingRequestsCount} new
+                {t("spaces.new_count", { count: pendingRequestsCount, defaultValue: "{{count}} new" })}
               </span>
             )}
           </button>
@@ -692,8 +693,8 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
             rel="noopener noreferrer"
             className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
           >
-            <span>Preview Public Calendar</span>
-            <ExternalLink className="h-3 w-3" />
+            <span>{t("spaces.preview_public_cal", "Preview Public Calendar")}</span>
+            <ExternalLink className="h-3 w-3 shrink-0" />
           </a>
         )}
       </div>
@@ -705,10 +706,10 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
             <div className="bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-300 dark:border-slate-800 rounded-2xl p-8 text-center flex flex-col items-center">
               <Building2 className="h-10 w-10 text-slate-300 dark:text-slate-600 mb-2" />
               <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                No Rentable Rooms Logged Yet
+                {t("spaces.empty_rooms_title", "No Rentable Rooms Logged Yet")}
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
-                Click below to add your first room with name, capacity range, photo, and optional rental rate.
+                {t("spaces.empty_rooms_desc", "Click below to add your first room with name, capacity range, photo, and optional rental rate.")}
               </p>
               {isAdmin && (
                 <button
@@ -716,8 +717,8 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                   onClick={() => setOpenRoomModal(true)}
                   className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Plus className="h-4 w-4" />
-                  <span>Log Room Details</span>
+                  <Plus className="h-4 w-4 shrink-0" />
+                  <span>{t("spaces.btn_log_room", "Log Room Details")}</span>
                 </button>
               )}
             </div>
@@ -727,11 +728,12 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                 const spaceBookingsCount = requests.filter(
                   (r) => r.space_id === space.id && (r.status === "approved" || r.status === "scheduled")
                 ).length;
+                const unitLabel = space.cost_unit === "day" ? t("spaces.unit_day", "day") : space.cost_unit === "event" ? t("spaces.unit_event", "event") : t("spaces.unit_hour", "hour");
 
                 return (
                   <div
                     key={space.id}
-                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs flex flex-col justify-between group hover:border-emerald-500/50 transition-all"
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs flex flex-col justify-between group hover:border-emerald-500/50 transition-all min-w-0"
                   >
                     <div>
                       {/* Room Photo */}
@@ -742,27 +744,26 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                             alt={space.name}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             onError={(e) => {
-                              // fallback
                               (e.target as any).src = PRESET_ROOM_IMAGES[0].url;
                             }}
                           />
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
                             <ImageIcon className="h-8 w-8 mb-1 opacity-50" />
-                            <span className="text-[11px] font-mono">No Image Provided</span>
+                            <span className="text-[11px] font-mono">{t("spaces.no_image", "No Image Provided")}</span>
                           </div>
                         )}
                         <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-slate-950/70 backdrop-blur-xs text-white text-[11px] font-bold flex items-center gap-1.5">
-                          <Users className="h-3.5 w-3.5 text-emerald-400" />
-                          <span>{space.people_range || "Flexible capacity"}</span>
+                          <Users className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                          <span>{space.people_range || t("spaces.flexible_capacity", "Flexible capacity")}</span>
                         </div>
                         {space.cost !== undefined && space.cost !== null && space.cost > 0 ? (
                           <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-extrabold shadow-xs font-mono">
-                            {formatAmount(space.cost)} / {space.cost_unit || "hour"}
+                            {formatAmount(space.cost)} / {unitLabel}
                           </div>
                         ) : (
                           <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-slate-900/80 backdrop-blur-xs text-emerald-300 text-[10px] font-bold">
-                            Free Community Access
+                            {t("spaces.free_community_access", "Free Community Access")}
                           </div>
                         )}
                       </div>
@@ -770,7 +771,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                       {/* Content */}
                       <div className="p-4 sm:p-5 flex flex-col gap-3">
                         <div>
-                          <h4 className="font-extrabold text-slate-900 dark:text-white text-base">
+                          <h4 className="font-extrabold text-slate-900 dark:text-white text-base break-words">
                             {space.name}
                           </h4>
                           {space.description && (
@@ -793,18 +794,18 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                             ))}
                             {space.amenities.length > 4 && (
                               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md text-slate-400">
-                                +{space.amenities.length - 4} more
+                                {t("spaces.more_amenities", { count: space.amenities.length - 4, defaultValue: "+{{count}} more" })}
                               </span>
                             )}
                           </div>
                         )}
 
-                        <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800">
                           <span>
-                            Bookings: <strong>{spaceBookingsCount} confirmed</strong>
+                            {t("spaces.bookings_label", "Bookings:")} <strong>{t("spaces.bookings_confirmed", { count: spaceBookingsCount, defaultValue: "{{count}} confirmed" })}</strong>
                           </span>
                           <span className="text-emerald-600 font-semibold text-[11px]">
-                            ● Available for rent
+                            ● {t("spaces.available_for_rent", "Available for rent")}
                           </span>
                         </div>
                       </div>
@@ -818,16 +819,16 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                           onClick={() => handleEditRoom(space)}
                           className="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center gap-1 transition"
                         >
-                          <Edit2 className="h-3 w-3" />
-                          <span>Edit</span>
+                          <Edit2 className="h-3 w-3 shrink-0" />
+                          <span>{t("common.edit", "Edit")}</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDeleteRoom(space.id, space.name)}
                           className="px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-1 transition"
                         >
-                          <Trash2 className="h-3 w-3" />
-                          <span>Delete</span>
+                          <Trash2 className="h-3 w-3 shrink-0" />
+                          <span>{t("common.delete", "Delete")}</span>
                         </button>
                       </div>
                     )}
@@ -842,23 +843,23 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
       {/* VIEW 2: SPACE BOOKING REQUESTS REVIEW TABLE */}
       {activeView === "requests" && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs flex flex-col gap-4">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
             <div>
               <h4 className="text-sm font-extrabold text-slate-950 dark:text-white">
-                Space Reservation Requests
+                {t("spaces.requests_title", "Space Reservation Requests")}
               </h4>
               <p className="text-xs text-slate-400 mt-0.5">
-                Review visitor and member reservation requests. Approve to notify requester and schedule deliverables.
+                {t("spaces.requests_subtitle", "Review visitor and member reservation requests. Approve to notify requester and schedule deliverables.")}
               </p>
             </div>
             <span className="text-xs font-mono font-bold text-slate-500">
-              Total Requests: {requests.length}
+              {t("spaces.total_requests", { count: requests.length, defaultValue: "Total Requests: {{count}}" })}
             </span>
           </div>
 
           {requests.length === 0 ? (
             <div className="py-12 text-center text-slate-400 text-xs">
-              No booking requests received yet. Requests submitted from the public organization page will appear here.
+              {t("spaces.empty_requests", "No booking requests received yet. Requests submitted from the public organization page will appear here.")}
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -867,6 +868,15 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                 const isApproved = req.status === "approved";
                 const isScheduled = req.status === "scheduled";
                 const isRejected = req.status === "rejected";
+                const statusLabel = isPending
+                  ? t("spaces.status_pending", "Pending Review")
+                  : isApproved
+                  ? t("spaces.status_approved", "Approved")
+                  : isScheduled
+                  ? t("spaces.status_scheduled", "Scheduled")
+                  : isRejected
+                  ? t("spaces.status_rejected", "Rejected")
+                  : req.status;
 
                 return (
                   <div
@@ -875,8 +885,8 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                   >
                     {/* Left: Booking Details */}
                     <div className="flex flex-col gap-1.5 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-slate-900 dark:text-white text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-extrabold text-slate-900 dark:text-white text-sm break-words">
                           {req.title}
                         </span>
                         <span className="text-xs text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
@@ -886,40 +896,40 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
 
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
                         <span className="flex items-center gap-1">
-                          <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                          <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <span>{req.date}</span>
                         </span>
                         <span className="flex items-center gap-1 font-mono">
-                          <Clock className="h-3.5 w-3.5 text-slate-400" />
+                          <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <span>{req.start_time} - {req.end_time}</span>
                         </span>
                         <span className="flex items-center gap-1">
-                          <User className="h-3.5 w-3.5 text-slate-400" />
-                          <span>Requester: <strong>{req.requester_name}</strong></span>
+                          <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <span>{t("spaces.requester_label", "Requester:")} <strong>{req.requester_name}</strong></span>
                         </span>
                         {req.requester_email && (
-                          <span className="flex items-center gap-1">
-                            <Mail className="h-3.5 w-3.5 text-slate-400" />
+                          <span className="flex items-center gap-1 break-all">
+                            <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                             <span>{req.requester_email}</span>
                           </span>
                         )}
                         {req.requester_phone && (
                           <span className="flex items-center gap-1 font-mono">
-                            <Phone className="h-3.5 w-3.5 text-slate-400" />
+                            <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                             <span>{req.requester_phone}</span>
                           </span>
                         )}
                       </div>
 
                       {req.notes && (
-                        <p className="text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-800 mt-1">
-                          <strong>Notes:</strong> {req.notes}
+                        <p className="text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-800 mt-1 break-words">
+                          <strong>{t("spaces.notes_label", "Notes:")}</strong> {req.notes}
                         </p>
                       )}
                     </div>
 
                     {/* Right: Status and High-Role Actions */}
-                    <div className="flex items-center gap-2 shrink-0 self-end lg:self-center">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0 self-end lg:self-center">
                       {/* Status Badge */}
                       <span
                         className={`px-3 py-1 rounded-full text-[10px] font-mono font-extrabold uppercase ${
@@ -932,7 +942,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                             : "bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950 dark:text-amber-300"
                         }`}
                       >
-                        {isPending ? "Pending Review" : req.status}
+                        {statusLabel}
                       </span>
 
                       {/* Admin Approve / Reject buttons */}
@@ -943,16 +953,16 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                             onClick={() => handleApproveRequest(req)}
                             className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-xs flex items-center gap-1 cursor-pointer"
                           >
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            <span>Approve</span>
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                            <span>{t("common.approve", "Approve")}</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => handleRejectRequest(req)}
-                            className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-700 dark:hover:bg-rose-950 text-slate-700 dark:text-slate-300 font-bold text-xs transition cursor-pointer"
+                            className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-700 dark:hover:bg-rose-950 text-slate-700 dark:text-slate-300 font-bold text-xs transition flex items-center gap-1 cursor-pointer"
                           >
-                            <XCircle className="h-3.5 w-3.5" />
-                            <span>Reject</span>
+                            <XCircle className="h-3.5 w-3.5 shrink-0" />
+                            <span>{t("common.reject", "Reject")}</span>
                           </button>
                         </div>
                       )}
@@ -964,14 +974,14 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                           onClick={() => openScheduleFromBooking(req)}
                           className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs transition shadow-xs flex items-center gap-1.5 cursor-pointer ml-2"
                         >
-                          <ListTodo className="h-3.5 w-3.5" />
-                          <span>Schedule Event & To-Dos</span>
+                          <ListTodo className="h-3.5 w-3.5 shrink-0" />
+                          <span>{t("spaces.schedule_event_todos", "Schedule Event & To-Dos")}</span>
                         </button>
                       )}
 
                       {isScheduled && (
                         <span className="text-xs text-purple-700 dark:text-purple-300 font-bold ml-2">
-                          ✓ Event Scheduled
+                          ✓ {t("spaces.event_scheduled_badge", "Event Scheduled")}
                         </span>
                       )}
                     </div>
@@ -990,16 +1000,16 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in">
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-5 sm:p-6 shadow-2xl flex flex-col gap-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-emerald-600" />
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
-                  {editingRoomId ? "Edit Rentable Room" : "Log Rentable Room"}
+              <div className="flex items-center gap-2 min-w-0">
+                <Building2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white break-words">
+                  {editingRoomId ? t("spaces.modal_edit_room", "Edit Rentable Room") : t("spaces.modal_log_room", "Log Rentable Room")}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setOpenRoomModal(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg shrink-0"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1009,12 +1019,12 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
               {/* Room Name */}
               <div>
                 <label className="font-extrabold text-slate-800 dark:text-slate-200 block mb-1">
-                  Room Name *
+                  {t("spaces.field_room_name", "Room Name")} *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Innovation Hall Alpha / Executive Boardroom 1"
+                  placeholder={t("spaces.placeholder_room_name", "e.g. Innovation Hall Alpha / Executive Boardroom 1")}
                   value={roomName}
                   onChange={(e) => setRoomName(e.target.value)}
                   className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-semibold"
@@ -1024,42 +1034,45 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
               {/* People Range */}
               <div>
                 <label className="font-extrabold text-slate-800 dark:text-slate-200 block mb-1">
-                  People Range / Capacity *
+                  {t("spaces.field_people_range", "People Range / Capacity")} *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. 15 - 50 people / Up to 100 people"
+                  placeholder={t("spaces.placeholder_people_range", "e.g. 15 - 50 people / Up to 100 people")}
                   value={roomPeopleRange}
                   onChange={(e) => setRoomPeopleRange(e.target.value)}
                   className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
                 />
                 <div className="flex flex-wrap gap-1.5 mt-1.5">
-                  {["5 - 15 people", "15 - 50 people", "50 - 150 people", "150 - 300 people"].map(
-                    (range) => (
-                      <button
-                        key={range}
-                        type="button"
-                        onClick={() => setRoomPeopleRange(range)}
-                        className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 dark:text-slate-300 font-mono"
-                      >
-                        {range}
-                      </button>
-                    )
-                  )}
+                  {[
+                    { val: "5 - 15 people", label: t("spaces.range_5_15", "5 - 15 people") },
+                    { val: "15 - 50 people", label: t("spaces.range_15_50", "15 - 50 people") },
+                    { val: "50 - 150 people", label: t("spaces.range_50_150", "50 - 150 people") },
+                    { val: "150 - 300 people", label: t("spaces.range_150_300", "150 - 300 people") }
+                  ].map((range) => (
+                    <button
+                      key={range.val}
+                      type="button"
+                      onClick={() => setRoomPeopleRange(range.label)}
+                      className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 dark:text-slate-300 font-mono"
+                    >
+                      {range.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
               {/* Cost (Not Required) */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="font-extrabold text-slate-800 dark:text-slate-200 block mb-1">
-                    Cost in RWF <span className="text-slate-400 font-normal">(not required)</span>
+                    {t("spaces.field_cost", "Cost in RWF")} <span className="text-slate-400 font-normal">({t("spaces.not_required", "not required")})</span>
                   </label>
                   <input
                     type="number"
                     min="0"
-                    placeholder="e.g. 15000 (leave blank for free)"
+                    placeholder={t("spaces.placeholder_cost", "e.g. 15000 (leave blank for free)")}
                     value={roomCost}
                     onChange={(e) => setRoomCost(e.target.value)}
                     className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
@@ -1067,16 +1080,16 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                 </div>
                 <div>
                   <label className="font-extrabold text-slate-800 dark:text-slate-200 block mb-1">
-                    Rate Period
+                    {t("spaces.field_rate_period", "Rate Period")}
                   </label>
                   <select
                     value={roomCostUnit}
                     onChange={(e) => setRoomCostUnit(e.target.value as any)}
                     className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600"
                   >
-                    <option value="hour">Per Hour</option>
-                    <option value="day">Per Day</option>
-                    <option value="event">Per Entire Event</option>
+                    <option value="hour">{t("spaces.rate_per_hour", "Per Hour")}</option>
+                    <option value="day">{t("spaces.rate_per_day", "Per Day")}</option>
+                    <option value="event">{t("spaces.rate_per_event", "Per Entire Event")}</option>
                   </select>
                 </div>
               </div>
@@ -1084,7 +1097,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
               {/* Image of Room */}
               <div>
                 <label className="font-extrabold text-slate-800 dark:text-slate-200 block mb-1">
-                  Image of Room (URL or select from curated presets below)
+                  {t("spaces.field_image_label", "Image of Room (URL or select from curated presets below)")}
                 </label>
                 <input
                   type="url"
@@ -1095,7 +1108,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                 />
 
                 {/* Preset image buttons */}
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {PRESET_ROOM_IMAGES.map((preset, idx) => (
                     <button
                       key={idx}
@@ -1112,10 +1125,10 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                           : "border-slate-200 dark:border-slate-800 hover:border-emerald-400"
                       }`}
                     >
-                      <img src={preset.url} alt={preset.name} className="w-full h-full object-cover" />
+                      <img src={preset.url} alt={t(preset.nameKey, preset.name)} className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-slate-950/60 p-1 flex items-end">
-                        <span className="text-[9px] text-white font-bold truncate leading-tight">
-                          {preset.name}
+                        <span className="text-[9px] text-white font-bold leading-tight text-left line-clamp-2">
+                          {t(preset.nameKey, preset.name)}
                         </span>
                       </div>
                     </button>
@@ -1126,11 +1139,11 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
               {/* Amenities */}
               <div>
                 <label className="font-extrabold text-slate-800 dark:text-slate-200 block mb-1">
-                  Included Amenities (comma-separated)
+                  {t("spaces.field_amenities", "Included Amenities (comma-separated)")}
                 </label>
                 <input
                   type="text"
-                  placeholder="WiFi, Projector, Sound System, Air Conditioning"
+                  placeholder={t("spaces.placeholder_amenities", "WiFi, Projector, Sound System, Air Conditioning")}
                   value={roomAmenities}
                   onChange={(e) => setRoomAmenities(e.target.value)}
                   className="w-full text-xs rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-600"
@@ -1144,13 +1157,13 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                   onClick={() => setOpenRoomModal(false)}
                   className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
-                  Cancel
+                  {t("common.cancel", "Cancel")}
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs cursor-pointer"
                 >
-                  {editingRoomId ? "Update Room" : "Save Room Details"}
+                  {editingRoomId ? t("spaces.btn_update_room", "Update Room") : t("spaces.btn_save_room", "Save Room Details")}
                 </button>
               </div>
             </form>
@@ -1164,20 +1177,20 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
       {openScheduleModal && targetBookingForSchedule && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in">
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-2xl w-full p-5 sm:p-6 shadow-2xl flex flex-col gap-4 max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div>
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 gap-2">
+              <div className="min-w-0">
                 <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                  <ListTodo className="h-5 w-5 text-emerald-600" />
-                  <span>Schedule Event & Assign Deliverable Tasks</span>
+                  <ListTodo className="h-5 w-5 text-emerald-600 shrink-0" />
+                  <span className="break-words">{t("spaces.schedule_modal_title", "Schedule Event & Assign Deliverable Tasks")}</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Confirm calendar details and assign responsibilities with estimated times used.
+                  {t("spaces.schedule_modal_desc", "Confirm calendar details and assign responsibilities with estimated times used.")}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setOpenScheduleModal(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg shrink-0"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1187,7 +1200,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
               {/* Event Title */}
               <div>
                 <label className="font-extrabold text-slate-800 dark:text-slate-200 block mb-1">
-                  Event Title *
+                  {t("spaces.field_event_title", "Event Title")} *
                 </label>
                 <input
                   type="text"
@@ -1202,7 +1215,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="font-extrabold text-slate-800 dark:text-slate-200 block mb-1">
-                    Start Date & Time *
+                    {t("spaces.field_start_datetime", "Start Date & Time")} *
                   </label>
                   <input
                     type="datetime-local"
@@ -1214,7 +1227,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                 </div>
                 <div>
                   <label className="font-extrabold text-slate-800 dark:text-slate-200 block mb-1">
-                    End Time (Optional)
+                    {t("spaces.field_end_time", "End Time (Optional)")}
                   </label>
                   <input
                     type="datetime-local"
@@ -1225,7 +1238,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                 </div>
                 <div>
                   <label className="font-extrabold text-slate-800 dark:text-slate-200 block mb-1">
-                    Location / Room
+                    {t("spaces.field_location_room", "Location / Room")}
                   </label>
                   <input
                     type="text"
@@ -1239,13 +1252,13 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
 
               {/* TO-DO / TASK ASSIGNMENT BUILDER WITH ESTIMATED TIME */}
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-850/60 border border-slate-200 dark:border-slate-800 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <h4 className="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
-                    <ListTodo className="h-4 w-4 text-emerald-600" />
-                    <span>Event To-Dos & Assign Deliverables</span>
+                    <ListTodo className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span>{t("spaces.todos_heading", "Event To-Dos & Assign Deliverables")}</span>
                   </h4>
                   <span className="text-[11px] font-mono font-bold text-slate-500">
-                    {scheduleTasks.length} tasks scheduled
+                    {t("spaces.tasks_scheduled_count", { count: scheduleTasks.length, defaultValue: "{{count}} tasks scheduled" })}
                   </span>
                 </div>
 
@@ -1254,7 +1267,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                   <div className="sm:col-span-5">
                     <input
                       type="text"
-                      placeholder="Task deliverable description..."
+                      placeholder={t("spaces.placeholder_task_desc", "Task deliverable description...")}
                       value={newTaskTitle}
                       onChange={(e) => setNewTaskTitle(e.target.value)}
                       className="w-full text-xs rounded-lg border bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600"
@@ -1263,7 +1276,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                   <div className="sm:col-span-3">
                     <input
                       type="text"
-                      placeholder="Assigned member name..."
+                      placeholder={t("spaces.placeholder_assignee", "Assigned member name...")}
                       value={newTaskMemberName}
                       onChange={(e) => setNewTaskMemberName(e.target.value)}
                       list="org-members-list"
@@ -1278,7 +1291,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                   <div className="sm:col-span-2">
                     <input
                       type="text"
-                      placeholder="Est. time (e.g. 2h)"
+                      placeholder={t("spaces.placeholder_est_time", "Est. time (e.g. 2h)")}
                       value={newTaskEstimateTime}
                       onChange={(e) => setNewTaskEstimateTime(e.target.value)}
                       className="w-full text-xs rounded-lg border bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3 py-1.5 outline-none font-mono focus:ring-1 focus:ring-emerald-600"
@@ -1290,8 +1303,8 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                       onClick={handleAddTaskToSchedule}
                       className="w-full px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-lg shadow-3xs transition cursor-pointer flex items-center justify-center gap-1"
                     >
-                      <Plus className="h-3.5 w-3.5" />
-                      <span>Add</span>
+                      <Plus className="h-3.5 w-3.5 shrink-0" />
+                      <span>{t("common.add", "Add")}</span>
                     </button>
                   </div>
                 </div>
@@ -1299,31 +1312,31 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                 {/* Current tasks list */}
                 {scheduleTasks.length > 0 ? (
                   <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
-                    {scheduleTasks.map((t, index) => (
+                    {scheduleTasks.map((task, index) => (
                       <div
-                        key={t.id}
-                        className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between text-xs gap-2"
+                        key={task.id}
+                        className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-wrap items-center justify-between text-xs gap-2"
                       >
                         <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="font-mono text-slate-400 font-bold text-[10px]">
+                          <span className="font-mono text-slate-400 font-bold text-[10px] shrink-0">
                             #{index + 1}
                           </span>
-                          <span className="font-semibold text-slate-900 dark:text-white truncate">
-                            {t.title}
+                          <span className="font-semibold text-slate-900 dark:text-white break-words">
+                            {task.title}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
                           <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-[10px] flex items-center gap-1">
-                            <User className="h-3 w-3 text-slate-400" />
-                            <span>{t.assigned_to_name}</span>
+                            <User className="h-3 w-3 text-slate-400 shrink-0" />
+                            <span>{task.assigned_to_name}</span>
                           </span>
                           <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-mono font-bold text-[10px] flex items-center gap-1 border border-emerald-200 dark:border-emerald-800">
-                            <Timer className="h-3 w-3 text-emerald-500" />
-                            <span>{t.estimated_time || "1 hour"}</span>
+                            <Timer className="h-3 w-3 text-emerald-500 shrink-0" />
+                            <span>{task.estimated_time || t("spaces.est_1h", "1 hour")}</span>
                           </span>
                           <button
                             type="button"
-                            onClick={() => handleRemoveTaskFromSchedule(t.id)}
+                            onClick={() => handleRemoveTaskFromSchedule(task.id)}
                             className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1334,7 +1347,7 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                   </div>
                 ) : (
                   <p className="text-[11px] text-slate-400 italic text-center py-2">
-                    No deliverables added yet. Add tasks above to designate member responsibilities.
+                    {t("spaces.no_deliverables", "No deliverables added yet. Add tasks above to designate member responsibilities.")}
                   </p>
                 )}
               </div>
@@ -1346,17 +1359,66 @@ export const RentableSpacesManager: React.FC<RentableSpacesManagerProps> = ({
                   onClick={() => setOpenScheduleModal(false)}
                   className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
-                  Cancel
+                  {t("common.cancel", "Cancel")}
                 </button>
                 <button
                   type="submit"
                   className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs cursor-pointer flex items-center gap-1.5"
                 >
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>Confirm Event Schedule</span>
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>{t("spaces.btn_confirm_schedule", "Confirm Event Schedule")}</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* IN-APP CONFIRMATION MODAL (replaces window.confirm) */}
+      {confirmAction && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-xl bg-rose-100 dark:bg-rose-950 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertCircle className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                  {confirmAction.type === "delete_room"
+                    ? t("spaces.confirm_delete_title", "Remove Room?")
+                    : t("spaces.confirm_disable_title", "Disable Space Rental Mode?")}
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  {confirmAction.type === "delete_room"
+                    ? t("spaces.confirm_delete_body", { name: confirmAction.roomName || "", defaultValue: 'Are you sure you want to remove room "{{name}}"?' })
+                    : t("spaces.confirm_disable_body", "Disable space rental mode? Rooms will be preserved in records.")}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setConfirmAction(null)}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                {t("common.cancel", "Cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirmAction.type === "delete_room" && confirmAction.roomId) {
+                    setSpaces(spaces.filter((s) => s.id !== confirmAction.roomId));
+                    addToast(t("spaces.toast_room_removed", { name: confirmAction.roomName || "", defaultValue: 'Room "{{name}}" removed.' }), "info");
+                  } else if (confirmAction.type === "disable_rental") {
+                    handleToggleSpaceRental(false);
+                  }
+                  setConfirmAction(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold cursor-pointer"
+              >
+                {t("common.confirm", "Confirm")}
+              </button>
+            </div>
           </div>
         </div>
       )}

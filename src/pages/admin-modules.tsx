@@ -80,7 +80,7 @@ import {
   usePlatformSettings,
   useSubmitSubscriptionPayment
 } from "../hooks/useImpactoData";
-import { Button, Input, Card, Badge, Avatar, Table, Modal, EmptyState } from "../components/ui";
+import { Button, Input, Card, Badge, Avatar, Table, Modal, EmptyState, ConfirmDialog } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { PlanGatedView } from "../components/PlanGatedView";
@@ -101,6 +101,7 @@ export const MembersManagement: React.FC = () => {
   const inviteMutation = useCreateMember();
   const statusMutation = useUpdateMemberStatus();
   const deleteMemberMutation = useDeleteMember();
+  const [pendingDeleteMember, setPendingDeleteMember] = useState<{ id: string; mode: "member" | "request"; name?: string } | null>(null);
 
   // New V2 states & modules integrations
   const [searchParams, setSearchParams] = useSearchParams();
@@ -445,16 +446,30 @@ export const MembersManagement: React.FC = () => {
     }
   };
 
-  const handleDeleteMember = async (memberId: string) => {
-    if (window.confirm("Are you sure you want to permanently delete this member from the organization? This action cannot be undone.")) {
-      try {
-        await deleteMemberMutation.mutateAsync({ id: memberId, orgId: activeOrg?.id || "" });
-        addToast("Member deleted successfully", "success");
-        refetch();
-      } catch (err) {
-        console.error(err);
-        addToast("Failed to delete member", "error");
-      }
+  const handleDeleteMember = (memberId: string) => {
+    setPendingDeleteMember({ id: memberId, mode: "member" });
+  };
+
+  const executePendingDeleteMember = async () => {
+    if (!pendingDeleteMember) return;
+    try {
+      await deleteMemberMutation.mutateAsync({ id: pendingDeleteMember.id, orgId: activeOrg?.id || "" });
+      addToast(
+        pendingDeleteMember.mode === "request"
+          ? t("v2.toast_membership_declined", "Membership request declined.")
+          : t("v2.toast_member_deleted", "Member deleted successfully"),
+        "success"
+      );
+      setPendingDeleteMember(null);
+      refetch();
+    } catch (err) {
+      console.error(err);
+      addToast(
+        pendingDeleteMember.mode === "request"
+          ? t("v2.toast_membership_decline_failed", "Failed to reject request.")
+          : t("v2.toast_member_delete_failed", "Failed to delete member"),
+        "error"
+      );
     }
   };
 
@@ -1330,18 +1345,7 @@ export const MembersManagement: React.FC = () => {
                           variant="outline"
                           className="text-red-600 border-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
                           icon={<Trash2 className="h-4 w-4" />}
-                          onClick={async () => {
-                            if (window.confirm(`Reject and delete the membership application of ${req.user?.full_name}?`)) {
-                              try {
-                                await deleteMemberMutation.mutateAsync({ id: req.id, orgId: activeOrg?.id || "" });
-                                addToast("Membership request declined.", "success");
-                                refetch();
-                              } catch (err) {
-                                console.error(err);
-                                addToast("Failed to reject request.", "error");
-                              }
-                            }
-                          }}
+                          onClick={() => setPendingDeleteMember({ id: req.id, mode: "request", name: req.user?.full_name })}
                         >
                           Decline
                         </Button>
@@ -1549,6 +1553,29 @@ export const MembersManagement: React.FC = () => {
           </Button>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!pendingDeleteMember}
+        title={
+          pendingDeleteMember?.mode === "request"
+            ? t("v2.confirm_decline_member_title", "Decline Membership Application")
+            : t("v2.confirm_delete_member_title", "Delete Member")
+        }
+        message={
+          pendingDeleteMember?.mode === "request"
+            ? t("v2.confirm_decline_member_msg", {
+                name: pendingDeleteMember?.name || "",
+                defaultValue: "Reject and delete the membership application of {{name}}?"
+              })
+            : t(
+                "v2.confirm_delete_member_msg",
+                "Are you sure you want to permanently delete this member from the organization? This action cannot be undone."
+              )
+        }
+        onConfirm={executePendingDeleteMember}
+        onCancel={() => setPendingDeleteMember(null)}
+        danger
+      />
     </div>
   );
 };
@@ -1565,6 +1592,7 @@ export const LedgerBookkeeping: React.FC = () => {
   const updateMutation = useUpdateLedgerEntry();
   const deleteMutation = useDeleteLedgerEntry();
   const { formatAmount } = useCurrencyStore();
+  const [pendingDeleteEntryId, setPendingDeleteEntryId] = useState<string | null>(null);
 
   const { data: goals } = useGoals(activeOrg?.id);
   const { data: members } = useMembers(activeOrg?.id);
@@ -1715,15 +1743,20 @@ export const LedgerBookkeeping: React.FC = () => {
     }
   };
 
-  const handleDeleteEntry = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this transaction record?")) return;
+  const handleDeleteEntry = (id: string) => {
+    setPendingDeleteEntryId(id);
+  };
+
+  const executeDeleteEntry = async () => {
+    if (!pendingDeleteEntryId) return;
     try {
-      await deleteMutation.mutateAsync({ id, org_id: activeOrg?.id || "" });
+      await deleteMutation.mutateAsync({ id: pendingDeleteEntryId, org_id: activeOrg?.id || "" });
+      setPendingDeleteEntryId(null);
       refetch();
-      addToast("Transaction record deleted successfully", "success");
+      addToast(t("v2.toast_tx_deleted", "Transaction record deleted successfully"), "success");
     } catch (err) {
       console.error("Failed to delete entry:", err);
-      addToast("Failed to delete transaction record", "error");
+      addToast(t("v2.toast_tx_delete_failed", "Failed to delete transaction record"), "error");
     }
   };
 
@@ -2952,6 +2985,15 @@ export const LedgerBookkeeping: React.FC = () => {
         )}
 
       </div>
+
+      <ConfirmDialog
+        open={!!pendingDeleteEntryId}
+        title={t("v2.confirm_delete_tx_title", "Delete Transaction Record")}
+        message={t("v2.confirm_delete_tx_msg", "Are you sure you want to delete this transaction record?")}
+        onConfirm={executeDeleteEntry}
+        onCancel={() => setPendingDeleteEntryId(null)}
+        danger
+      />
     </PlanGatedView>
   );
 };

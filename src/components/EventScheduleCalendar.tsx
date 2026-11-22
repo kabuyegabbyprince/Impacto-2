@@ -31,6 +31,7 @@ import { useToast } from "./Toast";
 import { RentableSpacesManager } from "./RentableSpacesManager";
 import { canAccessFeature } from "../lib/subscriptionMatrix";
 import { PlanGatedView } from "./PlanGatedView";
+import { useTranslation } from "react-i18next";
 
 export interface SpaceEntity {
   id: string;
@@ -120,6 +121,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
   activeSubTab,
   onSubTabChange
 }) => {
+  const { t, i18n } = useTranslation();
   const { addToast } = useToast();
   const { formatAmount } = useCurrencyStore();
   const { user } = useAuthStore();
@@ -208,6 +210,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
   const [openAddSpaceModal, setOpenAddSpaceModal] = useState(false);
   const [openBookSpaceModal, setOpenBookSpaceModal] = useState(false);
   const [selectedSpaceForBooking, setSelectedSpaceForBooking] = useState<SpaceEntity | null>(null);
+  const [confirmCancelBooking, setConfirmCancelBooking] = useState<{ id: string; name: string } | null>(null);
 
   // New space form fields
   const [newSpaceName, setNewSpaceName] = useState("");
@@ -239,10 +242,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
   const year = currentMonthDate.getFullYear();
   const month = currentMonthDate.getMonth(); // 0-indexed
 
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
+  const currentMonthLabel = currentMonthDate.toLocaleDateString(i18n.language, { month: "long" });
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0=Sun, 1=Mon, etc.
@@ -313,7 +313,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
   const handleAddSpace = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSpaceName.trim()) {
-      addToast("Space name is required.", "error");
+      addToast(t("calendar.space_name_required", { defaultValue: "Space name is required." }), "error");
       return;
     }
     const newSpace: SpaceEntity = {
@@ -325,7 +325,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
       size_sqm: Number(newSpaceSizeSqm) || 35,
       hourly_rate: Number(newSpaceHourlyRate) || 0,
       amenities: newSpaceAmenities.split(",").map(a => a.trim()).filter(Boolean),
-      manager_name: newSpaceManagerName || "Front Desk",
+      manager_name: newSpaceManagerName || t("calendar.front_desk", { defaultValue: "Front Desk" }),
       manager_phone: newSpaceManagerPhone || "N/A",
       status: "available"
     };
@@ -333,18 +333,21 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
     setSpaces(prev => [...prev, newSpace]);
     setOpenAddSpaceModal(false);
     setNewSpaceName("");
-    addToast(`Space "${newSpace.name}" added successfully!`, "success");
+    addToast(
+      t("calendar.space_added", { name: newSpace.name, defaultValue: `Space "${newSpace.name}" added successfully!` }),
+      "success"
+    );
   };
 
   // Handle reserve space
   const handleReserveSpace = (e: React.FormEvent) => {
     e.preventDefault();
     if (!bookingSpaceId) {
-      addToast("Please select a space/room to reserve.", "error");
+      addToast(t("calendar.select_space_required", { defaultValue: "Please select a space/room to reserve." }), "error");
       return;
     }
     if (!bookingTitle.trim() || !bookingReservedBy.trim()) {
-      addToast("Please provide event title and organizer name.", "error");
+      addToast(t("calendar.provide_title_organizer", { defaultValue: "Please provide event title and organizer name." }), "error");
       return;
     }
 
@@ -352,7 +355,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
     const endH = parseTimeToHours(bookingEndTime);
 
     if (endH <= startH) {
-      addToast("End time must be after start time.", "error");
+      addToast(t("calendar.end_after_start", { defaultValue: "End time must be after start time." }), "error");
       return;
     }
 
@@ -367,7 +370,13 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
 
     if (conflict) {
       addToast(
-        `Time Conflict! "${conflict.space_name}" is already occupied from ${conflict.start_time} to ${conflict.end_time} for "${conflict.title}".`,
+        t("calendar.time_conflict", {
+          space: conflict.space_name,
+          start: conflict.start_time,
+          end: conflict.end_time,
+          title: conflict.title,
+          defaultValue: `Time Conflict! "${conflict.space_name}" is already occupied from ${conflict.start_time} to ${conflict.end_time} for "${conflict.title}".`
+        }),
         "error"
       );
       return;
@@ -379,7 +388,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
       id: `bk-${Date.now()}`,
       org_id: orgId,
       space_id: bookingSpaceId,
-      space_name: targetSpace?.name || "Reserved Room",
+      space_name: targetSpace?.name || t("calendar.reserved_room", { defaultValue: "Reserved Room" }),
       date: bookingDate,
       start_time: bookingStartTime,
       end_time: bookingEndTime,
@@ -396,15 +405,26 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
     setBookingTitle("");
     setBookingReservedBy("");
     setBookingNotes("");
-    addToast(`Room reserved successfully from ${newBooking.start_time} to ${newBooking.end_time}!`, "success");
+    addToast(
+      t("calendar.room_reserved_success", {
+        start: newBooking.start_time,
+        end: newBooking.end_time,
+        defaultValue: `Room reserved successfully from ${newBooking.start_time} to ${newBooking.end_time}!`
+      }),
+      "success"
+    );
   };
 
-  // Delete booking
+  // Delete booking via in-app confirmation modal
   const handleDeleteBooking = (id: string, name: string) => {
-    if (confirm(`Cancel reservation for "${name}"?`)) {
-      setBookings(prev => prev.filter(b => b.id !== id));
-      addToast("Reservation cancelled and slot released.", "info");
-    }
+    setConfirmCancelBooking({ id, name });
+  };
+
+  const executeDeleteBooking = () => {
+    if (!confirmCancelBooking) return;
+    setBookings(prev => prev.filter(b => b.id !== confirmCancelBooking.id));
+    setConfirmCancelBooking(null);
+    addToast(t("calendar.reservation_cancelled", { defaultValue: "Reservation cancelled and slot released." }), "info");
   };
 
   // Selected date breakdown
@@ -431,7 +451,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
       {/* TOP HEADER CONTROLS & SUB-TABS */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
         {/* Navigation Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl min-w-0">
           <button
             type="button"
             onClick={() => setSubTab("calendar")}
@@ -442,7 +462,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
             }`}
           >
             <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
-            <span>Interactive Calendar</span>
+            <span>{t("calendar.interactive_calendar", { defaultValue: "Interactive Calendar" })}</span>
           </button>
           {canHostExternalEvents && hasRentableSpaces && (
             <button
@@ -455,7 +475,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
               }`}
             >
               <Building2 className="h-3.5 w-3.5 shrink-0" />
-              <span>Host External Event</span>
+              <span>{t("calendar.host_external_event", { defaultValue: "Host External Event" })}</span>
             </button>
           )}
           <button
@@ -468,7 +488,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
             }`}
           >
             <Layers className="h-3.5 w-3.5 shrink-0" />
-            <span>Our Event</span>
+            <span>{t("calendar.our_event", { defaultValue: "Our Event" })}</span>
           </button>
         </div>
 
@@ -484,17 +504,17 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
             >
               <Plus className="h-3.5 w-3.5 shrink-0" />
-              <span>Host External Event</span>
+              <span>{t("calendar.host_external_event", { defaultValue: "Host External Event" })}</span>
             </button>
           ) : (
             <button
               type="button"
               onClick={() => setSubTab("spaces")}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
-              title="Hosting external events requires the Pro Plan"
+              title={t("calendar.host_external_pro_tooltip", { defaultValue: "Hosting external events requires the Pro Plan" })}
             >
               <Lock className="h-3.5 w-3.5 shrink-0" />
-              <span>Host External Event (Pro)</span>
+              <span>{t("calendar.host_external_event_pro", { defaultValue: "Host External Event (Pro)" })}</span>
             </button>
           )}
 
@@ -514,10 +534,10 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                   setOpenBookSpaceModal(true);
                 }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold hover:bg-emerald-100 transition cursor-pointer shadow-3xs whitespace-nowrap shrink-0"
-                title="Book a space or room for your activity"
+                title={t("calendar.reserve_space_tooltip", { defaultValue: "Book a space or room for your activity" })}
               >
                 <Clock className="h-3.5 w-3.5 shrink-0" />
-                <span>Reserve Space</span>
+                <span>{t("calendar.reserve_space", { defaultValue: "Reserve Space" })}</span>
               </button>
               {isAdmin && (
                 <button
@@ -526,7 +546,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white text-xs font-semibold transition cursor-pointer shadow-xs whitespace-nowrap shrink-0"
                 >
                   <Plus className="h-3.5 w-3.5 shrink-0" />
-                  <span>Add Space</span>
+                  <span>{t("calendar.add_space", { defaultValue: "Add Space" })}</span>
                 </button>
               )}
             </>
@@ -538,30 +558,30 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
       {subTab === "calendar" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           {/* Main Month Grid (8 Cols) */}
-          <div className="lg:col-span-8 flex flex-col gap-3 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="lg:col-span-8 flex flex-col gap-3 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs min-w-0">
             {/* Month Header & Controls */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-3">
-                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                  {monthNames[month]} {year}
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex flex-wrap items-center gap-3 min-w-0">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white capitalize">
+                  {currentMonthLabel} {year}
                 </h3>
                 <span className="text-xs font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
-                  Rwanda Calendar
+                  {t("calendar.rwanda_calendar", { defaultValue: "Rwanda Calendar" })}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={handleGoToday}
                   className="px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 transition cursor-pointer"
                 >
-                  Today
+                  {t("calendar.today", { defaultValue: "Today" })}
                 </button>
                 <button
                   type="button"
                   onClick={handlePrevMonth}
                   className="p-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
-                  title="Previous Month"
+                  title={t("calendar.prev_month", { defaultValue: "Previous Month" })}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
@@ -569,7 +589,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                   type="button"
                   onClick={handleNextMonth}
                   className="p-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
-                  title="Next Month"
+                  title={t("calendar.next_month", { defaultValue: "Next Month" })}
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
@@ -578,13 +598,13 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
 
             {/* Day of Week Headers */}
             <div className="grid grid-cols-7 gap-1 text-center font-bold text-[11px] text-slate-400 uppercase tracking-wider py-1 select-none">
-              <span className="text-rose-500">Sun</span>
-              <span>Mon</span>
-              <span>Tue</span>
-              <span>Wed</span>
-              <span>Thu</span>
-              <span>Fri</span>
-              <span className="text-emerald-600 dark:text-emerald-400">Sat</span>
+              <span className="text-rose-500">{t("calendar.sun", { defaultValue: "Sun" })}</span>
+              <span>{t("calendar.mon", { defaultValue: "Mon" })}</span>
+              <span>{t("calendar.tue", { defaultValue: "Tue" })}</span>
+              <span>{t("calendar.wed", { defaultValue: "Wed" })}</span>
+              <span>{t("calendar.thu", { defaultValue: "Thu" })}</span>
+              <span>{t("calendar.fri", { defaultValue: "Fri" })}</span>
+              <span className="text-emerald-600 dark:text-emerald-400">{t("calendar.sat", { defaultValue: "Sat" })}</span>
             </div>
 
             {/* Calendar Cells Grid */}
@@ -647,10 +667,10 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                       </span>
                       {holiday && (
                         <span
-                          title={`${holiday.name} (${holiday.kinyarwanda}) - Public Holiday`}
+                          title={`${holiday.name} (${holiday.kinyarwanda}) - ${t("calendar.public_holiday", { defaultValue: "Public Holiday" })}`}
                           className="text-[10px] px-1 py-0.2 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-bold border border-amber-200 dark:border-amber-800 shrink-0"
                         >
-                          🇷🇼 Off
+                          🇷🇼 {t("calendar.off_badge", { defaultValue: "Off" })}
                         </span>
                       )}
                     </div>
@@ -660,9 +680,9 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                       {holiday && (
                         <div
                           className="text-[9px] font-semibold text-amber-900 dark:text-amber-200 bg-amber-100/70 dark:bg-amber-950/70 px-1 py-0.5 rounded truncate"
-                          title={holiday.name}
+                          title={i18n.language.startsWith("rw") ? holiday.kinyarwanda : holiday.name}
                         >
-                          ★ {holiday.name}
+                          ★ {i18n.language.startsWith("rw") ? holiday.kinyarwanda : holiday.name}
                         </div>
                       )}
                       {dayEvents.map(ev => (
@@ -676,7 +696,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                       ))}
                       {dayBookings.length > 0 && (
                         <div className="text-[9px] font-mono font-semibold text-sky-800 dark:text-sky-300 bg-sky-100/70 dark:bg-sky-950/60 px-1 py-0.5 rounded truncate">
-                          ◷ {dayBookings.length} {dayBookings.length === 1 ? "room" : "rooms"}
+                          ◷ {t("calendar.rooms_booked_count", { count: dayBookings.length, defaultValue: `${dayBookings.length} ${dayBookings.length === 1 ? "room" : "rooms"}` })}
                         </div>
                       )}
                     </div>
@@ -684,10 +704,10 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                     {/* Bottom Indicator Dots */}
                     <div className="flex items-center gap-1">
                       {dayEvents.length > 0 && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" title={`${dayEvents.length} Events`} />
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" title={t("calendar.events_count_tooltip", { count: dayEvents.length, defaultValue: `${dayEvents.length} Events` })} />
                       )}
                       {hasRentableSpaces && dayBookings.length > 0 && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-sky-500" title={`${dayBookings.length} Space Bookings`} />
+                        <span className="h-1.5 w-1.5 rounded-full bg-sky-500" title={t("calendar.bookings_count_tooltip", { count: dayBookings.length, defaultValue: `${dayBookings.length} Space Bookings` })} />
                       )}
                     </div>
                   </div>
@@ -697,39 +717,41 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
 
             {/* Rwanda Holidays Legend Bar */}
             <div className="mt-2 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between text-xs text-slate-500 gap-2">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                  <span>Rwandan Public Holiday</span>
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400 shrink-0" />
+                  <span>{t("calendar.rwandan_public_holiday", { defaultValue: "Rwandan Public Holiday" })}</span>
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                  <span>Org Event</span>
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0" />
+                  <span>{t("calendar.org_event", { defaultValue: "Org Event" })}</span>
                 </span>
                 {hasRentableSpaces && (
                   <span className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-sky-500" />
-                    <span>Space Occupied (24h)</span>
+                    <span className="h-2.5 w-2.5 rounded-full bg-sky-500 shrink-0" />
+                    <span>{t("calendar.space_occupied_24h", { defaultValue: "Space Occupied (24h)" })}</span>
                   </span>
                 )}
               </div>
-              <span className="text-[11px] font-medium text-slate-400">
-                {hasRentableSpaces ? "Click any date to inspect 24h occupancy & events" : "Click any date to inspect scheduled events"}
+              <span className="text-[11px] font-medium text-slate-400 break-words">
+                {hasRentableSpaces
+                  ? t("calendar.click_date_24h_hint", { defaultValue: "Click any date to inspect 24h occupancy & events" })
+                  : t("calendar.click_date_events_hint", { defaultValue: "Click any date to inspect scheduled events" })}
               </span>
             </div>
           </div>
 
           {/* Side Panel: Selected Date Overview (4 Cols) */}
-          <div className="lg:col-span-4 flex flex-col gap-4">
+          <div className="lg:col-span-4 flex flex-col gap-4 min-w-0">
             {/* Date Details Card */}
             <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col gap-3">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="min-w-0">
                   <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold block">
-                    Selected Date Details
+                    {t("calendar.selected_date_details", { defaultValue: "Selected Date Details" })}
                   </span>
-                  <h4 className="text-base font-bold text-slate-900 dark:text-white">
-                    {selectedDateObj.toLocaleDateString("en-US", {
+                  <h4 className="text-base font-bold text-slate-900 dark:text-white break-words capitalize">
+                    {selectedDateObj.toLocaleDateString(i18n.language, {
                       weekday: "long",
                       month: "short",
                       day: "numeric",
@@ -744,9 +766,9 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                       setBookingDate(selectedDate);
                       setOpenBookSpaceModal(true);
                     }}
-                    className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer shadow-3xs"
+                    className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer shadow-3xs shrink-0"
                   >
-                    + Book Space
+                    + {t("calendar.book_space_btn", { defaultValue: "Book Space" })}
                   </button>
                 )}
               </div>
@@ -755,13 +777,13 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
               {selectedHoliday && (
                 <div className="p-3 rounded-xl bg-gradient-to-r from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20 border border-amber-200 dark:border-amber-800/60 flex flex-col gap-1">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 dark:text-amber-200">
-                    <CalendarIcon className="h-3.5 w-3.5 text-amber-600" />
-                    <span>Official Public Holiday</span>
+                    <CalendarIcon className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                    <span>{t("calendar.official_public_holiday", { defaultValue: "Official Public Holiday" })}</span>
                   </div>
-                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 break-words">
                     {selectedHoliday.name} • <span className="italic">{selectedHoliday.kinyarwanda}</span>
                   </p>
-                  <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-snug">
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-snug break-words">
                     {selectedHoliday.description}
                   </p>
                 </div>
@@ -769,18 +791,18 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
 
               {/* Scheduled Events on Date */}
               <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
                   <span className="flex items-center gap-1.5">
-                    <CalendarDays className="h-3.5 w-3.5 text-emerald-600" />
-                    <span>Scheduled Events ({selectedDateEvents.length})</span>
+                    <CalendarDays className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                    <span>{t("calendar.scheduled_events_count", { count: selectedDateEvents.length, defaultValue: `Scheduled Events (${selectedDateEvents.length})` })}</span>
                   </span>
                   {isAdmin && onAddEventClick && (
                     <button
                       type="button"
                       onClick={onAddEventClick}
-                      className="text-[11px] text-emerald-600 hover:underline font-semibold"
+                      className="text-[11px] text-emerald-600 hover:underline font-semibold cursor-pointer shrink-0"
                     >
-                      + Schedule Event
+                      + {t("calendar.schedule_event_btn", { defaultValue: "Schedule Event" })}
                     </button>
                   )}
                 </div>
@@ -796,24 +818,24 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                             : "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 hover:border-slate-300"
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-900 dark:text-white truncate">{ev.title}</span>
-                          <span className="text-[10px] text-slate-500 font-mono">
-                            {ev.date_time ? new Date(ev.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-slate-900 dark:text-white break-words min-w-0">{ev.title}</span>
+                          <span className="text-[10px] text-slate-500 font-mono shrink-0">
+                            {ev.date_time ? new Date(ev.date_time).toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" }) : ""}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between text-[11px] text-slate-500">
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            <span className="truncate max-w-[140px]">{ev.location}</span>
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                          <span className="flex items-center gap-1 min-w-0">
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            <span className="break-words">{ev.location}</span>
                           </span>
                           {onSelectEvent && (
                             <button
                               type="button"
                               onClick={() => onSelectEvent(ev)}
-                              className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold"
+                              className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold cursor-pointer shrink-0"
                             >
-                              Manage Roster
+                              {t("calendar.manage_roster", { defaultValue: "Manage Roster" })}
                             </button>
                           )}
                         </div>
@@ -821,8 +843,8 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-400 italic py-2 text-center bg-slate-50 dark:bg-slate-800/20 rounded-xl">
-                    No community events scheduled on this date.
+                  <p className="text-xs text-slate-400 italic py-2 text-center bg-slate-50 dark:bg-slate-800/20 rounded-xl px-2">
+                    {t("calendar.no_events_on_date", { defaultValue: "No community events scheduled on this date." })}
                   </p>
                 )}
               </div>
@@ -831,8 +853,8 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
               {hasRentableSpaces && (
                 <div className="flex flex-col gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                   <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
-                    <Building2 className="h-3.5 w-3.5 text-sky-600" />
-                    <span>Space Lending Occupancy ({selectedDateBookings.length})</span>
+                    <Building2 className="h-3.5 w-3.5 text-sky-600 shrink-0" />
+                    <span>{t("calendar.space_lending_occupancy", { count: selectedDateBookings.length, defaultValue: `Space Lending Occupancy (${selectedDateBookings.length})` })}</span>
                   </span>
 
                   {selectedDateBookings.length > 0 ? (
@@ -842,28 +864,28 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                           key={bk.id}
                           className="p-2.5 rounded-xl bg-sky-50/60 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/50 text-xs flex flex-col gap-1"
                         >
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-sky-950 dark:text-sky-200 truncate">{bk.title}</span>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-sky-950 dark:text-sky-200 break-words min-w-0">{bk.title}</span>
                             {isAdmin && (
                               <button
                                 type="button"
                                 onClick={() => handleDeleteBooking(bk.id, bk.title)}
-                                className="text-slate-400 hover:text-rose-600 transition"
-                                title="Cancel / Release Space"
+                                className="text-slate-400 hover:text-rose-600 transition cursor-pointer shrink-0"
+                                title={t("calendar.cancel_release_space", { defaultValue: "Cancel / Release Space" })}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             )}
                           </div>
-                          <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                          <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 break-words">
                             {bk.space_name}
                           </span>
                           <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono mt-0.5">
                             <span>{bk.start_time} - {bk.end_time}</span>
-                            <span>{bk.attendees_count} people</span>
+                            <span>{t("calendar.people_count", { count: bk.attendees_count, defaultValue: `${bk.attendees_count} people` })}</span>
                           </div>
-                          <div className="text-[10px] text-slate-500 truncate">
-                            Lent to: <strong>{bk.reserved_by}</strong> ({bk.contact_phone})
+                          <div className="text-[10px] text-slate-500 break-words">
+                            {t("calendar.lent_to", { defaultValue: "Lent to" })}: <strong>{bk.reserved_by}</strong> ({bk.contact_phone})
                           </div>
                         </div>
                       ))}
@@ -871,10 +893,10 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                   ) : (
                     <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30 text-center">
                       <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 block">
-                        All Spaces Available!
+                        {t("calendar.all_spaces_available", { defaultValue: "All Spaces Available!" })}
                       </span>
                       <span className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5 block">
-                        No rooms are booked on this date.
+                        {t("calendar.no_rooms_booked", { defaultValue: "No rooms are booked on this date." })}
                       </span>
                     </div>
                   )}
@@ -890,8 +912,8 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
         <PlanGatedView
           featureKey="host_external_event"
           requiredTier="pro"
-          featureName="Host External Events & Facility Space Lending"
-          customMessage="Starter plans include full access to organization events and interactive calendars. Hosting external events and renting out organization spaces is available exclusively on the Pro Plan."
+          featureName={t("calendar.gated_feature_name", { defaultValue: "Host External Events & Facility Space Lending" })}
+          customMessage={t("calendar.gated_custom_message", { defaultValue: "Starter plans include full access to organization events and interactive calendars. Hosting external events and renting out organization spaces is available exclusively on the Pro Plan." })}
         >
           <RentableSpacesManager
             activeOrg={activeOrg}
@@ -908,21 +930,21 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
       {subTab === "agenda" && !onSubTabChange && (
         <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-            <div>
+            <div className="min-w-0">
               <h4 className="text-base font-bold text-slate-900 dark:text-white">
-                Our Events & Space Lends
+                {t("calendar.our_events_and_lends", { defaultValue: "Our Events & Space Lends" })}
               </h4>
-              <p className="text-xs text-slate-400">
-                Chronological list of all events, general assemblies, and room occupancies.
+              <p className="text-xs text-slate-400 break-words">
+                {t("calendar.agenda_subtitle", { defaultValue: "Chronological list of all events, general assemblies, and room occupancies." })}
               </p>
             </div>
             {isAdmin && onAddEventClick && (
               <button
                 type="button"
                 onClick={onAddEventClick}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer shrink-0"
               >
-                + Our Event
+                + {t("calendar.our_event", { defaultValue: "Our Event" })}
               </button>
             )}
           </div>
@@ -931,28 +953,28 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
             {events.map(ev => (
               <div
                 key={ev.id}
-                className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 flex flex-col gap-3"
+                className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 flex flex-col gap-3 min-w-0"
               >
-                <div className="flex items-center justify-between">
-                  <h5 className="font-bold text-sm text-slate-900 dark:text-white truncate">{ev.title}</h5>
-                  <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                    {ev.status || "upcoming"}
+                <div className="flex items-center justify-between gap-2">
+                  <h5 className="font-bold text-sm text-slate-900 dark:text-white break-words min-w-0">{ev.title}</h5>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 shrink-0">
+                    {t(`calendar.status_${ev.status || "upcoming"}`, { defaultValue: ev.status || "upcoming" })}
                   </span>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
-                  {ev.description || "No description provided."}
+                <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 break-words">
+                  {ev.description || t("calendar.no_description", { defaultValue: "No description provided." })}
                 </p>
-                <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800 font-mono">
-                  <span>{new Date(ev.date_time).toLocaleDateString()}</span>
-                  <span>{ev.location}</span>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800 font-mono">
+                  <span>{new Date(ev.date_time).toLocaleDateString(i18n.language)}</span>
+                  <span className="break-words">{ev.location}</span>
                 </div>
                 {onSelectEvent && (
                   <button
                     type="button"
                     onClick={() => onSelectEvent(ev)}
-                    className="w-full py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg hover:bg-emerald-100 transition"
+                    className="w-full py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg hover:bg-emerald-100 transition cursor-pointer"
                   >
-                    Manage Attendance & Roster
+                    {t("calendar.manage_attendance_roster", { defaultValue: "Manage Attendance & Roster" })}
                   </button>
                 )}
               </div>
@@ -961,19 +983,59 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
         </div>
       )}
 
+      {/* MODAL: CONFIRM CANCEL BOOKING */}
+      {confirmCancelBooking && (
+        <div className="fixed inset-0 z-[60] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 max-w-sm w-full p-5 shadow-2xl flex flex-col gap-4 animate-in fade-in">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 shrink-0">
+                <AlertCircle className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                  {t("calendar.confirm_cancel_title", { defaultValue: "Cancel Reservation?" })}
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 break-words">
+                  {t("calendar.confirm_cancel_desc", {
+                    name: confirmCancelBooking.name,
+                    defaultValue: `Are you sure you want to cancel the reservation for "${confirmCancelBooking.name}" and release the time slot?`
+                  })}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setConfirmCancelBooking(null)}
+                className="px-3.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold cursor-pointer"
+              >
+                {t("common.keep", { defaultValue: "Keep Reservation" })}
+              </button>
+              <button
+                type="button"
+                onClick={executeDeleteBooking}
+                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold cursor-pointer"
+              >
+                {t("calendar.confirm_cancel_btn", { defaultValue: "Yes, Cancel" })}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: ADD FACILITY SPACE */}
       {openAddSpaceModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-5 sm:p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-5 sm:p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-emerald-600" />
-                <span>Add Facility Space or Room</span>
+                <Building2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span>{t("calendar.add_space_modal_title", { defaultValue: "Add Facility Space or Room" })}</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setOpenAddSpaceModal(false)}
-                className="text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -982,39 +1044,39 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
             <form onSubmit={handleAddSpace} className="flex flex-col gap-3.5 text-xs">
               <div>
                 <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                  Space / Room Name *
+                  {t("calendar.space_name_label", { defaultValue: "Space / Room Name *" })}
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Cooperative Conference Hall B"
+                  placeholder={t("calendar.space_name_placeholder", { defaultValue: "e.g. Cooperative Conference Hall B" })}
                   value={newSpaceName}
                   onChange={e => setNewSpaceName(e.target.value)}
                   className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-1 focus:ring-emerald-500"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Space Type
+                    {t("calendar.space_type_label", { defaultValue: "Space Type" })}
                   </label>
                   <select
                     value={newSpaceType}
                     onChange={e => setNewSpaceType(e.target.value)}
                     className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none"
                   >
-                    <option value="Meeting Room">Meeting Room</option>
-                    <option value="Hall / Auditorium">Hall / Auditorium</option>
-                    <option value="Training Lab">Training Lab</option>
-                    <option value="Boardroom">Boardroom</option>
-                    <option value="Coworking Space">Coworking Space</option>
-                    <option value="Outdoor Ground / Garden">Outdoor Ground / Garden</option>
+                    <option value="Meeting Room">{t("calendar.type_meeting_room", { defaultValue: "Meeting Room" })}</option>
+                    <option value="Hall / Auditorium">{t("calendar.type_hall_auditorium", { defaultValue: "Hall / Auditorium" })}</option>
+                    <option value="Training Lab">{t("calendar.type_training_lab", { defaultValue: "Training Lab" })}</option>
+                    <option value="Boardroom">{t("calendar.type_boardroom", { defaultValue: "Boardroom" })}</option>
+                    <option value="Coworking Space">{t("calendar.type_coworking", { defaultValue: "Coworking Space" })}</option>
+                    <option value="Outdoor Ground / Garden">{t("calendar.type_outdoor", { defaultValue: "Outdoor Ground / Garden" })}</option>
                   </select>
                 </div>
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Max Seating Capacity
+                    {t("calendar.max_seating_capacity", { defaultValue: "Max Seating Capacity" })}
                   </label>
                   <input
                     type="number"
@@ -1026,10 +1088,10 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Surface Size (m²)
+                    {t("calendar.surface_size_sqm", { defaultValue: "Surface Size (m²)" })}
                   </label>
                   <input
                     type="number"
@@ -1041,7 +1103,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                 </div>
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Hourly Rate (RWF, 0 = Free)
+                    {t("calendar.hourly_rate_rwf", { defaultValue: "Hourly Rate (RWF, 0 = Free)" })}
                   </label>
                   <input
                     type="number"
@@ -1056,25 +1118,25 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
 
               <div>
                 <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                  Amenities (comma-separated)
+                  {t("calendar.amenities_label", { defaultValue: "Amenities (comma-separated)" })}
                 </label>
                 <input
                   type="text"
-                  placeholder="WiFi, HD Projector, Sound System, AC, Smart TV"
+                  placeholder={t("calendar.amenities_placeholder", { defaultValue: "WiFi, HD Projector, Sound System, AC, Smart TV" })}
                   value={newSpaceAmenities}
                   onChange={e => setNewSpaceAmenities(e.target.value)}
                   className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Room Manager / Keyholder
+                    {t("calendar.room_manager_label", { defaultValue: "Room Manager / Keyholder" })}
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Jean Habimana"
+                    placeholder={t("calendar.room_manager_placeholder", { defaultValue: "e.g. Jean Habimana" })}
                     value={newSpaceManagerName}
                     onChange={e => setNewSpaceManagerName(e.target.value)}
                     className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none"
@@ -1082,7 +1144,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                 </div>
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Contact Phone
+                    {t("calendar.contact_phone_label", { defaultValue: "Contact Phone" })}
                   </label>
                   <input
                     type="tel"
@@ -1098,15 +1160,15 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                 <button
                   type="button"
                   onClick={() => setOpenAddSpaceModal(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold"
+                  className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold cursor-pointer"
                 >
-                  Cancel
+                  {t("common.cancel", { defaultValue: "Cancel" })}
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs cursor-pointer"
                 >
-                  Save Space
+                  {t("calendar.save_space_btn", { defaultValue: "Save Space" })}
                 </button>
               </div>
             </form>
@@ -1117,16 +1179,16 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
       {/* MODAL: RESERVE SPACE (24H TIME OCCUPANCY) */}
       {openBookSpaceModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-5 sm:p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-5 sm:p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Clock className="h-4 w-4 text-emerald-600" />
-                <span>Reserve Room / Space (24h Slot)</span>
+                <Clock className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span>{t("calendar.reserve_room_modal_title", { defaultValue: "Reserve Room / Space (24h Slot)" })}</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setOpenBookSpaceModal(false)}
-                className="text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1135,7 +1197,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
             <form onSubmit={handleReserveSpace} className="flex flex-col gap-3.5 text-xs">
               <div>
                 <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                  Select Space / Facility *
+                  {t("calendar.select_space_facility", { defaultValue: "Select Space / Facility *" })}
                 </label>
                 <select
                   required
@@ -1145,7 +1207,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                 >
                   {spaces.map(s => (
                     <option key={s.id} value={s.id}>
-                      {s.name} ({s.capacity} seats • {s.size_sqm} m²)
+                      {s.name} ({s.capacity} {t("calendar.seats_unit", { defaultValue: "seats" })} • {s.size_sqm} m²)
                     </option>
                   ))}
                 </select>
@@ -1153,7 +1215,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
 
               <div>
                 <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                  Date of Occupancy *
+                  {t("calendar.date_of_occupancy", { defaultValue: "Date of Occupancy *" })}
                 </label>
                 <input
                   type="date"
@@ -1168,7 +1230,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Start Time (24h) *
+                    {t("calendar.start_time_24h", { defaultValue: "Start Time (24h) *" })}
                   </label>
                   <input
                     type="time"
@@ -1180,7 +1242,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                 </div>
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    End Time (24h) *
+                    {t("calendar.end_time_24h", { defaultValue: "End Time (24h) *" })}
                   </label>
                   <input
                     type="time"
@@ -1194,27 +1256,27 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
 
               <div>
                 <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                  Purpose / Occupancy Title *
+                  {t("calendar.purpose_title_label", { defaultValue: "Purpose / Occupancy Title *" })}
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Partner NGO Agricultural Training"
+                  placeholder={t("calendar.purpose_title_placeholder", { defaultValue: "e.g. Partner NGO Agricultural Training" })}
                   value={bookingTitle}
                   onChange={e => setBookingTitle(e.target.value)}
                   className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Lent to / Reserved by *
+                    {t("calendar.lent_to_reserved_by", { defaultValue: "Lent to / Reserved by *" })}
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="Organization or Person name"
+                    placeholder={t("calendar.org_or_person_placeholder", { defaultValue: "Organization or Person name" })}
                     value={bookingReservedBy}
                     onChange={e => setBookingReservedBy(e.target.value)}
                     className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none"
@@ -1222,7 +1284,7 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                 </div>
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Contact Phone Number
+                    {t("calendar.contact_phone_number", { defaultValue: "Contact Phone Number" })}
                   </label>
                   <input
                     type="tel"
@@ -1234,10 +1296,10 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Expected Attendees
+                    {t("calendar.expected_attendees", { defaultValue: "Expected Attendees" })}
                   </label>
                   <input
                     type="number"
@@ -1249,11 +1311,11 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                 </div>
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                    Special Equipment / Notes
+                    {t("calendar.special_equipment_notes", { defaultValue: "Special Equipment / Notes" })}
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Projector needed"
+                    placeholder={t("calendar.special_equipment_placeholder", { defaultValue: "e.g. Projector needed" })}
                     value={bookingNotes}
                     onChange={e => setBookingNotes(e.target.value)}
                     className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none"
@@ -1265,15 +1327,15 @@ export const EventScheduleCalendar: React.FC<EventScheduleCalendarProps> = ({
                 <button
                   type="button"
                   onClick={() => setOpenBookSpaceModal(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold"
+                  className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold cursor-pointer"
                 >
-                  Cancel
+                  {t("common.cancel", { defaultValue: "Cancel" })}
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs cursor-pointer"
                 >
-                  Confirm 24h Reservation
+                  {t("calendar.confirm_24h_reservation", { defaultValue: "Confirm 24h Reservation" })}
                 </button>
               </div>
             </form>

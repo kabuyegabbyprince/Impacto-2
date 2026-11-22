@@ -3,6 +3,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pi
 import { BarChart2, FileDown, Lock, Target, TrendingUp, Award, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { useTranslation } from "react-i18next";
 import { Goal } from "../types";
 import { Badge, Button } from "./ui";
 
@@ -20,6 +21,7 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
   activeOrg,
   onExportPDF,
 }) => {
+  const { t, i18n } = useTranslation();
   const [isExportingPDF, setIsExportingPDF] = useState(false);
 
   // Compute chart data for Growth/Pro visualization
@@ -43,11 +45,11 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
       (g) => !g.achievement_percentage || g.achievement_percentage === 0
     ).length;
     return [
-      { name: "Completed", value: completed, color: "#10B981" },
-      { name: "In Progress", value: inProgress, color: "#F59E0B" },
-      { name: "Pending", value: pending, color: "#64748B" },
+      { name: t("goal_charts.status_completed", { defaultValue: "Completed" }), value: completed, color: "#10B981" },
+      { name: t("goal_charts.status_in_progress", { defaultValue: "In Progress" }), value: inProgress, color: "#F59E0B" },
+      { name: t("goal_charts.status_pending", { defaultValue: "Pending" }), value: pending, color: "#64748B" },
     ].filter((d) => d.value > 0);
-  }, [goals]);
+  }, [goals, t]);
 
   // Aggregate stats
   const totalGoals = goals.length;
@@ -83,7 +85,7 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
       doc.setFontSize(15);
       doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
       doc.text(
-        `${activeOrg?.name || "Organization"} — Strategic Goal Progress Report`,
+        t("goal_charts.pdf_title", { org: activeOrg?.name || t("common.organization", { defaultValue: "Organization" }), defaultValue: "{{org}} — Strategic Goal Progress Report" }),
         20,
         24
       );
@@ -92,12 +94,12 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
       doc.setFontSize(8.5);
       doc.setTextColor(100, 116, 139);
       doc.text(
-        `Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} | Plan: Growth / Pro Executive Visual Report`,
+        t("goal_charts.pdf_generated", { date: `${new Date().toLocaleDateString(i18n.language)} ${new Date().toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })}`, defaultValue: "Generated: {{date}} | Plan: Growth / Pro Executive Visual Report" }),
         20,
         31
       );
       doc.text(
-        `Total Strategic Goals: ${totalGoals}  |  Completed: ${completedGoals}  |  Average Achievement: ${averageProgress}%`,
+        t("goal_charts.pdf_summary", { total: totalGoals, completed: completedGoals, average: averageProgress, defaultValue: "Total Strategic Goals: {{total}}  |  Completed: {{completed}}  |  Average Achievement: {{average}}%" }),
         20,
         37
       );
@@ -121,7 +123,7 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
           doc.setFont("helvetica", "bold");
           doc.setFontSize(9);
           doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-          doc.text("EXECUTIVE VISUALIZATION CHARTS (RECHARTS ANALYTICS)", 14, currentY);
+          doc.text(t("goal_charts.pdf_section_charts", { defaultValue: "EXECUTIVE VISUALIZATION CHARTS (RECHARTS ANALYTICS)" }), 14, currentY);
           currentY += 4;
 
           doc.addImage(imgData, "PNG", 14, currentY, imgWidth, Math.min(imgHeight, 105));
@@ -145,11 +147,11 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
       doc.setFontSize(8);
       doc.setTextColor(255, 255, 255);
       doc.text("#", 17, currentY + 5.5);
-      doc.text("STRATEGIC GOAL TITLE", 26, currentY + 5.5);
-      doc.text("PERIOD", 98, currentY + 5.5);
-      doc.text("DEADLINE", 122, currentY + 5.5);
-      doc.text("STATUS", 148, currentY + 5.5);
-      doc.text("PROGRESS", 175, currentY + 5.5);
+      doc.text(t("goal_charts.pdf_col_title", { defaultValue: "STRATEGIC GOAL TITLE" }), 26, currentY + 5.5);
+      doc.text(t("goal_charts.pdf_col_period", { defaultValue: "PERIOD" }), 98, currentY + 5.5);
+      doc.text(t("goal_charts.pdf_col_deadline", { defaultValue: "DEADLINE" }), 122, currentY + 5.5);
+      doc.text(t("goal_charts.pdf_col_status", { defaultValue: "STATUS" }), 148, currentY + 5.5);
+      doc.text(t("goal_charts.pdf_col_progress", { defaultValue: "PROGRESS" }), 175, currentY + 5.5);
 
       currentY += 8;
 
@@ -178,7 +180,7 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
         const periodText = `${(g.period_type || "yr").toUpperCase()}: ${g.period_label || "-"}`;
         doc.text(periodText, 98, currentY + 6);
 
-        const deadlineText = g.deadline ? new Date(g.deadline).toLocaleDateString() : "-";
+        const deadlineText = g.deadline ? new Date(g.deadline).toLocaleDateString(i18n.language) : "-";
         doc.text(deadlineText, 122, currentY + 6);
 
         const statusLabel = (g.status || "pending").toUpperCase();
@@ -202,7 +204,7 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.setTextColor(100, 116, 139);
-      doc.text("EXECUTIVE VERIFICATION & AUDIT SIGN-OFF", 14, currentY);
+      doc.text(t("goal_charts.pdf_signoff", { defaultValue: "EXECUTIVE VERIFICATION & AUDIT SIGN-OFF" }), 14, currentY);
 
       currentY += 4;
       doc.setDrawColor(203, 213, 225);
@@ -211,8 +213,8 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7.5);
-      doc.text("Executive Chairperson / President Signature", 14, currentY + 16);
-      doc.text("Audit Committee / Secretary Signature", 110, currentY + 16);
+      doc.text(t("goal_charts.pdf_chair_sig", { defaultValue: "Executive Chairperson / President Signature" }), 14, currentY + 16);
+      doc.text(t("goal_charts.pdf_audit_sig", { defaultValue: "Audit Committee / Secretary Signature" }), 110, currentY + 16);
 
       doc.save(`${activeOrg?.slug || "organization"}-goal-progress-report.pdf`);
     } catch (err) {
@@ -227,59 +229,59 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
     return (
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-3xs space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2.5 rounded-2xl bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 shrink-0">
               <Target className="h-5 w-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                  Strategic Goals Overview
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white break-words">
+                  {t("goal_charts.free_title", { defaultValue: "Strategic Goals Overview" })}
                 </h3>
-                <span className="text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
-                  Static Mode (Free Plan)
+                <span className="text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 break-words">
+                  {t("goal_charts.static_mode_badge", { defaultValue: "Static Mode (Free Plan)" })}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Saved static target milestones for cooperative planning.
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 break-words">
+                {t("goal_charts.free_subtitle", { defaultValue: "Saved static target milestones for cooperative planning." })}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div 
-              title="Download PDF is restricted to Growth and Pro plan users"
+          <div className="flex items-center gap-2 shrink-0">
+            <div
+              title={t("goal_charts.pdf_restricted_title", { defaultValue: "Download PDF is restricted to Growth and Pro plan users" })}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 text-xs font-medium cursor-not-allowed select-none"
             >
-              <Lock className="h-3.5 w-3.5" />
-              <span>Download PDF (Growth & Pro)</span>
+              <Lock className="h-3.5 w-3.5 shrink-0" />
+              <span>{t("goal_charts.download_pdf_locked", { defaultValue: "Download PDF (Growth & Pro)" })}</span>
             </div>
           </div>
         </div>
 
         {/* Static KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-              Total Strategic Goals
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 min-w-0">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block break-words">
+              {t("goal_charts.kpi_total_strategic", { defaultValue: "Total Strategic Goals" })}
             </span>
             <span className="text-2xl font-bold text-slate-900 dark:text-white mt-1 block">
               {totalGoals}
             </span>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-              Completed Targets
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 min-w-0">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block break-words">
+              {t("goal_charts.kpi_completed_targets", { defaultValue: "Completed Targets" })}
             </span>
             <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1 block">
               {completedGoals}
             </span>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-              Average Progress
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 min-w-0">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block break-words">
+              {t("goal_charts.kpi_avg_progress", { defaultValue: "Average Progress" })}
             </span>
             <span className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1 block">
               {averageProgress}%
@@ -289,9 +291,9 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
 
         {/* Static Progress Bars Fallback UI for Free plan */}
         <div className="space-y-3 p-4 bg-slate-50/70 dark:bg-slate-800/30 rounded-2xl border border-slate-200/80 dark:border-slate-800">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
-            <span>Static Goal Progress Summary</span>
-            <span className="text-[10px] text-slate-400 font-mono">Static View (Upgrade to Growth for Interactive Recharts)</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
+            <span>{t("goal_charts.static_summary_heading", { defaultValue: "Static Goal Progress Summary" })}</span>
+            <span className="text-[10px] text-slate-400 font-mono break-words">{t("goal_charts.static_view_hint", { defaultValue: "Static View (Upgrade to Growth for Interactive Recharts)" })}</span>
           </div>
           {goals.length > 0 ? (
             <div className="space-y-2.5 pt-1">
@@ -299,9 +301,9 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
                 const pct = Math.min(100, Math.max(0, g.achievement_percentage || 0));
                 return (
                   <div key={g.id} className="space-y-1">
-                    <div className="flex justify-between text-xs text-slate-600 dark:text-slate-400">
-                      <span className="font-medium truncate max-w-[240px] sm:max-w-md">{g.title}</span>
-                      <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{pct}%</span>
+                    <div className="flex justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
+                      <span className="font-medium break-words min-w-0">{g.title}</span>
+                      <span className="font-mono font-bold text-slate-700 dark:text-slate-300 shrink-0">{pct}%</span>
                     </div>
                     <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
                       <div
@@ -314,17 +316,17 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
               })}
             </div>
           ) : (
-            <p className="text-xs text-slate-500 italic py-2">No strategic goals created yet.</p>
+            <p className="text-xs text-slate-500 italic py-2">{t("goal_charts.empty_short", { defaultValue: "No strategic goals created yet." })}</p>
           )}
         </div>
 
         {/* Free Plan Static Mode Upgrade Notice */}
         <div className="p-4 bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/50 rounded-2xl flex items-start gap-3 text-xs text-amber-900 dark:text-amber-200">
           <Lock className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-          <div className="leading-relaxed">
-            <span className="font-bold block">Interactive Recharts Analytics & PDF Reports Locked</span>
-            <p className="text-amber-800 dark:text-amber-300 text-[11px] mt-0.5">
-              Visual target vs. progress bar charts, dynamic donut distribution charts, and executive client-side PDF download reports are exclusively available on <strong>Growth</strong> and <strong>Pro</strong> plans.
+          <div className="leading-relaxed min-w-0">
+            <span className="font-bold block break-words">{t("goal_charts.locked_title", { defaultValue: "Interactive Recharts Analytics & PDF Reports Locked" })}</span>
+            <p className="text-amber-800 dark:text-amber-300 text-[11px] mt-0.5 break-words">
+              {t("goal_charts.locked_desc", { defaultValue: "Visual target vs. progress bar charts, dynamic donut distribution charts, and executive client-side PDF download reports are exclusively available on Growth and Pro plans." })}
             </p>
           </div>
         </div>
@@ -337,21 +339,21 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-3xs space-y-6">
       {/* Header with Title and Download PDF Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2.5 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 shrink-0">
             <BarChart2 className="h-5 w-5" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
-                Goal Progress Analytics
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider break-words">
+                {t("goal_charts.paid_title", { defaultValue: "Goal Progress Analytics" })}
               </h3>
               <span className="text-[10px] font-mono font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 px-2.5 py-0.5 rounded-full">
-                Growth & Pro Tier
+                {t("goal_charts.paid_tier_badge", { defaultValue: "Growth & Pro Tier" })}
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Live visual progress charts and executive performance breakdowns
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 break-words">
+              {t("goal_charts.paid_subtitle", { defaultValue: "Live visual progress charts and executive performance breakdowns" })}
             </p>
           </div>
         </div>
@@ -365,7 +367,7 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
             icon={isExportingPDF ? <Loader2 className="h-4 w-4 animate-spin text-white" /> : <FileDown className="h-4 w-4 text-white" />}
             className="bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white font-bold text-xs shadow-sm transition-all cursor-pointer"
           >
-            {isExportingPDF ? "Generating PDF..." : "Download PDF"}
+            {isExportingPDF ? t("goal_charts.generating_pdf", { defaultValue: "Generating PDF..." }) : t("goal_charts.download_pdf", { defaultValue: "Download PDF" })}
           </Button>
         </div>
       </div>
@@ -374,40 +376,40 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
       <div id="goal-progress-visualization-capture" className="space-y-6 bg-white dark:bg-slate-900 p-2 rounded-2xl">
         {/* KPI Highlights */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-semibold">
-              <span>Total Goals</span>
-              <Target className="h-4 w-4 text-slate-400" />
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 min-w-0">
+            <div className="flex items-center justify-between gap-2 text-slate-500 dark:text-slate-400 text-xs font-semibold">
+              <span className="break-words">{t("goal_charts.kpi_total_goals", { defaultValue: "Total Goals" })}</span>
+              <Target className="h-4 w-4 text-slate-400 shrink-0" />
             </div>
             <span className="text-xl font-bold text-slate-900 dark:text-white mt-1 block">
               {totalGoals}
             </span>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40">
-            <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
-              <span>Completed</span>
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <div className="p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40 min-w-0">
+            <div className="flex items-center justify-between gap-2 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
+              <span className="break-words">{t("goal_charts.status_completed", { defaultValue: "Completed" })}</span>
+              <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
             </div>
             <span className="text-xl font-bold text-emerald-700 dark:text-emerald-300 mt-1 block">
               {completedGoals}
             </span>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40">
-            <div className="flex items-center justify-between text-amber-700 dark:text-amber-400 text-xs font-semibold">
-              <span>In Progress</span>
-              <TrendingUp className="h-4 w-4 text-amber-500" />
+          <div className="p-3.5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 min-w-0">
+            <div className="flex items-center justify-between gap-2 text-amber-700 dark:text-amber-400 text-xs font-semibold">
+              <span className="break-words">{t("goal_charts.status_in_progress", { defaultValue: "In Progress" })}</span>
+              <TrendingUp className="h-4 w-4 text-amber-500 shrink-0" />
             </div>
             <span className="text-xl font-bold text-amber-700 dark:text-amber-300 mt-1 block">
               {totalGoals - completedGoals}
             </span>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40">
-            <div className="flex items-center justify-between text-blue-700 dark:text-blue-400 text-xs font-semibold">
-              <span>Avg Achievement</span>
-              <Award className="h-4 w-4 text-blue-500" />
+          <div className="p-3.5 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40 min-w-0">
+            <div className="flex items-center justify-between gap-2 text-blue-700 dark:text-blue-400 text-xs font-semibold">
+              <span className="break-words">{t("goal_charts.kpi_avg_achievement", { defaultValue: "Avg Achievement" })}</span>
+              <Award className="h-4 w-4 text-blue-500 shrink-0" />
             </div>
             <span className="text-xl font-bold text-blue-700 dark:text-blue-300 mt-1 block">
               {averageProgress}%
@@ -419,12 +421,12 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
         {goals.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-1">
             {/* Target vs Progress Bar Chart */}
-            <div className="lg:col-span-8 bg-slate-50/60 dark:bg-slate-800/30 border border-slate-200/60 dark:border-slate-800 p-4 rounded-2xl">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Goal Achievement Rate (% of Target)
+            <div className="lg:col-span-8 bg-slate-50/60 dark:bg-slate-800/30 border border-slate-200/60 dark:border-slate-800 p-4 rounded-2xl min-w-0">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 break-words">
+                  {t("goal_charts.bar_title", { defaultValue: "Goal Achievement Rate (% of Target)" })}
                 </span>
-                <span className="text-[10px] text-slate-400 font-mono">Top {chartBarData.length} Goals</span>
+                <span className="text-[10px] text-slate-400 font-mono">{t("goal_charts.top_goals", { count: chartBarData.length, defaultValue: "Top {{count}} Goals" })}</span>
               </div>
               <div className="h-60 w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -438,7 +440,7 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
                     />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#64748b" }} />
                     <Tooltip
-                      formatter={(value: any) => [`${value}%`, "Progress"]}
+                      formatter={(value: any) => [`${value}%`, t("goal_charts.tooltip_progress", { defaultValue: "Progress" })]}
                       labelFormatter={(label, payload) => {
                         if (payload && payload[0]?.payload?.fullName) {
                           return payload[0].payload.fullName;
@@ -460,12 +462,12 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
             </div>
 
             {/* Status Breakdown Donut Chart */}
-            <div className="lg:col-span-4 bg-slate-50/60 dark:bg-slate-800/30 border border-slate-200/60 dark:border-slate-800 p-4 rounded-2xl flex flex-col items-center justify-between">
+            <div className="lg:col-span-4 bg-slate-50/60 dark:bg-slate-800/30 border border-slate-200/60 dark:border-slate-800 p-4 rounded-2xl flex flex-col items-center justify-between min-w-0">
               <div className="w-full text-left mb-1">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                  Status Breakdown
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block break-words">
+                  {t("goal_charts.donut_title", { defaultValue: "Status Breakdown" })}
                 </span>
-                <span className="text-[10px] text-slate-400 font-mono">Portfolio Distribution</span>
+                <span className="text-[10px] text-slate-400 font-mono">{t("goal_charts.donut_subtitle", { defaultValue: "Portfolio Distribution" })}</span>
               </div>
               <div className="w-full h-52 flex items-center justify-center">
                 <ResponsiveContainer width="100%" height="100%">
@@ -484,7 +486,7 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(value: any, name: any) => [`${value} goals`, name]}
+                      formatter={(value: any, name: any) => [t("goal_charts.tooltip_goals_count", { count: Number(value), defaultValue: "{{count}} goals" }), name]}
                       contentStyle={{
                         backgroundColor: "#0f172a",
                         color: "#fff",
@@ -502,7 +504,7 @@ export const GoalProgressCharts: React.FC<GoalProgressChartsProps> = ({
         ) : (
           <div className="text-center py-10 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
             <Target className="h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-            <p className="text-xs text-slate-500">No strategic goals created yet. Add goals above to populate analytics.</p>
+            <p className="text-xs text-slate-500">{t("goal_charts.empty_full", { defaultValue: "No strategic goals created yet. Add goals above to populate analytics." })}</p>
           </div>
         )}
       </div>

@@ -14,6 +14,7 @@ import {
   Building2,
   FileText
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button, Input } from "./ui";
 import { useCurrencyStore } from "../store/currencyStore";
 import { UssdPaymentHelper, DEFAULT_MOMO_DISPLAY_METHODS, MomoDisplayMethod } from "./UssdPaymentHelper";
@@ -82,8 +83,8 @@ interface MoMoPushPaymentModalProps {
 export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
   isOpen,
   onClose,
-  title = "Mobile Money Prompt (Instant Push)",
-  description = "Enter your MTN phone number (078.. or 079..) to receive a direct USSD payment prompt on your SIM card.",
+  title,
+  description,
   amountRwf: rawAmountRwf,
   amount: rawAmount,
   amountUsd,
@@ -93,7 +94,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
   defaultPhone = "",
   itemType = "general",
   itemId = "",
-  itemName = "Payment",
+  itemName,
   recipientName,
   recipientMtnNumber,
   recipientAirtelNumber,
@@ -102,6 +103,10 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
   isPlatformFee,
   onSuccess,
 }) => {
+  const { t } = useTranslation();
+  const resolvedTitle = title || t("momo_modal.default_title", { defaultValue: "Mobile Money Prompt (Instant Push)" });
+  const resolvedDescription = description || t("momo_modal.default_description", { defaultValue: "Enter your MTN phone number (078.. or 079..) to receive a direct USSD payment prompt on your SIM card." });
+  const resolvedItemName = itemName || t("momo_modal.default_item_name", { defaultValue: "Payment" });
   const amountRwf = rawAmountRwf ?? rawAmount ?? 0;
   const { formatAmount } = useCurrencyStore();
   const [tab, setTab] = useState<"instant_push" | "manual_sms">("instant_push");
@@ -126,7 +131,11 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
           ? allowedDisplayMethods
           : DEFAULT_MOMO_DISPLAY_METHODS);
 
-  const finalRecipientName = recipientName || (isPlatformTarget ? "Impacto Platform Administration" : "Organization Treasury");
+  const finalRecipientName = recipientName || (
+    isPlatformTarget
+      ? t("momo_modal.platform_admin_name", { defaultValue: "Impacto Platform Administration" })
+      : t("momo_modal.org_treasury_name", { defaultValue: "Organization Treasury" })
+  );
   const finalMtnNumber = recipientMtnNumber || "";
   const finalAirtelNumber = recipientAirtelNumber || "";
   const finalMerchantCode = recipientMerchantCode || undefined;
@@ -151,6 +160,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
   const [manualTxRef, setManualTxRef] = useState("");
   const [manualSms, setManualSms] = useState("");
   const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [manualError, setManualError] = useState("");
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
@@ -168,12 +178,12 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
     e.preventDefault();
     const cleanDigits = phoneNumber.replace(/\D/g, "");
     if (!isValidMtnRwandaNumber(cleanDigits)) {
-      setStatusMessage("MTN number required: Please enter an MTN Rwanda number starting with 078 or 079 (e.g. 078XXXXXXX or 079XXXXXXX) to receive the push prompt on your SIM card.");
+      setStatusMessage(t("momo_modal.err_mtn_required_desc", { defaultValue: "MTN number required: Please enter an MTN Rwanda number starting with 078 or 079 (e.g. 078XXXXXXX or 079XXXXXXX) to receive the push prompt on your SIM card." }));
       return;
     }
 
     setPushStatus("initiating");
-    setStatusMessage("Connecting to PawaPay and dispatching Mobile Money authorization prompt to your SIM card...");
+    setStatusMessage(t("momo_modal.status_initiating", { defaultValue: "Connecting to PawaPay and dispatching Mobile Money authorization prompt to your SIM card..." }));
 
     try {
       const res = await fetch("/api/payments/pawapay/deposit", {
@@ -186,7 +196,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
           phoneNumber: cleanDigits,
           payerName: payerName || "Impacto Payer",
           provider: "MTN_MOMO_RWA",
-          customerMessage: (comment || itemName || "Impacto Payment").substring(0, 22),
+          customerMessage: (comment || resolvedItemName || "Impacto Payment").substring(0, 22),
           itemType,
           itemId,
           metadata: [
@@ -205,16 +215,19 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
         setDepositId(data.depositId);
         setPushStatus("awaiting_pin");
         setStatusMessage(
-          `MoMo prompt dispatched to SIM (${phoneNumber})! Please look at your phone screen now and enter your Mobile Money PIN.`
+          t("momo_modal.status_dispatched", {
+            phone: phoneNumber,
+            defaultValue: `MoMo prompt dispatched to SIM (${phoneNumber})! Please look at your phone screen now and enter your Mobile Money PIN.`
+          })
         );
         startCountdownAndPolling(data.depositId);
       } else {
         setPushStatus("failed");
-        setStatusMessage(data.message || "Could not trigger Mobile Money push. Please verify your MTN phone number or try the manual tab.");
+        setStatusMessage(data.message || t("momo_modal.err_push_failed", { defaultValue: "Could not trigger Mobile Money push. Please verify your MTN phone number or try the manual tab." }));
       }
     } catch (err: any) {
       setPushStatus("failed");
-      setStatusMessage(err.message || "Connection error. Please try again.");
+      setStatusMessage(err.message || t("momo_modal.err_connection", { defaultValue: "Connection error. Please try again." }));
     }
   };
 
@@ -222,7 +235,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
   const handleCheckStatusNow = async () => {
     if (!depositId) return;
     setCheckingStatus(true);
-    setStatusMessage("Querying MTN network status for your authorization...");
+    setStatusMessage(t("momo_modal.status_querying", { defaultValue: "Querying MTN network status for your authorization..." }));
     try {
       const checkRes = await fetch(`/api/payments/pawapay/status/${depositId}`);
       if (checkRes.ok) {
@@ -239,7 +252,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
           if (countdownRef.current) clearInterval(countdownRef.current);
           setProviderTxId(txId);
           setPushStatus("success");
-          setStatusMessage("Payment authorized! Mobile Money transaction confirmed by MTN.");
+          setStatusMessage(t("momo_modal.status_confirmed", { defaultValue: "Payment authorized! Mobile Money transaction confirmed by MTN." }));
 
           await onSuccess({
             depositId,
@@ -249,19 +262,19 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
             payerPhone: phoneNumber,
             payerName: payerName || "Payer",
             provider: "MTN_MOMO_RWA",
-            comment: comment || itemName,
+            comment: comment || resolvedItemName,
             method: "pawapay_push",
           });
         } else if (isFailed) {
           setPushStatus("failed");
-          setStatusMessage("Transaction was rejected or cancelled on handset.");
+          setStatusMessage(t("momo_modal.status_rejected", { defaultValue: "Transaction was rejected or cancelled on handset." }));
         } else {
-          setStatusMessage("Transaction is still pending on MTN network. If you just entered your PIN, please wait a moment and click Check Status again.");
+          setStatusMessage(t("momo_modal.status_still_pending", { defaultValue: "Transaction is still pending on MTN network. If you just entered your PIN, please wait a moment and click Check Status again." }));
         }
       }
     } catch (err: any) {
       console.warn("Manual check error:", err);
-      setStatusMessage("Could not query network status. Please try again.");
+      setStatusMessage(t("momo_modal.err_query_failed", { defaultValue: "Could not query network status. Please try again." }));
     } finally {
       setCheckingStatus(false);
     }
@@ -303,7 +316,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
             if (countdownRef.current) clearInterval(countdownRef.current);
             setProviderTxId(txId);
             setPushStatus("success");
-            setStatusMessage("Payment authorized! Mobile Money transaction confirmed by MTN.");
+            setStatusMessage(t("momo_modal.status_confirmed", { defaultValue: "Payment authorized! Mobile Money transaction confirmed by MTN." }));
 
             // Call parent onSuccess callback
             await onSuccess({
@@ -314,14 +327,14 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
               payerPhone: phoneNumber,
               payerName: payerName || "Payer",
               provider: "MTN_MOMO_RWA",
-              comment: comment || itemName,
+              comment: comment || resolvedItemName,
               method: "pawapay_push",
             });
           } else if (isFailed) {
             if (pollingRef.current) clearInterval(pollingRef.current);
             if (countdownRef.current) clearInterval(countdownRef.current);
             setPushStatus("failed");
-            setStatusMessage("Transaction was cancelled or rejected on the handset.");
+            setStatusMessage(t("momo_modal.status_cancelled_handset", { defaultValue: "Transaction was cancelled or rejected on the handset." }));
           }
         }
       } catch (err) {
@@ -340,10 +353,11 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setManualError("");
     const cleanRef = manualTxRef.trim();
     const cleanSms = manualSms.trim();
     if (!cleanSms && !cleanRef) {
-      alert("Please provide the transaction reference ID or paste the SMS proof.");
+      setManualError(t("momo_modal.err_manual_required", { defaultValue: "Please provide the transaction reference ID or paste the SMS proof." }));
       return;
     }
 
@@ -357,15 +371,15 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
         payerPhone: phoneNumber.trim(),
         payerName: (payerName || "Payer").trim(),
         provider: detectedProvider === "MTN" ? "MTN_MOMO_RWA" : "AIRTEL_RWA",
-        comment: comment || itemName,
+        comment: comment || resolvedItemName,
         method: "manual_proof",
         proofText: manualSms,
       });
       setProviderTxId(cleanRef || `MAN-${Date.now().toString().slice(-6)}`);
-      setStatusMessage("Payment slip recorded and submitted for accountant verification.");
+      setStatusMessage(t("momo_modal.status_manual_submitted", { defaultValue: "Payment slip recorded and submitted for accountant verification." }));
       setPushStatus("success");
     } catch (err: any) {
-      alert(err.message || "Failed to submit manual proof.");
+      setManualError(err?.message || t("momo_modal.err_manual_submit_failed", { defaultValue: "Failed to submit manual proof." }));
     } finally {
       setManualSubmitting(false);
     }
@@ -386,25 +400,25 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-4 py-3.5 sm:px-6 sm:py-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+        <div className="px-4 py-3.5 sm:px-6 sm:py-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 gap-2">
           <div className="flex items-center gap-3 min-w-0">
             <div className="h-10 w-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-[#156c45] dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-center shadow-xs shrink-0">
               <Smartphone className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h3 className="font-display font-bold text-sm sm:text-base text-slate-900 dark:text-white leading-tight truncate">
-                {title}
+              <h3 className="font-display font-bold text-sm sm:text-base text-slate-900 dark:text-white leading-tight break-words">
+                {resolvedTitle}
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate mt-0.5">
-                {itemName} &bull; <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{amountRwf.toLocaleString()} RWF</span>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium break-words mt-0.5">
+                {resolvedItemName} &bull; <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{amountRwf.toLocaleString()} RWF</span>
                 {amountUsd ? ` (~$${amountUsd})` : ""}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition shrink-0 ml-2"
-            aria-label="Close"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition shrink-0 ml-2 cursor-pointer"
+            aria-label={t("common.close", { defaultValue: "Close" })}
           >
             <X className="h-5 w-5" />
           </button>
@@ -412,33 +426,37 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
 
         {/* Tab Toggle */}
         <div className="px-4 sm:px-6 pt-3 pb-1 shrink-0">
-          <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-800/70 rounded-xl">
+          <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-800/70 rounded-xl gap-1">
             <button
               type="button"
               onClick={() => {
                 setTab("instant_push");
                 setPushStatus("idle");
+                setManualError("");
               }}
-              className={`py-2 px-2.5 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-2 px-2.5 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 min-w-0 cursor-pointer ${
                 tab === "instant_push"
                   ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-semibold"
                   : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
               }`}
             >
-              <Smartphone className="h-3.5 w-3.5" />
-              <span className="truncate">Direct SIM Prompt</span>
+              <Smartphone className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{t("momo_modal.tab_instant_push", { defaultValue: "Direct SIM Prompt" })}</span>
             </button>
             <button
               type="button"
-              onClick={() => setTab("manual_sms")}
-              className={`py-2 px-2.5 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              onClick={() => {
+                setTab("manual_sms");
+                setManualError("");
+              }}
+              className={`py-2 px-2.5 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 min-w-0 cursor-pointer ${
                 tab === "manual_sms"
                   ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-semibold"
                   : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
               }`}
             >
-              <FileText className="h-3.5 w-3.5" />
-              <span className="truncate">Manual Transfer</span>
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{t("momo_modal.tab_manual_sms", { defaultValue: "Manual Transfer" })}</span>
             </button>
           </div>
         </div>
@@ -448,17 +466,19 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
           {/* Amount and Beneficiary Header Card */}
           <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
+              <div className="min-w-0">
                 <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block">
-                  {itemType === "donation" ? "Voluntary Contribution" : "Payable Amount"}
+                  {itemType === "donation"
+                    ? t("momo_modal.voluntary_contribution", { defaultValue: "Voluntary Contribution" })
+                    : t("momo_modal.payable_amount", { defaultValue: "Payable Amount" })}
                 </span>
                 {itemType === "donation" ? (
-                  <div className="flex items-center gap-2 mt-0.5">
+                  <div className="flex flex-wrap items-center gap-2 mt-0.5">
                     <span className="text-xl sm:text-2xl font-bold font-display text-slate-900 dark:text-white">
-                      Open Donation
+                      {t("momo_modal.open_donation", { defaultValue: "Open Donation" })}
                     </span>
                     <span className="text-xs text-slate-500 dark:text-slate-400">
-                      · Any amount
+                      · {t("momo_modal.any_amount", { defaultValue: "Any amount" })}
                     </span>
                   </div>
                 ) : (
@@ -467,13 +487,15 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                   </span>
                 )}
               </div>
-              <div className="sm:text-right">
+              <div className="sm:text-right min-w-0">
                 <span className="text-xs text-slate-400 block">
-                  {isPlatformTarget ? "Platform License Treasury" : "Beneficiary Treasury"}
+                  {isPlatformTarget
+                    ? t("momo_modal.platform_license_treasury", { defaultValue: "Platform License Treasury" })
+                    : t("momo_modal.beneficiary_treasury", { defaultValue: "Beneficiary Treasury" })}
                 </span>
-                <span className="text-xs font-medium text-slate-800 dark:text-slate-200 flex items-center sm:justify-end gap-1 mt-0.5">
+                <span className="text-xs font-medium text-slate-800 dark:text-slate-200 flex items-center sm:justify-end gap-1 mt-0.5 min-w-0">
                   <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <span className="truncate max-w-[200px]">{finalRecipientName}</span>
+                  <span className="break-words">{finalRecipientName}</span>
                 </span>
               </div>
             </div>
@@ -482,7 +504,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
             <div className="pt-2.5 border-t border-slate-200/70 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-600 dark:text-slate-300">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[10px] font-bold uppercase text-slate-400 font-sans">
-                  Settlement:
+                  {t("momo_modal.settlement_label", { defaultValue: "Settlement:" })}
                 </span>
                 {finalMtnNumber && effectiveAllowedMethods.includes("mtn_phone") && (
                   <span className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded-md font-bold text-[10px]">
@@ -497,12 +519,12 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
               </div>
               {finalMerchantCode && effectiveAllowedMethods.includes("merchant_code") && (
                 <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2 py-0.5 rounded-md text-[#156c45] dark:text-emerald-400 font-bold text-[10px]">
-                  <span>Code: {finalMerchantCode}</span>
+                  <span>{t("momo_modal.code_prefix", { code: finalMerchantCode, defaultValue: `Code: ${finalMerchantCode}` })}</span>
                   <button
                     type="button"
                     onClick={() => handleCopyCode(finalMerchantCode, "merchant_strip")}
-                    className="hover:text-emerald-900 dark:hover:text-emerald-200 p-0.5"
-                    title="Copy Code"
+                    className="hover:text-emerald-900 dark:hover:text-emerald-200 p-0.5 cursor-pointer"
+                    title={t("momo_modal.copy_code", { defaultValue: "Copy Code" })}
                   >
                     {copiedCode === "merchant_strip" ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
                   </button>
@@ -522,7 +544,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                   recipientName={finalRecipientName}
                   amountRwf={itemType === "donation" ? undefined : amountRwf}
                   isDonation={itemType === "donation"}
-                  itemName={itemName}
+                  itemName={resolvedItemName}
                   allowedMethods={isPlatformTarget ? undefined : effectiveAllowedMethods}
                   compact
                 />
@@ -530,28 +552,28 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
 
               {pushStatus === "idle" && (
                 <form onSubmit={handleInitiatePush} className="space-y-4">
-                  <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed">
-                    {description}
+                  <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed break-words">
+                    {resolvedDescription}
                   </p>
 
                   <div className="space-y-3">
                     <Input
-                      label="Payer Full Name"
-                      placeholder="e.g. Jean Pierre N."
+                      label={t("momo_modal.payer_full_name", { defaultValue: "Payer Full Name" })}
+                      placeholder={t("momo_modal.payer_full_name_placeholder", { defaultValue: "e.g. Jean Pierre N." })}
                       value={payerName}
                       onChange={(e) => setPayerName(e.target.value)}
                       required
                     />
 
                     <div>
-                      <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
                         <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                          <span>MTN Phone Number</span>
+                          <span>{t("momo_modal.mtn_phone_label", { defaultValue: "MTN Phone Number" })}</span>
                           <span className="text-rose-500">*</span>
                         </label>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800">
                           <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                          MTN Rwanda (078 / 079)
+                          {t("momo_modal.mtn_badge", { defaultValue: "MTN Rwanda (078 / 079)" })}
                         </span>
                       </div>
 
@@ -565,7 +587,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                               ? "border-rose-400 bg-rose-50/30 dark:bg-rose-950/20 focus:ring-2 focus:ring-rose-500"
                               : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-[#156c45]"
                           }`}
-                          placeholder="078XXXXXXX or 079..."
+                          placeholder={t("momo_modal.phone_placeholder", { defaultValue: "078XXXXXXX or 079..." })}
                           value={phoneNumber}
                           onChange={(e) => {
                             const val = e.target.value;
@@ -576,22 +598,22 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                         />
                         {isCompleteMtn && (
                           <span className="absolute right-3 top-2.5 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-1">
-                            <CheckCircle2 className="h-4 w-4" /> Verified
+                            <CheckCircle2 className="h-4 w-4" /> {t("momo_modal.verified_badge", { defaultValue: "Verified" })}
                           </span>
                         )}
                       </div>
 
                       {/* Quick MTN Prefix Helpers */}
-                      <div className="flex items-center justify-between mt-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mt-1.5">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-slate-400 font-medium">Quick prefix:</span>
+                          <span className="text-[10px] text-slate-400 font-medium">{t("momo_modal.quick_prefix", { defaultValue: "Quick prefix:" })}</span>
                           <button
                             type="button"
                             onClick={() => {
                               const rest = cleanPhone.startsWith("078") || cleanPhone.startsWith("079") ? cleanPhone.slice(3) : cleanPhone;
                               setPhoneNumber(("078" + rest).slice(0, 10));
                             }}
-                            className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 transition"
+                            className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 transition cursor-pointer"
                           >
                             078...
                           </button>
@@ -601,13 +623,13 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                               const rest = cleanPhone.startsWith("078") || cleanPhone.startsWith("079") ? cleanPhone.slice(3) : cleanPhone;
                               setPhoneNumber(("079" + rest).slice(0, 10));
                             }}
-                            className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 transition"
+                            className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 transition cursor-pointer"
                           >
                             079...
                           </button>
                         </div>
                         <span className="text-[10px] font-mono text-slate-400">
-                          {cleanPhone.length}/10 digits
+                          {t("momo_modal.digits_count", { count: cleanPhone.length, defaultValue: `${cleanPhone.length}/10 digits` })}
                         </span>
                       </div>
 
@@ -616,17 +638,17 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                         <div className="mt-2.5 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 rounded-xl text-xs space-y-2">
                           <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
                             <Smartphone className="h-4 w-4 shrink-0 text-amber-600" />
-                            <span>Airtel Money Rwanda Detected ({cleanPhone.slice(0, 3)}...)</span>
+                            <span>{t("momo_modal.airtel_detected_title", { prefix: cleanPhone.slice(0, 3), defaultValue: `Airtel Money Rwanda Detected (${cleanPhone.slice(0, 3)}...)` })}</span>
                           </div>
-                          <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                            Automated USSD push prompt is exclusive to MTN Rwanda SIMs. If you are using Airtel Money, switch to manual transfer to pay via <span className="font-mono font-bold">*500#</span> or <span className="font-mono font-bold">*182#</span> and submit your confirmation SMS.
+                          <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed break-words">
+                            {t("momo_modal.airtel_detected_desc", { defaultValue: "Automated USSD push prompt is exclusive to MTN Rwanda SIMs. If you are using Airtel Money, switch to manual transfer to pay via *500# or *182# and submit your confirmation SMS." })}
                           </p>
                           <Button
                             type="button"
                             onClick={() => setTab("manual_sms")}
                             className="w-full py-2 text-xs bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition"
                           >
-                            Switch to Airtel Transfer Instructions (*500# / *182#)
+                            {t("momo_modal.switch_airtel_btn", { defaultValue: "Switch to Airtel Transfer Instructions (*500# / *182#)" })}
                           </Button>
                         </div>
                       )}
@@ -634,10 +656,10 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                       {isAirtelOrInvalidPrefix && !isAirtelPrefix && (
                         <div className="mt-2.5 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 rounded-xl text-xs flex items-start gap-2">
                           <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-                          <div>
-                            <p className="font-bold">MTN Rwanda Number Required</p>
-                            <p className="text-[11px] text-rose-700 dark:text-rose-300 mt-0.5">
-                              Please enter an MTN number starting with <span className="font-mono font-bold">078</span> or <span className="font-mono font-bold">079</span> (e.g. 078XXXXXXX). Airtel users can switch to the Manual SMS tab above.
+                          <div className="min-w-0">
+                            <p className="font-bold">{t("momo_modal.mtn_required_title", { defaultValue: "MTN Rwanda Number Required" })}</p>
+                            <p className="text-[11px] text-rose-700 dark:text-rose-300 mt-0.5 break-words">
+                              {t("momo_modal.mtn_required_hint", { defaultValue: "Please enter an MTN number starting with 078 or 079 (e.g. 078XXXXXXX). Airtel users can switch to the Manual SMS tab above." })}
                             </p>
                           </div>
                         </div>
@@ -645,22 +667,22 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
 
                       {cleanPhone.length > 0 && isMtnPrefix && cleanPhone.length < 10 && (
                         <p className="text-[11px] text-amber-700 dark:text-amber-300 font-medium mt-1 flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          Please enter all 10 digits ({10 - cleanPhone.length} more needed)
+                          <Clock className="h-3 w-3 shrink-0" />
+                          {t("momo_modal.digits_remaining", { count: 10 - cleanPhone.length, defaultValue: `Please enter all 10 digits (${10 - cleanPhone.length} more needed)` })}
                         </p>
                       )}
 
                       {isCompleteMtn && (
                         <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium mt-1 flex items-center gap-1">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          MTN SIM verified. Prompt will be delivered to this handset automatically.
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                          {t("momo_modal.mtn_sim_verified", { defaultValue: "MTN SIM verified. Prompt will be delivered to this handset automatically." })}
                         </p>
                       )}
                     </div>
 
                     <Input
-                      label="Transaction Note / Comment (Optional)"
-                      placeholder="e.g. Monthly Solidarity Contribution"
+                      label={t("momo_modal.tx_note_label", { defaultValue: "Transaction Note / Comment (Optional)" })}
+                      placeholder={t("momo_modal.tx_note_placeholder", { defaultValue: "e.g. Monthly Solidarity Contribution" })}
                       value={comment}
                       onChange={(e) => setComment(e.target.value)}
                     />
@@ -669,7 +691,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                   {statusMessage && (
                     <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 rounded-xl text-xs flex items-center gap-2">
                       <AlertCircle className="h-4 w-4 shrink-0" />
-                      <span>{statusMessage}</span>
+                      <span className="break-words min-w-0">{statusMessage}</span>
                     </div>
                   )}
 
@@ -682,8 +704,12 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                         : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed"
                     }`}
                   >
-                    <Smartphone className="h-4 w-4" />
-                    <span>{itemType === "donation" ? "Authorize MoMo Contribution" : `Pay ${amountRwf.toLocaleString()} RWF via MoMo Prompt`}</span>
+                    <Smartphone className="h-4 w-4 shrink-0" />
+                    <span className="break-words">
+                      {itemType === "donation"
+                        ? t("momo_modal.authorize_donation_btn", { defaultValue: "Authorize MoMo Contribution" })
+                        : t("momo_modal.pay_via_momo_btn", { amount: amountRwf.toLocaleString(), defaultValue: `Pay ${amountRwf.toLocaleString()} RWF via MoMo Prompt` })}
+                    </span>
                   </button>
                 </form>
               )}
@@ -695,9 +721,9 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                   </div>
                   <div>
                     <h4 className="font-display font-bold text-slate-900 dark:text-white text-sm sm:text-base">
-                      Connecting to PawaPay Gateway...
+                      {t("momo_modal.connecting_pawapay", { defaultValue: "Connecting to PawaPay Gateway..." })}
                     </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{statusMessage}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 break-words">{statusMessage}</p>
                   </div>
                 </div>
               )}
@@ -712,42 +738,45 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                   </div>
 
                   <div>
-                    <h4 className="font-display font-extrabold text-slate-900 dark:text-white text-sm sm:text-base">
-                      Prompt Sent to MTN SIM: {phoneNumber}
+                    <h4 className="font-display font-extrabold text-slate-900 dark:text-white text-sm sm:text-base break-words">
+                      {t("momo_modal.prompt_sent_title", { phone: phoneNumber, defaultValue: `Prompt Sent to MTN SIM: ${phoneNumber}` })}
                     </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
-                      Please look at your phone screen right now and enter your MTN MoMo PIN to authorize{" "}
-                      <span className="font-bold text-[#156c45] dark:text-emerald-400">{amountRwf.toLocaleString()} RWF</span>.
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed break-words">
+                      {t("momo_modal.prompt_sent_desc", { amount: amountRwf.toLocaleString(), defaultValue: `Please look at your phone screen right now and enter your MTN MoMo PIN to authorize ${amountRwf.toLocaleString()} RWF.` })}
                     </p>
                   </div>
 
                   {/* Timer & USSD manual shortcut box */}
                   <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-left space-y-3">
-                    <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
                       <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
-                        <Clock className="h-4 w-4 animate-spin" />
-                        {countdown > 0 ? "Awaiting your PIN on phone..." : "Waiting for MTN clearance..."}
+                        <Clock className="h-4 w-4 animate-spin shrink-0" />
+                        {countdown > 0
+                          ? t("momo_modal.awaiting_pin_label", { defaultValue: "Awaiting your PIN on phone..." })
+                          : t("momo_modal.waiting_clearance_label", { defaultValue: "Waiting for MTN clearance..." })}
                       </span>
                       <span className="font-mono text-slate-500">
-                        {countdown > 0 ? `${countdown}s remaining` : "Extended wait"}
+                        {countdown > 0
+                          ? t("momo_modal.seconds_remaining", { seconds: countdown, defaultValue: `${countdown}s remaining` })
+                          : t("momo_modal.extended_wait", { defaultValue: "Extended wait" })}
                       </span>
                     </div>
 
                     <div className="pt-2.5 border-t border-dashed border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 space-y-2">
                       <p className="font-bold text-slate-700 dark:text-slate-300">
-                        Didn't see the USSD pop-up on your screen?
+                        {t("momo_modal.didnt_see_ussd", { defaultValue: "Didn't see the USSD pop-up on your screen?" })}
                       </p>
-                      <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                      <div className="flex flex-wrap items-center justify-between gap-2 bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
                         <span className="text-[11px] text-slate-800 dark:text-slate-200">
-                          Dial <strong className="font-mono font-bold text-[#156c45] dark:text-emerald-400">*182*7*1#</strong> & enter MoMo PIN
+                          {t("momo_modal.dial_shortcut_prefix", { defaultValue: "Dial" })} <strong className="font-mono font-bold text-[#156c45] dark:text-emerald-400">*182*7*1#</strong> {t("momo_modal.dial_shortcut_suffix", { defaultValue: "& enter MoMo PIN" })}
                         </span>
                         <button
                           type="button"
                           onClick={() => handleCopyCode("*182*7*1#", "ussd")}
-                          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition"
+                          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
                         >
                           {copiedCode === "ussd" ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                          <span>{copiedCode === "ussd" ? "Copied" : "Copy Code"}</span>
+                          <span>{copiedCode === "ussd" ? t("common.copied", { defaultValue: "Copied" }) : t("momo_modal.copy_code", { defaultValue: "Copy Code" })}</span>
                         </button>
                       </div>
                     </div>
@@ -759,7 +788,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                       className="w-full py-2.5 text-xs bg-[#156c45] hover:bg-[#125939] text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition"
                     >
                       <RefreshCw className={`h-3.5 w-3.5 ${checkingStatus ? "animate-spin" : ""}`} />
-                      I Approved PIN / Check MoMo Status Now
+                      {t("momo_modal.check_status_now_btn", { defaultValue: "I Approved PIN / Check MoMo Status Now" })}
                     </Button>
                   </div>
 
@@ -769,13 +798,13 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                       onClick={() => setPushStatus("idle")}
                       className="w-full sm:w-1/2 py-2 text-xs rounded-xl"
                     >
-                      Change Phone Number
+                      {t("momo_modal.change_phone_btn", { defaultValue: "Change Phone Number" })}
                     </Button>
                     <Button
                       onClick={() => setTab("manual_sms")}
                       className="w-full sm:w-1/2 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-white rounded-xl"
                     >
-                      Use Manual Reference
+                      {t("momo_modal.use_manual_ref_btn", { defaultValue: "Use Manual Reference" })}
                     </Button>
                   </div>
                 </div>
@@ -783,11 +812,11 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
 
               {pushStatus === "success" && (
                 <PaymentSuccessPulse
-                  title="Payment Confirmed!"
+                  title={t("momo_modal.payment_confirmed_title", { defaultValue: "Payment Confirmed!" })}
                   message={statusMessage}
                   reference={providerTxId || undefined}
                   amountRwf={amountRwf}
-                  doneLabel="Done & Close"
+                  doneLabel={t("momo_modal.done_close_btn", { defaultValue: "Done & Close" })}
                   onDone={onClose}
                 />
               )}
@@ -799,9 +828,9 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                   </div>
                   <div>
                     <h4 className="font-display font-bold text-slate-900 dark:text-white text-sm sm:text-base">
-                      Transaction Incomplete or Timed Out
+                      {t("momo_modal.tx_incomplete_title", { defaultValue: "Transaction Incomplete or Timed Out" })}
                     </h4>
-                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">{statusMessage}</p>
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 break-words">{statusMessage}</p>
                   </div>
                   {depositId && (
                     <Button
@@ -811,7 +840,7 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                       className="w-full py-2.5 text-xs bg-[#156c45] hover:bg-[#125939] text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5"
                     >
                       <RefreshCw className={`h-3.5 w-3.5 ${checkingStatus ? "animate-spin" : ""}`} />
-                      Re-Check Status (If Approved via *182*7*1#)
+                      {t("momo_modal.recheck_status_btn", { defaultValue: "Re-Check Status (If Approved via *182*7*1#)" })}
                     </Button>
                   )}
                   <div className="flex flex-col sm:flex-row gap-2">
@@ -820,13 +849,13 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                       onClick={() => setPushStatus("idle")}
                       className="w-full sm:w-1/2 py-2 text-xs rounded-xl"
                     >
-                      Try Again
+                      {t("momo_modal.try_again_btn", { defaultValue: "Try Again" })}
                     </Button>
                     <Button
                       onClick={() => setTab("manual_sms")}
                       className="w-full sm:w-1/2 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-white rounded-xl"
                     >
-                      Paste SMS Proof
+                      {t("momo_modal.paste_sms_proof_btn", { defaultValue: "Paste SMS Proof" })}
                     </Button>
                   </div>
                 </div>
@@ -834,17 +863,17 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
             </div>
           ) : pushStatus === "success" ? (
             <PaymentSuccessPulse
-              title="Payment Proof Submitted!"
-              message={statusMessage || "Payment slip recorded and submitted for accountant verification."}
+              title={t("momo_modal.proof_submitted_title", { defaultValue: "Payment Proof Submitted!" })}
+              message={statusMessage || t("momo_modal.status_manual_submitted", { defaultValue: "Payment slip recorded and submitted for accountant verification." })}
               reference={providerTxId || manualTxRef || undefined}
               amountRwf={amountRwf}
-              doneLabel="Done & Close"
+              doneLabel={t("momo_modal.done_close_btn", { defaultValue: "Done & Close" })}
               onDone={onClose}
             />
           ) : (
             <form onSubmit={handleManualSubmit} className="space-y-3.5">
-              <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed">
-                If you made a manual Mobile Money transfer via dial code or bank agent, paste the SMS confirmation or reference ID below for the accountant to reconcile.
+              <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed break-words">
+                {t("momo_modal.manual_intro", { defaultValue: "If you made a manual Mobile Money transfer via dial code or bank agent, paste the SMS confirmation or reference ID below for the accountant to reconcile." })}
               </p>
 
               <UssdPaymentHelper
@@ -855,60 +884,67 @@ export const MoMoPushPaymentModal: React.FC<MoMoPushPaymentModalProps> = ({
                 recipientName={finalRecipientName}
                 amountRwf={itemType === "donation" ? undefined : amountRwf}
                 isDonation={itemType === "donation"}
-                itemName={itemName}
+                itemName={resolvedItemName}
                 allowedMethods={isPlatformTarget ? undefined : effectiveAllowedMethods}
                 compact
               />
 
               <Input
-                label="Payer Full Name"
-                placeholder="e.g. Jean Pierre N."
+                label={t("momo_modal.payer_full_name", { defaultValue: "Payer Full Name" })}
+                placeholder={t("momo_modal.payer_full_name_placeholder", { defaultValue: "e.g. Jean Pierre N." })}
                 value={payerName}
                 onChange={(e) => setPayerName(e.target.value)}
                 required
               />
 
               <Input
-                label="Payer Phone Number"
-                placeholder="078XXXXXXX or 079..."
+                label={t("momo_modal.payer_phone_label", { defaultValue: "Payer Phone Number" })}
+                placeholder={t("momo_modal.phone_placeholder", { defaultValue: "078XXXXXXX or 079..." })}
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
                 required
               />
 
               <Input
-                label="Transaction ID / Reference Key (Optional if pasting SMS)"
-                placeholder="e.g. TXN93821034"
+                label={t("momo_modal.manual_tx_ref_label", { defaultValue: "Transaction ID / Reference Key (Optional if pasting SMS)" })}
+                placeholder={t("momo_modal.manual_tx_ref_placeholder", { defaultValue: "e.g. TXN93821034" })}
                 value={manualTxRef}
                 onChange={(e) => setManualTxRef(e.target.value)}
               />
 
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Pasted SMS Confirmation Message <span className="text-rose-500">*</span>
+                  {t("momo_modal.pasted_sms_label", { defaultValue: "Pasted SMS Confirmation Message" })} <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   rows={3}
                   className="w-full text-xs font-mono rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 p-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-[#156c45] outline-none"
-                  placeholder="Paste transaction SMS: 'You have transferred 25,000 RWF to Impacto Ltd. TxId: 98124...'"
+                  placeholder={t("momo_modal.pasted_sms_placeholder", { defaultValue: "Paste transaction SMS: 'You have transferred 25,000 RWF to Impacto Ltd. TxId: 98124...'" })}
                   value={manualSms}
                   onChange={(e) => setManualSms(e.target.value)}
                   required={!manualTxRef}
                 />
               </div>
 
+              {manualError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 rounded-xl text-xs flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span className="break-words min-w-0">{manualError}</span>
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={manualSubmitting}
-                className="w-full py-3 sm:py-3.5 bg-[#156c45] hover:bg-[#125939] active:scale-[0.99] text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition flex items-center justify-center gap-2"
+                className="w-full py-3 sm:py-3.5 bg-[#156c45] hover:bg-[#125939] active:scale-[0.99] text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
               >
                 {manualSubmitting ? (
                   <>
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                    <span>Submitting Payment Slip...</span>
+                    <RefreshCw className="h-4 w-4 animate-spin shrink-0" />
+                    <span>{t("momo_modal.submitting_slip", { defaultValue: "Submitting Payment Slip..." })}</span>
                   </>
                 ) : (
-                  <span>Submit Payment Slip for Verification</span>
+                  <span>{t("momo_modal.submit_slip_btn", { defaultValue: "Submit Payment Slip for Verification" })}</span>
                 )}
               </button>
             </form>

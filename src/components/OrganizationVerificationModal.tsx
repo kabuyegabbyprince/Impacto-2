@@ -16,6 +16,7 @@ import {
   Eye,
   Loader2,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Modal, Button, Input } from "./ui";
 import { Organization, OrgMember } from "../types";
 import {
@@ -43,6 +44,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
   org,
   members,
 }) => {
+  const { t } = useTranslation();
   const { addToast } = useToast();
   const { user } = useAuthStore();
   const { activeMember } = useOrgStore();
@@ -168,11 +170,11 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
   const compressImageToDataUrl = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onerror = () => reject(new Error("Could not read selected file."));
+      reader.onerror = () => reject(new Error(t("org_verification.err_read_file", { defaultValue: "Could not read selected file." })));
       reader.onload = (ev) => {
         const rawResult = ev.target?.result as string;
         if (!rawResult) {
-          reject(new Error("Empty file result."));
+          reject(new Error(t("org_verification.err_empty_file", { defaultValue: "Empty file result." })));
           return;
         }
         if (!file.type.startsWith("image/")) {
@@ -216,7 +218,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
-      addToast("File size too large. Please upload an image under 5MB.", "error");
+      addToast(t("org_verification.err_file_too_large", { defaultValue: "File size too large. Please upload an image under 5MB." }), "error");
       return;
     }
 
@@ -229,20 +231,20 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
           `verifications/${org.id}`
         );
         setter(storagePath);
-        addToast("Document uploaded securely.", "success");
+        addToast(t("org_verification.toast_doc_uploaded", { defaultValue: "Document uploaded securely." }), "success");
       } catch (err: any) {
         try {
           const fallbackDataUrl = await compressImageToDataUrl(file);
           setter(fallbackDataUrl);
           addToast(
-            "Document prepared for submission (direct encrypted payload fallback).",
+            t("org_verification.toast_doc_fallback", { defaultValue: "Document prepared for submission (direct encrypted payload fallback)." }),
             "success"
           );
         } catch (fallbackErr: any) {
           addToast(
             err?.message ||
               fallbackErr?.message ||
-              "Failed to process document for upload.",
+              t("org_verification.err_upload_failed", { defaultValue: "Failed to process document for upload." }),
             "error"
           );
         }
@@ -281,20 +283,20 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
     setAccountantDocType("passport");
     setAccountantDocNumber("PC992810");
 
-    addToast("Sample identity documents & telephone numbers loaded.", "success");
+    addToast(t("org_verification.toast_sample_loaded", { defaultValue: "Sample identity documents & telephone numbers loaded." }), "success");
   };
 
   const handleIndividualSubmit = async () => {
     if (!currentMember) {
-      addToast("Active officer membership record not found for this organization.", "error");
+      addToast(t("org_verification.err_no_member_record", { defaultValue: "Active officer membership record not found for this organization." }), "error");
       return;
     }
     if (!myPhone.trim()) {
-      addToast("Please provide your telephone number for verification contact.", "error");
+      addToast(t("org_verification.err_phone_required", { defaultValue: "Please provide your telephone number for verification contact." }), "error");
       return;
     }
     if (!myPassportPhoto || !myIdDoc || !myDocNumber.trim()) {
-      addToast("Please provide your passport photo, National ID/Passport scan, and document number.", "error");
+      addToast(t("org_verification.err_docs_required", { defaultValue: "Please provide your passport photo, National ID/Passport scan, and document number." }), "error");
       return;
     }
 
@@ -312,42 +314,42 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
 
       if (res.allOfficersSubmitted) {
         addToast(
-          "All mandatory officer documents submitted! Organization is now awaiting verification by Super Admin.",
+          t("org_verification.toast_all_submitted", { defaultValue: "All mandatory officer documents submitted! Organization is now awaiting verification by Super Admin." }),
           "success"
         );
       } else {
         addToast(
-          "Your officer verification documents were saved! Both Admin and Accountant must submit theirs to queue the organization for Super Admin audit.",
+          t("org_verification.toast_officer_saved", { defaultValue: "Your officer verification documents were saved! Both Admin and Accountant must submit theirs to queue the organization for Super Admin audit." }),
           "success"
         );
       }
       onClose();
     } catch (err: any) {
-      addToast(err?.message || "Failed to submit verification credentials.", "error");
+      addToast(err?.message || t("org_verification.err_submit_failed", { defaultValue: "Failed to submit verification credentials." }), "error");
     }
   };
 
   const handleBulkSubmit = async () => {
     if (!adminMember) {
-      addToast("No organization administrator found.", "error");
+      addToast(t("org_verification.err_no_admin", { defaultValue: "No organization administrator found." }), "error");
       return;
     }
     if (!accountantMember) {
       addToast(
-        "Accountant Required: An organization must appoint an Accountant to satisfy authenticity verification.",
+        t("org_verification.err_no_accountant", { defaultValue: "Accountant Required: An organization must appoint an Accountant to satisfy authenticity verification." }),
         "error"
       );
       return;
     }
 
     if (!adminPhone.trim() || !adminPassportPhoto || !adminIdDoc || !adminDocNumber.trim()) {
-      addToast("Please provide administrator telephone number, passport photo, and National ID/Passport.", "error");
+      addToast(t("org_verification.err_admin_docs_missing", { defaultValue: "Please provide administrator telephone number, passport photo, and National ID/Passport." }), "error");
       setSubmittingRoleTab("admin");
       return;
     }
 
     if (!accountantPhone.trim() || !accountantPassportPhoto || !accountantIdDoc || !accountantDocNumber.trim()) {
-      addToast("Please provide accountant telephone number, passport photo, and National ID/Passport.", "error");
+      addToast(t("org_verification.err_accountant_docs_missing", { defaultValue: "Please provide accountant telephone number, passport photo, and National ID/Passport." }), "error");
       setSubmittingRoleTab("accountant");
       return;
     }
@@ -371,12 +373,12 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
       });
 
       addToast(
-        "Verification dossier submitted! Organization is now awaiting system verification by Super Admin.",
+        t("org_verification.toast_dossier_submitted", { defaultValue: "Verification dossier submitted! Organization is now awaiting system verification by Super Admin." }),
         "success"
       );
       onClose();
     } catch (err: any) {
-      addToast(err?.message || "Failed to submit verification dossier.", "error");
+      addToast(err?.message || t("org_verification.err_dossier_failed", { defaultValue: "Failed to submit verification dossier." }), "error");
     }
   };
 
@@ -385,7 +387,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
       await broadcastNotificationMutation.mutateAsync({
         org_id: org.id,
         recipient_group: "officers",
-        body_text: `Member verification reminder: Please submit Admin & Accountant authenticity documents for ${org.name}.`,
+        body_text: t("org_verification.nudge_broadcast_body", { orgName: org.name, defaultValue: `Member verification reminder: Please submit Admin & Accountant authenticity documents for ${org.name}.` }),
         recipient_count: Math.max(officerMembers.length, 1),
         sent_by: user?.id || "member",
       });
@@ -393,7 +395,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
       console.warn("[Verification] Notification broadcast fallback notice:", err);
     }
     setNudgeSent(true);
-    addToast("Reminder sent to organization leadership to submit authenticity documents!", "success");
+    addToast(t("org_verification.toast_nudge_sent", { defaultValue: "Reminder sent to organization leadership to submit authenticity documents!" }), "success");
   };
 
   const handleRemindOfficer = async (officer: OrgMember) => {
@@ -402,7 +404,11 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
       await broadcastNotificationMutation.mutateAsync({
         org_id: org.id,
         recipient_group: officer.role || "officers",
-        body_text: `Verification document reminder for ${officerName} (${officer.role}): Please upload your passport photo and government ID in Organization Verification.`,
+        body_text: t("org_verification.officer_reminder_body", {
+          officerName,
+          role: officer.role,
+          defaultValue: `Verification document reminder for ${officerName} (${officer.role}): Please upload your passport photo and government ID in Organization Verification.`
+        }),
         recipient_count: 1,
         sent_by: user?.id || "admin",
       });
@@ -411,7 +417,11 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
     }
     setRemindedIds((prev) => ({ ...prev, [officer.id]: true }));
     addToast(
-      `Reminder sent to ${officerName} (${officer.phone_number || "on file"}) to submit verification documents!`,
+      t("org_verification.toast_officer_reminded", {
+        officerName,
+        phone: officer.phone_number || t("org_verification.on_file", { defaultValue: "on file" }),
+        defaultValue: `Reminder sent to ${officerName} (${officer.phone_number || "on file"}) to submit verification documents!`
+      }),
       "success"
     );
   };
@@ -461,28 +471,29 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-base font-bold text-gray-900 dark:text-white break-words">
-                    Organization Authenticity Verification
+                    {t("org_verification.header_title", { defaultValue: "Organization Authenticity Verification" })}
                   </h2>
                   {isVerified ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 flex items-center gap-1 shrink-0">
-                      <CheckCircle2 className="h-3 w-3" /> VERIFIED GREEN TICK
+                      <CheckCircle2 className="h-3 w-3" /> {t("org_verification.badge_verified", { defaultValue: "VERIFIED GREEN TICK" })}
                     </span>
                   ) : isPending ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 flex items-center gap-1 shrink-0">
-                      <Clock className="h-3 w-3" /> AWAITING AUDIT
+                      <Clock className="h-3 w-3" /> {t("org_verification.badge_pending", { defaultValue: "AWAITING AUDIT" })}
                     </span>
                   ) : isRejected ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-300 flex items-center gap-1 shrink-0">
-                      <XCircle className="h-3 w-3" /> REJECTED - ACTION NEEDED
+                      <XCircle className="h-3 w-3" /> {t("org_verification.badge_rejected", { defaultValue: "REJECTED - ACTION NEEDED" })}
                     </span>
                   ) : (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 flex items-center gap-1 shrink-0">
-                      UNVERIFIED
+                      {t("org_verification.badge_unverified", { defaultValue: "UNVERIFIED" })}
                     </span>
                   )}
                 </div>
                 <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 break-words">
-                  Authenticity status for <strong className="text-gray-900 dark:text-white">{org.name}</strong> (@{org.slug})
+                  {t("org_verification.header_subtitle_prefix", { defaultValue: "Authenticity status for" })}{" "}
+                  <strong className="text-gray-900 dark:text-white">{org.name}</strong> (@{org.slug})
                 </p>
               </div>
             </div>
@@ -493,7 +504,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                 onClick={fillSampleDocuments}
                 className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 transition cursor-pointer shrink-0"
               >
-                <Sparkles className="h-3 w-3" /> Auto-Fill Demo IDs
+                <Sparkles className="h-3 w-3" /> {t("org_verification.auto_fill_demo", { defaultValue: "Auto-Fill Demo IDs" })}
               </button>
             )}
           </div>
@@ -503,9 +514,12 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
             <div className="p-3.5 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl flex items-center gap-3 min-w-0">
               <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
               <div className="text-xs text-emerald-900 dark:text-emerald-200 min-w-0">
-                <p className="font-bold">Official Green Authenticity Tick Active</p>
+                <p className="font-bold">{t("org_verification.callout_verified_title", { defaultValue: "Official Green Authenticity Tick Active" })}</p>
                 <p className="text-emerald-700 dark:text-emerald-300 text-[11px] mt-0.5 break-words">
-                  This organization is verified by platform auditors. Verified by {org.verified_by || "Platform Auditor"}. Green tick is visible on all member portals and public directories.
+                  {t("org_verification.callout_verified_desc", {
+                    auditor: org.verified_by || t("org_verification.platform_auditor", { defaultValue: "Platform Auditor" }),
+                    defaultValue: `This organization is verified by platform auditors. Verified by ${org.verified_by || "Platform Auditor"}. Green tick is visible on all member portals and public directories.`
+                  })}
                 </p>
               </div>
             </div>
@@ -513,9 +527,9 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
             <div className="p-3.5 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl flex items-center gap-3 min-w-0">
               <Clock className="h-5 w-5 text-amber-600 shrink-0 animate-pulse" />
               <div className="text-xs text-amber-900 dark:text-amber-200 min-w-0">
-                <p className="font-bold">All Required Documents Submitted — Awaiting System Verification</p>
+                <p className="font-bold">{t("org_verification.callout_pending_title", { defaultValue: "All Required Documents Submitted — Awaiting System Verification" })}</p>
                 <p className="text-amber-700 dark:text-amber-300 text-[11px] mt-0.5 break-words">
-                  Admin & Accountant credentials have been received. Super Admin is reviewing the dossier to grant the official Green Tick.
+                  {t("org_verification.callout_pending_desc", { defaultValue: "Admin & Accountant credentials have been received. Super Admin is reviewing the dossier to grant the official Green Tick." })}
                 </p>
               </div>
             </div>
@@ -523,19 +537,19 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
             <div className="p-3.5 bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-2xl flex items-start gap-3 min-w-0">
               <XCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
               <div className="text-xs text-rose-900 dark:text-rose-200 min-w-0">
-                <p className="font-bold">Verification Dossier Rejected — Corrections Required</p>
+                <p className="font-bold">{t("org_verification.callout_rejected_title", { defaultValue: "Verification Dossier Rejected — Corrections Required" })}</p>
                 <p className="text-rose-700 dark:text-rose-300 text-[11px] mt-0.5 break-words">
-                  <strong className="font-semibold">Reviewer Feedback:</strong>{" "}
-                  {org.verification_rejection_reason || "Please review uploaded ID scans and resubmit clear documents."}
+                  <strong className="font-semibold">{t("org_verification.reviewer_feedback_label", { defaultValue: "Reviewer Feedback:" })}</strong>{" "}
+                  {org.verification_rejection_reason || t("org_verification.default_rejection_feedback", { defaultValue: "Please review uploaded ID scans and resubmit clear documents." })}
                 </p>
               </div>
             </div>
           ) : (
             <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-700 dark:text-slate-300 flex items-start gap-2.5 min-w-0">
               <Info className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-              <div className="text-[11px] leading-relaxed min-w-0">
-                <span className="font-bold text-gray-900 dark:text-white">Authenticity Rule:</span>{" "}
-                All organizations start <span className="font-bold">Unverified</span>. Verification requires both your <span className="font-bold">Administrator</span> and <span className="font-bold">Accountant</span> to submit their passport photo, National ID/Passport, and telephone number. <span className="text-emerald-700 dark:text-emerald-400 font-semibold">Normal members do not need to verify</span>.
+              <div className="text-[11px] leading-relaxed min-w-0 break-words">
+                <span className="font-bold text-gray-900 dark:text-white">{t("org_verification.authenticity_rule_label", { defaultValue: "Authenticity Rule:" })}</span>{" "}
+                {t("org_verification.authenticity_rule_desc", { defaultValue: "All organizations start Unverified. Verification requires both your Administrator and Accountant to submit their passport photo, National ID/Passport, and telephone number. Normal members do not need to verify." })}
               </div>
             </div>
           )}
@@ -544,10 +558,15 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
           <div className="p-3.5 rounded-xl border bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 flex flex-col gap-2 min-w-0">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> Mandatory Officer Progress (Admin & Accountant):
+                <Users className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> {t("org_verification.mandatory_progress_label", { defaultValue: "Mandatory Officer Progress (Admin & Accountant):" })}
               </span>
               <span className="font-mono font-bold text-emerald-600">
-                {submittedMandatory.length} / {requiredCount} Submitted ({progressPercent}%)
+                {t("org_verification.submitted_progress", {
+                  submitted: submittedMandatory.length,
+                  required: requiredCount,
+                  percent: progressPercent,
+                  defaultValue: `${submittedMandatory.length} / ${requiredCount} Submitted (${progressPercent}%)`
+                })}
               </span>
             </div>
             <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
@@ -570,7 +589,10 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                     : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
                 }`}
               >
-                My Officer Verification ({currentMember?.role?.toUpperCase()})
+                {t("org_verification.tab_my_submission", {
+                  role: currentMember?.role?.toUpperCase(),
+                  defaultValue: `My Officer Verification (${currentMember?.role?.toUpperCase()})`
+                })}
               </button>
             )}
 
@@ -584,7 +606,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                     : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
                 }`}
               >
-                Admin Full Team Dossier
+                {t("org_verification.tab_all_officers", { defaultValue: "Admin Full Team Dossier" })}
               </button>
             )}
 
@@ -597,7 +619,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                   : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
               }`}
             >
-              Officer Roster & Status
+              {t("org_verification.tab_roster", { defaultValue: "Officer Roster & Status" })}
             </button>
           </div>
 
@@ -630,13 +652,13 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                       {currentMember?.role?.substring(0, 2).toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <span className="text-xs font-bold text-slate-900 dark:text-white block truncate">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white block break-words">
                         {currentMember?.user?.full_name || user?.full_name} ({currentMember?.role?.toUpperCase()})
                       </span>
-                      <span className="text-[11px] text-slate-500 block">
+                      <span className="text-[11px] text-slate-500 block break-words">
                         {isVerified
-                          ? "Your credentials have been verified"
-                          : "Submit your individual identity credentials below"}
+                          ? t("org_verification.your_creds_verified", { defaultValue: "Your credentials have been verified" })
+                          : t("org_verification.submit_creds_below", { defaultValue: "Submit your individual identity credentials below" })}
                       </span>
                     </div>
                   </div>
@@ -652,12 +674,12 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                     }`}
                   >
                     {currentMember?.verification_status === "verified"
-                      ? "Verified"
+                      ? t("org_verification.status_verified", { defaultValue: "Verified" })
                       : currentMember?.verification_status === "rejected"
-                      ? "Rejected — Resubmit"
+                      ? t("org_verification.status_rejected_resubmit", { defaultValue: "Rejected — Resubmit" })
                       : currentMember?.passport_photo_url && currentMember?.id_document_url
-                      ? "Submitted"
-                      : "Documents Needed"}
+                      ? t("org_verification.status_submitted", { defaultValue: "Submitted" })
+                      : t("org_verification.status_docs_needed", { defaultValue: "Documents Needed" })}
                   </span>
                 </div>
 
@@ -665,10 +687,10 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                   <div className="p-3 rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50/70 dark:bg-rose-950/30 text-xs text-rose-800 dark:text-rose-200 flex items-start gap-2 min-w-0">
                     <XCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
                     <div className="min-w-0">
-                      <span className="font-bold block">Correction Required Before Re-Review</span>
+                      <span className="font-bold block">{t("org_verification.correction_required_title", { defaultValue: "Correction Required Before Re-Review" })}</span>
                       <span className="text-[11px] break-words block mt-0.5">
                         {org.verification_rejection_reason ||
-                          "Please verify your ID number and upload clear, legible copies of your passport photo and government ID."}
+                          t("org_verification.correction_required_fallback", { defaultValue: "Please verify your ID number and upload clear, legible copies of your passport photo and government ID." })}
                       </span>
                     </div>
                   </div>
@@ -678,11 +700,11 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                   <div className="p-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/30 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2 min-w-0">
                     <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                     <div className="min-w-0">
-                      <span className="font-bold block">Your Documents Are Saved</span>
+                      <span className="font-bold block">{t("org_verification.docs_saved_title", { defaultValue: "Your Documents Are Saved" })}</span>
                       <span className="text-[11px] break-words block mt-0.5">
                         {myRoleIsAccountant
-                          ? "Waiting for your Organization Administrator to submit their verification documents so the organization can enter Super Admin audit."
-                          : "Waiting for your Organization Accountant to submit their verification documents so the organization can enter Super Admin audit."}
+                          ? t("org_verification.waiting_for_admin", { defaultValue: "Waiting for your Organization Administrator to submit their verification documents so the organization can enter Super Admin audit." })
+                          : t("org_verification.waiting_for_accountant", { defaultValue: "Waiting for your Organization Accountant to submit their verification documents so the organization can enter Super Admin audit." })}
                       </span>
                     </div>
                   </div>
@@ -690,7 +712,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <Input
-                    label="Telephone / Mobile Number (Required)"
+                    label={t("org_verification.phone_required_label", { defaultValue: "Telephone / Mobile Number (Required)" })}
                     value={myPhone}
                     onChange={(e) => setMyPhone(e.target.value)}
                     placeholder="+250 788 000 000"
@@ -701,7 +723,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
 
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-semibold text-gray-700 dark:text-slate-300">
-                      Government ID Document Type
+                      {t("org_verification.gov_id_type_label", { defaultValue: "Government ID Document Type" })}
                     </label>
                     <select
                       value={myDocType}
@@ -709,17 +731,17 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                       disabled={isVerified}
                       className="w-full text-xs rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 px-3 py-2 text-slate-900 dark:text-white disabled:opacity-60"
                     >
-                      <option value="national_id">National ID Card (16-Digit)</option>
-                      <option value="passport">Passport</option>
+                      <option value="national_id">{t("org_verification.doc_type_national_id", { defaultValue: "National ID Card (16-Digit)" })}</option>
+                      <option value="passport">{t("org_verification.doc_type_passport", { defaultValue: "Passport" })}</option>
                     </select>
                   </div>
 
                   <div className="sm:col-span-2">
                     <Input
-                      label="Document / ID Number"
+                      label={t("org_verification.doc_number_label", { defaultValue: "Document / ID Number" })}
                       value={myDocNumber}
                       onChange={(e) => setMyDocNumber(e.target.value)}
-                      placeholder="e.g. 1199080084592011 or PC123456"
+                      placeholder={t("org_verification.doc_number_placeholder", { defaultValue: "e.g. 1199080084592011 or PC123456" })}
                       disabled={isVerified}
                       required
                     />
@@ -730,13 +752,13 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col gap-2">
                     <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                      <Camera className="h-4 w-4 text-emerald-600" /> 1. Passport Photo (Headshot)
+                      <Camera className="h-4 w-4 text-emerald-600 shrink-0" /> {t("org_verification.upload_passport_heading", { defaultValue: "1. Passport Photo (Headshot)" })}
                     </span>
                     {myPassportPhoto ? (
                       <div className="h-32 rounded-lg overflow-hidden relative group border bg-slate-100 dark:bg-slate-800">
                         <ResolvedImage
                           src={myPassportPhoto}
-                          alt="Passport Photo"
+                          alt={t("org_verification.passport_photo_alt", { defaultValue: "Passport Photo" })}
                           bucketName="impacto-files"
                           className="w-full h-full object-cover"
                         />
@@ -745,7 +767,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                             type="button"
                             onClick={() => setZoomDocUrl(myPassportPhoto)}
                             className="bg-black/60 text-white rounded-full p-1 cursor-pointer"
-                            title="Preview"
+                            title={t("org_verification.preview_btn", { defaultValue: "Preview" })}
                           >
                             <Eye className="h-3 w-3" />
                           </button>
@@ -754,7 +776,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                               type="button"
                               onClick={() => setMyPassportPhoto("")}
                               className="bg-black/60 text-white rounded-full p-1 cursor-pointer"
-                              title="Remove"
+                              title={t("common.remove", { defaultValue: "Remove" })}
                             >
                               <X className="h-3 w-3" />
                             </button>
@@ -762,13 +784,13 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                         </div>
                       </div>
                     ) : (
-                      <label className="h-32 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 text-xs text-slate-500 gap-1">
+                      <label className="h-32 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 text-xs text-slate-500 gap-1 text-center px-2">
                         {uploadingField === "my_passport" ? (
                           <Loader2 className="h-5 w-5 text-emerald-600 animate-spin" />
                         ) : (
                           <Upload className="h-5 w-5 text-slate-400" />
                         )}
-                        <span>{uploadingField === "my_passport" ? "Uploading..." : "Upload Passport Photo"}</span>
+                        <span>{uploadingField === "my_passport" ? t("org_verification.uploading", { defaultValue: "Uploading..." }) : t("org_verification.upload_passport_btn", { defaultValue: "Upload Passport Photo" })}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -782,13 +804,13 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
 
                   <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col gap-2">
                     <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                      <FileText className="h-4 w-4 text-emerald-600" /> 2. National ID / Passport Scan
+                      <FileText className="h-4 w-4 text-emerald-600 shrink-0" /> {t("org_verification.upload_id_heading", { defaultValue: "2. National ID / Passport Scan" })}
                     </span>
                     {myIdDoc ? (
                       <div className="h-32 rounded-lg overflow-hidden relative group border bg-slate-100 dark:bg-slate-800">
                         <ResolvedImage
                           src={myIdDoc}
-                          alt="ID Scan"
+                          alt={t("org_verification.id_scan_alt", { defaultValue: "ID Scan" })}
                           bucketName="impacto-files"
                           className="w-full h-full object-cover"
                         />
@@ -797,7 +819,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                             type="button"
                             onClick={() => setZoomDocUrl(myIdDoc)}
                             className="bg-black/60 text-white rounded-full p-1 cursor-pointer"
-                            title="Preview"
+                            title={t("org_verification.preview_btn", { defaultValue: "Preview" })}
                           >
                             <Eye className="h-3 w-3" />
                           </button>
@@ -806,7 +828,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                               type="button"
                               onClick={() => setMyIdDoc("")}
                               className="bg-black/60 text-white rounded-full p-1 cursor-pointer"
-                              title="Remove"
+                              title={t("common.remove", { defaultValue: "Remove" })}
                             >
                               <X className="h-3 w-3" />
                             </button>
@@ -814,13 +836,13 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                         </div>
                       </div>
                     ) : (
-                      <label className="h-32 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 text-xs text-slate-500 gap-1">
+                      <label className="h-32 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 text-xs text-slate-500 gap-1 text-center px-2">
                         {uploadingField === "my_id" ? (
                           <Loader2 className="h-5 w-5 text-emerald-600 animate-spin" />
                         ) : (
                           <Upload className="h-5 w-5 text-slate-400" />
                         )}
-                        <span>{uploadingField === "my_id" ? "Uploading..." : "Upload ID Scan"}</span>
+                        <span>{uploadingField === "my_id" ? t("org_verification.uploading", { defaultValue: "Uploading..." }) : t("org_verification.upload_id_btn", { defaultValue: "Upload ID Scan" })}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -841,8 +863,8 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 mt-2"
                   >
                     {currentMember?.verification_status === "rejected"
-                      ? "Resubmit My Identity Documents"
-                      : "Submit My Identity Documents"}
+                      ? t("org_verification.resubmit_docs_btn", { defaultValue: "Resubmit My Identity Documents" })
+                      : t("org_verification.submit_docs_btn", { defaultValue: "Submit My Identity Documents" })}
                   </Button>
                 )}
               </div>
@@ -862,7 +884,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                       : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
                   }`}
                 >
-                  1. Administrator Documents
+                  {t("org_verification.step_admin_docs", { defaultValue: "1. Administrator Documents" })}
                 </button>
                 <button
                   type="button"
@@ -873,18 +895,18 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                       : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
                   }`}
                 >
-                  2. Accountant Documents
+                  {t("org_verification.step_accountant_docs", { defaultValue: "2. Accountant Documents" })}
                 </button>
               </div>
 
               {submittingRoleTab === "admin" ? (
                 <div className="flex flex-col gap-3">
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200 break-words">
-                    Administrator: {adminMember?.user?.full_name || "Admin"}
+                    {t("org_verification.admin_prefix", { name: adminMember?.user?.full_name || t("org_verification.admin_fallback", { defaultValue: "Admin" }), defaultValue: `Administrator: ${adminMember?.user?.full_name || "Admin"}` })}
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Input
-                      label="Administrator Phone Number"
+                      label={t("org_verification.admin_phone_label", { defaultValue: "Administrator Phone Number" })}
                       value={adminPhone}
                       onChange={(e) => setAdminPhone(e.target.value)}
                       placeholder="+250 788 111 222"
@@ -892,20 +914,20 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                     />
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-semibold text-gray-700 dark:text-slate-300">
-                        Admin ID Document Type
+                        {t("org_verification.admin_id_type_label", { defaultValue: "Admin ID Document Type" })}
                       </label>
                       <select
                         value={adminDocType}
                         onChange={(e) => setAdminDocType(e.target.value as any)}
                         className="w-full text-xs rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 px-3 py-2 text-slate-900 dark:text-white"
                       >
-                        <option value="national_id">National ID Card (16-Digit)</option>
-                        <option value="passport">Passport</option>
+                        <option value="national_id">{t("org_verification.doc_type_national_id", { defaultValue: "National ID Card (16-Digit)" })}</option>
+                        <option value="passport">{t("org_verification.doc_type_passport", { defaultValue: "Passport" })}</option>
                       </select>
                     </div>
                     <div className="sm:col-span-2">
                       <Input
-                        label="Admin ID Number"
+                        label={t("org_verification.admin_id_num_label", { defaultValue: "Admin ID Number" })}
                         value={adminDocNumber}
                         onChange={(e) => setAdminDocNumber(e.target.value)}
                         placeholder="1199080084592011"
@@ -917,7 +939,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                       <div className="h-28 rounded-lg overflow-hidden relative border bg-slate-100 dark:bg-slate-800">
                         <ResolvedImage
                           src={adminPassportPhoto}
-                          alt="Admin Passport"
+                          alt={t("org_verification.admin_passport_alt", { defaultValue: "Admin Passport" })}
                           bucketName="impacto-files"
                           className="w-full h-full object-cover"
                         />
@@ -930,13 +952,13 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                         </button>
                       </div>
                     ) : (
-                      <label className="h-28 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg flex flex-col items-center justify-center cursor-pointer text-xs text-slate-500">
+                      <label className="h-28 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg flex flex-col items-center justify-center cursor-pointer text-xs text-slate-500 text-center px-2">
                         {uploadingField === "admin_passport" ? (
                           <Loader2 className="h-4 w-4 mb-1 animate-spin text-emerald-600" />
                         ) : (
                           <Upload className="h-4 w-4 mb-1" />
                         )}
-                        <span>{uploadingField === "admin_passport" ? "Uploading..." : "Upload Passport Photo"}</span>
+                        <span>{uploadingField === "admin_passport" ? t("org_verification.uploading", { defaultValue: "Uploading..." }) : t("org_verification.upload_passport_btn", { defaultValue: "Upload Passport Photo" })}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -951,7 +973,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                       <div className="h-28 rounded-lg overflow-hidden relative border bg-slate-100 dark:bg-slate-800">
                         <ResolvedImage
                           src={adminIdDoc}
-                          alt="Admin ID"
+                          alt={t("org_verification.admin_id_alt", { defaultValue: "Admin ID" })}
                           bucketName="impacto-files"
                           className="w-full h-full object-cover"
                         />
@@ -964,13 +986,13 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                         </button>
                       </div>
                     ) : (
-                      <label className="h-28 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg flex flex-col items-center justify-center cursor-pointer text-xs text-slate-500">
+                      <label className="h-28 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg flex flex-col items-center justify-center cursor-pointer text-xs text-slate-500 text-center px-2">
                         {uploadingField === "admin_id" ? (
                           <Loader2 className="h-4 w-4 mb-1 animate-spin text-emerald-600" />
                         ) : (
                           <Upload className="h-4 w-4 mb-1" />
                         )}
-                        <span>{uploadingField === "admin_id" ? "Uploading..." : "Upload National ID / Passport"}</span>
+                        <span>{uploadingField === "admin_id" ? t("org_verification.uploading", { defaultValue: "Uploading..." }) : t("org_verification.upload_national_id_passport_btn", { defaultValue: "Upload National ID / Passport" })}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -985,11 +1007,14 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
               ) : (
                 <div className="flex flex-col gap-3">
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200 break-words">
-                    Accountant: {accountantMember?.user?.full_name || "No Accountant Appointed Yet"}
+                    {t("org_verification.accountant_prefix", {
+                      name: accountantMember?.user?.full_name || t("org_verification.no_accountant_appointed", { defaultValue: "No Accountant Appointed Yet" }),
+                      defaultValue: `Accountant: ${accountantMember?.user?.full_name || "No Accountant Appointed Yet"}`
+                    })}
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Input
-                      label="Accountant Phone Number"
+                      label={t("org_verification.accountant_phone_label", { defaultValue: "Accountant Phone Number" })}
                       value={accountantPhone}
                       onChange={(e) => setAccountantPhone(e.target.value)}
                       placeholder="+250 788 333 444"
@@ -997,20 +1022,20 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                     />
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-semibold text-gray-700 dark:text-slate-300">
-                        Accountant ID Document Type
+                        {t("org_verification.accountant_id_type_label", { defaultValue: "Accountant ID Document Type" })}
                       </label>
                       <select
                         value={accountantDocType}
                         onChange={(e) => setAccountantDocType(e.target.value as any)}
                         className="w-full text-xs rounded-xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 px-3 py-2 text-slate-900 dark:text-white"
                       >
-                        <option value="national_id">National ID Card (16-Digit)</option>
-                        <option value="passport">Passport</option>
+                        <option value="national_id">{t("org_verification.doc_type_national_id", { defaultValue: "National ID Card (16-Digit)" })}</option>
+                        <option value="passport">{t("org_verification.doc_type_passport", { defaultValue: "Passport" })}</option>
                       </select>
                     </div>
                     <div className="sm:col-span-2">
                       <Input
-                        label="Accountant ID Number"
+                        label={t("org_verification.accountant_id_num_label", { defaultValue: "Accountant ID Number" })}
                         value={accountantDocNumber}
                         onChange={(e) => setAccountantDocNumber(e.target.value)}
                         placeholder="PC992810"
@@ -1022,7 +1047,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                       <div className="h-28 rounded-lg overflow-hidden relative border bg-slate-100 dark:bg-slate-800">
                         <ResolvedImage
                           src={accountantPassportPhoto}
-                          alt="Accountant Passport"
+                          alt={t("org_verification.accountant_passport_alt", { defaultValue: "Accountant Passport" })}
                           bucketName="impacto-files"
                           className="w-full h-full object-cover"
                         />
@@ -1035,13 +1060,13 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                         </button>
                       </div>
                     ) : (
-                      <label className="h-28 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg flex flex-col items-center justify-center cursor-pointer text-xs text-slate-500">
+                      <label className="h-28 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg flex flex-col items-center justify-center cursor-pointer text-xs text-slate-500 text-center px-2">
                         {uploadingField === "acc_passport" ? (
                           <Loader2 className="h-4 w-4 mb-1 animate-spin text-emerald-600" />
                         ) : (
                           <Upload className="h-4 w-4 mb-1" />
                         )}
-                        <span>{uploadingField === "acc_passport" ? "Uploading..." : "Upload Passport Photo"}</span>
+                        <span>{uploadingField === "acc_passport" ? t("org_verification.uploading", { defaultValue: "Uploading..." }) : t("org_verification.upload_passport_btn", { defaultValue: "Upload Passport Photo" })}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -1056,7 +1081,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                       <div className="h-28 rounded-lg overflow-hidden relative border bg-slate-100 dark:bg-slate-800">
                         <ResolvedImage
                           src={accountantIdDoc}
-                          alt="Accountant ID"
+                          alt={t("org_verification.accountant_id_alt", { defaultValue: "Accountant ID" })}
                           bucketName="impacto-files"
                           className="w-full h-full object-cover"
                         />
@@ -1069,13 +1094,13 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                         </button>
                       </div>
                     ) : (
-                      <label className="h-28 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg flex flex-col items-center justify-center cursor-pointer text-xs text-slate-500">
+                      <label className="h-28 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg flex flex-col items-center justify-center cursor-pointer text-xs text-slate-500 text-center px-2">
                         {uploadingField === "acc_id" ? (
                           <Loader2 className="h-4 w-4 mb-1 animate-spin text-emerald-600" />
                         ) : (
                           <Upload className="h-4 w-4 mb-1" />
                         )}
-                        <span>{uploadingField === "acc_id" ? "Uploading..." : "Upload National ID / Passport"}</span>
+                        <span>{uploadingField === "acc_id" ? t("org_verification.uploading", { defaultValue: "Uploading..." }) : t("org_verification.upload_national_id_passport_btn", { defaultValue: "Upload National ID / Passport" })}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -1095,7 +1120,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                 disabled={uploadingField !== null}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 mt-2"
               >
-                Submit Complete Leadership Dossier (Admin & Accountant)
+                {t("org_verification.submit_dossier_btn", { defaultValue: "Submit Complete Leadership Dossier (Admin & Accountant)" })}
               </Button>
             </div>
           )}
@@ -1105,7 +1130,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
             <div className="flex flex-col gap-4 min-w-0">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-bold text-slate-900 dark:text-white">
-                  Leadership Roles Verification Roster ({officerMembers.length} Officers)
+                  {t("org_verification.roster_title", { count: officerMembers.length, defaultValue: `Leadership Roles Verification Roster (${officerMembers.length} Officers)` })}
                 </span>
                 {!isVerified && !isOfficer && (
                   <Button
@@ -1115,7 +1140,9 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                     className="text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 flex items-center gap-1.5 shrink-0"
                   >
                     <Send className="h-3.5 w-3.5" />
-                    {nudgeSent ? "Reminder Sent!" : "Ask Leadership to Verify"}
+                    {nudgeSent
+                      ? t("org_verification.reminder_sent_btn", { defaultValue: "Reminder Sent!" })
+                      : t("org_verification.ask_leadership_verify_btn", { defaultValue: "Ask Leadership to Verify" })}
                   </Button>
                 )}
               </div>
@@ -1136,7 +1163,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-xs font-bold text-slate-900 dark:text-white break-words">
-                              {officer.user?.full_name || "Governance Officer"}
+                              {officer.user?.full_name || t("org_verification.governance_officer_fallback", { defaultValue: "Governance Officer" })}
                             </span>
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 uppercase shrink-0">
                               {officer.role}
@@ -1147,10 +1174,14 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                             {officer.phone_number || officer.user?.phone_number ? (
                               <span>{officer.phone_number || officer.user?.phone_number}</span>
                             ) : (
-                              <span className="text-amber-600 dark:text-amber-400">Phone not set</span>
+                              <span className="text-amber-600 dark:text-amber-400">{t("org_verification.phone_not_set", { defaultValue: "Phone not set" })}</span>
                             )}
                             <span>•</span>
-                            <span>{officer.id_document_number ? `ID: ${officer.id_document_number}` : "No ID number"}</span>
+                            <span>
+                              {officer.id_document_number
+                                ? t("org_verification.id_prefix", { id: officer.id_document_number, defaultValue: `ID: ${officer.id_document_number}` })
+                                : t("org_verification.no_id_number", { defaultValue: "No ID number" })}
+                            </span>
                           </span>
                         </div>
                       </div>
@@ -1158,11 +1189,11 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                       <div className="flex items-center gap-2 shrink-0">
                         {officer.verification_status === "verified" ? (
                           <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Verified
+                            <CheckCircle2 className="h-3.5 w-3.5" /> {t("org_verification.status_verified", { defaultValue: "Verified" })}
                           </span>
                         ) : hasDocs ? (
                           <span className="text-[11px] font-bold text-amber-600 flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" /> Docs Uploaded
+                            <Clock className="h-3.5 w-3.5" /> {t("org_verification.docs_uploaded", { defaultValue: "Docs Uploaded" })}
                           </span>
                         ) : isOrgAdmin ? (
                           <Button
@@ -1170,11 +1201,11 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
                             onClick={() => handleRemindOfficer(officer)}
                             className="text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 py-1 px-2.5 flex items-center gap-1 shadow-xs"
                           >
-                            <Send className="h-3 w-3" /> {wasReminded ? "Reminded" : "Remind"}
+                            <Send className="h-3 w-3" /> {wasReminded ? t("org_verification.reminded_btn", { defaultValue: "Reminded" }) : t("org_verification.remind_btn", { defaultValue: "Remind" })}
                           </Button>
                         ) : (
                           <span className="text-[11px] font-medium text-slate-400">
-                            Documents Missing
+                            {t("org_verification.docs_missing", { defaultValue: "Documents Missing" })}
                           </span>
                         )}
                       </div>
@@ -1188,7 +1219,7 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
           {/* Footer close */}
           <div className="flex justify-end border-t pt-3 dark:border-slate-800">
             <Button variant="outline" onClick={onClose} className="text-xs font-bold">
-              Close
+              {t("common.close", { defaultValue: "Close" })}
             </Button>
           </div>
         </div>
@@ -1199,20 +1230,20 @@ export const OrganizationVerificationModal: React.FC<OrganizationVerificationMod
         <Modal
           open={!!zoomDocUrl}
           onClose={() => setZoomDocUrl(null)}
-          title="Identity Document Preview"
+          title={t("org_verification.preview_modal_title", { defaultValue: "Identity Document Preview" })}
           maxWidth="max-w-2xl"
         >
           <div className="flex flex-col gap-4 items-center">
             <div className="max-h-[70vh] w-full overflow-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-950 p-2 flex justify-center">
               <ResolvedImage
                 src={zoomDocUrl}
-                alt="Document Preview"
+                alt={t("org_verification.doc_preview_alt", { defaultValue: "Document Preview" })}
                 bucketName="impacto-files"
                 className="max-h-[65vh] w-auto object-contain rounded-lg"
               />
             </div>
             <Button onClick={() => setZoomDocUrl(null)} className="w-full text-xs font-bold">
-              Close Preview
+              {t("org_verification.close_preview_btn", { defaultValue: "Close Preview" })}
             </Button>
           </div>
         </Modal>

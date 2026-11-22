@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   CreditCard,
   ShieldCheck,
@@ -60,6 +61,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
   currentPlan = "growth",
   memberCount = 12
 }) => {
+  const { t, i18n } = useTranslation();
   const { activeOrg, activeMember, setActiveOrg } = useOrgStore();
   const { addToast } = useToast();
   const { data: members = [] } = useMembers(activeOrg?.id);
@@ -130,39 +132,39 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
   const packages = [
     {
       id: "gov-pack",
-      name: "Governance & Compliance Pack",
-      theme: "Governance",
+      name: t("v2.pkg_gov_name", "Governance & Compliance Pack"),
+      theme: t("v2.pkg_gov_theme", "Governance"),
       price: 25000,
       features: [
-        "Cryptographic Document E-Signatures",
-        "Full Audit Trail Historical Logs",
-        "Official Certificate Studio"
+        t("v2.pkg_gov_f1", "Cryptographic Document E-Signatures"),
+        t("v2.pkg_gov_f2", "Full Audit Trail Historical Logs"),
+        t("v2.pkg_gov_f3", "Official Certificate Studio")
       ],
-      desc: "Ensure tamper-proof sign-offs, democratic assembly compliance, and full administrative auditability."
+      desc: t("v2.pkg_gov_desc", "Ensure tamper-proof sign-offs, democratic assembly compliance, and full administrative auditability.")
     },
     {
       id: "field-pack",
-      name: "Field Operations & Asset Pack",
-      theme: "Operations",
+      name: t("v2.pkg_field_name", "Field Operations & Asset Pack"),
+      theme: t("v2.pkg_field_theme", "Operations"),
       price: 20000,
       features: [
-        "QR Code Attendance Check-in",
-        "Asset & Machinery Inventory Tracker",
-        "PWA Offline Mode & Sync Queue"
+        t("v2.pkg_field_f1", "QR Code Attendance Check-in"),
+        t("v2.pkg_field_f2", "Asset & Machinery Inventory Tracker"),
+        t("v2.pkg_field_f3", "PWA Offline Mode & Sync Queue")
       ],
-      desc: "Equip agronomists and field extension officers with offline capability and instant QR verification."
+      desc: t("v2.pkg_field_desc", "Equip agronomists and field extension officers with offline capability and instant QR verification.")
     },
     {
       id: "fintech-pack",
-      name: "Fintech & Financial Inclusion Pack",
-      theme: "Finance",
+      name: t("v2.pkg_fin_name", "Fintech & Financial Inclusion Pack"),
+      theme: t("v2.pkg_fin_theme", "Finance"),
       price: 30000,
       features: [
-        "MTN / Airtel Mobile Money Gateway",
-        "Automated Dues Ledger Management",
-        "Excel Attendance & Ledger Export"
+        t("v2.pkg_fin_f1", "MTN / Airtel Mobile Money Gateway"),
+        t("v2.pkg_fin_f2", "Automated Dues Ledger Management"),
+        t("v2.pkg_fin_f3", "Excel Attendance & Ledger Export")
       ],
-      desc: "Accelerate revenue collections with verified Mobile Money records and standard Excel balance sheets."
+      desc: t("v2.pkg_fin_desc", "Accelerate revenue collections with verified Mobile Money records and standard Excel balance sheets.")
     }
   ];
 
@@ -170,7 +172,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
   const handleQrCheckIn = async (memberId: string) => {
     const access = canAccessFeature(activeOrg, "qr_attendance");
     if (!access.allowed) {
-      addToast("QR Attendance check-in is disabled on Free plan. Upgrade or activate the Event & Attendance Package to unlock.", "error");
+      addToast(t("v2.toast_qr_locked", "QR Attendance check-in is disabled on Free plan. Upgrade or activate the Event & Attendance Package to unlock."), "error");
       return;
     }
 
@@ -197,9 +199,9 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
         setOfflineQueue(OfflineSyncService.getQueue());
       }
       const member = members.find((m) => m.id === memberId);
-      addToast(`QR Check-in confirmed for ${member?.user?.full_name || "Member"}!`, "success");
+      addToast(t("v2.toast_qr_confirmed", "QR Check-in confirmed for {{name}}!", { name: member?.user?.full_name || t("common.member", "Member") }), "success");
     } catch (err: any) {
-      addToast(err.message || "QR Check-in failed", "error");
+      addToast(err.message || t("v2.toast_qr_failed", "QR Check-in failed"), "error");
     } finally {
       setQrScanning(false);
       setQrScanInput("");
@@ -208,15 +210,22 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
 
   const handleExportAttendanceExcel = () => {
     const currentEvent = events.find((e) => e.id === selectedEventId) || events[0];
-    const headers = ["Member Name", "Member Email", "Role", "Event Title", "Check-in Status", "Timestamp"];
+    const headers = [
+      t("v2.csv_member_name", "Member Name"),
+      t("v2.csv_member_email", "Member Email"),
+      t("v2.csv_role", "Role"),
+      t("v2.csv_event_title", "Event Title"),
+      t("v2.csv_checkin_status", "Check-in Status"),
+      t("v2.csv_timestamp", "Timestamp")
+    ];
     const rows = members.map((m) => {
       const isPresent = allAttendance?.some((a) => a.member_id === m.id && (!currentEvent || a.event_id === currentEvent.id));
       return [
         `"${m.user?.full_name || ""}"`,
         `"${m.user?.email || ""}"`,
         m.role,
-        `"${currentEvent?.title || "All Events"}"`,
-        isPresent ? "PRESENT" : "ABSENT",
+        `"${currentEvent?.title || t("v2.all_events", "All Events")}"`,
+        isPresent ? t("v2.status_present", "PRESENT") : t("v2.status_absent", "ABSENT"),
         new Date().toISOString()
       ];
     });
@@ -230,15 +239,22 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    addToast("Attendance matrix exported to Excel successfully!", "success");
+    addToast(t("v2.toast_attendance_exported", "Attendance matrix exported to Excel successfully!"), "success");
   };
 
   const handleExportAuditLogsCSV = () => {
-    const headers = ["Timestamp", "Staff Name", "Role", "Action Type", "Target", "Details / Reference"];
+    const headers = [
+      t("v2.csv_timestamp", "Timestamp"),
+      t("v2.csv_staff_name", "Staff Name"),
+      t("v2.csv_role", "Role"),
+      t("v2.csv_action_type", "Action Type"),
+      t("v2.csv_target", "Target"),
+      t("v2.csv_details", "Details / Reference")
+    ];
     const rows = filteredAuditLogs.map((log: any) => [
       log.created_at || log.timestamp || "",
-      `"${log.staff_name || log.performed_by || "System Admin"}"`,
-      log.staff_role || "Administrator",
+      `"${log.staff_name || log.performed_by || t("v2.system_admin", "System Admin")}"`,
+      log.staff_role || t("v2.role_admin", "Administrator"),
       log.action_type || log.action || "UPDATE",
       `"${log.target_org_name || log.target || ""}"`,
       `"${(log.notes || log.reference || log.details || "").replace(/"/g, '""')}"`
@@ -253,7 +269,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    addToast("Historical audit trail exported to CSV/Excel!", "success");
+    addToast(t("v2.toast_audit_exported", "Historical audit trail exported to CSV/Excel!"), "success");
   };
 
   const handleRunAiSummary = async () => {
@@ -264,33 +280,32 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: meetingTitle,
-          notes: meetingNotes || "Discussed Q3 cooperative performance, new member onboarding, and upcoming harvest festival contributions."
+          notes: meetingNotes || t("v2.ai_default_notes", "Discussed Q3 cooperative performance, new member onboarding, and upcoming harvest festival contributions.")
         })
       });
       const data = await res.json();
       if (data.success) {
         setAiSummary(data.summary);
       } else {
-        // Fallback robust local resolution engine if server key is waiting
         setAiSummary(
-          `# ${meetingTitle} - Executive Resolutions Summary\n\n` +
-          `**Session Quorum:** Verified 42 Voting Members in Attendance\n\n` +
-          `### Key Resolutions Passed:\n` +
-          `1. **Financial Approval:** Approved Q3 financial statement of 3,450,000 RWF collected dues vs 1,200,000 RWF input seed investments.\n` +
-          `2. **Capital Investment Resolution:** Unanimously authorized the Solar Irrigation Capital Equipment acquisition (42 votes in favor, 0 opposed).\n` +
-          `3. **Extension Mandate:** Scheduled agronomist field audit of all member plots by Friday with tamper-evident digital sign-off.\n\n` +
-          `*Status: Certified by Executive Board & Ready for Official Gazetting.*`
+          `# ${meetingTitle} - ${t("v2.ai_summary_title", "Executive Resolutions Summary")}\n\n` +
+          `**${t("v2.ai_quorum_label", "Session Quorum:")}** ${t("v2.ai_quorum_val", "Verified 42 Voting Members in Attendance")}\n\n` +
+          `### ${t("v2.ai_resolutions_heading", "Key Resolutions Passed:")}\n` +
+          `1. **${t("v2.ai_res_1_title", "Financial Approval:")}** ${t("v2.ai_res_1_body", "Approved Q3 financial statement of 3,450,000 RWF collected dues vs 1,200,000 RWF input seed investments.")}\n` +
+          `2. **${t("v2.ai_res_2_title", "Capital Investment Resolution:")}** ${t("v2.ai_res_2_body", "Unanimously authorized the Solar Irrigation Capital Equipment acquisition (42 votes in favor, 0 opposed).")}\n` +
+          `3. **${t("v2.ai_res_3_title", "Extension Mandate:")}** ${t("v2.ai_res_3_body", "Scheduled agronomist field audit of all member plots by Friday with tamper-evident digital sign-off.")}\n\n` +
+          `*${t("v2.ai_status_certified", "Status: Certified by Executive Board & Ready for Official Gazetting.")}*`
         );
       }
     } catch (e: any) {
       setAiSummary(
-        `# ${meetingTitle} - Executive Resolutions Summary\n\n` +
-        `**Session Quorum:** Verified 42 Voting Members in Attendance\n\n` +
-        `### Key Resolutions Passed:\n` +
-        `1. **Financial Approval:** Approved Q3 financial statement of 3,450,000 RWF collected dues vs 1,200,000 RWF input seed investments.\n` +
-        `2. **Capital Investment Resolution:** Unanimously authorized the Solar Irrigation Capital Equipment acquisition (42 votes in favor, 0 opposed).\n` +
-        `3. **Extension Mandate:** Scheduled agronomist field audit of all member plots by Friday with tamper-evident digital sign-off.\n\n` +
-        `*Status: Certified by Executive Board & Ready for Official Gazetting.*`
+        `# ${meetingTitle} - ${t("v2.ai_summary_title", "Executive Resolutions Summary")}\n\n` +
+        `**${t("v2.ai_quorum_label", "Session Quorum:")}** ${t("v2.ai_quorum_val", "Verified 42 Voting Members in Attendance")}\n\n` +
+        `### ${t("v2.ai_resolutions_heading", "Key Resolutions Passed:")}\n` +
+        `1. **${t("v2.ai_res_1_title", "Financial Approval:")}** ${t("v2.ai_res_1_body", "Approved Q3 financial statement of 3,450,000 RWF collected dues vs 1,200,000 RWF input seed investments.")}\n` +
+        `2. **${t("v2.ai_res_2_title", "Capital Investment Resolution:")}** ${t("v2.ai_res_2_body", "Unanimously authorized the Solar Irrigation Capital Equipment acquisition (42 votes in favor, 0 opposed).")}\n` +
+        `3. **${t("v2.ai_res_3_title", "Extension Mandate:")}** ${t("v2.ai_res_3_body", "Scheduled agronomist field audit of all member plots by Friday with tamper-evident digital sign-off.")}\n\n` +
+        `*${t("v2.ai_status_certified", "Status: Certified by Executive Board & Ready for Official Gazetting.")}*`
       );
     } finally {
       setAiLoading(false);
@@ -311,26 +326,26 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
         setLedgerInsights(data.insights);
       } else {
         setLedgerInsights(
-          `🔍 **Cooperative Financial Audit & Anomaly Detection Report**\n\n` +
-          `• **Total Income Recorded:** 150,000 RWF\n` +
-          `• **Total Expenses Recorded:** 957,000 RWF\n` +
-          `• **Net Balance:** -807,000 RWF (Deficit Warning)\n\n` +
-          `⚠️ **High Risk Anomaly Identified on 2026-08-25:**\n` +
-          `A single disbursement of **850,000 RWF** ("Unusual equipment purchase spike") represents 88.8% of all monthly outlays. No matching Board Approval Resolution or receipt hash was detected in the Document Signing Registry.\n\n` +
-          `💡 **Actionable Recommendation for Treasurer:**\n` +
-          `Request official VAT receipt and link this entry to an authorized General Assembly resolution before closing the monthly book.`
+          `🔍 **${t("v2.ledger_report_title", "Cooperative Financial Audit & Anomaly Detection Report")}**\n\n` +
+          `• **${t("v2.ledger_income_label", "Total Income Recorded:")}** 150,000 RWF\n` +
+          `• **${t("v2.ledger_expense_label", "Total Expenses Recorded:")}** 957,000 RWF\n` +
+          `• **${t("v2.ledger_net_label", "Net Balance:")}** -807,000 RWF (${t("v2.ledger_deficit_warn", "Deficit Warning")})\n\n` +
+          `⚠️ **${t("v2.ledger_anomaly_title", "High Risk Anomaly Identified on 2026-08-25:")}**\n` +
+          `${t("v2.ledger_anomaly_body", "A single disbursement of 850,000 RWF (Unusual equipment purchase spike) represents 88.8% of all monthly outlays. No matching Board Approval Resolution or receipt hash was detected in the Document Signing Registry.")}\n\n` +
+          `💡 **${t("v2.ledger_rec_title", "Actionable Recommendation for Treasurer:")}**\n` +
+          `${t("v2.ledger_rec_body", "Request official VAT receipt and link this entry to an authorized General Assembly resolution before closing the monthly book.")}`
         );
       }
     } catch (e: any) {
       setLedgerInsights(
-        `🔍 **Cooperative Financial Audit & Anomaly Detection Report**\n\n` +
-        `• **Total Income Recorded:** 150,000 RWF\n` +
-        `• **Total Expenses Recorded:** 957,000 RWF\n` +
-        `• **Net Balance:** -807,000 RWF (Deficit Warning)\n\n` +
-        `⚠️ **High Risk Anomaly Identified on 2026-08-25:**\n` +
-        `A single disbursement of **850,000 RWF** ("Unusual equipment purchase spike") represents 88.8% of all monthly outlays. No matching Board Approval Resolution or receipt hash was detected in the Document Signing Registry.\n\n` +
-        `💡 **Actionable Recommendation for Treasurer:**\n` +
-        `Request official VAT receipt and link this entry to an authorized General Assembly resolution before closing the monthly book.`
+        `🔍 **${t("v2.ledger_report_title", "Cooperative Financial Audit & Anomaly Detection Report")}**\n\n` +
+        `• **${t("v2.ledger_income_label", "Total Income Recorded:")}** 150,000 RWF\n` +
+        `• **${t("v2.ledger_expense_label", "Total Expenses Recorded:")}** 957,000 RWF\n` +
+        `• **${t("v2.ledger_net_label", "Net Balance:")}** -807,000 RWF (${t("v2.ledger_deficit_warn", "Deficit Warning")})\n\n` +
+        `⚠️ **${t("v2.ledger_anomaly_title", "High Risk Anomaly Identified on 2026-08-25:")}**\n` +
+        `${t("v2.ledger_anomaly_body", "A single disbursement of 850,000 RWF (Unusual equipment purchase spike) represents 88.8% of all monthly outlays. No matching Board Approval Resolution or receipt hash was detected in the Document Signing Registry.")}\n\n` +
+        `💡 **${t("v2.ledger_rec_title", "Actionable Recommendation for Treasurer:")}**\n` +
+        `${t("v2.ledger_rec_body", "Request official VAT receipt and link this entry to an authorized General Assembly resolution before closing the monthly book.")}`
       );
     } finally {
       setLedgerLoading(false);
@@ -346,10 +361,10 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
     let updatedPackages: string[];
     if (isAlreadyActive) {
       updatedPackages = currentActive.filter((id) => id !== pkg.id);
-      addToast(`${pkg.name} deactivated.`, "info");
+      addToast(t("v2.toast_pkg_deactivated", "{{name}} deactivated.", { name: pkg.name }), "info");
     } else {
       updatedPackages = [...currentActive, pkg.id];
-      addToast(`${pkg.name} successfully activated on your organization!`, "success");
+      addToast(t("v2.toast_pkg_activated", "{{name}} successfully activated on your organization!", { name: pkg.name }), "success");
 
       const phoneToUse = customPhone || targetOrg.dues_mtn_number || targetOrg.donation_mtn_number || "";
       const methodToUse = customMethod || (phoneToUse.startsWith("078") || phoneToUse.startsWith("079") ? "mtn" : "airtel");
@@ -406,21 +421,21 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       const data = await res.json();
       const methodToUse = provider === "AIRTEL_RWA" ? "airtel" : "mtn";
       if (data.success) {
-        setCheckoutSuccess(`Payment prompt transmitted! Deposit ID: ${data.depositId}. Please approve the MoMo PIN prompt on ${phoneNumber}.`);
-        addToast("Mobile money payment request sent to your handset!", "success");
+        setCheckoutSuccess(t("v2.checkout_prompt_sent", "Payment prompt transmitted! Deposit ID: {{id}}. Please approve the MoMo PIN prompt on {{phone}}.", { id: data.depositId, phone: phoneNumber }));
+        addToast(t("v2.toast_momo_sent", "Mobile money payment request sent to your handset!"), "success");
         if (selectedPackage) {
           handleActivatePackage(selectedPackage, phoneNumber, methodToUse);
         }
       } else {
         const depositRef = `DEP-${Date.now().toString().slice(-6)}`;
-        setCheckoutSuccess(`Mobile Money request submitted (Ref: ${depositRef}). Package privileges assigned.`);
+        setCheckoutSuccess(t("v2.checkout_submitted", "Mobile Money request submitted (Ref: {{ref}}). Package privileges assigned.", { ref: depositRef }));
         if (selectedPackage) {
           handleActivatePackage(selectedPackage, phoneNumber, methodToUse);
         }
       }
     } catch (err: any) {
       const depositRef = `DEP-${Date.now().toString().slice(-6)}`;
-      setCheckoutSuccess(`Mobile Money request queued (Ref: ${depositRef}). Package privileges assigned.`);
+      setCheckoutSuccess(t("v2.checkout_queued", "Mobile Money request queued (Ref: {{ref}}). Package privileges assigned.", { ref: depositRef }));
       if (selectedPackage) {
         const methodToUse = provider === "AIRTEL_RWA" ? "airtel" : "mtn";
         handleActivatePackage(selectedPackage, phoneNumber, methodToUse);
@@ -435,9 +450,9 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
     try {
       const res = await OfflineSyncService.processQueue();
       setOfflineQueue(OfflineSyncService.getQueue());
-      addToast(`Synchronized ${res.synced} pending offline records to cloud database!`, "success");
+      addToast(t("v2.toast_synced", "Synchronized {{count}} pending offline records to cloud database!", { count: res.synced }), "success");
     } catch (err: any) {
-      addToast("Offline sync failed: " + err.message, "error");
+      addToast(t("v2.toast_sync_failed", "Offline sync failed: {{msg}}", { msg: err.message }), "error");
     } finally {
       setSyncingNow(false);
     }
@@ -452,7 +467,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       gps: "-1.9441, 30.0619"
     });
     setOfflineQueue(OfflineSyncService.getQueue());
-    addToast("Queued 1 test offline record in browser storage.", "info");
+    addToast(t("v2.toast_offline_queued", "Queued 1 test offline record in browser storage."), "info");
   };
 
   const allLogs = (auditLogs.length > 0 ? auditLogs : MockDB.getPlatformAuditLogs()) || [];
@@ -472,139 +487,139 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
     tag: string;
   }> = {
     qr_attendance: {
-      title: "QR Code Attendance & Roll Call Engine",
-      subtitle: "Instant contactless verification for general assemblies, field trainings, and cooperative meetings.",
+      title: t("v2.exp_qr_title", "QR Code Attendance & Roll Call Engine"),
+      subtitle: t("v2.exp_qr_sub", "Instant contactless verification for general assemblies, field trainings, and cooperative meetings."),
       howItWorks: [
-        "Select your scheduled general assembly, agropastoral training, or board meeting.",
-        "Display the official station QR code at the entrance or scan member ID cards using any mobile camera or barcode scanner.",
-        "Attendance stamps immediately update the live roll-call matrix with timestamp and verified member ID."
+        t("v2.exp_qr_w1", "Select your scheduled general assembly, agropastoral training, or board meeting."),
+        t("v2.exp_qr_w2", "Display the official station QR code at the entrance or scan member ID cards using any mobile camera or barcode scanner."),
+        t("v2.exp_qr_w3", "Attendance stamps immediately update the live roll-call matrix with timestamp and verified member ID.")
       ],
       howItHelps: [
-        "Guarantees legal quorum compliance for general assembly voting resolutions without manual paper confusion.",
-        "Eliminates ghost member fraud and saves over 4 hours of post-meeting manual attendance data entry.",
-        "One-click Excel (.xlsx/.csv) export ready for Rwanda Governance Board (RGB) or RCA statutory audits."
+        t("v2.exp_qr_h1", "Guarantees legal quorum compliance for general assembly voting resolutions without manual paper confusion."),
+        t("v2.exp_qr_h2", "Eliminates ghost member fraud and saves over 4 hours of post-meeting manual attendance data entry."),
+        t("v2.exp_qr_h3", "One-click Excel (.xlsx/.csv) export ready for Rwanda Governance Board (RGB) or RCA statutory audits.")
       ],
-      tag: "Operations & Governance"
+      tag: t("v2.exp_qr_tag", "Operations & Governance")
     },
     certificates: {
-      title: "Official Certificate & Credential Studio",
-      subtitle: "Issue verifiable, tamper-evident digital certificates with custom signatures and QR verification.",
+      title: t("v2.exp_cert_title", "Official Certificate & Credential Studio"),
+      subtitle: t("v2.exp_cert_sub", "Issue verifiable, tamper-evident digital certificates with custom signatures and QR verification."),
       howItWorks: [
-        "Pick an award category (Training Completion, Good Standing, Agropastoral Excellence, Board Service).",
-        "Select the recipient member from your cooperative directory and sign using the digital pen canvas.",
-        "The system generates a high-resolution certificate with unique cryptographic serial code and QR verification URL."
+        t("v2.exp_cert_w1", "Pick an award category (Training Completion, Good Standing, Agropastoral Excellence, Board Service)."),
+        t("v2.exp_cert_w2", "Select the recipient member from your cooperative directory and sign using the digital pen canvas."),
+        t("v2.exp_cert_w3", "The system generates a high-resolution certificate with unique cryptographic serial code and QR verification URL.")
       ],
       howItHelps: [
-        "Empowers cooperative members with recognized proof of training for micro-loan applications and grant requests.",
-        "Builds strong member pride, retention, and formal recognition for punctual dues payments and high harvest yields.",
-        "Public QR code verification allows microfinance banks and partner NGOs to instantly confirm member legitimacy."
+        t("v2.exp_cert_h1", "Empowers cooperative members with recognized proof of training for micro-loan applications and grant requests."),
+        t("v2.exp_cert_h2", "Builds strong member pride, retention, and formal recognition for punctual dues payments and high harvest yields."),
+        t("v2.exp_cert_h3", "Public QR code verification allows microfinance banks and partner NGOs to instantly confirm member legitimacy.")
       ],
-      tag: "Member Empowerment"
+      tag: t("v2.exp_cert_tag", "Member Empowerment")
     },
     assets: {
-      title: "Asset, Machinery & Tool Tracker",
-      subtitle: "Complete register of tractors, solar water pumps, milling units, and warehouse equipment.",
+      title: t("v2.exp_asset_title", "Asset, Machinery & Tool Tracker"),
+      subtitle: t("v2.exp_asset_sub", "Complete register of tractors, solar water pumps, milling units, and warehouse equipment."),
       howItWorks: [
-        "Catalog every tool and machine with serial number, purchase cost, warranty date, and current operational condition.",
-        "Check out equipment to specific member farmers or agronomists with assignment timestamps.",
-        "Generate and affix QR identification tags to physical machinery for fast smartphone inspection in the field."
+        t("v2.exp_asset_w1", "Catalog every tool and machine with serial number, purchase cost, warranty date, and current operational condition."),
+        t("v2.exp_asset_w2", "Check out equipment to specific member farmers or agronomists with assignment timestamps."),
+        t("v2.exp_asset_w3", "Generate and affix QR identification tags to physical machinery for fast smartphone inspection in the field.")
       ],
       howItHelps: [
-        "Prevents costly equipment loss, tool theft, and unrecorded machinery damage across cooperative branches.",
-        "Accurately tracks capital depreciation and schedules preventive maintenance before expensive breakdowns occur.",
-        "Provides an audited capital asset sheet required by commercial banks when approving agricultural development loans."
+        t("v2.exp_asset_h1", "Prevents costly equipment loss, tool theft, and unrecorded machinery damage across cooperative branches."),
+        t("v2.exp_asset_h2", "Accurately tracks capital depreciation and schedules preventive maintenance before expensive breakdowns occur."),
+        t("v2.exp_asset_h3", "Provides an audited capital asset sheet required by commercial banks when approving agricultural development loans.")
       ],
-      tag: "Capital & Logistics"
+      tag: t("v2.exp_asset_tag", "Capital & Logistics")
     },
     signatures: {
-      title: "Cryptographic Document E-Signatures",
-      subtitle: "Legally binding digital signing with SHA-256 integrity hashes for cooperative bylaws and dividend agreements.",
+      title: t("v2.exp_sig_title", "Cryptographic Document E-Signatures"),
+      subtitle: t("v2.exp_sig_sub", "Legally binding digital signing with SHA-256 integrity hashes for cooperative bylaws and dividend agreements."),
       howItWorks: [
-        "Open any active cooperative resolution, financial balance sheet, or member dividend distribution policy.",
-        "Executive board members draw their signature with touch/pen or upload their authorized stamp.",
-        "The document is sealed with a tamper-evident cryptographic hash, signer IP, and immutable version timestamp."
+        t("v2.exp_sig_w1", "Open any active cooperative resolution, financial balance sheet, or member dividend distribution policy."),
+        t("v2.exp_sig_w2", "Executive board members draw their signature with touch/pen or upload their authorized stamp."),
+        t("v2.exp_sig_w3", "The document is sealed with a tamper-evident cryptographic hash, signer IP, and immutable version timestamp.")
       ],
       howItHelps: [
-        "Enables remote board sign-offs without requiring members to travel long distances to headquarters.",
-        "Provides 100% legal evidence in case of member disputes regarding land allocations or dividend distribution.",
-        "Maintains a clear version registry ensuring that all members and regulators view the exact authorized policy."
+        t("v2.exp_sig_h1", "Enables remote board sign-offs without requiring members to travel long distances to headquarters."),
+        t("v2.exp_sig_h2", "Provides 100% legal evidence in case of member disputes regarding land allocations or dividend distribution."),
+        t("v2.exp_sig_h3", "Maintains a clear version registry ensuring that all members and regulators view the exact authorized policy.")
       ],
-      tag: "Legal Compliance"
+      tag: t("v2.exp_sig_tag", "Legal Compliance")
     },
     audit_trail: {
-      title: "Immutable Administrative Audit Trail",
-      subtitle: "Detailed chronological record of every financial approval, member edit, and permission change.",
+      title: t("v2.exp_audit_title", "Immutable Administrative Audit Trail"),
+      subtitle: t("v2.exp_audit_sub", "Detailed chronological record of every financial approval, member edit, and permission change."),
       howItWorks: [
-        "Every single action (dues receipt verification, subscription payment, role change) is logged in real time.",
-        "Logs record the exact actor, target organization, action type, client timestamp, and detailed note reference.",
-        "Search by actor, filter by action type, and export directly to CSV for external regulatory compliance."
+        t("v2.exp_audit_w1", "Every single action (dues receipt verification, subscription payment, role change) is logged in real time."),
+        t("v2.exp_audit_w2", "Logs record the exact actor, target organization, action type, client timestamp, and detailed note reference."),
+        t("v2.exp_audit_w3", "Search by actor, filter by action type, and export directly to CSV for external regulatory compliance.")
       ],
       howItHelps: [
-        "Provides bulletproof transparency that eliminates embezzlement suspicions and builds deep trust among members.",
-        "Speeds up annual financial audits by providing accountants and regulators with ready-to-inspect digital paper trails.",
-        "Quickly identifies administrative errors or unauthorized changes before they impact cooperative operations."
+        t("v2.exp_audit_h1", "Provides bulletproof transparency that eliminates embezzlement suspicions and builds deep trust among members."),
+        t("v2.exp_audit_h2", "Speeds up annual financial audits by providing accountants and regulators with ready-to-inspect digital paper trails."),
+        t("v2.exp_audit_h3", "Quickly identifies administrative errors or unauthorized changes before they impact cooperative operations.")
       ],
-      tag: "Security & Auditing"
+      tag: t("v2.exp_audit_tag", "Security & Auditing")
     },
     subscription: {
-      title: "Subscription & Trial Lifecycle Engine",
-      subtitle: "Transparent tier tracking, automated 3-day grace period, and instant Mobile Money license activation.",
+      title: t("v2.exp_sub_title", "Subscription & Trial Lifecycle Engine"),
+      subtitle: t("v2.exp_sub_sub", "Transparent tier tracking, automated 3-day grace period, and instant Mobile Money license activation."),
       howItWorks: [
-        "Monitors remaining trial days and roster capacity in real-time.",
-        "Calculates member caps and informs admins before limits are exceeded.",
-        "Enables one-click renewal and plan upgrades directly via MTN / Airtel Mobile Money with automated receipt."
+        t("v2.exp_sub_w1", "Monitors remaining trial days and roster capacity in real-time."),
+        t("v2.exp_sub_w2", "Calculates member caps and informs admins before limits are exceeded."),
+        t("v2.exp_sub_w3", "Enables one-click renewal and plan upgrades directly via MTN / Airtel Mobile Money with automated receipt.")
       ],
       howItHelps: [
-        "Guarantees uninterrupted cooperative operations with generous grace periods and clear expiry alerts.",
-        "Adapts to your budget: start on the Free Tier for small savings groups and scale seamlessly to Enterprise.",
-        "No international credit cards required — fully localized for Rwandan Mobile Money payment channels."
+        t("v2.exp_sub_h1", "Guarantees uninterrupted cooperative operations with generous grace periods and clear expiry alerts."),
+        t("v2.exp_sub_h2", "Adapts to your budget: start on the Free Tier for small savings groups and scale seamlessly to Enterprise."),
+        t("v2.exp_sub_h3", "No international credit cards required — fully localized for Rwandan Mobile Money payment channels.")
       ],
-      tag: "Billing & Scaling"
+      tag: t("v2.exp_sub_tag", "Billing & Scaling")
     },
     marketplace: {
-      title: "Curated Impacto Feature Marketplace",
-      subtitle: "Add-on packs tailored specifically for Rwandan agricultural cooperatives, SACCOs, and community groups.",
+      title: t("v2.exp_mkt_title", "Curated Impacto Feature Marketplace"),
+      subtitle: t("v2.exp_mkt_sub", "Add-on packs tailored specifically for Rwandan agricultural cooperatives, SACCOs, and community groups."),
       howItWorks: [
-        "Browse modular packs tailored to your specific organizational needs (Governance, Field Operations, Fintech).",
-        "Click to activate features on a 30-day trial or subscribe instantly using Mobile Money.",
-        "Features immediately become available across all admin and member dashboards."
+        t("v2.exp_mkt_w1", "Browse modular packs tailored to your specific organizational needs (Governance, Field Operations, Fintech)."),
+        t("v2.exp_mkt_w2", "Click to activate features on a 30-day trial or subscribe instantly using Mobile Money."),
+        t("v2.exp_mkt_w3", "Features immediately become available across all admin and member dashboards.")
       ],
       howItHelps: [
-        "Pay only for the specific capabilities your cooperative needs without paying for unused bloat.",
-        "Empowers field extension officers with offline mobile tools while giving treasurers powerful automated payment tools.",
-        "Seamlessly toggle add-ons on or off as seasonal harvest and general assembly cycles require."
+        t("v2.exp_mkt_h1", "Pay only for the specific capabilities your cooperative needs without paying for unused bloat."),
+        t("v2.exp_mkt_h2", "Empowers field extension officers with offline mobile tools while giving treasurers powerful automated payment tools."),
+        t("v2.exp_mkt_h3", "Seamlessly toggle add-ons on or off as seasonal harvest and general assembly cycles require.")
       ],
-      tag: "Modular Extensions"
+      tag: t("v2.exp_mkt_tag", "Modular Extensions")
     },
     ai: {
-      title: "Smart AI Meeting Summarizer & Ledger Auditor",
-      subtitle: "Gemini-powered natural language processing to extract resolutions and detect financial book anomalies.",
+      title: t("v2.exp_ai_title", "Smart AI Meeting Summarizer & Ledger Auditor"),
+      subtitle: t("v2.exp_ai_sub", "Gemini-powered natural language processing to extract resolutions and detect financial book anomalies."),
       howItWorks: [
-        "Paste raw meeting notes or upload ledger entries in one click.",
-        "Gemini AI analyzes discussions to synthesize democratic resolutions and actionable task assignments.",
-        "Anomaly detection algorithms scan ledger entries for spending spikes, duplicate vouchers, and missing approvals."
+        t("v2.exp_ai_w1", "Paste raw meeting notes or upload ledger entries in one click."),
+        t("v2.exp_ai_w2", "Gemini AI analyzes discussions to synthesize democratic resolutions and actionable task assignments."),
+        t("v2.exp_ai_w3", "Anomaly detection algorithms scan ledger entries for spending spikes, duplicate vouchers, and missing approvals.")
       ],
       howItHelps: [
-        "Transforms chaotic 3-hour assembly notes into pristine executive summaries ready for member distribution in seconds.",
-        "Catches bookkeeping errors and unusual expense spikes before monthly reports are presented to the board.",
-        "Saves executive secretaries over 8 hours of report writing per month."
+        t("v2.exp_ai_h1", "Transforms chaotic 3-hour assembly notes into pristine executive summaries ready for member distribution in seconds."),
+        t("v2.exp_ai_h2", "Catches bookkeeping errors and unusual expense spikes before monthly reports are presented to the board."),
+        t("v2.exp_ai_h3", "Saves executive secretaries over 8 hours of report writing per month.")
       ],
-      tag: "AI Intelligence"
+      tag: t("v2.exp_ai_tag", "AI Intelligence")
     },
     offline_sync: {
-      title: "PWA Offline Mode & Sync Queue",
-      subtitle: "Record attendance, register members, and collect dues even in rural zones with zero internet signal.",
+      title: t("v2.exp_off_title", "PWA Offline Mode & Sync Queue"),
+      subtitle: t("v2.exp_off_sub", "Record attendance, register members, and collect dues even in rural zones with zero internet signal."),
       howItWorks: [
-        "When cellular connectivity drops, actions are securely stored in the local encrypted browser queue.",
-        "The visual sync badge displays real-time connection status and counts pending offline records.",
-        "As soon as internet connection is restored, the queue automatically flushes and synchronizes with cloud servers."
+        t("v2.exp_off_w1", "When cellular connectivity drops, actions are securely stored in the local encrypted browser queue."),
+        t("v2.exp_off_w2", "The visual sync badge displays real-time connection status and counts pending offline records."),
+        t("v2.exp_off_w3", "As soon as internet connection is restored, the queue automatically flushes and synchronizes with cloud servers.")
       ],
       howItHelps: [
-        "Ensures agronomists in remote valleys and rural coffee washing stations never lose a single transaction or record.",
-        "Zero downtime: cooperative staff can continue daily operations without waiting for network repairs.",
-        "Automatic two-way conflict resolution prevents duplicate records when multiple field officers sync simultaneously."
+        t("v2.exp_off_h1", "Ensures agronomists in remote valleys and rural coffee washing stations never lose a single transaction or record."),
+        t("v2.exp_off_h2", "Zero downtime: cooperative staff can continue daily operations without waiting for network repairs."),
+        t("v2.exp_off_h3", "Automatic two-way conflict resolution prevents duplicate records when multiple field officers sync simultaneously.")
       ],
-      tag: "Rural Connectivity"
+      tag: t("v2.exp_off_tag", "Rural Connectivity")
     }
   };
 
@@ -614,18 +629,18 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
     <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-800 shadow-sm p-6 max-w-7xl mx-auto my-6">
       {/* Top Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-6 mb-6 gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1.5">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
-              <Zap className="h-3.5 w-3.5" /> Impacto V2 Enterprise Engine
+              <Zap className="h-3.5 w-3.5 shrink-0" /> {t("v2.engine_badge", "Impacto V2 Enterprise Engine")}
             </span>
             <OfflineSyncIndicator />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white font-display">
-            V2 Advanced Features & Enterprise Extensions
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white font-display break-words">
+            {t("v2.header_title", "V2 Advanced Features & Enterprise Extensions")}
           </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            QR attendance, digital certificates, equipment tracking, cryptographically sealed signatures, full audit logs, and PWA offline queue.
+          <p className="text-xs text-gray-500 dark:text-gray-400 break-words">
+            {t("v2.header_sub", "QR attendance, digital certificates, equipment tracking, cryptographically sealed signatures, full audit logs, and PWA offline queue.")}
           </p>
         </div>
 
@@ -639,7 +654,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
             }`}
           >
-            <QrCode className="h-3.5 w-3.5" /> Attendance
+            <QrCode className="h-3.5 w-3.5 shrink-0" /> {t("v2.tab_attendance", "Attendance")}
           </button>
           <button
             onClick={() => setActiveTab("certificates")}
@@ -649,7 +664,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
             }`}
           >
-            <Award className="h-3.5 w-3.5" /> Certificates
+            <Award className="h-3.5 w-3.5 shrink-0" /> {t("v2.tab_certificates", "Certificates")}
           </button>
           <button
             onClick={() => setActiveTab("assets")}
@@ -659,7 +674,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
             }`}
           >
-            <Box className="h-3.5 w-3.5" /> Asset Tracker
+            <Box className="h-3.5 w-3.5 shrink-0" /> {t("v2.tab_assets", "Asset Tracker")}
           </button>
           <button
             onClick={() => setActiveTab("signatures")}
@@ -669,7 +684,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
             }`}
           >
-            <FileSignature className="h-3.5 w-3.5" /> E-Signatures
+            <FileSignature className="h-3.5 w-3.5 shrink-0" /> {t("v2.tab_signatures", "E-Signatures")}
           </button>
           <button
             onClick={() => setActiveTab("audit_trail")}
@@ -679,7 +694,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
             }`}
           >
-            <History className="h-3.5 w-3.5" /> Audit Trail
+            <History className="h-3.5 w-3.5 shrink-0" /> {t("v2.tab_audit", "Audit Trail")}
           </button>
           <button
             onClick={() => setActiveTab("subscription")}
@@ -689,7 +704,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
             }`}
           >
-            <CreditCard className="h-3.5 w-3.5" /> Plan & Trial
+            <CreditCard className="h-3.5 w-3.5 shrink-0" /> {t("v2.tab_subscription", "Plan & Trial")}
           </button>
           <button
             onClick={() => setActiveTab("marketplace")}
@@ -699,7 +714,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
             }`}
           >
-            <Package className="h-3.5 w-3.5" /> Marketplace
+            <Package className="h-3.5 w-3.5 shrink-0" /> {t("v2.tab_marketplace", "Marketplace")}
           </button>
           <button
             onClick={() => setActiveTab("ai")}
@@ -709,7 +724,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
             }`}
           >
-            <Cpu className="h-3.5 w-3.5" /> AI Assistant
+            <Cpu className="h-3.5 w-3.5 shrink-0" /> {t("v2.tab_ai", "AI Assistant")}
           </button>
           <button
             onClick={() => setActiveTab("offline_sync")}
@@ -719,7 +734,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 : "text-gray-600 dark:text-gray-400 hover:text-gray-900"
             }`}
           >
-            <Wifi className="h-3.5 w-3.5" /> Offline Sync
+            <Wifi className="h-3.5 w-3.5 shrink-0" /> {t("v2.tab_offline", "Offline Sync")}
           </button>
         </div>
       </div>
@@ -729,19 +744,19 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       {/* ========================================================================= */}
       <div className="mb-8 rounded-3xl bg-gradient-to-br from-emerald-50/90 via-teal-50/40 to-white dark:from-emerald-950/30 dark:via-gray-900 dark:to-gray-900 border border-emerald-200/70 dark:border-emerald-900/40 p-6 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-emerald-100 dark:border-emerald-900/40 pb-4 mb-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-600 text-white">
                 {currentExplanation.tag}
               </span>
               <span className="text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Active & Operational
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> {t("v2.active_operational", "Active & Operational")}
               </span>
             </div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-emerald-600" /> {currentExplanation.title}
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 break-words">
+              <BookOpen className="h-5 w-5 text-emerald-600 shrink-0" /> <span>{currentExplanation.title}</span>
             </h3>
-            <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">
+            <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5 break-words">
               {currentExplanation.subtitle}
             </p>
           </div>
@@ -749,9 +764,9 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* How It Works */}
-          <div className="bg-white/80 dark:bg-gray-800/60 rounded-2xl p-4 border border-emerald-100 dark:border-emerald-900/30">
+          <div className="bg-white/80 dark:bg-gray-800/60 rounded-2xl p-4 border border-emerald-100 dark:border-emerald-900/30 min-w-0">
             <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5 mb-3">
-              <Zap className="h-4 w-4 text-emerald-600" /> How It Works Step-by-Step
+              <Zap className="h-4 w-4 text-emerald-600 shrink-0" /> {t("v2.how_it_works", "How It Works Step-by-Step")}
             </h4>
             <div className="space-y-2.5">
               {currentExplanation.howItWorks.map((step, idx) => (
@@ -759,22 +774,22 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold">
                     {idx + 1}
                   </span>
-                  <span className="leading-relaxed">{step}</span>
+                  <span className="leading-relaxed break-words min-w-0">{step}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* How It Helps */}
-          <div className="bg-white/80 dark:bg-gray-800/60 rounded-2xl p-4 border border-emerald-100 dark:border-emerald-900/30">
+          <div className="bg-white/80 dark:bg-gray-800/60 rounded-2xl p-4 border border-emerald-100 dark:border-emerald-900/30 min-w-0">
             <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5 mb-3">
-              <ShieldCheck className="h-4 w-4 text-emerald-600" /> How It Helps Your Cooperative
+              <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" /> {t("v2.how_it_helps", "How It Helps Your Cooperative")}
             </h4>
             <div className="space-y-2.5">
               {currentExplanation.howItHelps.map((help, idx) => (
                 <div key={idx} className="flex items-start gap-2.5 text-xs text-gray-700 dark:text-gray-300">
                   <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span className="leading-relaxed font-medium">{help}</span>
+                  <span className="leading-relaxed font-medium break-words min-w-0">{help}</span>
                 </div>
               ))}
             </div>
@@ -794,17 +809,17 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
           {!isQrAllowed && (
             <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-start gap-3">
               <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-              <div className="text-xs">
-                <p className="font-bold text-amber-900 dark:text-amber-200">Attendance Check-in is Locked</p>
-                <p className="text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">
-                  Marking attendance and live check-ins are disabled on the Free Forever tier. Activate the <strong>Event & Attendance Package ($4/mo / 5,000 RWF)</strong> or upgrade to <strong>Starter, Growth, or Pro</strong> to record attendances.
+              <div className="text-xs min-w-0">
+                <p className="font-bold text-amber-900 dark:text-amber-200">{t("v2.att_locked_title", "Attendance Check-in is Locked")}</p>
+                <p className="text-amber-700 dark:text-amber-300 mt-1 leading-relaxed break-words">
+                  {t("v2.att_locked_desc", "Marking attendance and live check-ins are disabled on the Free Forever tier. Activate the Event & Attendance Package ($4/mo / 5,000 RWF) or upgrade to Starter, Growth, or Pro to record attendances.")}
                 </p>
                 <div className="mt-3">
                   <button
-                    onClick={() => setActiveTab("subscription_packages")}
+                    onClick={() => setActiveTab("marketplace")}
                     className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
                   >
-                    View Add-on Packages ($4/mo)
+                    {t("v2.view_addon_packages", "View Add-on Packages ($4/mo)")}
                   </button>
                 </div>
               </div>
@@ -816,26 +831,26 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
             <div className="lg:col-span-4 space-y-4">
               <div className="bg-gray-50 dark:bg-gray-800/40 p-5 rounded-2xl border border-gray-200 dark:border-gray-700/60 space-y-4">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-emerald-600 text-white">
+                  <div className="p-2 rounded-xl bg-emerald-600 text-white shrink-0">
                     <QrCode className="h-5 w-5" />
                   </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-gray-900 dark:text-white">QR Code Session Check-in</h3>
-                    <p className="text-[11px] text-gray-500">Scan member physical badges or select for rapid check-in.</p>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-sm text-gray-900 dark:text-white break-words">{t("v2.qr_checkin_title", "QR Code Session Check-in")}</h3>
+                    <p className="text-[11px] text-gray-500 break-words">{t("v2.qr_checkin_sub", "Scan member physical badges or select for rapid check-in.")}</p>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Select Scheduled Event</label>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">{t("v2.select_event", "Select Scheduled Event")}</label>
                   <select
                     value={selectedEventId}
                     onChange={(e) => setSelectedEventId(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white"
                   >
-                    {events.length === 0 && <option value="general">Default General Assembly 2026</option>}
+                    {events.length === 0 && <option value="general">{t("v2.default_event", "Default General Assembly 2026")}</option>}
                     {events.map((e) => (
                       <option key={e.id} value={e.id}>
-                        {e.title} ({e.date_time ? new Date(e.date_time).toLocaleDateString() : "Scheduled"})
+                        {e.title} ({e.date_time ? new Date(e.date_time).toLocaleDateString(i18n.language) : t("v2.scheduled", "Scheduled")})
                       </option>
                     ))}
                   </select>
@@ -843,25 +858,25 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
 
                 {/* QR Code Graphic for Selected Event */}
                 <div className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 text-center shadow-inner">
-                  <span className="text-[10px] font-mono uppercase text-gray-400 block mb-2 font-bold">Official Event Station QR</span>
+                  <span className="text-[10px] font-mono uppercase text-gray-400 block mb-2 font-bold">{t("v2.station_qr_label", "Official Event Station QR")}</span>
                   <img
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
                       `IMPACTO:EVENT:${selectedEventId || "general"}:${activeOrg?.id || "org"}`
                     )}`}
-                    alt="Event QR"
+                    alt={t("v2.station_qr_label", "Official Event Station QR")}
                     className="h-36 w-36 mx-auto rounded-lg"
                     referrerPolicy="no-referrer"
                   />
-                  <p className="text-[10px] text-gray-500 mt-2">Display this QR at event venue entrance for self check-in.</p>
+                  <p className="text-[10px] text-gray-500 mt-2 break-words">{t("v2.station_qr_hint", "Display this QR at event venue entrance for self check-in.")}</p>
                 </div>
 
                 {/* Manual / Barcode Scanner Input */}
                 <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Rapid QR / ID Scanner Input</label>
-                  <div className="flex gap-2">
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">{t("v2.rapid_scanner_label", "Rapid QR / ID Scanner Input")}</label>
+                  <div className="flex flex-wrap gap-2">
                     <input
                       type="text"
-                      placeholder={isQrAllowed ? "Scan badge or enter member ID..." : "Attendance check-in locked on Free plan"}
+                      placeholder={isQrAllowed ? t("v2.scanner_placeholder", "Scan badge or enter member ID...") : t("v2.scanner_locked_placeholder", "Attendance check-in locked on Free plan")}
                       value={qrScanInput}
                       disabled={!isQrAllowed}
                       onChange={(e) => setQrScanInput(e.target.value)}
@@ -870,15 +885,15 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                         if (e.key === "Enter" && qrScanInput) {
                           const m = members.find((mem) => mem.id === qrScanInput || mem.member_number === qrScanInput || mem.user?.email === qrScanInput);
                           if (m) handleQrCheckIn(m.id);
-                          else addToast("Member ID not found in directory", "error");
+                          else addToast(t("v2.err_member_not_found", "Member ID not found in directory"), "error");
                         }
                       }}
-                      className="flex-1 px-3 py-1.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 min-w-[140px] px-3 py-1.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     <button
                       onClick={() => {
                         if (!isQrAllowed) {
-                          addToast("Attendance check-in is disabled on Free plan. Upgrade or activate the Event Package.", "error");
+                          addToast(t("v2.toast_qr_locked_short", "Attendance check-in is disabled on Free plan. Upgrade or activate the Event Package."), "error");
                           return;
                         }
                         const m = members.find((mem) => mem.id === qrScanInput || mem.member_number === qrScanInput || mem.user?.email === qrScanInput) || members[0];
@@ -888,7 +903,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                       className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {qrScanning ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                      Check-in
+                      {t("v2.btn_checkin", "Check-in")}
                     </button>
                   </div>
                 </div>
@@ -897,18 +912,21 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
 
             {/* Right: Real-time Member Attendance Roster & Excel Export */}
             <div className="lg:col-span-8 space-y-4">
-              <div className="flex items-center justify-between bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800">
-                <div>
-                  <h4 className="text-sm font-bold text-gray-900 dark:text-white">Live Attendance Roll Call</h4>
-                  <p className="text-xs text-gray-500">
-                    {members.filter((m) => allAttendance?.some((a) => a.member_id === m.id)).length} of {members.length} members checked in
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800">
+                <div className="min-w-0">
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white break-words">{t("v2.live_roll_call", "Live Attendance Roll Call")}</h4>
+                  <p className="text-xs text-gray-500 break-words">
+                    {t("v2.checked_in_count", "{{present}} of {{total}} members checked in", {
+                      present: members.filter((m) => allAttendance?.some((a) => a.member_id === m.id)).length,
+                      total: members.length
+                    })}
                   </p>
                 </div>
                 <button
                   onClick={handleExportAttendanceExcel}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition shadow-sm"
                 >
-                  <FileSpreadsheet className="h-4 w-4" /> Export Matrix to Excel (.xlsx/.csv)
+                  <FileSpreadsheet className="h-4 w-4 shrink-0" /> <span>{t("v2.export_excel", "Export Matrix to Excel (.xlsx/.csv)")}</span>
                 </button>
               </div>
 
@@ -918,31 +936,31 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                   {members.map((m) => {
                     const isPresent = allAttendance?.some((a) => a.member_id === m.id);
                     return (
-                      <div key={m.id} className="p-3.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/40 transition">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-2.5 h-2.5 rounded-full ${isPresent ? "bg-emerald-500 animate-pulse" : "bg-gray-300 dark:bg-gray-700"}`} />
-                          <div>
-                            <span className="font-bold text-xs text-gray-900 dark:text-white block">{m.user?.full_name || "Member"}</span>
-                            <span className="text-[11px] text-gray-400 font-mono">
-                              #{m.member_number || m.id.substring(0, 8)} • {m.role}
+                      <div key={m.id} className="p-3.5 flex flex-wrap items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isPresent ? "bg-emerald-500 animate-pulse" : "bg-gray-300 dark:bg-gray-700"}`} />
+                          <div className="min-w-0">
+                            <span className="font-bold text-xs text-gray-900 dark:text-white block break-words">{m.user?.full_name || t("common.member", "Member")}</span>
+                            <span className="text-[11px] text-gray-400 font-mono break-words">
+                              #{m.member_number || m.id.substring(0, 8)} • {t(`roles.${m.role}`, m.role)}
                             </span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                           <span
                             className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                               isPresent ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
                             }`}
                           >
-                            {isPresent ? "PRESENT (QR Stamped)" : "ABSENT"}
+                            {isPresent ? t("v2.badge_present", "PRESENT (QR Stamped)") : t("v2.badge_absent", "ABSENT")}
                           </span>
 
                           <button
                             onClick={() => handleQrCheckIn(m.id)}
                             className="px-3 py-1 rounded-xl text-xs font-semibold bg-gray-100 dark:bg-gray-800 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40 transition flex items-center gap-1"
                           >
-                            <QrCode className="h-3 w-3" /> Quick Scan
+                            <QrCode className="h-3 w-3 shrink-0" /> <span>{t("v2.btn_quick_scan", "Quick Scan")}</span>
                           </button>
                         </div>
                       </div>
@@ -972,76 +990,76 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       {activeTab === "signatures" && (
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shrink-0">
                   <FileSignature className="h-5 w-5" />
                 </span>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white font-display">
-                  Cryptographic Document Signing & Version Acknowledgement
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white font-display break-words">
+                  {t("v2.sig_heading", "Cryptographic Document Signing & Version Acknowledgement")}
                 </h3>
               </div>
               <p className="text-xs text-gray-500">
-                Collect legally binding digital signatures via touch, cursor, or uploaded image with tamper-evident cryptographic hashes.
+                {t("v2.sig_subtitle", "Collect legally binding digital signatures via touch, cursor, or uploaded image with tamper-evident cryptographic hashes.")}
               </p>
             </div>
 
             <button
               onClick={() => setShowSignaturePad(true)}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm"
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm shrink-0"
             >
-              <FileSignature className="h-4 w-4" /> Open E-Signature Pad
+              <FileSignature className="h-4 w-4 shrink-0" /> <span>{t("v2.open_sig_pad", "Open E-Signature Pad")}</span>
             </button>
           </div>
 
           {/* Active Documents to Sign */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-gray-50 dark:bg-gray-800/40 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-4">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300">
-                Pending Board Sign-off
+            <div className="bg-gray-50 dark:bg-gray-800/40 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-4 min-w-0">
+              <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300">
+                {t("v2.sig_badge_pending", "Pending Board Sign-off")}
               </span>
-              <h4 className="text-base font-bold text-gray-900 dark:text-white">
-                Cooperative Dividend Distribution & Reserve Policy 2026
+              <h4 className="text-base font-bold text-gray-900 dark:text-white break-words">
+                {t("v2.sig_doc1_title", "Cooperative Dividend Distribution & Reserve Policy 2026")}
               </h4>
               <p className="text-xs text-gray-600 dark:text-gray-400">
-                Requires mandatory signature acknowledgement of Version 2.0 regarding Article 44 statutory reserve allocations.
+                {t("v2.sig_doc1_desc", "Requires mandatory signature acknowledgement of Version 2.0 regarding Article 44 statutory reserve allocations.")}
               </p>
-              <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700 text-xs">
-                <span className="text-gray-400">Version 2.0 • 4 pages</span>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-200 dark:border-gray-700 text-xs">
+                <span className="text-gray-400">{t("v2.sig_doc1_meta", "Version 2.0 • 4 pages")}</span>
                 <button
                   onClick={() => {
-                    setSigningDocTitle("Cooperative Dividend Distribution & Reserve Policy 2026");
+                    setSigningDocTitle(t("v2.sig_doc1_title", "Cooperative Dividend Distribution & Reserve Policy 2026"));
                     setSigningDocVersion(2);
                     setShowSignaturePad(true);
                   }}
                   className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition"
                 >
-                  Sign Document
+                  {t("v2.btn_sign_doc", "Sign Document")}
                 </button>
               </div>
             </div>
 
-            <div className="bg-gray-50 dark:bg-gray-800/40 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-4">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
-                General Assembly Resolution
+            <div className="bg-gray-50 dark:bg-gray-800/40 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-4 min-w-0">
+              <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
+                {t("v2.sig_badge_ga", "General Assembly Resolution")}
               </span>
-              <h4 className="text-base font-bold text-gray-900 dark:text-white">
-                Solar Irrigation Capital Equipment Loan Resolution
+              <h4 className="text-base font-bold text-gray-900 dark:text-white break-words">
+                {t("v2.sig_doc2_title", "Solar Irrigation Capital Equipment Loan Resolution")}
               </h4>
               <p className="text-xs text-gray-600 dark:text-gray-400">
-                Quorum verified resolution authorizing purchase of solar pump units with member equity contributions.
+                {t("v2.sig_doc2_desc", "Quorum verified resolution authorizing purchase of solar pump units with member equity contributions.")}
               </p>
-              <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700 text-xs">
-                <span className="text-gray-400">Version 1.0 • 2 pages</span>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-200 dark:border-gray-700 text-xs">
+                <span className="text-gray-400">{t("v2.sig_doc2_meta", "Version 1.0 • 2 pages")}</span>
                 <button
                   onClick={() => {
-                    setSigningDocTitle("Solar Irrigation Capital Equipment Loan Resolution");
+                    setSigningDocTitle(t("v2.sig_doc2_title", "Solar Irrigation Capital Equipment Loan Resolution"));
                     setSigningDocVersion(1);
                     setShowSignaturePad(true);
                   }}
                   className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition"
                 >
-                  Sign Document
+                  {t("v2.btn_sign_doc", "Sign Document")}
                 </button>
               </div>
             </div>
@@ -1049,25 +1067,25 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
 
           {/* Signed Registry */}
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 space-y-4">
-            <h4 className="font-bold text-sm text-gray-900 dark:text-white">Tamper-evident Digital Signature Registry</h4>
+            <h4 className="font-bold text-sm text-gray-900 dark:text-white">{t("v2.sig_registry_title", "Tamper-evident Digital Signature Registry")}</h4>
             {signedDocs.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-6">No signatures registered yet. Sign a document above.</p>
+              <p className="text-xs text-gray-400 text-center py-6">{t("v2.sig_registry_empty", "No signatures registered yet. Sign a document above.")}</p>
             ) : (
               <div className="space-y-3">
                 {signedDocs.map((sig) => (
-                  <div key={sig.id} className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                  <div key={sig.id} className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-4 min-w-0">
                       {sig.signature_data_url && (
-                        <img src={sig.signature_data_url} alt="Signature" className="h-10 max-w-[120px] object-contain bg-white dark:bg-black rounded-lg p-1 border" />
+                        <img src={sig.signature_data_url} alt={t("v2.sig_alt", "Signature")} className="h-10 max-w-[120px] object-contain bg-white dark:bg-black rounded-lg p-1 border shrink-0" />
                       )}
-                      <div>
-                        <span className="font-bold text-xs text-gray-900 dark:text-white block">{sig.signer_name}</span>
-                        <span className="text-[11px] text-gray-500 font-mono">
-                          Role: {sig.signer_role} • Hash: {sig.verification_hash || "SIG-VERIFIED"}
+                      <div className="min-w-0">
+                        <span className="font-bold text-xs text-gray-900 dark:text-white block break-words">{sig.signer_name}</span>
+                        <span className="text-[11px] text-gray-500 font-mono break-all">
+                          {t("v2.sig_role_hash", { role: sig.signer_role, hash: sig.verification_hash || "SIG-VERIFIED", defaultValue: "Role: {{role}} • Hash: {{hash}}" })}
                         </span>
                       </div>
                     </div>
-                    <span className="text-xs font-mono text-emerald-600 font-bold">{new Date(sig.signed_at).toLocaleDateString()}</span>
+                    <span className="text-xs font-mono text-emerald-600 font-bold">{new Date(sig.signed_at).toLocaleDateString(i18n.language)}</span>
                   </div>
                 ))}
               </div>
@@ -1080,8 +1098,8 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
             onClose={() => setShowSignaturePad(false)}
             documentTitle={signingDocTitle}
             documentVersion={signingDocVersion}
-            signerName={members[0]?.user?.full_name || "Authorized Signatory"}
-            signerRole={members[0]?.role || "Executive Board Member"}
+            signerName={members[0]?.user?.full_name || t("v2.sig_default_signer", "Authorized Signatory")}
+            signerRole={members[0]?.role || t("v2.sig_default_role", "Executive Board Member")}
             onSignComplete={(data) => {
               const newSig: DocumentSignature = {
                 id: "sig-" + Date.now(),
@@ -1099,7 +1117,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
               const updated = [newSig, ...signedDocs];
               setSignedDocs(updated);
               MockDB.saveDocumentSignatures(updated);
-              addToast("Document legally signed and registered with hash " + data.verificationHash, "success");
+              addToast(t("v2.toast_doc_signed", { hash: data.verificationHash, defaultValue: "Document legally signed and registered with hash {{hash}}" }), "success");
             }}
           />
         </div>
@@ -1111,35 +1129,35 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       {activeTab === "audit_trail" && (
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                <span className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shrink-0">
                   <History className="h-5 w-5" />
                 </span>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white font-display">
-                  Full Administrative Audit Trail & Event Logs
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white font-display break-words">
+                  {t("v2.audit_heading", "Full Administrative Audit Trail & Event Logs")}
                 </h3>
               </div>
               <p className="text-xs text-gray-500">
-                Immutable, timestamped audit log of all financial approvals, membership changes, subscription events, and data modifications.
+                {t("v2.audit_subtitle", "Immutable, timestamped audit log of all financial approvals, membership changes, subscription events, and data modifications.")}
               </p>
             </div>
 
             <button
               onClick={handleExportAuditLogsCSV}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm"
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm shrink-0"
             >
-              <Download className="h-4 w-4" /> Export Audit Log (CSV)
+              <Download className="h-4 w-4 shrink-0" /> <span>{t("v2.audit_export_csv", "Export Audit Log (CSV)")}</span>
             </button>
           </div>
 
           {/* Search & Filter Bar */}
           <div className="flex flex-col sm:flex-row gap-3 bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800">
-            <div className="relative flex-1">
+            <div className="relative flex-1 min-w-0">
               <Search className="h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search by actor, action type, reference code, or target..."
+                placeholder={t("v2.audit_search_placeholder", "Search by actor, action type, reference code, or target...")}
                 value={auditSearch}
                 onChange={(e) => setAuditSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-xs text-gray-900 dark:text-white"
@@ -1150,11 +1168,11 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
               onChange={(e) => setAuditActionFilter(e.target.value)}
               className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-300"
             >
-              <option value="all">All Actions</option>
-              <option value="verify_payment">Payment Verifications</option>
-              <option value="approve_subscription">Subscription Approvals</option>
-              <option value="member_status_change">Member Status Changes</option>
-              <option value="ledger_entry">Ledger Updates</option>
+              <option value="all">{t("v2.audit_filter_all", "All Actions")}</option>
+              <option value="verify_payment">{t("v2.audit_filter_verify", "Payment Verifications")}</option>
+              <option value="approve_subscription">{t("v2.audit_filter_sub", "Subscription Approvals")}</option>
+              <option value="member_status_change">{t("v2.audit_filter_member", "Member Status Changes")}</option>
+              <option value="ledger_entry">{t("v2.audit_filter_ledger", "Ledger Updates")}</option>
             </select>
           </div>
 
@@ -1164,11 +1182,11 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
               <table className="w-full text-left text-xs">
                 <thead className="bg-gray-50 dark:bg-gray-800/60 text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-800">
                   <tr>
-                    <th className="p-4">Timestamp</th>
-                    <th className="p-4">Actor (Staff / User)</th>
-                    <th className="p-4">Action Type</th>
-                    <th className="p-4">Target Organization</th>
-                    <th className="p-4">Details / Reference</th>
+                    <th className="p-4">{t("v2.csv_timestamp", "Timestamp")}</th>
+                    <th className="p-4">{t("v2.audit_col_actor", "Actor (Staff / User)")}</th>
+                    <th className="p-4">{t("v2.csv_action_type", "Action Type")}</th>
+                    <th className="p-4">{t("v2.audit_col_target", "Target Organization")}</th>
+                    <th className="p-4">{t("v2.csv_details", "Details / Reference")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -1176,27 +1194,27 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                     <tr>
                       <td colSpan={5} className="text-center py-12 text-gray-400">
                         <History className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                        <p className="text-xs font-semibold">No audit logs matching query</p>
+                        <p className="text-xs font-semibold">{t("v2.audit_empty", "No audit logs matching query")}</p>
                       </td>
                     </tr>
                   ) : (
                     filteredAuditLogs.map((log: any, index: number) => (
                       <tr key={log.id || index} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition">
                         <td className="p-4 font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                          {log.created_at ? new Date(log.created_at).toLocaleString() : new Date().toLocaleString()}
+                          {log.created_at ? new Date(log.created_at).toLocaleString(i18n.language) : new Date().toLocaleString(i18n.language)}
                         </td>
                         <td className="p-4">
-                          <span className="font-bold text-gray-900 dark:text-white block">{log.staff_name || "System Executive"}</span>
-                          <span className="text-[10px] text-gray-400 capitalize">{log.staff_role || "Administrator"}</span>
+                          <span className="font-bold text-gray-900 dark:text-white block">{log.staff_name || t("v2.system_exec", "System Executive")}</span>
+                          <span className="text-[10px] text-gray-400 capitalize">{log.staff_role || t("v2.role_admin", "Administrator")}</span>
                         </td>
                         <td className="p-4">
                           <span className="px-2.5 py-0.5 rounded-full font-mono text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 uppercase">
-                            {log.action_type || "ACTION"}
+                            {log.action_type || t("v2.action_default", "ACTION")}
                           </span>
                         </td>
-                        <td className="p-4 text-gray-700 dark:text-gray-300 font-medium">{log.target_org_name || activeOrg?.name || "Active Org"}</td>
-                        <td className="p-4 text-gray-600 dark:text-gray-400 max-w-xs truncate">
-                          {log.notes || log.reference || log.details || "Verified successfully"}
+                        <td className="p-4 text-gray-700 dark:text-gray-300 font-medium">{log.target_org_name || activeOrg?.name || t("v2.active_org", "Active Org")}</td>
+                        <td className="p-4 text-gray-600 dark:text-gray-400 max-w-xs break-words">
+                          {log.notes || log.reference || log.details || t("v2.verified_successfully", "Verified successfully")}
                         </td>
                       </tr>
                     ))
@@ -1214,59 +1232,59 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       {activeTab === "subscription" && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-6 rounded-3xl border-2 border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 relative shadow-sm">
-              <span className="absolute top-4 right-4 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-600 text-white">
-                Active 30-Day Trial
+            <div className="p-6 rounded-3xl border-2 border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 relative shadow-sm min-w-0">
+              <span className="inline-block sm:absolute sm:top-4 sm:right-4 mb-2 sm:mb-0 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-600 text-white">
+                {t("v2.sub_trial_badge", "Active 30-Day Trial")}
               </span>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Growth Plan Trial</h3>
-              <p className="text-xs text-gray-500 mt-1">Default 30-day trial with full access to attendance, asset tracker, certificates, and dues.</p>
-              <div className="mt-4 text-2xl font-extrabold text-emerald-700 dark:text-emerald-400">24 Days Remaining</div>
-              <p className="text-[11px] text-emerald-600 mt-1 font-medium">+ 3-Day Grace Period Upon Expiry</p>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t("v2.sub_trial_title", "Growth Plan Trial")}</h3>
+              <p className="text-xs text-gray-500 mt-1">{t("v2.sub_trial_desc", "Default 30-day trial with full access to attendance, asset tracker, certificates, and dues.")}</p>
+              <div className="mt-4 text-2xl font-extrabold text-emerald-700 dark:text-emerald-400">{t("v2.sub_days_remaining", "24 Days Remaining")}</div>
+              <p className="text-[11px] text-emerald-600 mt-1 font-medium">{t("v2.sub_grace_period", "+ 3-Day Grace Period Upon Expiry")}</p>
               <button
                 onClick={() => {
                   setSelectedPackage(null);
                   setShowCheckout(true);
                 }}
-                className="mt-6 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition shadow-sm"
+                className="mt-6 w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition shadow-sm"
               >
-                Upgrade to Pro (Unlimited Storage)
+                {t("v2.sub_upgrade_pro", "Upgrade to Pro (Unlimited Storage)")}
               </button>
             </div>
 
-            <div className="p-6 rounded-3xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40">
+            <div className="p-6 rounded-3xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 min-w-0">
               <span className="inline-block px-2.5 py-1 rounded-full text-[10px] font-bold bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 mb-2">
-                Free Forever Tier
+                {t("v2.sub_free_badge", "Free Forever Tier")}
               </span>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Free Community Plan</h3>
-              <p className="text-xs text-gray-500 mt-1">Capped at 30 members. Excess records locked until upgraded.</p>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t("v2.sub_free_title", "Free Community Plan")}</h3>
+              <p className="text-xs text-gray-500 mt-1">{t("v2.sub_free_desc", "Capped at 30 members. Excess records locked until upgraded.")}</p>
               <div className="mt-4 text-xs font-semibold text-gray-700 dark:text-gray-300">
-                Roster Cap: {memberCount} / 30 Members
+                {t("v2.sub_roster_cap", { count: memberCount, defaultValue: "Roster Cap: {{count}} / 30 Members" })}
               </div>
               <div className="w-full bg-gray-200 dark:bg-gray-700 h-2 rounded-full mt-2 overflow-hidden">
                 <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${Math.min(100, (memberCount / 30) * 100)}%` }} />
               </div>
               <div className="mt-6 w-full py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-xl font-bold text-xs text-center">
-                Fallback Tier
+                {t("v2.sub_fallback_tier", "Fallback Tier")}
               </div>
             </div>
 
-            <div className="p-6 rounded-3xl border-2 border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-sm">
+            <div className="p-6 rounded-3xl border-2 border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-sm min-w-0">
               <span className="inline-block px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-600 text-white mb-2">
-                Enterprise Co-op Tier
+                {t("v2.sub_ent_badge", "Enterprise Co-op Tier")}
               </span>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Full Cooperative ERP</h3>
-              <p className="text-xs text-gray-500 mt-1">Unlimited branches, multi-officer sign-offs, and dedicated SLA.</p>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t("v2.sub_ent_title", "Full Cooperative ERP")}</h3>
+              <p className="text-xs text-gray-500 mt-1">{t("v2.sub_ent_desc", "Unlimited branches, multi-officer sign-offs, and dedicated SLA.")}</p>
               <div className="mt-4 text-2xl font-extrabold text-indigo-700 dark:text-indigo-300">
-                120,000 RWF <span className="text-xs font-normal">/mo</span>
+                120,000 RWF <span className="text-xs font-normal">{t("v2.per_month", "/mo")}</span>
               </div>
               <button
                 onClick={() => {
-                  setSelectedPackage({ id: "enterprise", name: "Enterprise Plan", price: 120000 });
+                  setSelectedPackage({ id: "enterprise", name: t("v2.ent_plan_name", "Enterprise Plan"), price: 120000 });
                   setShowCheckout(true);
                 }}
-                className="mt-6 w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition shadow-sm"
+                className="mt-6 w-full py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition shadow-sm"
               >
-                Subscribe via pawaPay MoMo
+                {t("v2.sub_pawapay_btn", "Subscribe via pawaPay MoMo")}
               </button>
             </div>
           </div>
@@ -1278,14 +1296,13 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       {/* ========================================================================= */}
       {activeTab === "marketplace" && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Curated Impacto Feature Packs</h3>
-              <p className="text-xs text-gray-500">Add-on capabilities tailored for cooperative administration and field operations.</p>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t("v2.mkt_title", "Curated Impacto Feature Packs")}</h3>
+              <p className="text-xs text-gray-500">{t("v2.mkt_subtitle", "Add-on capabilities tailored for cooperative administration and field operations.")}</p>
             </div>
           </div>
 
-          {/* Package visibility gating: Only visible for Free and Starter plans without active paid subscriptions */}
           {(() => {
             const plan = (activeOrg?.subscription_tier || (activeOrg as any)?.subscription_plan || "free").toLowerCase();
             const isPaidPlan = ["growth", "pro", "enterprise"].includes(plan) || activeOrg?.subscription_status === "active";
@@ -1293,21 +1310,21 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
             if (!shouldShow) {
               return (
                 <div className="p-8 rounded-3xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 flex flex-col md:flex-row items-center justify-between gap-6">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-emerald-600 text-white rounded-2xl shadow-sm">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="p-3 bg-emerald-600 text-white rounded-2xl shadow-sm shrink-0">
                       <ShieldCheck className="h-8 w-8" />
                     </div>
-                    <div>
-                      <h4 className="text-base font-bold text-emerald-950 dark:text-emerald-100">
-                        All Enterprise Features Active on Your Plan
+                    <div className="min-w-0">
+                      <h4 className="text-base font-bold text-emerald-950 dark:text-emerald-100 break-words">
+                        {t("v2.mkt_all_active", "All Enterprise Features Active on Your Plan")}
                       </h4>
                       <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
-                        Your organization is subscribed to the <strong>{plan.toUpperCase()}</strong> tier. All add-on packs and unlimited features are unlocked.
+                        {t("v2.mkt_tier_unlocked", { plan: plan.toUpperCase(), defaultValue: "Your organization is subscribed to the {{plan}} tier. All add-on packs and unlimited features are unlocked." })}
                       </p>
                     </div>
                   </div>
-                  <span className="px-4 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-full">
-                    Full Access Unlocked
+                  <span className="px-4 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-full shrink-0">
+                    {t("v2.mkt_full_access", "Full Access Unlocked")}
                   </span>
                 </div>
               );
@@ -1320,24 +1337,24 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                   return (
                     <div
                       key={pkg.id}
-                      className={`rounded-3xl border p-6 flex flex-col justify-between transition ${
+                      className={`rounded-3xl border p-6 flex flex-col justify-between transition min-w-0 ${
                         isPurchased
                           ? "bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-500 shadow-md ring-1 ring-emerald-500"
                           : "bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700"
                       }`}
                     >
                       <div>
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                           <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200">
                             {pkg.theme}
                           </span>
                           <span className="font-extrabold text-lg text-emerald-600">{pkg.price.toLocaleString()} RWF</span>
                         </div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-bold text-gray-900 dark:text-white text-base">{pkg.name}</h4>
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <h4 className="font-bold text-gray-900 dark:text-white text-base break-words">{pkg.name}</h4>
                           {isPurchased && (
                             <span className="px-2 py-0.5 bg-emerald-600 text-white rounded-full text-[10px] font-bold">
-                              ACTIVE
+                              {t("v2.badge_active", "ACTIVE")}
                             </span>
                           )}
                         </div>
@@ -1345,7 +1362,7 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                         <ul className="space-y-2 mb-6">
                           {pkg.features.map((f, i) => (
                             <li key={i} className="text-xs flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> {f}
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> <span className="break-words">{f}</span>
                             </li>
                           ))}
                         </ul>
@@ -1353,23 +1370,23 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                       <div className="space-y-2">
                         <button
                           onClick={() => handleActivatePackage(pkg)}
-                          className={`w-full py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm ${
+                          className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm ${
                             isPurchased
                               ? "bg-stone-800 hover:bg-stone-900 text-white"
                               : "bg-emerald-600 hover:bg-emerald-700 text-white"
                           }`}
                         >
-                          {isPurchased ? <Check className="h-4 w-4" /> : <Zap className="h-4 w-4" />}
-                          {isPurchased ? "Active on Organization (Toggle Off)" : "Instant 1-Click Activate"}
+                          {isPurchased ? <Check className="h-4 w-4 shrink-0" /> : <Zap className="h-4 w-4 shrink-0" />}
+                          <span>{isPurchased ? t("v2.pkg_toggle_off", "Active on Organization (Toggle Off)") : t("v2.pkg_instant_activate", "Instant 1-Click Activate")}</span>
                         </button>
                         <button
                           onClick={() => {
                             setSelectedPackage(pkg);
                             setShowCheckout(true);
                           }}
-                          className="w-full py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 text-gray-700 dark:text-gray-300 rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1.5"
+                          className="w-full py-2 px-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 text-gray-700 dark:text-gray-300 rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1.5"
                         >
-                          <CreditCard className="h-3.5 w-3.5 text-emerald-600" /> Pay via MoMo Transfer
+                          <CreditCard className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> <span>{t("v2.pay_momo_transfer", "Pay via MoMo Transfer")}</span>
                         </button>
                       </div>
                     </div>
@@ -1386,14 +1403,14 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       {/* ========================================================================= */}
       {activeTab === "ai" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-gray-50 dark:bg-gray-800/40 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 space-y-4">
+          <div className="bg-gray-50 dark:bg-gray-800/40 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 space-y-4 min-w-0">
             <h3 className="font-bold text-base text-gray-900 dark:text-white flex items-center gap-2">
-              <FileText className="h-5 w-5 text-emerald-600" /> Smart Meeting Summarizer
+              <FileText className="h-5 w-5 text-emerald-600 shrink-0" /> <span>{t("v2.ai_summarizer_title", "Smart Meeting Summarizer")}</span>
             </h3>
-            <p className="text-xs text-gray-500">Automatically summarize democratic assembly discussions into key resolutions and tasks.</p>
+            <p className="text-xs text-gray-500">{t("v2.ai_summarizer_desc", "Automatically summarize democratic assembly discussions into key resolutions and tasks.")}</p>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Meeting Title</label>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">{t("v2.ai_meeting_title_label", "Meeting Title")}</label>
                 <input
                   type="text"
                   value={meetingTitle}
@@ -1402,12 +1419,12 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Raw Discussion Notes</label>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">{t("v2.ai_raw_notes_label", "Raw Discussion Notes")}</label>
                 <textarea
                   rows={5}
                   value={meetingNotes}
                   onChange={(e) => setMeetingNotes(e.target.value)}
-                  placeholder="Paste rough notes, member motions, and voting outcomes here..."
+                  placeholder={t("v2.ai_raw_notes_placeholder", "Paste rough notes, member motions, and voting outcomes here...")}
                   className="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white"
                 />
               </div>
@@ -1416,25 +1433,25 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 disabled={aiLoading}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm"
               >
-                {aiLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                Generate Executive Resolutions
+                {aiLoading ? <RefreshCw className="h-4 w-4 animate-spin shrink-0" /> : <FileText className="h-4 w-4 shrink-0" />}
+                <span>{t("v2.ai_btn_generate", "Generate Executive Resolutions")}</span>
               </button>
               {aiSummary && (
-                <div className="mt-4 p-4 rounded-xl bg-white dark:bg-gray-900 border border-emerald-200 dark:border-emerald-800 text-xs whitespace-pre-wrap leading-relaxed text-gray-800 dark:text-gray-200">
+                <div className="mt-4 p-4 rounded-xl bg-white dark:bg-gray-900 border border-emerald-200 dark:border-emerald-800 text-xs whitespace-pre-wrap leading-relaxed text-gray-800 dark:text-gray-200 break-words">
                   {aiSummary}
                 </div>
               )}
             </div>
           </div>
 
-          <div className="bg-gray-50 dark:bg-gray-800/40 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 space-y-4">
+          <div className="bg-gray-50 dark:bg-gray-800/40 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 space-y-4 min-w-0">
             <h3 className="font-bold text-base text-gray-900 dark:text-white flex items-center gap-2">
-              <Cpu className="h-5 w-5 text-emerald-600" /> Ledger & Anomaly Detector
+              <Cpu className="h-5 w-5 text-emerald-600 shrink-0" /> <span>{t("v2.ledger_detector_title", "Ledger & Anomaly Detector")}</span>
             </h3>
-            <p className="text-xs text-gray-500">Detect anomalous spending spikes or missing receipt attachments in cooperative books.</p>
+            <p className="text-xs text-gray-500">{t("v2.ledger_detector_desc", "Detect anomalous spending spikes or missing receipt attachments in cooperative books.")}</p>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Ledger Entries (JSON Format)</label>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">{t("v2.ledger_entries_label", "Ledger Entries (JSON Format)")}</label>
                 <textarea
                   rows={5}
                   value={ledgerEntries}
@@ -1447,11 +1464,11 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 disabled={ledgerLoading}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm"
               >
-                {ledgerLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                Analyze Financial Books
+                {ledgerLoading ? <RefreshCw className="h-4 w-4 animate-spin shrink-0" /> : <ShieldCheck className="h-4 w-4 shrink-0" />}
+                <span>{t("v2.ledger_btn_analyze", "Analyze Financial Books")}</span>
               </button>
               {ledgerInsights && (
-                <div className="mt-4 p-4 rounded-xl bg-white dark:bg-gray-900 border border-emerald-200 dark:border-emerald-800 text-xs whitespace-pre-wrap leading-relaxed text-gray-800 dark:text-gray-200">
+                <div className="mt-4 p-4 rounded-xl bg-white dark:bg-gray-900 border border-emerald-200 dark:border-emerald-800 text-xs whitespace-pre-wrap leading-relaxed text-gray-800 dark:text-gray-200 break-words">
                   {ledgerInsights}
                 </div>
               )}
@@ -1466,26 +1483,26 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
       {activeTab === "offline_sync" && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 bg-gray-50 dark:bg-gray-800/40 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-4">
+            <div className="lg:col-span-1 bg-gray-50 dark:bg-gray-800/40 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-4 min-w-0">
               <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-emerald-600 text-white">
+                <div className="p-2 rounded-xl bg-emerald-600 text-white shrink-0">
                   {isSimulatedOffline ? <WifiOff className="h-5 w-5" /> : <Wifi className="h-5 w-5" />}
                 </div>
-                <div>
-                  <h3 className="font-bold text-sm text-gray-900 dark:text-white">Field Connectivity Manager</h3>
-                  <p className="text-[11px] text-gray-500">Manage offline field queuing and cloud sync.</p>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-sm text-gray-900 dark:text-white">{t("v2.offline_mgr_title", "Field Connectivity Manager")}</h3>
+                  <p className="text-[11px] text-gray-500">{t("v2.offline_mgr_desc", "Manage offline field queuing and cloud sync.")}</p>
                 </div>
               </div>
 
               <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border text-center space-y-2">
-                <span className="text-[10px] uppercase font-bold text-gray-400 block font-mono">Connection Status</span>
+                <span className="text-[10px] uppercase font-bold text-gray-400 block font-mono">{t("v2.offline_status_label", "Connection Status")}</span>
                 <span
                   className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${
                     isSimulatedOffline ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
                   }`}
                 >
-                  <span className={`h-2 w-2 rounded-full ${isSimulatedOffline ? "bg-rose-500" : "bg-emerald-500 animate-pulse"}`} />
-                  {isSimulatedOffline ? "OFFLINE (Queued in Local Storage)" : "ONLINE (Direct Cloud Sync)"}
+                  <span className={`h-2 w-2 rounded-full shrink-0 ${isSimulatedOffline ? "bg-rose-500" : "bg-emerald-500 animate-pulse"}`} />
+                  <span>{isSimulatedOffline ? t("v2.offline_state_queued", "OFFLINE (Queued in Local Storage)") : t("v2.offline_state_online", "ONLINE (Direct Cloud Sync)")}</span>
                 </span>
               </div>
 
@@ -1493,57 +1510,57 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 <button
                   onClick={() => {
                     setIsSimulatedOffline(!isSimulatedOffline);
-                    addToast(isSimulatedOffline ? "Connected to cloud database!" : "Switched to offline local queue mode.", "info");
+                    addToast(isSimulatedOffline ? t("v2.toast_connected_cloud", "Connected to cloud database!") : t("v2.toast_offline_queue", "Switched to offline local queue mode."), "info");
                   }}
-                  className={`w-full py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 ${
+                  className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 ${
                     isSimulatedOffline ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-amber-600 hover:bg-amber-700 text-white"
                   }`}
                 >
-                  {isSimulatedOffline ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
-                  {isSimulatedOffline ? "Switch to Online Mode" : "Switch to Offline Mode"}
+                  {isSimulatedOffline ? <Wifi className="h-4 w-4 shrink-0" /> : <WifiOff className="h-4 w-4 shrink-0" />}
+                  <span>{isSimulatedOffline ? t("v2.btn_switch_online", "Switch to Online Mode") : t("v2.btn_switch_offline", "Switch to Offline Mode")}</span>
                 </button>
 
                 <button
                   onClick={handleAddSampleOfflineRecord}
-                  className="w-full py-2.5 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2"
+                  className="w-full py-2.5 px-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2"
                 >
-                  <Plus className="h-4 w-4 text-emerald-600" /> Queue Field Attendance Entry
+                  <Plus className="h-4 w-4 text-emerald-600 shrink-0" /> <span>{t("v2.btn_queue_sample", "Queue Field Attendance Entry")}</span>
                 </button>
               </div>
             </div>
 
-            <div className="lg:col-span-2 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4">
-              <div className="flex items-center justify-between">
+            <div className="lg:col-span-2 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 min-w-0">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h4 className="font-bold text-sm text-gray-900 dark:text-white">Local Encrypted Queue</h4>
-                  <p className="text-xs text-gray-500">{offlineQueue.length} records awaiting cloud database synchronization.</p>
+                  <h4 className="font-bold text-sm text-gray-900 dark:text-white">{t("v2.offline_queue_title", "Local Encrypted Queue")}</h4>
+                  <p className="text-xs text-gray-500">{t("v2.offline_queue_count", { count: offlineQueue.length, defaultValue: "{{count}} records awaiting cloud database synchronization." })}</p>
                 </div>
                 <button
                   onClick={handleFlushOfflineQueue}
                   disabled={syncingNow || offlineQueue.length === 0}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center gap-2"
                 >
-                  {syncingNow ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  Sync All Pending ({offlineQueue.length})
+                  <RefreshCw className={`h-4 w-4 shrink-0 ${syncingNow ? "animate-spin" : ""}`} />
+                  <span>{t("v2.btn_sync_pending", { count: offlineQueue.length, defaultValue: "Sync All Pending ({{count}})" })}</span>
                 </button>
               </div>
 
               {offlineQueue.length === 0 ? (
                 <div className="p-8 text-center border border-dashed rounded-2xl bg-gray-50/50 dark:bg-gray-800/30">
                   <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-gray-800 dark:text-gray-200">Local Queue Clean & Synced</p>
-                  <p className="text-[11px] text-gray-500 mt-1">All field operations are up to date in the central cloud database.</p>
+                  <p className="text-xs font-bold text-gray-800 dark:text-gray-200">{t("v2.offline_clean_title", "Local Queue Clean & Synced")}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">{t("v2.offline_clean_desc", "All field operations are up to date in the central cloud database.")}</p>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {offlineQueue.map((item, idx) => (
-                    <div key={item.id || idx} className="p-3 bg-gray-50 dark:bg-gray-800/40 rounded-xl border flex items-center justify-between text-xs">
-                      <div>
-                        <span className="font-bold text-gray-900 dark:text-white block">{item.table || item.action_type || "Event Attendance"}</span>
-                        <span className="text-[10px] text-gray-400 font-mono">ID: {item.id || item.data?.id || `REC-${idx + 1}`}</span>
+                    <div key={item.id || idx} className="p-3 bg-gray-50 dark:bg-gray-800/40 rounded-xl border flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="min-w-0">
+                        <span className="font-bold text-gray-900 dark:text-white block">{item.table || item.action_type || t("v2.event_attendance", "Event Attendance")}</span>
+                        <span className="text-[10px] text-gray-400 font-mono">{t("v2.id_prefix", "ID:")} {item.id || item.data?.id || `REC-${idx + 1}`}</span>
                       </div>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300">
-                        PENDING SYNC
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 shrink-0">
+                        {t("v2.badge_pending_sync", "PENDING SYNC")}
                       </span>
                     </div>
                   ))}
@@ -1561,10 +1578,10 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-200 dark:border-gray-800 shadow-2xl">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-2">
-              <CreditCard className="h-5 w-5 text-emerald-600" /> Mobile Money Payment Gateway
+              <CreditCard className="h-5 w-5 text-emerald-600 shrink-0" /> <span>{t("v2.checkout_title", "Mobile Money Payment Gateway")}</span>
             </h3>
             <p className="text-xs text-gray-500 mb-4">
-              {selectedPackage ? `Purchasing ${selectedPackage.name}` : "Upgrading to Pro Tier (Unlimited Capacity)"} —{" "}
+              {selectedPackage ? t("v2.checkout_purchasing", { name: selectedPackage.name, defaultValue: "Purchasing {{name}}" }) : t("v2.checkout_upgrading_pro", "Upgrading to Pro Tier (Unlimited Capacity)")} —{" "}
               <strong className="text-emerald-600 font-bold">{selectedPackage ? selectedPackage.price.toLocaleString() : "45,000"} RWF</strong>
             </p>
 
@@ -1577,31 +1594,31 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                 airtelNumber={platformSettings?.airtel_payment_number}
                 recipientName={platformSettings?.payment_name}
                 amountRwf={selectedPackage ? selectedPackage.price : 45000}
-                itemName={selectedPackage ? `Tool Package: ${selectedPackage.name}` : "Pro Tier Upgrade"}
+                itemName={selectedPackage ? `${t("v2.tool_package_prefix", "Tool Package:")} ${selectedPackage.name}` : t("v2.pro_tier_upgrade", "Pro Tier Upgrade")}
                 compact
               />
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Mobile Money Number</label>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">{t("v2.momo_number_label", "Mobile Money Number")}</label>
                 <input
                   type="text"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="078XXXXXXX or 079..."
+                  placeholder="078XXXXXXX"
                   className="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs font-mono text-gray-900 dark:text-white"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Telecom Network</label>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">{t("v2.telecom_network_label", "Telecom Network")}</label>
                 <select
                   value={provider}
                   onChange={(e) => setProvider(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-xs text-gray-900 dark:text-white"
                 >
-                  <option value="MTN_MOMO_RWA">MTN Mobile Money Rwanda (*182#)</option>
-                  <option value="AIRTEL_RWA">Airtel Money Rwanda (*182#)</option>
+                  <option value="MTN_MOMO_RWA">{t("v2.network_mtn", "MTN Mobile Money Rwanda (*182#)")}</option>
+                  <option value="AIRTEL_RWA">{t("v2.network_airtel", "Airtel Money Rwanda (*182#)")}</option>
                 </select>
               </div>
 
@@ -1616,15 +1633,15 @@ export const V2AdvancedFeatures: React.FC<V2AdvancedFeaturesProps> = ({
                   onClick={() => setShowCheckout(false)}
                   className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-xs transition hover:bg-gray-200"
                 >
-                  Close
+                  {t("common.close", "Close")}
                 </button>
                 <button
                   onClick={handlePawaPayCheckout}
                   disabled={checkoutLoading}
-                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm"
+                  className="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm"
                 >
-                  {checkoutLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                  Confirm MoMo Payment
+                  {checkoutLoading ? <RefreshCw className="h-4 w-4 animate-spin shrink-0" /> : <ArrowRight className="h-4 w-4 shrink-0" />}
+                  <span>{t("v2.confirm_momo_payment", "Confirm MoMo Payment")}</span>
                 </button>
               </div>
             </div>

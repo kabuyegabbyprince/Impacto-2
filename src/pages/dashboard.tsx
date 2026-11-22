@@ -162,7 +162,7 @@ import {
   usePlatformSettings,
   useSubmitSubscriptionPayment
 } from "../hooks/useImpactoData";
-import { Button, Input, Card, Badge, Avatar, ProgressBar, EmptyState, Modal, Table } from "../components/ui";
+import { Button, Input, Card, Badge, Avatar, ProgressBar, EmptyState, Modal, Table, ConfirmDialog } from "../components/ui";
 import { PaymentGatewaySection, PaymentGatewaySuccessState } from "../components/PaymentGatewaySection";
 import { MockDB } from "../lib/mockData";
 import { canAccessFeature, getOrgSubscriptionLifecycle, ADDON_PACKAGES } from "../lib/subscriptionMatrix";
@@ -2088,6 +2088,7 @@ export const NewsFeed: React.FC = () => {
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
   const [selectedPost, setSelectedPost] = useState<NewsPost | null>(null);
+  const [pendingDeletePost, setPendingDeletePost] = useState<NewsPost | null>(null);
 
   const [activeTab, setActiveTab] = useState<"active" | "history">("active");
 
@@ -2171,15 +2172,19 @@ export const NewsFeed: React.FC = () => {
     }
   };
 
-  const handleDelete = async (post: NewsPost) => {
-    if (confirm("Soft-delete this post? It will remain stored as a historical log in the primary database schema.")) {
-      try {
-        await deleteMutation.mutateAsync({ id: post.id, org_id: activeOrg?.id || "" });
-        refetch();
-        addToast("Post transitioned into database persistent history logs.", "success");
-      } catch (err) {
-        console.error(err);
-      }
+  const handleDelete = (post: NewsPost) => {
+    setPendingDeletePost(post);
+  };
+
+  const executeDeletePost = async () => {
+    if (!pendingDeletePost) return;
+    try {
+      await deleteMutation.mutateAsync({ id: pendingDeletePost.id, org_id: activeOrg?.id || "" });
+      setPendingDeletePost(null);
+      refetch();
+      addToast(t("v2.toast_post_archived", "Post transitioned into database persistent history logs."), "success");
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -2427,6 +2432,15 @@ export const NewsFeed: React.FC = () => {
           </form>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!pendingDeletePost}
+        title={t("v2.confirm_delete_post_title", "Archive Announcement")}
+        message={t("v2.confirm_delete_post_msg", "Soft-delete this post? It will remain stored as a historical log in the primary database schema.")}
+        onConfirm={executeDeletePost}
+        onCancel={() => setPendingDeletePost(null)}
+        danger
+      />
     </div>
   );
 };
@@ -4703,6 +4717,7 @@ const OldGoalsTracker: React.FC = () => {
   const [openEditModal, setOpenEditModal] = useState(false);
   const [openUpdateModal, setOpenUpdateModal] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
+  const [pendingDeleteGoalId, setPendingDeleteGoalId] = useState<string | null>(null);
 
   // New/Edit Goal Fields
   const [title, setTitle] = useState("");
@@ -4906,12 +4921,7 @@ const OldGoalsTracker: React.FC = () => {
                           <Edit className="h-3.5 w-3.5" />
                         </button>
                         <button
-                          onClick={async () => {
-                            if (confirm("Are you sure you want to delete this goal?")) {
-                              await deleteGoalMutation.mutateAsync({ id: goal.id, org_id: activeOrg?.id || "" });
-                              refetch();
-                            }
-                          }}
+                          onClick={() => setPendingDeleteGoalId(goal.id)}
                           className="p-1 px-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition shrink-0"
                           title="Delete Goal"
                         >
@@ -5139,6 +5149,20 @@ const OldGoalsTracker: React.FC = () => {
           );
         })()}
       </Modal>
+
+      <ConfirmDialog
+        open={!!pendingDeleteGoalId}
+        title={t("goals_delete_title", "Delete Strategic Goal")}
+        message={t("goals_confirm_delete", "Are you sure you want to delete this goal?")}
+        onConfirm={async () => {
+          if (!pendingDeleteGoalId) return;
+          await deleteGoalMutation.mutateAsync({ id: pendingDeleteGoalId, org_id: activeOrg?.id || "" });
+          setPendingDeleteGoalId(null);
+          refetch();
+        }}
+        onCancel={() => setPendingDeleteGoalId(null)}
+        danger
+      />
     </div>
     </PlanGatedView>
   );
@@ -5979,6 +6003,7 @@ export const DocumentsCenter: React.FC = () => {
   const [viewingDoc, setViewingDoc] = useState<Document | null>(null);
   const [activePreviewDoc, setActivePreviewDoc] = useState<{ url: string; name: string } | null>(null);
   const [resolvedPreviewUrl, setResolvedPreviewUrl] = useState<string>("");
+  const [pendingDeleteDocId, setPendingDeleteDocId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activePreviewDoc?.url) {
@@ -6216,11 +6241,15 @@ export const DocumentsCenter: React.FC = () => {
     refetch();
   };
 
-  const handleDeleteDoc = async (id: string) => {
-    if (confirm("Are you sure you want to delete this document permanently?")) {
-      await deleteDocMutation.mutateAsync({ id, orgId: activeOrg?.id || "" });
-      refetch();
-    }
+  const handleDeleteDoc = (id: string) => {
+    setPendingDeleteDocId(id);
+  };
+
+  const executeDeleteDoc = async () => {
+    if (!pendingDeleteDocId) return;
+    await deleteDocMutation.mutateAsync({ id: pendingDeleteDocId, orgId: activeOrg?.id || "" });
+    setPendingDeleteDocId(null);
+    refetch();
   };
 
   return (
@@ -6948,6 +6977,15 @@ export const DocumentsCenter: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      <ConfirmDialog
+        open={!!pendingDeleteDocId}
+        title={t("v2.confirm_delete_doc_title", "Delete Document")}
+        message={t("v2.confirm_delete_doc_msg", "Are you sure you want to delete this document permanently?")}
+        onConfirm={executeDeleteDoc}
+        onCancel={() => setPendingDeleteDocId(null)}
+        danger
+      />
     </div>
     </PlanGatedView>
   );
@@ -7394,6 +7432,7 @@ export const EventsCalendar: React.FC = () => {
   const [openEditModal, setOpenEditModal] = useState(false);
   const updateEventMutation = useUpdateEvent();
   const deleteEventMutation = useDeleteEvent();
+  const [pendingDeleteEvent, setPendingDeleteEvent] = useState<ImpactEvent | null>(null);
 
   const [attendanceSearch, setAttendanceSearch] = useState("");
   const [eventSearch, setEventSearch] = useState("");
@@ -7751,14 +7790,18 @@ export const EventsCalendar: React.FC = () => {
     }
   };
 
-  const handleDelete = async (event: ImpactEvent) => {
-    if (confirm("Delete this event? It will be archived.")) {
-      try {
-        await deleteEventMutation.mutateAsync({ id: event.id, org_id: activeOrg?.id || "" });
-        refetch();
-      } catch (err) {
-        console.error(err);
-      }
+  const handleDelete = (event: ImpactEvent) => {
+    setPendingDeleteEvent(event);
+  };
+
+  const executeDeleteEvent = async () => {
+    if (!pendingDeleteEvent) return;
+    try {
+      await deleteEventMutation.mutateAsync({ id: pendingDeleteEvent.id, org_id: activeOrg?.id || "" });
+      setPendingDeleteEvent(null);
+      refetch();
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -8485,6 +8528,15 @@ export const EventsCalendar: React.FC = () => {
         goals={goals || []}
         currentMember={activeMember}
         activeOrg={activeOrg}
+      />
+
+      <ConfirmDialog
+        open={!!pendingDeleteEvent}
+        title={t("v2.confirm_delete_event_title", "Delete Event")}
+        message={t("v2.confirm_delete_event_msg", "Delete this event? It will be archived.")}
+        onConfirm={executeDeleteEvent}
+        onCancel={() => setPendingDeleteEvent(null)}
+        danger
       />
     </div>
   );

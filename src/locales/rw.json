@@ -27,6 +27,31 @@
     "auditor_desk": "Igenzura ry'Ubugenzuzi",
     "admin_settings": "Igenamiterere ry'Ubuyobozi"
   },
+  "search_bar": {
+    "prompt": "Ni iki ushaka gukora uyu munsi?",
+    "placeholder": "Shakisha ibikorwa urugero: inama, imisanzu, amafaranga...",
+    "no_results": "Nta bikorwa bihuye n'ibyo ushakishije byabonetse",
+    "quick_shortcuts": "Imiyoboro yihuse",
+    "first_time_tip": "Ni ubwa mbere uhageze? Kurikiza inama zacu cyangwa utangire urugendo rw'ubuyobozi!"
+  },
+  "search_feat": {
+    "dashboard": "Incamake y'umuryango, ibipimo bizima n'ibipimo byingenzi.",
+    "members": "Genzura urutonde rw'abanyamuryango, indangamuntu n'inyandiko zo gusezera.",
+    "events": "Gutegura inama z'iteraniro, amahuza y'inama n'amarembo ya QR.",
+    "fees": "Kurikirana imisanzu ya buri cyumweru, kwishyura kuri MoMo no gusuzuma impapuro z'ubwishyu.",
+    "ledger": "Ibitabo by'imari, amafaranga yinjira n'asohoka n'iburinganire.",
+    "assets": "Kugenzura umutungo, ibikoresho n'igenzura ry'ibikoresho.",
+    "goals": "Intego z'ingenzi, ingingo n'ukurikirana intambwe.",
+    "documents": "Amategeko shingiro yisangiwe, amabwiriza n'inyandiko za PDF.",
+    "chat": "Aho kuganirira hatekanye n'ibiganiro by'amatsinda.",
+    "news": "Amakuru yatangajwe, amavugurura n'amatangazo y'umuryango.",
+    "marketplace": "Reba ibicuruzwa bya koperative, ibikoresho by'ubuhinzi no kugaragaza ubushake.",
+    "grants": "Kurikirana igihe ntarengwa cy'inkunga n'ubugenzuzi bw'abaterankunga.",
+    "reports": "Gutegura raporo za PDF z'umwaka n'imbonerahamwe y'imari.",
+    "org_profile": "Intego y'umuryango, icyerekezo n'indangamuntu rusange.",
+    "settings": "Guhindura ikirango, konti za MoMo n'ibyiciro by'ubwitabizi.",
+    "profile": "Umwirondoro bwite, kwemeza indangamuntu n'igenamiterere rya konti."
+  },
   "common": {
     "save": "Bika",
     "cancel": "Guhagarika",

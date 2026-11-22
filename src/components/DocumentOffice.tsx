@@ -48,6 +48,7 @@ import { useCreateMember } from "../hooks/useImpactoData";
 import { useToast } from "../components/Toast";
 import { DigitalSignaturePad } from "./DigitalSignaturePad";
 import { MockDB } from "../lib/mockData";
+import { useTranslation } from "react-i18next";
 
 interface DocumentOfficeProps {
   activeOrg: any;
@@ -95,6 +96,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
   onClose,
   readOnly = false
 }) => {
+  const { t, i18n } = useTranslation();
   const { addToast } = useToast();
   const createMemberMutation = useCreateMember();
 
@@ -154,16 +156,16 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
   const handleAddSheet = () => {
     const newId = `sheet-${Date.now()}`;
-    const newName = `Sheet ${sheets.length + 1}`;
+    const newName = t("doc_office.sheet_default_name", { num: sheets.length + 1, defaultValue: "Sheet {{num}}" });
     const emptyData = Array.from({ length: 15 }, () => Array(8).fill(""));
     setSheets(prev => [...prev, { id: newId, name: newName, data: emptyData }]);
     setActiveSheetId(newId);
-    addToast(`Added ${newName}`, "success");
+    addToast(t("doc_office.toast_sheet_added", { name: newName, defaultValue: "Added {{name}}" }), "success");
   };
 
   const handleDeleteSheet = (id: string) => {
     if (sheets.length <= 1) {
-      addToast("Cannot delete the only remaining sheet", "warning");
+      addToast(t("doc_office.warn_last_sheet", "Cannot delete the only remaining sheet"), "warning");
       return;
     }
     const nextSheets = sheets.filter(s => s.id !== id);
@@ -171,7 +173,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
     if (activeSheetId === id) {
       setActiveSheetId(nextSheets[0].id);
     }
-    addToast("Sheet removed", "info");
+    addToast(t("doc_office.toast_sheet_removed", "Sheet removed"), "info");
   };
 
   // Excel Grid Dimension Modal State
@@ -296,8 +298,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
         file.name.endsWith(".xls")
       ) {
         addToast({
-          title: "Import Format Notice",
-          message: `Microsoft Word (.docx), Excel (.xlsx), and PDF files are compressed binary formats. To edit them online, please copy-paste the text directly into the editor or import a plain text (.txt) or Markdown (.md) file.`,
+          title: t("doc_office.import_notice_title", "Import Format Notice"),
+          message: t("doc_office.import_notice_msg", "Microsoft Word (.docx), Excel (.xlsx), and PDF files are compressed binary formats. To edit them online, please copy-paste the text directly into the editor or import a plain text (.txt) or Markdown (.md) file."),
           type: "warning"
         });
         return;
@@ -318,8 +320,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
           editorRef.current.innerHTML = formatted;
         }
         addToast({
-          title: "File Imported",
-          message: `Successfully loaded plain text from "${file.name}".`,
+          title: t("doc_office.file_imported_title", "File Imported"),
+          message: t("doc_office.file_imported_msg", { file: file.name, defaultValue: 'Successfully loaded plain text from "{{file}}".' }),
           type: "success"
         });
       };
@@ -348,7 +350,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
   const addColumn = () => {
     const nextGrid = gridData.map((row, rIdx) => {
-      return [...row, rIdx === 0 ? `Column ${row.length + 1}` : ""];
+      return [...row, rIdx === 0 ? t("doc_office.col_num", { num: row.length + 1, defaultValue: "Column {{num}}" }) : ""];
     });
     setGridData(nextGrid);
   };
@@ -392,27 +394,28 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
     const stats = getColStats(colIdx);
     let val = 0;
     let label = "";
+    const colLabel = gridData[0][colIdx] || t("doc_office.col_short", { num: colIdx + 1, defaultValue: "Col {{num}}" });
 
     switch (type) {
       case "SUM":
         val = stats.sum;
-        label = `Total Sum (${gridData[0][colIdx] || `Col ${colIdx + 1}`})`;
+        label = `${t("doc_office.formula_sum", "Total Sum")} (${colLabel})`;
         break;
       case "AVERAGE":
         val = stats.avg;
-        label = `Average (${gridData[0][colIdx] || `Col ${colIdx + 1}`})`;
+        label = `${t("doc_office.formula_avg", "Average")} (${colLabel})`;
         break;
       case "MIN":
         val = stats.min;
-        label = `Min (${gridData[0][colIdx] || `Col ${colIdx + 1}`})`;
+        label = `${t("doc_office.formula_min", "Min")} (${colLabel})`;
         break;
       case "MAX":
         val = stats.max;
-        label = `Max (${gridData[0][colIdx] || `Col ${colIdx + 1}`})`;
+        label = `${t("doc_office.formula_max", "Max")} (${colLabel})`;
         break;
       case "COUNT":
         val = stats.count;
-        label = `Count (${gridData[0][colIdx] || `Col ${colIdx + 1}`})`;
+        label = `${t("doc_office.formula_count", "Count")} (${colLabel})`;
         break;
     }
 
@@ -437,8 +440,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
     setGridData(nextGrid);
     addToast({
-      title: "Calculation Appended",
-      message: `Successfully appended ${type} formula row into spreadsheet.`,
+      title: t("doc_office.calc_appended_title", "Calculation Appended"),
+      message: t("doc_office.calc_appended_msg", { type, defaultValue: "Successfully appended {{type}} formula row into spreadsheet." }),
       type: "success"
     });
   };
@@ -465,8 +468,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
     setGridData([headers, ...dataRows]);
     addToast({
-      title: "Spreadsheet Sorted",
-      message: `Sorted grid rows by "${headers[colIdx] || `Column ${colIdx + 1}`}" successfully.`,
+      title: t("doc_office.sorted_title", "Spreadsheet Sorted"),
+      message: t("doc_office.sorted_msg", { col: headers[colIdx] || t("doc_office.col_num", { num: colIdx + 1, defaultValue: "Column {{num}}" }), defaultValue: 'Sorted grid rows by "{{col}}" successfully.' }),
       type: "success"
     });
   };
@@ -540,8 +543,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
         if (rows.length > 0) {
           setGridData(rows);
           addToast({
-            title: "Spreadsheet Loaded",
-            message: `Successfully loaded grid data with ${rows.length} rows from "${file.name}".`,
+            title: t("doc_office.sheet_loaded_title", "Spreadsheet Loaded"),
+            message: t("doc_office.sheet_loaded_msg", { count: rows.length, file: file.name, defaultValue: 'Successfully loaded grid data with {{count}} rows from "{{file}}".' }),
             type: "success"
           });
         }
@@ -555,8 +558,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
     const isFree = !activeOrg?.subscription_plan || activeOrg.subscription_plan === "free";
     if (isFree) {
       addToast({
-        title: "Free Plan: Save as PDF",
-        message: "On the Free plan, documents can be saved and printed as PDF. Upgrade to unlock raw CSV spreadsheet exports.",
+        title: t("doc_office.free_pdf_title", "Free Plan: Save as PDF"),
+        message: t("doc_office.free_pdf_msg", "On the Free plan, documents can be saved and printed as PDF. Upgrade to unlock raw CSV spreadsheet exports."),
         type: "info"
       });
       window.print();
@@ -625,8 +628,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
     setIsBulkImportOpen(false);
 
     addToast({
-      title: "Bulk Member Import Completed",
-      message: `Successfully imported ${successCount} members. ${failCount > 0 ? `Failed ${failCount} rows.` : ""}`,
+      title: t("doc_office.bulk_done_title", "Bulk Member Import Completed"),
+      message: `${t("doc_office.bulk_done_msg", { count: successCount, defaultValue: "Successfully imported {{count}} members." })} ${failCount > 0 ? t("doc_office.bulk_failed_msg", { count: failCount, defaultValue: "Failed {{count}} rows." }) : ""}`,
       type: successCount > 0 ? "success" : "error"
     });
   };
@@ -635,8 +638,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
   const handleSaveOfficeDocument = async () => {
     if (!docName.trim()) {
       addToast({
-        title: "Filename Required",
-        message: "Please enter a valid document name before saving.",
+        title: t("doc_office.err_filename_title", "Filename Required"),
+        message: t("doc_office.err_filename_msg", "Please enter a valid document name before saving."),
         type: "error"
       });
       return;
@@ -658,8 +661,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
       if (fileType === "word" && isCustomizedDissemination && !editingDoc) {
         if (!isProPlan) {
           addToast({
-            title: "Pro Feature Upgrade",
-            message: "Customized Bulk Dissemination with individualized placeholders requires a Pro/Enterprise plan. Please upgrade to unlock.",
+            title: t("doc_office.pro_upgrade_title", "Pro Feature Upgrade"),
+            message: t("doc_office.pro_dissemination_msg", "Customized Bulk Dissemination with individualized placeholders requires a Pro/Enterprise plan. Please upgrade to unlock."),
             type: "error"
           });
           setIsSaving(false);
@@ -672,8 +675,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
         if (targetedMembers.length === 0) {
           addToast({
-            title: "No Recipients Selected",
-            message: "Please select at least one recipient to receive customized documents.",
+            title: t("doc_office.no_recipients_title", "No Recipients Selected"),
+            message: t("doc_office.no_recipients_msg", "Please select at least one recipient to receive customized documents."),
             type: "error"
           });
           setIsSaving(false);
@@ -682,18 +685,17 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
         // Loop over each member and save a customized copy
         for (const m of targetedMembers) {
-          const memberName = m.user?.full_name || "Cooperative Member";
+          const memberName = m.user?.full_name || t("doc_office.coop_member", "Cooperative Member");
           const memberEmail = m.user?.email || "member@cooperative.rw";
           const rawRole = m.role || "Member";
           const memberRole = rawRole === "org_admin" || rawRole === "admin_representative" || rawRole === "admin" ? "admin" : rawRole;
           
-          // Case-insensitive, space-tolerant regex replacements for all variable permutations
           const interpolatedContent = contentString
             .replace(/\{\{\s*(full\s+name|full_name|fullname|name)\s*\}\}/gi, memberName)
             .replace(/\{\{\s*email\s*\}\}/gi, memberEmail)
             .replace(/\{\{\s*role\s*\}\}/gi, memberRole)
-            .replace(/\{\{\s*(org\s+name|org_name|orgname|org)\s*\}\}/gi, activeOrg?.name || "Cooperative")
-            .replace(/\{\{\s*date\s*\}\}/gi, new Date().toLocaleDateString());
+            .replace(/\{\{\s*(org\s+name|org_name|orgname|org)\s*\}\}/gi, activeOrg?.name || t("doc_office.coop_fallback", "Cooperative"))
+            .replace(/\{\{\s*date\s*\}\}/gi, new Date().toLocaleDateString(i18n.language));
 
           const customizedSizeKB = (interpolatedContent.length / 1024).toFixed(1);
           const customizedDocName = `${docName} - ${memberName}`;
@@ -702,31 +704,29 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
             org_id: activeOrg?.id,
             name: customizedDocName,
             uploaded_by: activeMember?.id || "anonymous",
-            uploader_name: activeMember?.user?.full_name || "Representative",
+            uploader_name: activeMember?.user?.full_name || t("doc_office.representative", "Representative"),
             requires_acknowledgement: false,
             content: interpolatedContent,
             file_type: "word",
-            is_letter: true, // Marked as letter so it shows up in their personalized inbox
-            recipient_member_ids: [m.id], // ONLY this recipient receives it!
+            is_letter: true,
+            recipient_member_ids: [m.id],
             file_size: `${customizedSizeKB} KB`,
             show_header: showBrandedHeader
           });
         }
 
         addToast({
-          title: "Customized Documents Dispatched",
-          message: `Successfully generated and sent ${targetedMembers.length} customized copies into their documents sections.`,
+          title: t("doc_office.dispatched_title", "Customized Documents Dispatched"),
+          message: t("doc_office.dispatched_msg", { count: targetedMembers.length, defaultValue: "Successfully generated and sent {{count}} customized copies into their documents sections." }),
           type: "success"
         });
         onClose();
         return;
       }
 
-      // Estimate file size based on content length
       const sizeKB = (contentString.length / 1024).toFixed(1);
 
       if (editingDoc) {
-        // Update mode
         await onUpdateDocument({
           id: editingDoc.id,
           org_id: activeOrg?.id,
@@ -738,17 +738,16 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
           is_private: isPrivateDoc
         });
         addToast({
-          title: "Document Updated",
-          message: `"${docName}" has been successfully saved in workspace.`,
+          title: t("doc_office.updated_title", "Document Updated"),
+          message: t("doc_office.updated_msg", { name: docName, defaultValue: '"{{name}}" has been successfully saved in workspace.' }),
           type: "success"
         });
       } else {
-        // Create mode
         await onSaveDocument({
           org_id: activeOrg?.id,
           name: docName,
           uploaded_by: activeMember?.id || "anonymous",
-          uploader_name: activeMember?.user?.full_name || "Representative",
+          uploader_name: activeMember?.user?.full_name || t("doc_office.representative", "Representative"),
           requires_acknowledgement: false,
           content: contentString,
           file_url: fileUrl,
@@ -760,8 +759,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
           is_private: isPrivateDoc
         });
         addToast({
-          title: "Document Created",
-          message: `Successfully persisted your in-app ${fileType} document.`,
+          title: t("doc_office.created_title", "Document Created"),
+          message: t("doc_office.created_msg", { type: fileType, defaultValue: "Successfully persisted your in-app {{type}} document." }),
           type: "success"
         });
       }
@@ -769,8 +768,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
     } catch (err: any) {
       console.error(err);
       addToast({
-        title: "Save Failed",
-        message: err.message || "An unexpected error occurred during save.",
+        title: t("doc_office.save_failed_title", "Save Failed"),
+        message: err.message || t("doc_office.save_failed_msg", "An unexpected error occurred during save."),
         type: "error"
       });
     } finally {
@@ -791,7 +790,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
       <div className={`w-full h-full ${isFullscreen ? 'md:h-full md:max-w-none md:rounded-none' : 'md:h-[99vh] md:max-w-[99vw] md:rounded-xl'} bg-white dark:bg-slate-900 shadow-2xl border dark:border-slate-800 flex flex-col overflow-hidden relative animate-in fade-in zoom-in duration-200 transition-all`}>
         
         {/* OFFICE HEADER */}
-        <div className="px-4 py-3 md:px-6 md:py-3.5 border-b border-gray-150 dark:border-slate-800 flex items-center justify-between gap-3 bg-white dark:bg-slate-900 shrink-0">
+        <div className="px-4 py-3 md:px-6 md:py-3.5 border-b border-gray-150 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 shrink-0">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/60 flex items-center justify-center text-[#156c45] dark:text-emerald-400 shrink-0 shadow-3xs">
               {fileType === "excel" ? <FileSpreadsheet className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
@@ -801,14 +800,14 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                 type="text" 
                 value={docName}
                 onChange={(e) => setDocName(e.target.value)}
-                placeholder={fileType === "excel" ? "Spreadsheet filename..." : "Document filename..."}
+                placeholder={fileType === "excel" ? t("doc_office.spreadsheet_filename_placeholder", { defaultValue: "Spreadsheet filename..." }) : t("doc_office.document_filename_placeholder", { defaultValue: "Document filename..." })}
                 disabled={readOnly}
                 className="bg-transparent font-display font-semibold text-base md:text-lg text-gray-800 dark:text-white outline-none w-full py-0.5 truncate placeholder:text-gray-400 focus:placeholder:text-gray-300 transition"
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
             {!readOnly && (
               <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-gray-700 dark:text-gray-300 hover:text-gray-900 transition">
                 <input 
@@ -817,7 +816,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   onChange={(e) => setIsPrivateDoc(e.target.checked)}
                   className="h-4 w-4 rounded border-gray-300 text-[#156c45] focus:ring-[#156c45] cursor-pointer"
                 />
-                <span>Private</span>
+                <span>{t("doc_office.private", { defaultValue: "Private" })}</span>
               </label>
             )}
 
@@ -825,10 +824,10 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
               onClick={() => window.print()}
               type="button"
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl transition cursor-pointer"
-              title="Save or Export as PDF"
+              title={t("doc_office.export_pdf_tooltip", { defaultValue: "Save or Export as PDF" })}
             >
-              <Printer className="h-3.5 w-3.5 text-emerald-600" />
-              <span>Save as PDF</span>
+              <Printer className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+              <span>{t("doc_office.save_as_pdf", { defaultValue: "Save as PDF" })}</span>
             </button>
 
             {!readOnly && (
@@ -837,14 +836,14 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                 disabled={isSaving}
                 className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-[#156c45] hover:bg-[#115436] disabled:bg-[#156c45]/60 rounded-xl transition shadow-sm cursor-pointer"
               >
-                <Save className="h-3.5 w-3.5" />
-                <span>{isSaving ? "Saving..." : "Save to Cloud"}</span>
+                <Save className="h-3.5 w-3.5 shrink-0" />
+                <span>{isSaving ? t("doc_office.saving", { defaultValue: "Saving..." }) : t("doc_office.save_to_cloud", { defaultValue: "Save to Cloud" })}</span>
               </button>
             )}
 
             <button 
               onClick={() => setShowMobileSettings(!showMobileSettings)}
-              className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl text-gray-600 dark:text-gray-300 transition"
+              className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl text-gray-600 dark:text-gray-300 transition cursor-pointer"
             >
               <Settings2 className="h-4.5 w-4.5" />
             </button>
@@ -852,7 +851,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
             <button 
               type="button"
               onClick={() => setIsFullscreen(!isFullscreen)}
-              title={isFullscreen ? "Exit Fullscreen" : "Fullscreen Interface"}
+              title={isFullscreen ? t("doc_office.exit_fullscreen", { defaultValue: "Exit Fullscreen" }) : t("doc_office.fullscreen_interface", { defaultValue: "Fullscreen Interface" })}
               className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl text-gray-400 hover:text-gray-700 dark:hover:text-white transition hidden sm:flex items-center justify-center cursor-pointer"
             >
               {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -869,7 +868,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
         {/* SECONDARY TOOLBAR & TABS BAR */}
         <div className="px-4 py-2.5 sm:px-6 border-b border-gray-150 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 shrink-0">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button 
               onClick={() => setFileType("word")}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
@@ -878,7 +877,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300 hover:border-[#156c45] hover:text-[#156c45] dark:hover:border-emerald-500 dark:hover:text-emerald-400"
               }`}
             >
-              Word / Letter
+              {t("doc_office.word_letter_tab", { defaultValue: "Word / Letter" })}
             </button>
             <button 
               onClick={() => setFileType("excel")}
@@ -888,22 +887,22 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300 hover:border-[#156c45] hover:text-[#156c45] dark:hover:border-emerald-500 dark:hover:text-emerald-400"
               }`}
             >
-              Excel Spreadsheet
+              {t("doc_office.excel_spreadsheet_tab", { defaultValue: "Excel Spreadsheet" })}
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 justify-end flex-1">
+          <div className="flex flex-wrap items-center gap-2 justify-end flex-1 min-w-0">
             {/* Word Toolbar */}
             {fileType === "word" && !readOnly && (
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-1">
-                  <button onClick={() => execCmd("bold")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs font-bold text-gray-700 dark:text-slate-300 transition" title="Bold">
+                  <button onClick={() => execCmd("bold")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs font-bold text-gray-700 dark:text-slate-300 transition cursor-pointer" title={t("doc_office.bold", { defaultValue: "Bold" })}>
                     B
                   </button>
-                  <button onClick={() => execCmd("italic")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs italic text-gray-700 dark:text-slate-300 transition" title="Italic">
+                  <button onClick={() => execCmd("italic")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs italic text-gray-700 dark:text-slate-300 transition cursor-pointer" title={t("doc_office.italic", { defaultValue: "Italic" })}>
                     I
                   </button>
-                  <button onClick={() => execCmd("underline")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs underline text-gray-700 dark:text-slate-300 transition" title="Underline">
+                  <button onClick={() => execCmd("underline")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs underline text-gray-700 dark:text-slate-300 transition cursor-pointer" title={t("doc_office.underline", { defaultValue: "Underline" })}>
                     U
                   </button>
                 </div>
@@ -911,10 +910,10 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                 <div className="h-4 w-px bg-gray-200 dark:bg-slate-800 mx-0.5" />
 
                 <div className="flex items-center gap-1">
-                  <button onClick={() => execCmd("formatBlock", "H1")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs font-bold text-gray-700 dark:text-slate-300 transition" title="Heading 1">
+                  <button onClick={() => execCmd("formatBlock", "H1")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs font-bold text-gray-700 dark:text-slate-300 transition cursor-pointer" title={t("doc_office.heading_1", { defaultValue: "Heading 1" })}>
                     H1
                   </button>
-                  <button onClick={() => execCmd("formatBlock", "H2")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs font-bold text-gray-700 dark:text-slate-300 transition" title="Heading 2">
+                  <button onClick={() => execCmd("formatBlock", "H2")} className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-xs font-bold text-gray-700 dark:text-slate-300 transition cursor-pointer" title={t("doc_office.heading_2", { defaultValue: "Heading 2" })}>
                     H2
                   </button>
                 </div>
@@ -922,13 +921,13 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                 <div className="h-4 w-px bg-gray-200 dark:bg-slate-800 mx-0.5" />
 
                 <div className="flex items-center gap-1">
-                  <button onClick={() => execCmd("justifyLeft")} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-700 dark:text-slate-300 transition" title="Align Left">
+                  <button onClick={() => execCmd("justifyLeft")} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-700 dark:text-slate-300 transition cursor-pointer" title={t("doc_office.align_left", { defaultValue: "Align Left" })}>
                     <AlignLeft className="h-3.5 w-3.5" />
                   </button>
-                  <button onClick={() => execCmd("justifyCenter")} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-700 dark:text-slate-300 transition" title="Align Center">
+                  <button onClick={() => execCmd("justifyCenter")} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-700 dark:text-slate-300 transition cursor-pointer" title={t("doc_office.align_center", { defaultValue: "Align Center" })}>
                     <AlignCenter className="h-3.5 w-3.5" />
                   </button>
-                  <button onClick={() => execCmd("justifyRight")} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-700 dark:text-slate-300 transition" title="Align Right">
+                  <button onClick={() => execCmd("justifyRight")} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded text-gray-700 dark:text-slate-300 transition cursor-pointer" title={t("doc_office.align_right", { defaultValue: "Align Right" })}>
                     <AlignRight className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -940,7 +939,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   onChange={(e) => execCmd("fontSize", e.target.value)} 
                   className="px-2 py-1 text-xs font-semibold bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-700 dark:text-slate-300 outline-none cursor-pointer"
                   defaultValue="3"
-                  title="Font Size"
+                  title={t("doc_office.font_size", { defaultValue: "Font Size" })}
                 >
                   <option value="1">XS</option>
                   <option value="2">SM</option>
@@ -955,21 +954,21 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   onChange={(e) => execCmd("foreColor", e.target.value)} 
                   className="px-2 py-1 text-xs font-semibold bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-700 dark:text-slate-300 outline-none cursor-pointer"
                   defaultValue="#1E293B"
-                  title="Text Color"
+                  title={t("doc_office.text_color", { defaultValue: "Text Color" })}
                 >
-                  <option value="#1E293B">Slate</option>
-                  <option value="#156c45">Forest</option>
-                  <option value="#EF4444">Red</option>
-                  <option value="#3B82F6">Blue</option>
-                  <option value="#F59E0B">Amber</option>
-                  <option value="#8B5CF6">Purple</option>
+                  <option value="#1E293B">{t("doc_office.color_slate", { defaultValue: "Slate" })}</option>
+                  <option value="#156c45">{t("doc_office.color_forest", { defaultValue: "Forest" })}</option>
+                  <option value="#EF4444">{t("doc_office.color_red", { defaultValue: "Red" })}</option>
+                  <option value="#3B82F6">{t("doc_office.color_blue", { defaultValue: "Blue" })}</option>
+                  <option value="#F59E0B">{t("doc_office.color_amber", { defaultValue: "Amber" })}</option>
+                  <option value="#8B5CF6">{t("doc_office.color_purple", { defaultValue: "Purple" })}</option>
                 </select>
 
                 <div className="h-4 w-px bg-gray-200 dark:bg-slate-800 mx-0.5" />
 
                 {/* Import File Button */}
                 <label className="flex items-center gap-1.5 px-3 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer text-xs font-bold text-gray-700 dark:text-slate-300 transition select-none">
-                  <span>Import File</span>
+                  <span>{t("doc_office.import_file", { defaultValue: "Import File" })}</span>
                   <input 
                     type="file" 
                     accept=".txt,.md,.html,.docx" 
@@ -985,36 +984,36 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
               <div className="flex flex-wrap items-center gap-2">
                 <button 
                   onClick={addRow} 
-                  className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#156c45] rounded-lg text-xs font-bold transition"
+                  className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#156c45] rounded-lg text-xs font-bold transition cursor-pointer"
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  Row
+                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                  <span>{t("doc_office.row", { defaultValue: "Row" })}</span>
                 </button>
                 <button 
                   onClick={addColumn} 
-                  className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#156c45] rounded-lg text-xs font-bold transition"
+                  className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#156c45] rounded-lg text-xs font-bold transition cursor-pointer"
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  Column
+                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                  <span>{t("doc_office.column", { defaultValue: "Column" })}</span>
                 </button>
                 <button 
                   onClick={deleteColumn} 
-                  className="flex items-center gap-1 px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold transition"
+                  className="flex items-center gap-1 px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold transition cursor-pointer"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Remove Col
+                  <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                  <span>{t("doc_office.remove_col", { defaultValue: "Remove Col" })}</span>
                 </button>
                 <button 
                   onClick={() => injectFormulaRow(4, "SUM")}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#156c45] rounded-lg text-xs font-bold transition"
+                  className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#156c45] rounded-lg text-xs font-bold transition cursor-pointer"
                 >
-                  <Calculator className="h-3.5 w-3.5" />
-                  Auto-Sum
+                  <Calculator className="h-3.5 w-3.5 shrink-0" />
+                  <span>{t("doc_office.auto_sum", { defaultValue: "Auto-Sum" })}</span>
                 </button>
 
                 <label className="flex items-center gap-1.5 px-3 py-1 hover:bg-gray-100 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg cursor-pointer text-xs font-bold text-gray-700 dark:text-slate-300 transition select-none">
-                  <FileUp className="h-3.5 w-3.5 text-emerald-600" />
-                  Import CSV
+                  <FileUp className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <span>{t("doc_office.import_csv", { defaultValue: "Import CSV" })}</span>
                   <input 
                     type="file" 
                     accept=".csv" 
@@ -1034,8 +1033,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                     onClick={() => setSignatureMenuOpen(!signatureMenuOpen)}
                     className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-xs font-bold text-gray-700 dark:text-slate-200 transition cursor-pointer"
                   >
-                    <PenTool className="h-3.5 w-3.5 text-[#156c45]" />
-                    <span className="hidden sm:inline">Signature</span>
+                    <PenTool className="h-3.5 w-3.5 text-[#156c45] shrink-0" />
+                    <span className="hidden sm:inline">{t("doc_office.signature", { defaultValue: "Signature" })}</span>
                   </button>
                   
                   {signatureMenuOpen && (
@@ -1043,7 +1042,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                       <div className="fixed inset-0 z-40" onClick={() => setSignatureMenuOpen(false)} />
                       <div className="absolute right-0 top-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl w-48 overflow-hidden shrink-0 z-50 py-1">
                         <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-700 font-mono text-[9px] uppercase tracking-wider text-slate-400 font-bold">
-                          Digital Signatures
+                          {t("doc_office.digital_signatures", { defaultValue: "Digital Signatures" })}
                         </div>
                         <button
                           type="button"
@@ -1053,8 +1052,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                           }}
                           className="w-full text-left px-3.5 py-2.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition cursor-pointer font-semibold"
                         >
-                          <Upload className="h-3.5 w-3.5 text-[#156c45]" />
-                          <span>Import / Create Signature</span>
+                          <Upload className="h-3.5 w-3.5 text-[#156c45] shrink-0" />
+                          <span>{t("doc_office.import_create_signature", { defaultValue: "Import / Create Signature" })}</span>
                         </button>
                       </div>
                     </>
@@ -1069,14 +1068,14 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
           
           {/* MAIN CANVAS */}
-          <div className="flex-1 p-3 sm:p-5 md:p-6 overflow-y-auto bg-stone-100/60 dark:bg-slate-950/40 flex flex-col items-center">
+          <div className="flex-1 p-3 sm:p-5 md:p-6 overflow-y-auto bg-stone-100/60 dark:bg-slate-950/40 flex flex-col items-center min-w-0">
             
             {/* A: WORD / LETTER DRAFTING INTERFACE */}
             {fileType === "word" && (
               <div className="w-full max-w-5xl flex flex-col gap-4 flex-1 transition-all duration-200">
                 
                 {/* PAGE NAVIGATION TABS */}
-                <div className="flex items-center justify-between bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-2.5 shadow-3xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-2.5 shadow-3xs">
                   <div className="flex items-center gap-1.5 overflow-x-auto">
                     {wordPages.map((_, pIdx) => (
                       <button
@@ -1089,13 +1088,13 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                           setActivePageIndex(pIdx);
                           if (editorRef.current) editorRef.current.innerHTML = nextPages[pIdx] || "";
                         }}
-                        className={`px-3.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        className={`px-3.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0 ${
                           activePageIndex === pIdx
                             ? "bg-[#156c45] text-white shadow-3xs"
                             : "bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700"
                         }`}
                       >
-                        Page {pIdx + 1}
+                        {t("doc_office.page_number", { num: pIdx + 1, defaultValue: `Page ${pIdx + 1}` })}
                       </button>
                     ))}
                     {!readOnly && (
@@ -1109,12 +1108,16 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                           const newIdx = nextPages.length - 1;
                           setActivePageIndex(newIdx);
                           if (editorRef.current) editorRef.current.innerHTML = "";
-                          addToast(`Added Page ${newIdx + 1}`, "success");
+                          addToast({
+                            title: t("doc_office.page_added_title", { defaultValue: "Page Added" }),
+                            message: t("doc_office.added_page_msg", { num: newIdx + 1, defaultValue: `Added Page ${newIdx + 1}` }),
+                            type: "success"
+                          });
                         }}
-                        className="px-3 py-1 rounded-lg border border-dashed border-gray-300 dark:border-slate-700 text-gray-500 hover:border-[#156c45] hover:text-[#156c45] text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                        className="px-3 py-1 rounded-lg border border-dashed border-gray-300 dark:border-slate-700 text-gray-500 hover:border-[#156c45] hover:text-[#156c45] text-xs font-bold flex items-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0"
                       >
                         <Plus className="h-3.5 w-3.5" />
-                        <span>Add Page</span>
+                        <span>{t("doc_office.add_page", { defaultValue: "Add Page" })}</span>
                       </button>
                     )}
                   </div>
@@ -1129,11 +1132,15 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                         const nextIdx = Math.max(0, activePageIndex - 1);
                         setActivePageIndex(nextIdx);
                         if (editorRef.current) editorRef.current.innerHTML = nextPages[nextIdx] || "";
-                        addToast("Page removed", "info");
+                        addToast({
+                          title: t("doc_office.page_removed_title", { defaultValue: "Page Removed" }),
+                          message: t("doc_office.page_removed_msg", { defaultValue: "Page removed" }),
+                          type: "info"
+                        });
                       }}
-                      className="text-xs text-red-500 hover:underline font-bold px-2 py-1 cursor-pointer"
+                      className="text-xs text-red-500 hover:underline font-bold px-2 py-1 cursor-pointer shrink-0"
                     >
-                      Delete Page
+                      {t("doc_office.delete_page", { defaultValue: "Delete Page" })}
                     </button>
                   )}
                 </div>
@@ -1143,16 +1150,16 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   {/* Cooperative Branded Header */}
                   {showBrandedHeader && (
                     <div className="border-b-2 border-[#156c45] pb-4 mb-6 text-center select-none shrink-0">
-                      <h1 className="text-xl sm:text-2xl md:text-3xl font-bold font-serif tracking-wider text-gray-900 dark:text-white uppercase">
+                      <h1 className="text-xl sm:text-2xl md:text-3xl font-bold font-serif tracking-wider text-gray-900 dark:text-white uppercase break-words">
                         {activeOrg?.name ? activeOrg.name : "WALKER"}
                       </h1>
-                      <p className="text-[10px] sm:text-[11px] font-mono tracking-widest text-[#4a6357] dark:text-emerald-400 font-semibold uppercase mt-1">
-                        Branded Cooperative Official Communication Desk
+                      <p className="text-[10px] sm:text-[11px] font-mono tracking-widest text-[#4a6357] dark:text-emerald-400 font-semibold uppercase mt-1 break-words">
+                        {t("doc_office.branded_desk_subtitle", { defaultValue: "Branded Cooperative Official Communication Desk" })}
                       </p>
                       {isLetter && (
                         <div className="mt-2.5 flex items-center justify-center gap-1.5">
                           <span className="px-3 py-0.5 bg-[#e8f5ee] dark:bg-emerald-950/40 text-[9px] font-bold text-[#156c45] dark:text-emerald-400 rounded-full tracking-wider uppercase select-none border border-emerald-200 dark:border-emerald-900/50">
-                            OFFICIAL CO-OP LETTER
+                            {t("doc_office.official_coop_letter", { defaultValue: "OFFICIAL CO-OP LETTER" })}
                           </span>
                         </div>
                       )}
@@ -1161,18 +1168,18 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
                   {/* Date & Reference Area */}
                   {showRefBar && (
-                    <div className="flex justify-between text-xs font-mono text-[#4a6357] dark:text-slate-400 mb-6 shrink-0 select-none">
-                      <span>Ref: COOP/DOC-{Math.floor(1000 + Math.random() * 9000)}</span>
-                      <span>Date: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                    <div className="flex flex-wrap justify-between gap-2 text-xs font-mono text-[#4a6357] dark:text-slate-400 mb-6 shrink-0 select-none">
+                      <span>{t("doc_office.ref_prefix", { defaultValue: "Ref" })}: COOP/DOC-{Math.floor(1000 + Math.random() * 9000)}</span>
+                      <span>{t("common.date", { defaultValue: "Date" })}: {new Date().toLocaleDateString(i18n.language, { year: "numeric", month: "long", day: "numeric" })}</span>
                     </div>
                   )}
 
                   {/* Dynamic letter info panel in view mode */}
                   {viewingDoc?.is_letter && (
                     <div className="mb-6 p-3 sm:p-4 bg-[#e8f5ee]/40 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 rounded-xl leading-relaxed text-[#156c45] dark:text-emerald-300">
-                      <h4 className="font-bold text-xs select-none">Received Communication Docket</h4>
+                      <h4 className="font-bold text-xs select-none">{t("doc_office.received_docket_title", { defaultValue: "Received Communication Docket" })}</h4>
                       <p className="text-[11px] font-medium mt-1">
-                        This document has been shared with you by the cooperative administrative desk. You have access to review and respond inside the portal.
+                        {t("doc_office.received_docket_desc", { defaultValue: "This document has been shared with you by the cooperative administrative desk. You have access to review and respond inside the portal." })}
                       </p>
                     </div>
                   )}
@@ -1184,38 +1191,38 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                     onInput={handleEditorInput}
                     className="flex-1 outline-none text-sm sm:text-base font-sans leading-relaxed text-gray-800 dark:text-slate-100 min-h-[300px] overflow-visible select-text prose dark:prose-invert max-w-none focus:outline-none break-words"
                     style={{ minHeight: "300px" }}
-                    placeholder="Begin typing your official cooperative letter, resolution, or guidelines here..."
+                    data-placeholder={t("doc_office.editor_placeholder", { defaultValue: "Begin typing your official cooperative letter, resolution, or guidelines here..." })}
                   />
 
                   {/* DIGITAL SIGNATURE & VERIFICATION SECTION */}
                   {showSignatoryFooter && (
                     <div className="mt-8 pt-6 border-t border-gray-200 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 select-none">
-                      <div className="space-y-1">
+                      <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-slate-300">
-                          <CheckCircle className="h-4 w-4 text-[#156c45]" />
-                          <span>Verified Digital Author:</span>
+                          <CheckCircle className="h-4 w-4 text-[#156c45] shrink-0" />
+                          <span>{t("doc_office.verified_digital_author", { defaultValue: "Verified Digital Author:" })}</span>
                         </div>
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {activeMember?.user?.full_name || "Official Signatory"}
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white break-words">
+                          {activeMember?.user?.full_name || t("doc_office.official_signatory", { defaultValue: "Official Signatory" })}
                         </p>
-                        <p className="text-xs text-gray-400 capitalize">
-                          {activeMember?.role ? activeMember.role.replace("_", " ") : "Authorized Representative"} • {activeOrg?.name || "Impacto"}
+                        <p className="text-xs text-gray-400 capitalize break-words">
+                          {activeMember?.role ? t(`roles.${activeMember.role}`, { defaultValue: activeMember.role.replace("_", " ") }) : t("doc_office.authorized_rep", { defaultValue: "Authorized Representative" })} • {activeOrg?.name || "Impacto"}
                         </p>
                       </div>
 
-                      <div className="flex flex-col items-end gap-1.5">
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
                         <div className="h-16 w-44 border-b-2 border-gray-400 dark:border-slate-600 flex items-center justify-center bg-gray-50/50 dark:bg-slate-800/30 rounded-t-lg relative group">
                           <span className="font-serif italic text-lg text-gray-800 dark:text-slate-200 select-none">
-                            {activeMember?.user?.full_name || "Signatory"}
+                            {activeMember?.user?.full_name || t("doc_office.signatory_fallback", { defaultValue: "Signatory" })}
                           </span>
                           <div className="absolute right-1 top-1">
                             <span className="text-[8px] bg-emerald-100 dark:bg-emerald-950 text-[#156c45] font-bold px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
-                              E-SIGNED
+                              {t("doc_office.esigned_badge", { defaultValue: "E-SIGNED" })}
                             </span>
                           </div>
                         </div>
                         <span className="text-[10px] text-gray-400 font-mono">
-                          Document Version Secured & Timestamped
+                          {t("doc_office.doc_version_secured", { defaultValue: "Document Version Secured & Timestamped" })}
                         </span>
                       </div>
                     </div>
@@ -1230,62 +1237,62 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                 
                 {/* TOOLBAR */}
                 {!readOnly && (
-                  <div className="p-3 bg-white dark:bg-slate-900 border rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-xs shrink-0">
-                    <div className="flex items-center flex-wrap gap-2">
+                  <div className="p-3 bg-white dark:bg-slate-900 border rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-xs shrink-0 min-w-0">
+                    <div className="flex items-center flex-wrap gap-2 min-w-0">
                       <button 
                         onClick={addRow} 
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-xs font-bold text-gray-700 dark:text-slate-300 transition"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-xs font-bold text-gray-700 dark:text-slate-300 transition shrink-0"
                       >
-                        <Plus className="h-3.5 w-3.5 text-emerald-600" />
-                        Add Row
+                        <Plus className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        <span>{t("doc_office.add_row", { defaultValue: "Add Row" })}</span>
                       </button>
                       <button 
                         onClick={() => deleteRow(gridData.length - 1)} 
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-xs font-bold text-red-600 transition"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-xs font-bold text-red-600 transition shrink-0"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Remove Last Row
+                        <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                        <span>{t("doc_office.remove_last_row", { defaultValue: "Remove Last Row" })}</span>
                       </button>
                       <button 
                         onClick={addColumn} 
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-xs font-bold text-gray-700 dark:text-slate-300 transition"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-xs font-bold text-gray-700 dark:text-slate-300 transition shrink-0"
                       >
-                        <Plus className="h-3.5 w-3.5 text-emerald-600" />
-                        Add Column
+                        <Plus className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        <span>{t("doc_office.add_column", { defaultValue: "Add Column" })}</span>
                       </button>
                       <button 
                         onClick={deleteColumn} 
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-xs font-bold text-red-600 transition"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-xs font-bold text-red-600 transition shrink-0"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Remove Last Column
+                        <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                        <span>{t("doc_office.remove_last_column", { defaultValue: "Remove Last Column" })}</span>
                       </button>
                       <button 
                         onClick={handleConfigureGridDimensions}
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 rounded-lg text-xs font-bold text-[#156c45] dark:text-emerald-400 transition"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 rounded-lg text-xs font-bold text-[#156c45] dark:text-emerald-400 transition shrink-0"
                       >
-                        <Settings2 className="h-3.5 w-3.5" />
-                        Configure Dimensions
+                        <Settings2 className="h-3.5 w-3.5 shrink-0" />
+                        <span>{t("doc_office.configure_dimensions", { defaultValue: "Configure Dimensions" })}</span>
                       </button>
 
-                      <div className="h-5 w-px bg-gray-200 dark:bg-slate-800 mx-1" />
+                      <div className="h-5 w-px bg-gray-200 dark:bg-slate-800 mx-1 hidden sm:block" />
 
                       {/* Math action */}
                       <button 
                         onClick={() => injectFormulaRow(4, "SUM")} // default column index 4 is amount
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-400 transition"
-                        title="Incorporate columns summation inside grid"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-400 transition shrink-0"
+                        title={t("doc_office.auto_sum_title", { defaultValue: "Incorporate columns summation inside grid" })}
                       >
-                        <Calculator className="h-3.5 w-3.5" />
-                        Auto-Sum Shares/RWF
+                        <Calculator className="h-3.5 w-3.5 shrink-0" />
+                        <span>{t("doc_office.auto_sum", { defaultValue: "Auto-Sum Shares/RWF" })}</span>
                       </button>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center flex-wrap gap-2">
                       {/* CSV File Import */}
-                      <label className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-50 hover:bg-stone-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-stone-250 dark:border-slate-700 rounded-lg cursor-pointer text-xs font-bold text-stone-600 dark:text-slate-300 transition select-none">
-                        <FileUp className="h-3.5 w-3.5 text-emerald-600" />
-                        Import CSV/Excel
+                      <label className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-50 hover:bg-stone-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-stone-250 dark:border-slate-700 rounded-lg cursor-pointer text-xs font-bold text-stone-600 dark:text-slate-300 transition select-none shrink-0">
+                        <FileUp className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        <span>{t("doc_office.import_csv", { defaultValue: "Import CSV/Excel" })}</span>
                         <input 
                           type="file" 
                           accept=".csv" 
@@ -1298,10 +1305,10 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                       {(activeMember?.role === "org_admin" || activeMember?.role === "manager" || activeMember?.role === "accountant") && (
                         <button 
                           onClick={() => setIsBulkImportOpen(true)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-lg text-xs font-bold transition"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-lg text-xs font-bold transition shrink-0"
                         >
-                          <UserPlus className="h-3.5 w-3.5" />
-                          Import to Co-op Members
+                          <UserPlus className="h-3.5 w-3.5 shrink-0" />
+                          <span>{t("doc_office.import_to_members", { defaultValue: "Import to Co-op Members" })}</span>
                         </button>
                       )}
                     </div>
@@ -1366,28 +1373,28 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   </div>
 
                   {/* Export CSV footer */}
-                  <div className="p-3 bg-gray-50 dark:bg-slate-950/20 border-t flex justify-between items-center shrink-0 text-[11px] text-gray-450 select-none">
-                    <span>
-                      Total rows inside workspace grid: <strong>{gridData.length}</strong>
+                  <div className="p-3 bg-gray-50 dark:bg-slate-950/20 border-t flex flex-wrap justify-between items-center gap-2 shrink-0 text-[11px] text-gray-450 select-none min-w-0">
+                    <span className="min-w-0 break-words">
+                      {t("doc_office.total_rows_grid", { defaultValue: "Total rows inside workspace grid:" })} <strong>{gridData.length}</strong>
                     </span>
                     <button 
                       onClick={handleExportCSV}
-                      className="flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-gray-100 dark:bg-slate-850 dark:hover:bg-slate-800 border text-gray-600 dark:text-slate-300 font-bold rounded-lg transition"
+                      className="flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-gray-100 dark:bg-slate-850 dark:hover:bg-slate-800 border text-gray-600 dark:text-slate-300 font-bold rounded-lg transition shrink-0"
                     >
-                      <Download className="h-3 w-3 text-emerald-600" />
-                      Download Spreadsheet CSV
+                      <Download className="h-3 w-3 text-emerald-600 shrink-0" />
+                      <span>{t("doc_office.download_csv", { defaultValue: "Download Spreadsheet CSV" })}</span>
                     </button>
                   </div>
 
                   {/* Multi-Sheet Tabs Bar */}
-                  <div className="px-4 py-2 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex items-center justify-between gap-2 overflow-x-auto shrink-0">
-                    <div className="flex items-center gap-1.5">
+                  <div className="px-4 py-2 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 overflow-x-auto shrink-0">
+                    <div className="flex items-center flex-wrap gap-1.5 min-w-0">
                       {sheets.map(sheet => (
                         <div key={sheet.id} className="flex items-center">
                           <button
                             type="button"
                             onClick={() => setActiveSheetId(sheet.id)}
-                            className={`px-3.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                            className={`px-3.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
                               activeSheetId === sheet.id
                                 ? "bg-[#156c45] text-white shadow-3xs"
                                 : "bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700"
@@ -1412,10 +1419,10 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                         <button
                           type="button"
                           onClick={handleAddSheet}
-                          className="px-3 py-1 rounded-lg border border-dashed border-gray-300 dark:border-slate-700 text-gray-500 hover:border-[#156c45] hover:text-[#156c45] text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                          className="px-3 py-1 rounded-lg border border-dashed border-gray-300 dark:border-slate-700 text-gray-500 hover:border-[#156c45] hover:text-[#156c45] text-xs font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
                         >
-                          <Plus className="h-3.5 w-3.5" />
-                          <span>Add Sheet</span>
+                          <Plus className="h-3.5 w-3.5 shrink-0" />
+                          <span>{t("doc_office.add_sheet", { defaultValue: "Add Sheet" })}</span>
                         </button>
                       )}
                     </div>
@@ -1423,9 +1430,9 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                       <button
                         type="button"
                         onClick={handleConfigureGridDimensions}
-                        className="px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-[#156c45] text-xs font-bold transition cursor-pointer"
+                        className="px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-[#156c45] text-xs font-bold transition cursor-pointer shrink-0"
                       >
-                        Configure Grid
+                        {t("doc_office.configure_grid", { defaultValue: "Configure Grid" })}
                       </button>
                     )}
                   </div>
@@ -1433,33 +1440,34 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
                 {/* VISUALIZATION SECTION (NATIVE SVG CHARTS) */}
                 {chartData.length > 0 && (
-                  <div className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-sm p-5 flex flex-col gap-3">
-                    <div className="flex items-center justify-between border-b pb-2 select-none">
-                      <h3 className="text-xs font-black uppercase tracking-wider text-gray-500 font-display flex items-center gap-1.5">
-                        <BarChart className="h-4 w-4 text-emerald-500" /> Live Spreadsheet Charts Analytics
+                  <div className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-sm p-5 flex flex-col gap-3 min-w-0">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2 select-none min-w-0">
+                      <h3 className="text-xs font-black uppercase tracking-wider text-gray-500 font-display flex items-center gap-1.5 min-w-0">
+                        <BarChart className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <span className="truncate">{t("doc_office.live_charts_title", { defaultValue: "Live Spreadsheet Charts Analytics" })}</span>
                       </h3>
-                      <div className="flex items-center gap-3 text-xs">
+                      <div className="flex flex-wrap items-center gap-3 text-xs">
                         <div className="flex items-center gap-1">
-                          <span className="text-gray-400 font-medium">X (Labels):</span>
+                          <span className="text-gray-400 font-medium">{t("doc_office.x_labels", { defaultValue: "X (Labels):" })}</span>
                           <select 
                             value={chartXCol} 
                             onChange={(e) => setChartXCol(Number(e.target.value))}
                             className="bg-gray-100 dark:bg-slate-800 border-none outline-none rounded p-1 text-[11px] font-bold"
                           >
                             {gridData[0]?.map((col, idx) => (
-                              <option key={idx} value={idx}>{col || `Col ${idx + 1}`}</option>
+                              <option key={idx} value={idx}>{col || `${t("doc_office.col_short", { defaultValue: "Col" })} ${idx + 1}`}</option>
                             ))}
                           </select>
                         </div>
                         <div className="flex items-center gap-1">
-                          <span className="text-gray-400 font-medium">Y (Values):</span>
+                          <span className="text-gray-400 font-medium">{t("doc_office.y_values", { defaultValue: "Y (Values):" })}</span>
                           <select 
                             value={chartYCol} 
                             onChange={(e) => setChartYCol(Number(e.target.value))}
                             className="bg-gray-100 dark:bg-slate-800 border-none outline-none rounded p-1 text-[11px] font-bold"
                           >
                             {gridData[0]?.map((col, idx) => (
-                              <option key={idx} value={idx}>{col || `Col ${idx + 1}`}</option>
+                              <option key={idx} value={idx}>{col || `${t("doc_office.col_short", { defaultValue: "Col" })} ${idx + 1}`}</option>
                             ))}
                           </select>
                         </div>
@@ -1561,59 +1569,60 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                 transition-transform duration-300 ease-in-out lg:translate-x-0
                 ${showMobileSettings ? 'translate-x-0' : 'translate-x-full'}
               `}>
-                <div className="flex items-center justify-between lg:hidden mb-1 -mt-2">
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Settings</h3>
-                  <button onClick={() => setShowMobileSettings(false)} className="p-1 text-gray-500 hover:text-gray-800 dark:hover:text-white bg-gray-200 dark:bg-slate-800 rounded-lg">
+                <div className="flex items-center justify-between lg:hidden mb-1 -mt-2 min-w-0">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate">{t("common.settings", { defaultValue: "Settings" })}</h3>
+                  <button onClick={() => setShowMobileSettings(false)} className="p-1 text-gray-500 hover:text-gray-800 dark:hover:text-white bg-gray-200 dark:bg-slate-800 rounded-lg shrink-0">
                     <X className="h-5 w-5" />
                   </button>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <h3 className="text-xs font-black uppercase tracking-wider text-gray-500 font-display flex items-center gap-1.5 select-none">
-                    <Share2 className="h-4 w-4 text-indigo-500" /> Dissemination & Sharing
+                    <Share2 className="h-4 w-4 text-indigo-500 shrink-0" />
+                    <span className="break-words">{t("doc_office.dissemination_sharing", { defaultValue: "Dissemination & Sharing" })}</span>
                   </h3>
-                <p className="text-[10px] text-gray-400 leading-normal mt-1 select-none">
-                  Control accessibility, privacy, and which cooperative members can view this document.
+                <p className="text-[10px] text-gray-400 leading-normal mt-1 select-none break-words">
+                  {t("doc_office.dissemination_desc", { defaultValue: "Control accessibility, privacy, and which cooperative members can view this document." })}
                 </p>
               </div>
 
               {/* PRIVACY & ACCESS CONTROL */}
-              <div className={`flex flex-col gap-3 p-3.5 bg-white dark:bg-slate-900 border rounded-xl transition ${isPrivateDoc ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
-                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <div className={`flex flex-col gap-3 p-3.5 bg-white dark:bg-slate-900 border rounded-xl transition min-w-0 ${isPrivateDoc ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
+                <label className="flex items-start gap-2.5 cursor-pointer select-none min-w-0">
                   <input 
                     type="checkbox" 
                     checked={isPrivateDoc}
                     onChange={(e) => setIsPrivateDoc(e.target.checked)}
                     className="mt-1 rounded border-gray-350 text-[#156c45] focus:ring-[#156c45] h-4 w-4 shrink-0 accent-[#156c45]"
                   />
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <Lock className="h-3.5 w-3.5 text-[#156c45]" />
-                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block">Private Document</span>
+                      <Lock className="h-3.5 w-3.5 text-[#156c45] shrink-0" />
+                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block break-words">{t("doc_office.private_document", { defaultValue: "Private Document" })}</span>
                     </div>
-                    <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight">
-                      When enabled, only you and explicitly chosen cooperative members can access this file.
+                    <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight break-words">
+                      {t("doc_office.private_document_desc", { defaultValue: "When enabled, only you and explicitly chosen cooperative members can access this file." })}
                     </span>
                   </div>
                 </label>
 
                 {isPrivateDoc && !isLetter && (
-                  <div className="pt-2 border-t flex flex-col gap-2 animate-in fade-in duration-150">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
-                        Authorized Members ({selectedRecipients.length})
+                  <div className="pt-2 border-t flex flex-col gap-2 animate-in fade-in duration-150 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold text-gray-600 dark:text-slate-400 uppercase tracking-wider truncate">
+                        {t("doc_office.authorized_members", { defaultValue: "Authorized Members" })} ({selectedRecipients.length})
                       </span>
                       {selectedRecipients.length > 0 && (
                         <button 
                           onClick={() => setSelectedRecipients([])} 
-                          className="text-[10px] text-rose-500 hover:underline font-bold"
+                          className="text-[10px] text-rose-500 hover:underline font-bold shrink-0"
                         >
-                          Clear
+                          {t("common.clear", { defaultValue: "Clear" })}
                         </button>
                       )}
                     </div>
                     <input 
                       type="text" 
-                      placeholder="Search member name/email..." 
+                      placeholder={t("doc_office.search_member_placeholder", { defaultValue: "Search member name/email..." })} 
                       value={memberSearchQuery} 
                       onChange={(e) => setMemberSearchQuery(e.target.value)}
                       className="w-full text-xs p-1.5 bg-gray-50 dark:bg-slate-800 border rounded-lg outline-none focus:border-indigo-500"
@@ -1640,7 +1649,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                                 </div>
                                 <div className="min-w-0">
                                   <span className="text-[11px] font-bold text-gray-700 dark:text-slate-200 block truncate">
-                                    {member.user?.full_name || "Member"}
+                                    {member.user?.full_name || t("roles.member", { defaultValue: "Member" })}
                                   </span>
                                   <span className="text-[9px] text-gray-400 block truncate">
                                     {member.user?.email}
@@ -1660,10 +1669,10 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
               {/* WORD LETTER SPECIFIC SETTINGS */}
               {fileType === "word" && (
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-4 min-w-0">
                   
                   {/* Letter toggle */}
-                  <label className={`flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs ${isLetter ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
+                  <label className={`flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs min-w-0 ${isLetter ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
                     <input 
                       type="checkbox" 
                       checked={isLetter}
@@ -1675,66 +1684,66 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                       }}
                       className="mt-1 rounded border-gray-350 text-[#156c45] focus:ring-[#156c45] h-4 w-4 shrink-0 accent-[#156c45]"
                     />
-                    <div>
-                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block">Treat as Official Letter</span>
-                      <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight">
-                        Convert this page into a letter and target specific cooperative members in their received box.
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block break-words">{t("doc_office.treat_as_letter", { defaultValue: "Treat as Official Letter" })}</span>
+                      <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight break-words">
+                        {t("doc_office.treat_as_letter_desc", { defaultValue: "Convert this page into a letter and target specific cooperative members in their received box." })}
                       </span>
                     </div>
                   </label>
 
                   {/* Letterhead Toggle */}
-                  <label className={`flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs ${showBrandedHeader ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
+                  <label className={`flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs min-w-0 ${showBrandedHeader ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
                     <input 
                       type="checkbox" 
                       checked={showBrandedHeader}
                       onChange={(e) => setShowBrandedHeader(e.target.checked)}
                       className="mt-1 rounded border-gray-350 text-[#156c45] focus:ring-[#156c45] h-4 w-4 shrink-0 accent-[#156c45]"
                     />
-                    <div>
-                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block">Include Branded Header</span>
-                      <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight">
-                        Display the official cooperative letterhead banner at the top of the canvas.
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block break-words">{t("doc_office.include_branded_header", { defaultValue: "Include Branded Header" })}</span>
+                      <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight break-words">
+                        {t("doc_office.include_branded_header_desc", { defaultValue: "Display the official cooperative letterhead banner at the top of the canvas." })}
                       </span>
                     </div>
                   </label>
 
                   {/* Reference & Date Bar Toggle */}
-                  <label className={`flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs ${showRefBar ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
+                  <label className={`flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs min-w-0 ${showRefBar ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
                     <input 
                       type="checkbox" 
                       checked={showRefBar}
                       onChange={(e) => setShowRefBar(e.target.checked)}
                       className="mt-1 rounded border-gray-350 text-[#156c45] focus:ring-[#156c45] h-4 w-4 shrink-0 accent-[#156c45]"
                     />
-                    <div>
-                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block">Include Reference & Date Bar</span>
-                      <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight">
-                        Display reference number and formal date bar on the document.
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block break-words">{t("doc_office.include_ref_bar", { defaultValue: "Include Reference & Date Bar" })}</span>
+                      <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight break-words">
+                        {t("doc_office.include_ref_bar_desc", { defaultValue: "Display reference number and formal date bar on the document." })}
                       </span>
                     </div>
                   </label>
 
                   {/* Signatory Footer Toggle */}
-                  <label className={`flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs ${showSignatoryFooter ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
+                  <label className={`flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs min-w-0 ${showSignatoryFooter ? 'border-[#156c45] ring-1 ring-[#156c45]/20 bg-emerald-50/20 dark:bg-emerald-950/10' : 'border-gray-200 dark:border-slate-800'}`}>
                     <input 
                       type="checkbox" 
                       checked={showSignatoryFooter}
                       onChange={(e) => setShowSignatoryFooter(e.target.checked)}
                       className="mt-1 rounded border-gray-350 text-[#156c45] focus:ring-[#156c45] h-4 w-4 shrink-0 accent-[#156c45]"
                     />
-                    <div>
-                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block">Include Signatory & Timestamp Footer</span>
-                      <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight">
-                        Display verified digital author signature and cryptographic timestamp block at the bottom.
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block break-words">{t("doc_office.include_signatory_footer", { defaultValue: "Include Signatory & Timestamp Footer" })}</span>
+                      <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight break-words">
+                        {t("doc_office.include_signatory_footer_desc", { defaultValue: "Display verified digital author signature and cryptographic timestamp block at the bottom." })}
                       </span>
                     </div>
                   </label>
 
                   {/* Customized Dissemination Toggle */}
                   {isLetter && !editingDoc && (
-                    <div className="relative">
-                      <label className="flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs">
+                    <div className="relative min-w-0">
+                      <label className="flex items-start gap-2.5 p-3.5 bg-white dark:bg-slate-900 border rounded-xl cursor-pointer transition select-none hover:shadow-3xs min-w-0">
                         <input 
                           type="checkbox" 
                           checked={isCustomizedDissemination}
@@ -1743,61 +1752,62 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                           }}
                           className="mt-1 rounded border-gray-350 text-amber-600 focus:ring-amber-500 h-4 w-4 shrink-0"
                         />
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block">Individualized Dissemination</span>
-                            <span className="px-1.5 py-0.2 bg-amber-500 text-white font-bold text-[8px] uppercase tracking-wide rounded">PRO</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center flex-wrap gap-1.5">
+                            <span className="text-xs font-bold text-gray-700 dark:text-slate-200 block break-words">{t("doc_office.individualized_dissemination", { defaultValue: "Individualized Dissemination" })}</span>
+                            <span className="px-1.5 py-0.2 bg-amber-500 text-white font-bold text-[8px] uppercase tracking-wide rounded shrink-0">PRO</span>
                           </div>
-                          <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight">
-                            Generate and deliver customized individual copies mapped dynamically to organization members in the database.
+                          <span className="text-[10px] text-gray-400 mt-0.5 block leading-tight break-words">
+                            {t("doc_office.individualized_dissemination_desc", { defaultValue: "Generate and deliver customized individual copies mapped dynamically to organization members in the database." })}
                           </span>
                           
-                          <div className="mt-2.5 p-2.5 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-gray-100 dark:border-slate-800 text-[10px] space-y-1.5 select-none">
+                          <div className="mt-2.5 p-2.5 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-gray-100 dark:border-slate-800 text-[10px] space-y-1.5 select-none min-w-0">
                             <span className="font-bold text-gray-600 dark:text-slate-350 block uppercase tracking-wider text-[8px]">
-                              Active Database Variables
+                              {t("doc_office.active_db_vars", { defaultValue: "Active Database Variables" })}
                             </span>
                             <div className="flex flex-col gap-1.5">
-                              <div className="flex items-center justify-between">
-                                <span className="font-mono text-[#156c45] dark:text-emerald-400 font-bold bg-[#e8f5ee] dark:bg-emerald-950/40 px-1.5 py-0.5 rounded text-[8px]">
-                                  full name
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono text-[#156c45] dark:text-emerald-400 font-bold bg-[#e8f5ee] dark:bg-emerald-950/40 px-1.5 py-0.5 rounded text-[8px] shrink-0">
+                                  {t("doc_office.var_full_name", { defaultValue: "full name" })}
                                 </span>
                                 <span className="text-gray-550 dark:text-slate-400 max-w-[130px] truncate font-medium">
-                                  {activeMember?.user?.full_name || "Cooperative Member"}
+                                  {activeMember?.user?.full_name || t("doc_office.cooperative_member", { defaultValue: "Cooperative Member" })}
                                 </span>
                               </div>
-                              <div className="flex items-center justify-between">
-                                <span className="font-mono text-[#156c45] dark:text-emerald-400 font-bold bg-[#e8f5ee] dark:bg-emerald-950/40 px-1.5 py-0.5 rounded text-[8px]">
-                                  email
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono text-[#156c45] dark:text-emerald-400 font-bold bg-[#e8f5ee] dark:bg-emerald-950/40 px-1.5 py-0.5 rounded text-[8px] shrink-0">
+                                  {t("doc_office.var_email", { defaultValue: "email" })}
                                 </span>
                                 <span className="text-gray-550 dark:text-slate-400 max-w-[130px] truncate font-medium">
                                   {activeMember?.user?.email || "member@cooperative.rw"}
                                 </span>
                               </div>
-                              <div className="flex items-center justify-between">
-                                <span className="font-mono text-[#156c45] dark:text-emerald-400 font-bold bg-[#e8f5ee] dark:bg-emerald-950/40 px-1.5 py-0.5 rounded text-[8px]">
-                                  role
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono text-[#156c45] dark:text-emerald-400 font-bold bg-[#e8f5ee] dark:bg-emerald-950/40 px-1.5 py-0.5 rounded text-[8px] shrink-0">
+                                  {t("doc_office.var_role", { defaultValue: "role" })}
                                 </span>
-                                <span className="text-gray-550 dark:text-slate-400 capitalize font-medium">
+                                <span className="text-gray-550 dark:text-slate-400 capitalize font-medium truncate">
                                   {(() => {
-                                    const r = activeMember?.role || "Member";
-                                    return r === "org_admin" || r === "admin_representative" || r === "admin" ? "admin" : r;
+                                    const r = activeMember?.role || "member";
+                                    const normalized = r === "org_admin" || r === "admin_representative" || r === "admin" ? "admin" : r;
+                                    return t(`roles.${normalized}`, { defaultValue: normalized });
                                   })()}
                                 </span>
                               </div>
-                              <div className="flex items-center justify-between">
-                                <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded text-[8px]">
-                                  org name
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded text-[8px] shrink-0">
+                                  {t("doc_office.var_org_name", { defaultValue: "org name" })}
                                 </span>
                                 <span className="text-gray-550 dark:text-slate-400 max-w-[130px] truncate font-medium">
-                                  {activeOrg?.name || "Cooperative"}
+                                  {activeOrg?.name || t("doc_office.cooperative_default", { defaultValue: "Cooperative" })}
                                 </span>
                               </div>
-                              <div className="flex items-center justify-between">
-                                <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded text-[8px]">
-                                  date
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded text-[8px] shrink-0">
+                                  {t("doc_office.var_date", { defaultValue: "date" })}
                                 </span>
                                 <span className="text-gray-550 dark:text-slate-400 font-medium">
-                                  {new Date().toLocaleDateString()}
+                                  {new Date().toLocaleDateString(i18n.language)}
                                 </span>
                               </div>
                             </div>
@@ -1805,7 +1815,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                         </div>
                       </label>
                       {!isProPlan && (
-                        <div className="absolute inset-0 bg-stone-50/15 dark:bg-slate-950/25 backdrop-grayscale-sm rounded-xl cursor-not-allowed flex items-center justify-end p-2" title="Pro Feature Lock">
+                        <div className="absolute inset-0 bg-stone-50/15 dark:bg-slate-950/25 backdrop-grayscale-sm rounded-xl cursor-not-allowed flex items-center justify-end p-2" title={t("doc_office.pro_feature_lock", { defaultValue: "Pro Feature Lock" })}>
                           <span className="p-1.5 bg-white/90 dark:bg-slate-800/90 rounded-lg shadow-sm border dark:border-slate-700">
                             <Lock className="h-4 w-4 text-amber-500" />
                           </span>
@@ -1816,7 +1826,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
                   {/* Letter Target selections */}
                   {isLetter && (
-                    <div className="flex flex-col gap-2.5 animate-in fade-in slide-in-from-top duration-200">
+                    <div className="flex flex-col gap-2.5 animate-in fade-in slide-in-from-top duration-200 min-w-0">
                       
                       {/* Send to all active members check */}
                       <label className="flex items-center gap-2 px-1 select-none cursor-pointer">
@@ -1827,32 +1837,32 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                             setSendToAll(e.target.checked);
                             if (e.target.checked) setSelectedRecipients([]);
                           }}
-                          className="rounded border-gray-350 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                          className="rounded border-gray-350 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5 shrink-0"
                         />
-                        <span className="text-[11px] font-bold text-gray-650 dark:text-slate-300">
-                          Send to all active cooperative members
+                        <span className="text-[11px] font-bold text-gray-650 dark:text-slate-300 break-words">
+                          {t("doc_office.send_to_all_active", { defaultValue: "Send to all active cooperative members" })}
                         </span>
                       </label>
 
                       {!sendToAll && (
-                        <div className="flex flex-col gap-2 mt-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] uppercase font-mono tracking-wider font-bold text-gray-400 select-none">
-                              Recipients ({selectedRecipients.length}):
+                        <div className="flex flex-col gap-2 mt-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] uppercase font-mono tracking-wider font-bold text-gray-400 select-none truncate">
+                              {t("doc_office.recipients", { defaultValue: "Recipients" })} ({selectedRecipients.length}):
                             </span>
                             {selectedRecipients.length > 0 && (
                               <button 
                                 onClick={() => setSelectedRecipients([])} 
-                                className="text-[10px] text-rose-500 hover:underline font-bold"
+                                className="text-[10px] text-rose-500 hover:underline font-bold shrink-0"
                               >
-                                Clear
+                                {t("common.clear", { defaultValue: "Clear" })}
                               </button>
                             )}
                           </div>
 
                           <input 
                             type="text" 
-                            placeholder="Filter members..." 
+                            placeholder={t("doc_office.filter_members_placeholder", { defaultValue: "Filter members..." })} 
                             value={memberSearchQuery} 
                             onChange={(e) => setMemberSearchQuery(e.target.value)}
                             className="w-full text-xs p-1.5 bg-white dark:bg-slate-900 border rounded-lg outline-none focus:border-indigo-500"
@@ -1880,7 +1890,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                                       </div>
                                       <div className="flex flex-col min-w-0">
                                         <span className="text-[11px] font-bold text-gray-700 dark:text-slate-200 truncate leading-none">
-                                          {member.user?.full_name || "Cooperative Partner"}
+                                          {member.user?.full_name || t("doc_office.cooperative_partner", { defaultValue: "Cooperative Partner" })}
                                         </span>
                                         <span className="text-[9px] text-gray-400 font-mono mt-0.5 truncate leading-none">
                                           {member.user?.email}
@@ -1904,11 +1914,11 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
               {/* EXCEL CALCULATIONS, SORTING & FORMATTING SIDEBAR */}
               {fileType === "excel" && (
-                <div className="flex flex-col gap-4 animate-in fade-in duration-150">
+                <div className="flex flex-col gap-4 animate-in fade-in duration-150 min-w-0">
                   
                   {/* Active target column selector */}
                   <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl p-3 shadow-xs">
-                    <label className="text-[10px] uppercase font-mono font-bold tracking-wider text-gray-400 block mb-1">Active Target Column</label>
+                    <label className="text-[10px] uppercase font-mono font-bold tracking-wider text-gray-400 block mb-1">{t("doc_office.active_target_col", { defaultValue: "Active Target Column" })}</label>
                     <select
                       value={selectedCalcCol}
                       onChange={(e) => {
@@ -1920,44 +1930,44 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                       className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-lg p-2 font-bold text-xs focus:ring-1 focus:ring-emerald-500"
                     >
                       {gridData[0]?.map((col, idx) => (
-                        <option key={idx} value={idx}>{col || `Column ${idx + 1}`}</option>
+                        <option key={idx} value={idx}>{col || `${t("doc_office.column_label", { defaultValue: "Column" })} ${idx + 1}`}</option>
                       ))}
                     </select>
                   </div>
 
                   {/* Mathematical Formulas & Summary Statistics */}
-                  <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl p-3.5 shadow-xs flex flex-col gap-2.5">
+                  <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl p-3.5 shadow-xs flex flex-col gap-2.5 min-w-0">
                     <div className="flex items-center gap-1.5 border-b pb-2">
                       <Sigma className="h-4 w-4 text-emerald-600 shrink-0" />
-                      <span className="text-xs font-black text-gray-800 dark:text-slate-100 uppercase tracking-tight font-display">Formulas & Calculations</span>
+                      <span className="text-xs font-black text-gray-800 dark:text-slate-100 uppercase tracking-tight font-display break-words">{t("doc_office.formulas_calculations", { defaultValue: "Formulas & Calculations" })}</span>
                     </div>
 
                     <div className="space-y-2">
                       {(() => {
                         const stats = getColStats(selectedCalcCol);
                         const calcOptions = [
-                          { label: "Sum Total", val: stats.sum, type: "SUM" as const },
-                          { label: "Average Value", val: stats.avg, type: "AVERAGE" as const },
-                          { label: "Minimum Value", val: stats.min, type: "MIN" as const },
-                          { label: "Maximum Value", val: stats.max, type: "MAX" as const },
-                          { label: "Count (Numeric)", val: stats.count, type: "COUNT" as const },
+                          { label: t("doc_office.sum_total", { defaultValue: "Sum Total" }), val: stats.sum, type: "SUM" as const },
+                          { label: t("doc_office.average_value", { defaultValue: "Average Value" }), val: stats.avg, type: "AVERAGE" as const },
+                          { label: t("doc_office.minimum_value", { defaultValue: "Minimum Value" }), val: stats.min, type: "MIN" as const },
+                          { label: t("doc_office.maximum_value", { defaultValue: "Maximum Value" }), val: stats.max, type: "MAX" as const },
+                          { label: t("doc_office.count_numeric", { defaultValue: "Count (Numeric)" }), val: stats.count, type: "COUNT" as const },
                         ];
 
                         return calcOptions.map((opt) => (
-                          <div key={opt.type} className="flex items-center justify-between py-1 px-2 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-lg group select-none transition">
-                            <div className="flex flex-col">
-                              <span className="text-[10px] text-gray-400 font-semibold">{opt.label}</span>
+                          <div key={opt.type} className="flex items-center justify-between gap-2 py-1 px-2 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-lg group select-none transition min-w-0">
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[10px] text-gray-400 font-semibold truncate">{opt.label}</span>
                               <span className="text-xs font-black text-gray-800 dark:text-slate-200 font-mono">
-                                {opt.val % 1 === 0 ? opt.val.toLocaleString() : opt.val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {opt.val % 1 === 0 ? opt.val.toLocaleString(i18n.language) : opt.val.toLocaleString(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             </div>
                             <button
                               onClick={() => injectFormulaRow(selectedCalcCol, opt.type)}
-                              className="p-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50 text-emerald-600 rounded-lg text-[10px] font-black tracking-wider transition opacity-0 group-hover:opacity-100 flex items-center gap-1 cursor-pointer"
-                              title={`Inject ${opt.type} row`}
+                              className="p-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-950/50 text-emerald-600 rounded-lg text-[10px] font-black tracking-wider transition opacity-0 group-hover:opacity-100 flex items-center gap-1 cursor-pointer shrink-0"
+                              title={t("doc_office.inject_formula_row", { defaultValue: `Inject ${opt.type} row`, type: opt.type })}
                             >
-                              <Plus className="h-3.5 w-3.5" />
-                              Append
+                              <Plus className="h-3.5 w-3.5 shrink-0" />
+                              <span>{t("doc_office.append", { defaultValue: "Append" })}</span>
                             </button>
                           </div>
                         ));
@@ -1966,10 +1976,10 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   </div>
 
                   {/* Active Column Sorting Center */}
-                  <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl p-3.5 shadow-xs flex flex-col gap-2.5">
+                  <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl p-3.5 shadow-xs flex flex-col gap-2.5 min-w-0">
                     <div className="flex items-center gap-1.5 border-b pb-2">
                       <ArrowUpDown className="h-4 w-4 text-indigo-550 shrink-0" />
-                      <span className="text-xs font-black text-gray-800 dark:text-slate-100 uppercase tracking-tight font-display">Sorting & Ordering</span>
+                      <span className="text-xs font-black text-gray-800 dark:text-slate-100 uppercase tracking-tight font-display break-words">{t("doc_office.sorting_ordering", { defaultValue: "Sorting & Ordering" })}</span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
@@ -1977,39 +1987,39 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                         onClick={() => handleSortGrid(selectedCalcCol, "asc")}
                         className="px-2 py-1.5 border border-gray-150 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-lg text-[10px] font-black text-gray-700 dark:text-slate-300 flex items-center justify-center gap-1 transition cursor-pointer"
                       >
-                        Sort A → Z
+                        {t("doc_office.sort_az", { defaultValue: "Sort A → Z" })}
                       </button>
                       <button
                         onClick={() => handleSortGrid(selectedCalcCol, "desc")}
                         className="px-2 py-1.5 border border-gray-150 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-lg text-[10px] font-black text-gray-700 dark:text-slate-300 flex items-center justify-center gap-1 transition cursor-pointer"
                       >
-                        Sort Z → A
+                        {t("doc_office.sort_za", { defaultValue: "Sort Z → A" })}
                       </button>
                       <button
                         onClick={() => handleSortGrid(selectedCalcCol, "num_asc")}
                         className="px-2 py-1.5 border border-gray-150 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-lg text-[10px] font-black text-gray-700 dark:text-slate-300 flex items-center justify-center gap-1 transition col-span-2 cursor-pointer"
                       >
-                        Sort Numerically (Min → Max)
+                        {t("doc_office.sort_num_asc", { defaultValue: "Sort Numerically (Min → Max)" })}
                       </button>
                       <button
                         onClick={() => handleSortGrid(selectedCalcCol, "num_desc")}
                         className="px-2 py-1.5 border border-gray-150 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 rounded-lg text-[10px] font-black text-gray-700 dark:text-slate-300 flex items-center justify-center gap-1 transition col-span-2 cursor-pointer"
                       >
-                        Sort Numerically (Max → Min)
+                        {t("doc_office.sort_num_desc", { defaultValue: "Sort Numerically (Max → Min)" })}
                       </button>
                     </div>
                   </div>
 
                   {/* Custom Conditional Formatting Studio */}
-                  <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl p-3.5 shadow-xs flex flex-col gap-3">
+                  <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-xl p-3.5 shadow-xs flex flex-col gap-3 min-w-0">
                     <div className="flex items-center gap-1.5 border-b pb-2">
                       <Palette className="h-4 w-4 text-amber-500 shrink-0" />
-                      <span className="text-xs font-black text-gray-800 dark:text-slate-100 uppercase tracking-tight font-display">Conditional Highlights</span>
+                      <span className="text-xs font-black text-gray-800 dark:text-slate-100 uppercase tracking-tight font-display break-words">{t("doc_office.conditional_highlights", { defaultValue: "Conditional Highlights" })}</span>
                     </div>
 
                     <div className="flex flex-col gap-2 text-[11px]">
                       <div className="flex flex-col gap-1">
-                        <span className="font-bold text-gray-500">Formatting Rule:</span>
+                        <span className="font-bold text-gray-500">{t("doc_office.formatting_rule", { defaultValue: "Formatting Rule:" })}</span>
                         <select
                           value={highlightRule.type}
                           onChange={(e) => {
@@ -2020,18 +2030,18 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                           }}
                           className="bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-lg p-2 font-bold text-xs text-gray-700 dark:text-slate-300"
                         >
-                          <option value="none">Disabled (No Highlight)</option>
-                          <option value="less_than_avg">Less than Column Average</option>
-                          <option value="range">Within Custom Range (Min to Max)</option>
-                          <option value="less_than_val">Less than Custom Value</option>
-                          <option value="greater_than_val">Greater than Custom Value</option>
+                          <option value="none">{t("doc_office.rule_none", { defaultValue: "Disabled (No Highlight)" })}</option>
+                          <option value="less_than_avg">{t("doc_office.rule_less_avg", { defaultValue: "Less than Column Average" })}</option>
+                          <option value="range">{t("doc_office.rule_range", { defaultValue: "Within Custom Range (Min to Max)" })}</option>
+                          <option value="less_than_val">{t("doc_office.rule_less_val", { defaultValue: "Less than Custom Value" })}</option>
+                          <option value="greater_than_val">{t("doc_office.rule_greater_val", { defaultValue: "Greater than Custom Value" })}</option>
                         </select>
                       </div>
 
                       {highlightRule.type === "range" && (
                         <div className="grid grid-cols-2 gap-2 animate-in slide-in-from-top-1 duration-150">
                           <div className="flex flex-col gap-1">
-                            <span className="font-bold text-gray-500 text-[10px]">Min Value</span>
+                            <span className="font-bold text-gray-500 text-[10px]">{t("doc_office.min_value", { defaultValue: "Min Value" })}</span>
                             <input
                               type="number"
                               value={highlightRule.minVal ?? ""}
@@ -2040,7 +2050,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                             />
                           </div>
                           <div className="flex flex-col gap-1">
-                            <span className="font-bold text-gray-500 text-[10px]">Max Value</span>
+                            <span className="font-bold text-gray-500 text-[10px]">{t("doc_office.max_value", { defaultValue: "Max Value" })}</span>
                             <input
                               type="number"
                               value={highlightRule.maxVal ?? ""}
@@ -2053,7 +2063,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
                       {(highlightRule.type === "less_than_val" || highlightRule.type === "greater_than_val") && (
                         <div className="flex flex-col gap-1 animate-in slide-in-from-top-1 duration-150">
-                          <span className="font-bold text-gray-500 text-[10px]">Threshold Value</span>
+                          <span className="font-bold text-gray-500 text-[10px]">{t("doc_office.threshold_value", { defaultValue: "Threshold Value" })}</span>
                           <input
                             type="number"
                             value={highlightRule.customVal ?? ""}
@@ -2064,7 +2074,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                       )}
 
                       <div className="flex flex-col gap-1.5 mt-1">
-                        <span className="font-bold text-gray-500">Highlight Palette:</span>
+                        <span className="font-bold text-gray-500">{t("doc_office.highlight_palette", { defaultValue: "Highlight Palette:" })}</span>
                         <div className="flex items-center gap-2">
                           {[
                             { color: "red" as const, bg: "bg-red-500 ring-red-450" },
@@ -2087,13 +2097,13 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
               )}
 
               {/* GENERAL GUIDANCE CORNER */}
-              <div className="mt-auto p-4 bg-indigo-50/50 dark:bg-slate-800/30 border dark:border-slate-800/60 rounded-2xl select-none">
+              <div className="mt-auto p-4 bg-indigo-50/50 dark:bg-slate-800/30 border dark:border-slate-800/60 rounded-2xl select-none min-w-0">
                 <div className="flex items-start gap-2">
                   <Info className="h-4.5 w-4.5 text-indigo-500 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-xs font-black text-indigo-905 dark:text-indigo-400">Offline Office Suite</span>
-                    <p className="text-[10px] leading-relaxed text-slate-550 dark:text-slate-400 mt-1">
-                      Draft letters and spreadsheets. Documents are cached in the secure database so you never lose administrative progress.
+                  <div className="min-w-0">
+                    <span className="text-xs font-black text-indigo-905 dark:text-indigo-400 break-words">{t("doc_office.offline_suite", { defaultValue: "Offline Office Suite" })}</span>
+                    <p className="text-[10px] leading-relaxed text-slate-550 dark:text-slate-400 mt-1 break-words">
+                      {t("doc_office.offline_suite_desc", { defaultValue: "Draft letters and spreadsheets. Documents are cached in the secure database so you never lose administrative progress." })}
                     </p>
                   </div>
                 </div>
@@ -2107,26 +2117,27 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
       {/* MODAL FOR SPREADSHEET DIMENSION SETUP */}
       {isGridModalOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-xl overflow-hidden flex flex-col animate-in fade-in duration-150">
-            <div className="p-4 border-b bg-gray-50 dark:bg-slate-950/40 flex items-center justify-between select-none shrink-0">
-              <span className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-1.5">
-                <Settings2 className="h-4 w-4 text-[#156c45]" /> Configure Sheet Dimensions
+          <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-xl overflow-hidden flex flex-col animate-in fade-in duration-150">
+            <div className="p-4 border-b bg-gray-50 dark:bg-slate-950/40 flex items-center justify-between gap-2 select-none shrink-0 min-w-0">
+              <span className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-1.5 min-w-0 truncate">
+                <Settings2 className="h-4 w-4 text-[#156c45] shrink-0" />
+                <span className="truncate">{t("doc_office.configure_sheet_dimensions", { defaultValue: "Configure Sheet Dimensions" })}</span>
               </span>
               <button 
                 onClick={() => setIsGridModalOpen(false)} 
-                className="p-1 hover:bg-gray-150 dark:hover:bg-slate-800 rounded-lg text-gray-400 cursor-pointer"
+                className="p-1 hover:bg-gray-150 dark:hover:bg-slate-800 rounded-lg text-gray-400 cursor-pointer shrink-0"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="p-5 flex flex-col gap-4 text-xs">
-              <p className="text-gray-500 dark:text-slate-400 select-none">
-                Specify the exact number of rows and columns to generate for this spreadsheet:
+              <p className="text-gray-500 dark:text-slate-400 select-none break-words">
+                {t("doc_office.configure_dimensions_desc", { defaultValue: "Specify the exact number of rows and columns to generate for this spreadsheet:" })}
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Rows</label>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">{t("doc_office.rows", { defaultValue: "Rows" })}</label>
                   <input
                     type="number"
                     min={1}
@@ -2137,7 +2148,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">Columns</label>
+                  <label className="font-bold text-gray-700 dark:text-slate-300 block mb-1">{t("doc_office.columns", { defaultValue: "Columns" })}</label>
                   <input
                     type="number"
                     min={1}
@@ -2148,13 +2159,13 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                   />
                 </div>
               </div>
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsGridModalOpen(false)}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition cursor-pointer"
                 >
-                  Cancel
+                  {t("common.cancel", { defaultValue: "Cancel" })}
                 </button>
                 <button
                   type="button"
@@ -2166,11 +2177,11 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                     );
                     setGridData(newGrid);
                     setIsGridModalOpen(false);
-                    addToast(`Grid configured to ${rowCount} rows x ${colCount} columns`, "success");
+                    addToast(t("doc_office.grid_configured_toast", { defaultValue: `Grid configured to ${rowCount} rows x ${colCount} columns`, rows: rowCount, cols: colCount }), "success");
                   }}
                   className="px-4 py-1.5 rounded-lg text-xs font-bold bg-[#156c45] hover:bg-[#125939] text-white transition cursor-pointer"
                 >
-                  Apply Dimensions
+                  {t("doc_office.apply_dimensions", { defaultValue: "Apply Dimensions" })}
                 </button>
               </div>
             </div>
@@ -2182,43 +2193,44 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
       {isBulkImportOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl border shadow-xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in duration-150">
-            <div className="p-4 border-b bg-gray-50 dark:bg-slate-950/40 flex items-center justify-between select-none shrink-0">
-              <span className="text-sm font-black text-gray-901 dark:text-white flex items-center gap-1.5">
-                <UserPlus className="h-4 w-4 text-amber-500" /> Map Bulk Members Spreadsheet
+            <div className="p-4 border-b bg-gray-50 dark:bg-slate-950/40 flex items-center justify-between gap-2 select-none shrink-0 min-w-0">
+              <span className="text-sm font-black text-gray-901 dark:text-white flex items-center gap-1.5 min-w-0 truncate">
+                <UserPlus className="h-4 w-4 text-amber-500 shrink-0" />
+                <span className="truncate">{t("doc_office.map_bulk_members", { defaultValue: "Map Bulk Members Spreadsheet" })}</span>
               </span>
-              <button onClick={() => setIsBulkImportOpen(false)} className="p-1 hover:bg-gray-150 dark:hover:bg-slate-800 rounded-lg text-gray-400">
+              <button onClick={() => setIsBulkImportOpen(false)} className="p-1 hover:bg-gray-150 dark:hover:bg-slate-800 rounded-lg text-gray-400 shrink-0">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="p-5 overflow-y-auto flex flex-col gap-4 text-xs">
-              <p className="text-gray-500 select-none">
-                The spreadsheet rows can be mapped directly to create new active registered members of the organization. Select the appropriate columns:
+              <p className="text-gray-500 select-none break-words">
+                {t("doc_office.map_bulk_members_desc", { defaultValue: "The spreadsheet rows can be mapped directly to create new active registered members of the organization. Select the appropriate columns:" })}
               </p>
 
-              <div className="grid grid-cols-2 gap-4 select-none">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 select-none">
                 <div className="flex flex-col gap-1.5">
-                  <span className="font-bold text-gray-700 dark:text-slate-300">Name Column:</span>
+                  <span className="font-bold text-gray-700 dark:text-slate-300">{t("doc_office.name_column", { defaultValue: "Name Column:" })}</span>
                   <select 
                     value={importNameCol}
                     onChange={(e) => setImportNameCol(Number(e.target.value))}
                     className="w-full bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg p-2 font-bold focus:ring-1 focus:ring-amber-500"
                   >
                     {gridData[0]?.map((col, idx) => (
-                      <option key={idx} value={idx}>{col || `Column ${idx + 1}`}</option>
+                      <option key={idx} value={idx}>{col || `${t("doc_office.column_label", { defaultValue: "Column" })} ${idx + 1}`}</option>
                     ))}
                   </select>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <span className="font-bold text-gray-700 dark:text-slate-300">Email Column:</span>
+                  <span className="font-bold text-gray-700 dark:text-slate-300">{t("doc_office.email_column", { defaultValue: "Email Column:" })}</span>
                   <select 
                     value={importEmailCol}
                     onChange={(e) => setImportEmailCol(Number(e.target.value))}
                     className="w-full bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg p-2 font-bold focus:ring-1 focus:ring-amber-500"
                   >
                     {gridData[0]?.map((col, idx) => (
-                      <option key={idx} value={idx}>{col || `Column ${idx + 1}`}</option>
+                      <option key={idx} value={idx}>{col || `${t("doc_office.column_label", { defaultValue: "Column" })} ${idx + 1}`}</option>
                     ))}
                   </select>
                 </div>
@@ -2226,14 +2238,14 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
 
               {/* Rows preview table */}
               <div className="flex flex-col gap-2">
-                <span className="font-mono text-[10px] text-gray-400 uppercase tracking-wider font-bold select-none">Preview of Rows to Import:</span>
+                <span className="font-mono text-[10px] text-gray-400 uppercase tracking-wider font-bold select-none">{t("doc_office.preview_rows_import", { defaultValue: "Preview of Rows to Import:" })}</span>
                 <div className="border rounded-xl overflow-hidden max-h-48 overflow-y-auto">
                   <table className="w-full text-left">
                     <thead>
                       <tr className="bg-gray-50 dark:bg-slate-950 border-b font-bold text-gray-500 text-[10px] select-none uppercase">
-                        <th className="p-2 border-r">No.</th>
-                        <th className="p-2 border-r">Parsed Name</th>
-                        <th className="p-2">Parsed Email</th>
+                        <th className="p-2 border-r">{t("doc_office.no_col", { defaultValue: "No." })}</th>
+                        <th className="p-2 border-r">{t("doc_office.parsed_name", { defaultValue: "Parsed Name" })}</th>
+                        <th className="p-2">{t("doc_office.parsed_email", { defaultValue: "Parsed Email" })}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2244,8 +2256,8 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
                         return (
                           <tr key={idx} className={`border-b border-gray-100 dark:border-slate-805/70 text-[11px] ${isValid ? "bg-emerald-50/20 dark:bg-emerald-950/10" : "bg-red-50/25 dark:bg-red-950/10"}`}>
                             <td className="p-2 border-r font-mono text-gray-400">{idx + 1}</td>
-                            <td className="p-2 border-r font-bold truncate max-w-[120px]">{name || <em className="text-gray-400">Empty</em>}</td>
-                            <td className="p-2 font-mono truncate max-w-[150px]">{email || <em className="text-gray-400">Empty</em>}</td>
+                            <td className="p-2 border-r font-bold truncate max-w-[120px]">{name || <em className="text-gray-400">{t("doc_office.empty_cell", { defaultValue: "Empty" })}</em>}</td>
+                            <td className="p-2 font-mono truncate max-w-[150px]">{email || <em className="text-gray-400">{t("doc_office.empty_cell", { defaultValue: "Empty" })}</em>}</td>
                           </tr>
                         );
                       })}
@@ -2255,19 +2267,19 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
               </div>
             </div>
 
-            <div className="p-4 bg-gray-50 dark:bg-slate-950/40 border-t flex justify-end gap-2.5 shrink-0 select-none">
+            <div className="p-4 bg-gray-50 dark:bg-slate-950/40 border-t flex flex-wrap justify-end gap-2.5 shrink-0 select-none">
               <button 
                 onClick={() => setIsBulkImportOpen(false)}
                 className="px-4 py-2 border rounded-lg text-xs font-bold hover:bg-gray-100 dark:hover:bg-slate-800 transition text-gray-600 dark:text-slate-300"
               >
-                Cancel
+                {t("common.cancel", { defaultValue: "Cancel" })}
               </button>
               <button 
                 onClick={handleBulkMembersImport}
                 disabled={isSaving}
                 className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-lg text-xs font-bold transition"
               >
-                {isSaving ? "Importing..." : "Confirm Bulk Import"}
+                {isSaving ? t("doc_office.importing", { defaultValue: "Importing..." }) : t("doc_office.confirm_bulk_import", { defaultValue: "Confirm Bulk Import" })}
               </button>
             </div>
           </div>
@@ -2278,10 +2290,10 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
       <DigitalSignaturePad
         isOpen={showSignaturePad}
         onClose={() => setShowSignaturePad(false)}
-        documentTitle={docName || "Official Workspace Document"}
+        documentTitle={docName || t("doc_office.official_workspace_doc", { defaultValue: "Official Workspace Document" })}
         documentVersion={1}
-        signerName={activeMember?.user?.full_name || "Authorized Member"}
-        signerRole="Executive Official"
+        signerName={activeMember?.user?.full_name || t("doc_office.authorized_member", { defaultValue: "Authorized Member" })}
+        signerRole={t("doc_office.executive_official", { defaultValue: "Executive Official" })}
         onSignComplete={(data) => {
           const sigs = MockDB.getDocumentSignatures();
           const newSig = {
@@ -2298,7 +2310,7 @@ export const DocumentOffice: React.FC<DocumentOfficeProps> = ({
             signed_at: data.signedAt
           };
           MockDB.saveDocumentSignatures([newSig, ...sigs]);
-          addToast(`Signature successfully registered with verification hash ${data.verificationHash}!`, "success");
+          addToast(t("doc_office.signature_registered", { defaultValue: `Signature successfully registered with verification hash ${data.verificationHash}!`, hash: data.verificationHash }), "success");
         }}
       />
     </div>

@@ -25,6 +25,7 @@ import {
   ExternalLink,
   Trash2
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import { OrgMember } from "../types";
@@ -111,6 +112,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
   onClose,
   members = []
 }) => {
+  const { t, i18n } = useTranslation();
   const { activeOrg, activeMember } = useOrgStore();
   const { addToast } = useToast();
 
@@ -124,20 +126,22 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
   const [orgLogoOverride, setOrgLogoOverride] = useState<string>("");
   const [showPartnerLogo, setShowPartnerLogo] = useState<boolean>(false);
   const [partnerLogoUrl, setPartnerLogoUrl] = useState<string>("");
-  const [partnerName, setPartnerName] = useState<string>("National Cooperative Agency (RCA)");
-  const [partnerSubtitle, setPartnerSubtitle] = useState<string>("In Technical Partnership & Accreditation");
+  const [partnerName, setPartnerName] = useState<string>(() => t("cert_builder.default_partner_name", { defaultValue: "National Cooperative Agency (RCA)" }));
+  const [partnerSubtitle, setPartnerSubtitle] = useState<string>(() => t("cert_builder.default_partner_subtitle", { defaultValue: "In Technical Partnership & Accreditation" }));
   const [logoLayout, setLogoLayout] = useState<LogoLayout>("split");
   const [logoSize, setLogoSize] = useState<"sm" | "md" | "lg">("md");
 
   // 3. Editable Text & Copy States
-  const [certificateTitle, setCertificateTitle] = useState("CERTIFICATE OF EXCELLENCE & LEADERSHIP");
-  const [subtitle, setSubtitle] = useState("Conferred by Democratic Decision of the General Assembly");
-  const [reasonText, setReasonText] = useState(
-    "In recognition of outstanding dedication, continuous active participation, and exemplary adherence to cooperative governance standards and shared community welfare."
+  const [certificateTitle, setCertificateTitle] = useState(() => t("cert_builder.default_title", { defaultValue: "CERTIFICATE OF EXCELLENCE & LEADERSHIP" }));
+  const [subtitle, setSubtitle] = useState(() => t("cert_builder.default_subtitle", { defaultValue: "Conferred by Democratic Decision of the General Assembly" }));
+  const [reasonText, setReasonText] = useState(() =>
+    t("cert_builder.default_reason", {
+      defaultValue: "In recognition of outstanding dedication, continuous active participation, and exemplary adherence to cooperative governance standards and shared community welfare."
+    })
   );
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [signatoryName, setSignatoryName] = useState((activeMember as any)?.user?.full_name || "Authorized Executive");
-  const [signatoryTitle, setSignatoryTitle] = useState("Board Chairperson / Administrator");
+  const [signatoryName, setSignatoryName] = useState(() => (activeMember as any)?.user?.full_name || t("cert_builder.default_signatory_name", { defaultValue: "Authorized Executive" }));
+  const [signatoryTitle, setSignatoryTitle] = useState(() => t("cert_builder.default_signatory_title", { defaultValue: "Board Chairperson / Administrator" }));
   const [signatureDataUrl, setSignatureDataUrl] = useState<string>("");
   const [showSignaturePad, setShowSignaturePad] = useState(false);
 
@@ -199,7 +203,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
     reader.onload = () => {
       setOrgLogoOverride(reader.result as string);
       setShowOrgLogo(true);
-      addToast("Organization logo uploaded successfully!", "success");
+      addToast(t("cert_builder.toast_org_logo_uploaded", { defaultValue: "Organization logo uploaded successfully!" }), "success");
     };
     reader.readAsDataURL(file);
   };
@@ -211,7 +215,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
     reader.onload = () => {
       setPartnerLogoUrl(reader.result as string);
       setShowPartnerLogo(true);
-      addToast("Partner / Co-sponsor logo attached!", "success");
+      addToast(t("cert_builder.toast_partner_logo_uploaded", { defaultValue: "Partner / Co-sponsor logo attached!" }), "success");
     };
     reader.readAsDataURL(file);
   };
@@ -233,11 +237,13 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
     container.style.background = "#ffffff";
     container.style.boxSizing = "border-box";
 
-    const memberName = member.user?.full_name || "Esteemed Member";
-    const memberRole = member.role || "Member";
+    const memberName = member.user?.full_name || t("cert_builder.esteemed_member", { defaultValue: "Esteemed Member" });
     const memberEmail = member.user?.email || "";
     const memberPhone = member.user?.phone_number || "";
-    const orgName = activeOrg?.name || "Impacto Cooperative Federation";
+    const orgName = activeOrg?.name || t("cert_builder.default_org_name", { defaultValue: "Impacto Cooperative Federation" });
+    const formattedIssueDate = issueDate
+      ? new Date(`${issueDate}T12:00:00`).toLocaleDateString(i18n.language, { year: "numeric", month: "short", day: "numeric" })
+      : issueDate;
     const logoH = getLogoHeightPx();
 
     // Logos block HTML
@@ -251,6 +257,12 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
            <img src="${partnerLogoUrl}" style="height: ${logoH * 0.85}px; max-width: 130px; object-fit: contain;" />
          </div>`
       : showPartnerLogo ? `<div style="font-size: 10px; font-weight: bold; color: #475569; font-family: sans-serif;">${partnerName}</div>` : "";
+
+    const officialText = t("cert_builder.seal_official", { defaultValue: "OFFICIAL" });
+    const sealText = t("cert_builder.seal_label", { defaultValue: "SEAL" });
+    const verifiedText = t("cert_builder.seal_verified", { defaultValue: "VERIFIED" });
+    const authenticatedText = t("cert_builder.seal_authenticated", { defaultValue: "AUTHENTICATED" });
+    const certIdPrefix = t("cert_builder.certificate_id_prefix", { defaultValue: "Certificate ID" });
 
     // -----------------------------------------------------------------
     // STRUCTURE 1: LANDSCAPE CLASSIC FILIGREE (Horizontal 1120 x 792)
@@ -279,7 +291,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
           <!-- Title -->
           <div style="margin: 12px 0;">
             <div style="font-size: 26px; font-weight: 900; letter-spacing: 1.5px; color: ${effectivePrimary}; text-transform: uppercase;">${certificateTitle}</div>
-            <div style="font-size: 13px; font-style: italic; color: #64748b; margin-top: 4px;">This formal instrument of recognition is solemnly conferred upon</div>
+            <div style="font-size: 13px; font-style: italic; color: #64748b; margin-top: 4px;">${t("cert_builder.conferred_upon_classic", { defaultValue: "This formal instrument of recognition is solemnly conferred upon" })}</div>
           </div>
 
           <!-- Recipient Name -->
@@ -288,7 +300,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
               ${memberName}
             </div>
             <div style="font-size: 11px; font-family: sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: ${effectivePrimary}; margin-top: 8px;">
-              Certificate ID: <span style="font-family: monospace; font-weight: 800; letter-spacing: 1px;">${uniqueSerial}</span>
+              ${certIdPrefix}: <span style="font-family: monospace; font-weight: 800; letter-spacing: 1px;">${uniqueSerial}</span>
             </div>
           </div>
 
@@ -300,17 +312,17 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
           <!-- Bottom Footer Row -->
           <div style="display: flex; justify-content: space-between; align-items: flex-end; padding-top: 14px; border-top: 1px solid #e2e8f0; font-family: sans-serif;">
             <div style="text-align: left;">
-              <div style="font-size: 9px; text-transform: uppercase; color: #64748b; font-weight: bold;">Date Conferred</div>
-              <div style="font-size: 12px; font-weight: bold; color: #0f172a;">${issueDate}</div>
-              <div style="font-size: 8px; font-family: monospace; color: #156c45; margin-top: 3px;">Verify: impacto.rw/verify/${uniqueSerial}</div>
+              <div style="font-size: 9px; text-transform: uppercase; color: #64748b; font-weight: bold;">${t("cert_builder.date_conferred", { defaultValue: "Date Conferred" })}</div>
+              <div style="font-size: 12px; font-weight: bold; color: #0f172a;">${formattedIssueDate}</div>
+              <div style="font-size: 8px; font-family: monospace; color: #156c45; margin-top: 3px;">${t("cert_builder.verify_label", { defaultValue: "Verify" })}: impacto.rw/verify/${uniqueSerial}</div>
             </div>
 
             <!-- Seal -->
             <div style="border: 2px dashed ${effectivePrimary}; border-radius: 50%; padding: 4px; background: rgba(255,255,255,0.95);">
               <div style="width: 72px; height: 72px; border-radius: 50%; border: 1.5px solid ${effectivePrimary}; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: ${effectivePrimary};">
-                <div style="font-size: 8px; font-weight: 900;">OFFICIAL</div>
-                <div style="font-size: 7px; font-weight: bold;">SEAL</div>
-                <div style="font-size: 6px; opacity: 0.8; margin-top: 1px;">VERIFIED</div>
+                <div style="font-size: 8px; font-weight: 900;">${officialText}</div>
+                <div style="font-size: 7px; font-weight: bold;">${sealText}</div>
+                <div style="font-size: 6px; opacity: 0.8; margin-top: 1px;">${verifiedText}</div>
               </div>
             </div>
 
@@ -359,8 +371,8 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
             }
 
             <div style="border-top: 1px solid rgba(255,255,255,0.25); padding-top: 16px; font-size: 9px; opacity: 0.85; text-align: left;">
-              <div>Serial: <span style="font-family: monospace; font-weight: bold;">${uniqueSerial}</span></div>
-              <div style="margin-top: 4px;">Verified Registry: impacto.rw/verify</div>
+              <div>${t("cert_builder.serial_label", { defaultValue: "Serial" })}: <span style="font-family: monospace; font-weight: bold;">${uniqueSerial}</span></div>
+              <div style="margin-top: 4px;">${t("cert_builder.verified_registry", { defaultValue: "Verified Registry" })}: impacto.rw/verify</div>
             </div>
           </div>
 
@@ -369,10 +381,10 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
             <div>
               <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: ${effectivePrimary};">
-                  Official Verification & Merit Credential
+                  ${t("cert_builder.official_merit_credential", { defaultValue: "Official Verification & Merit Credential" })}
                 </div>
                 <div style="font-size: 11px; font-weight: 600; color: #64748b;">
-                  Date: <strong style="color: #0f172a;">${issueDate}</strong>
+                  ${t("common.date", { defaultValue: "Date" })}: <strong style="color: #0f172a;">${formattedIssueDate}</strong>
                 </div>
               </div>
 
@@ -380,7 +392,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                 ${certificateTitle}
               </div>
               <div style="font-size: 13px; color: #64748b; margin-top: 6px; font-style: italic;">
-                Presented in formal recognition and validation to
+                ${t("cert_builder.presented_recognition_to", { defaultValue: "Presented in formal recognition and validation to" })}
               </div>
             </div>
 
@@ -389,7 +401,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                 ${memberName}
               </div>
               <div style="display: inline-block; background: #f8fafc; border: 1.5px solid ${effectivePrimary}; padding: 6px 18px; border-radius: 6px; font-size: 11px; font-weight: 700; color: #0f172a; margin-top: 10px; letter-spacing: 0.5px;">
-                CERTIFICATE ID: <span style="font-family: monospace; font-weight: 800; color: ${effectivePrimary};">${uniqueSerial}</span>
+                ${certIdPrefix.toUpperCase()}: <span style="font-family: monospace; font-weight: 800; color: ${effectivePrimary};">${uniqueSerial}</span>
               </div>
             </div>
 
@@ -399,8 +411,8 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
 
             <div style="display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid #e2e8f0; padding-top: 18px;">
               <div>
-                <div style="font-size: 9px; text-transform: uppercase; color: #64748b; font-weight: bold;">Validation Status</div>
-                <div style="font-size: 12px; font-weight: bold; color: #16a34a; margin-top: 2px;">Verified & Sealed</div>
+                <div style="font-size: 9px; text-transform: uppercase; color: #64748b; font-weight: bold;">${t("cert_builder.validation_status", { defaultValue: "Validation Status" })}</div>
+                <div style="font-size: 12px; font-weight: bold; color: #16a34a; margin-top: 2px;">${t("cert_builder.verified_and_sealed", { defaultValue: "Verified & Sealed" })}</div>
                 <div style="font-size: 8px; color: #94a3b8; margin-top: 2px;">ID: ${uniqueSerial}</div>
               </div>
 
@@ -443,7 +455,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
           <!-- Diploma Title -->
           <div style="margin: 20px 0;">
             <div style="font-size: 28px; font-weight: 900; letter-spacing: 1px; color: ${effectivePrimary}; text-transform: uppercase;">${certificateTitle}</div>
-            <div style="font-size: 14px; font-style: italic; color: #64748b; margin-top: 8px;">Conferred with the highest distinction upon</div>
+            <div style="font-size: 14px; font-style: italic; color: #64748b; margin-top: 8px;">${t("cert_builder.conferred_distinction_upon", { defaultValue: "Conferred with the highest distinction upon" })}</div>
           </div>
 
           <!-- Recipient -->
@@ -452,7 +464,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
               ${memberName}
             </div>
             <div style="font-size: 12px; font-family: sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: ${effectivePrimary}; margin-top: 10px;">
-              Certificate ID: <span style="font-family: monospace; font-weight: 800;">${uniqueSerial}</span>
+              ${certIdPrefix}: <span style="font-family: monospace; font-weight: 800;">${uniqueSerial}</span>
             </div>
           </div>
 
@@ -465,9 +477,9 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
           <div style="margin: 16px 0; display: flex; justify-content: center;">
             <div style="border: 2px dashed ${effectivePrimary}; border-radius: 50%; padding: 6px; background: rgba(255,255,255,0.9);">
               <div style="width: 80px; height: 80px; border-radius: 50%; border: 1.5px solid ${effectivePrimary}; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: ${effectivePrimary};">
-                <div style="font-size: 9px; font-weight: 900;">OFFICIAL</div>
-                <div style="font-size: 8px; font-weight: bold;">SEAL</div>
-                <div style="font-size: 7px; opacity: 0.8; margin-top: 2px;">AUTHENTICATED</div>
+                <div style="font-size: 9px; font-weight: 900;">${officialText}</div>
+                <div style="font-size: 8px; font-weight: bold;">${sealText}</div>
+                <div style="font-size: 7px; opacity: 0.8; margin-top: 2px;">${authenticatedText}</div>
               </div>
             </div>
           </div>
@@ -475,8 +487,8 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
           <!-- Signatures & Verification footer -->
           <div style="border-top: 1px solid #e2e8f0; padding-top: 18px; display: flex; justify-content: space-between; align-items: flex-end; font-family: sans-serif;">
             <div style="text-align: left;">
-              <div style="font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: bold;">Conferral Date</div>
-              <div style="font-size: 13px; font-weight: bold; color: #0f172a;">${issueDate}</div>
+              <div style="font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: bold;">${t("cert_builder.conferral_date", { defaultValue: "Conferral Date" })}</div>
+              <div style="font-size: 13px; font-weight: bold; color: #0f172a;">${formattedIssueDate}</div>
               <div style="font-size: 9px; font-family: monospace; color: #156c45; margin-top: 4px;">impacto.rw/verify/${uniqueSerial}</div>
             </div>
 
@@ -529,42 +541,42 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
             <div>
               <div style="font-size: 24px; font-weight: 800; color: #0f172a;">${memberName}</div>
               <div style="display: inline-block; background: ${effectivePrimary}; color: #ffffff; padding: 5px 18px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-top: 8px; font-family: monospace; letter-spacing: 0.8px;">
-                CERT ID: ${uniqueSerial}
+                ${t("cert_builder.cert_id_short", { defaultValue: "CERT ID" })}: ${uniqueSerial}
               </div>
             </div>
 
             <!-- Details Box -->
             <div style="width: 100%; max-width: 440px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 18px; font-size: 12px; text-align: left;">
               <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                <span style="color: #64748b; font-weight: 600;">Member ID:</span>
+                <span style="color: #64748b; font-weight: 600;">${t("cert_builder.member_id", { defaultValue: "Member ID" })}:</span>
                 <span style="color: #0f172a; font-family: monospace; font-weight: bold;">${member.id}</span>
               </div>
               ${memberEmail ? `
               <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                <span style="color: #64748b; font-weight: 600;">Email:</span>
+                <span style="color: #64748b; font-weight: 600;">${t("common.email", { defaultValue: "Email" })}:</span>
                 <span style="color: #0f172a;">${memberEmail}</span>
               </div>` : ""}
               ${memberPhone ? `
               <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                <span style="color: #64748b; font-weight: 600;">Phone:</span>
+                <span style="color: #64748b; font-weight: 600;">${t("common.phone", { defaultValue: "Phone" })}:</span>
                 <span style="color: #0f172a;">${memberPhone}</span>
               </div>` : ""}
               <div style="display: flex; justify-content: space-between;">
-                <span style="color: #64748b; font-weight: 600;">Issued Date:</span>
-                <span style="color: #0f172a; font-weight: bold;">${issueDate}</span>
+                <span style="color: #64748b; font-weight: 600;">${t("cert_builder.issued_date", { defaultValue: "Issued Date" })}:</span>
+                <span style="color: #0f172a; font-weight: bold;">${formattedIssueDate}</span>
               </div>
             </div>
 
             <!-- Verification Footer -->
             <div style="width: 100%; border-top: 1px dashed #cbd5e1; padding-top: 16px; display: flex; align-items: center; justify-content: space-between;">
               <div style="text-align: left;">
-                <div style="font-size: 9px; text-transform: uppercase; color: #64748b; font-weight: bold;">Authorized Signatory</div>
+                <div style="font-size: 9px; text-transform: uppercase; color: #64748b; font-weight: bold;">${t("cert_builder.authorized_signatory", { defaultValue: "Authorized Signatory" })}</div>
                 <div style="font-size: 12px; font-weight: bold; color: ${effectivePrimary}; margin-top: 2px;">${signatoryName}</div>
-                <div style="font-size: 8px; color: #156c45; font-family: monospace; margin-top: 2px;">Token: ${uniqueSerial}</div>
+                <div style="font-size: 8px; color: #156c45; font-family: monospace; margin-top: 2px;">${t("cert_builder.token_label", { defaultValue: "Token" })}: ${uniqueSerial}</div>
               </div>
               <div style="width: 48px; height: 48px; border: 1px solid #cbd5e1; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 8px; font-family: monospace; background: #ffffff;">
                 <span style="font-weight: bold; font-size: 14px;">QR</span>
-                <span>VERIFY</span>
+                <span>${t("cert_builder.verify_upper", { defaultValue: "VERIFY" })}</span>
               </div>
             </div>
           </div>
@@ -579,7 +591,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
   // Export PDF for all selected members
   const handleExportPDF = async () => {
     if (selectedMemberIds.length === 0) {
-      addToast("Please select at least one member to generate certificates/badges.", "error");
+      addToast(t("cert_builder.err_select_member", { defaultValue: "Please select at least one member to generate certificates/badges." }), "error");
       return;
     }
 
@@ -641,7 +653,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
           id: `cert-${Date.now()}-${i}`,
           org_id: activeOrg?.id || "org-1",
           recipient_member_id: mem.id,
-          recipient_name: mem.user?.full_name || "Member",
+          recipient_name: mem.user?.full_name || t("common.member", { defaultValue: "Member" }),
           recipient_email: mem.user?.email || "",
           title: certificateTitle,
           description: reasonText,
@@ -675,11 +687,11 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
       const fileName = `${isLandscape ? "Certificates" : "Badges"}_${activeOrg?.name || "Cooperative"}_${new Date().toISOString().split("T")[0]}.pdf`;
       doc.save(fileName);
 
-      addToast(`Successfully exported ${total} credentials! Stamped with verification IDs.`, "success");
+      addToast(t("cert_builder.toast_exported", { total, defaultValue: `Successfully exported ${total} credentials! Stamped with verification IDs.` }), "success");
       setIsExporting(false);
     } catch (err: any) {
       console.error(err);
-      addToast("Failed to generate PDF: " + (err.message || "Unknown error"), "error");
+      addToast(t("cert_builder.err_pdf_failed", { error: err.message || t("common.unknown_error", { defaultValue: "Unknown error" }), defaultValue: `Failed to generate PDF: ${err.message || "Unknown error"}` }), "error");
       setIsExporting(false);
     }
   };
@@ -689,44 +701,45 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
       <div className="w-full h-full max-w-7xl max-h-[96vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* HEADER BAR */}
-        <div className="px-6 py-4 border-b border-gray-150 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0">
-          <div className="flex items-center gap-3">
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-150 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-100 dark:border-emerald-900/60 flex items-center justify-center text-[#156c45] shrink-0">
               <Award className="h-5 w-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-extrabold text-gray-900 dark:text-white font-display">
-                  Certificate & Member Badge Studio
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-extrabold text-gray-900 dark:text-white font-display break-words">
+                  {t("cert_builder.studio_title", { defaultValue: "Certificate & Member Badge Studio" })}
                 </h2>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-[#156c45] uppercase">
-                  4 Structures • Dual Logos • QR Verifiable
+                  {t("cert_builder.studio_badge", { defaultValue: "4 Structures • Dual Logos • QR Verifiable" })}
                 </span>
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Design formal diplomas or ID badges with custom logos, and export print-ready PDFs with verifiable tokens.
+              <p className="text-xs text-gray-500 dark:text-gray-400 break-words">
+                {t("cert_builder.studio_subtitle", { defaultValue: "Design formal diplomas or ID badges with custom logos, and export print-ready PDFs with verifiable tokens." })}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
             <button
               type="button"
               onClick={handleExportPDF}
               disabled={isExporting || selectedMemberIds.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-[#156c45] hover:bg-[#115436] disabled:bg-[#156c45]/60 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
             >
-              <Download className="h-3.5 w-3.5" />
+              <Download className="h-3.5 w-3.5 shrink-0" />
               <span>
                 {isExporting 
-                  ? `Exporting (${exportProgress}%)...` 
-                  : `Export PDF (${selectedMemberIds.length} Members)`}
+                  ? t("cert_builder.exporting_progress", { progress: exportProgress, defaultValue: `Exporting (${exportProgress}%)...` })
+                  : t("cert_builder.export_pdf_btn", { count: selectedMemberIds.length, defaultValue: `Export PDF (${selectedMemberIds.length} Members)` })}
               </span>
             </button>
 
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-xl transition cursor-pointer"
+              aria-label={t("common.close", { defaultValue: "Close" })}
             >
               <X className="h-5 w-5" />
             </button>
@@ -737,13 +750,13 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
           
           {/* COLUMN 1: CONTROLS & ARCHITECTURE */}
-          <div className="w-full lg:w-80 border-r border-gray-150 dark:border-slate-800 p-5 overflow-y-auto bg-gray-50/70 dark:bg-slate-900/40 flex flex-col gap-5 shrink-0">
+          <div className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-gray-150 dark:border-slate-800 p-5 overflow-y-auto bg-gray-50/70 dark:bg-slate-900/40 flex flex-col gap-5 shrink-0 max-h-80 lg:max-h-none">
             
             {/* 4 STRUCTURE SELECTOR */}
             <div>
               <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-2 flex items-center gap-1.5">
-                <LayoutTemplate className="h-3.5 w-3.5 text-[#156c45]" />
-                Layout Structure & Orientation
+                <LayoutTemplate className="h-3.5 w-3.5 text-[#156c45] shrink-0" />
+                {t("cert_builder.layout_structure_label", { defaultValue: "Layout Structure & Orientation" })}
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -756,10 +769,10 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                   }`}
                 >
                   <div className="flex items-center gap-1 font-bold">
-                    <Award className="h-3.5 w-3.5" />
-                    <span>Landscape A</span>
+                    <Award className="h-3.5 w-3.5 shrink-0" />
+                    <span>{t("cert_builder.landscape_a", { defaultValue: "Landscape A" })}</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 block mt-0.5">Classic Filigree</span>
+                  <span className="text-[10px] text-gray-400 block mt-0.5">{t("cert_builder.classic_filigree", { defaultValue: "Classic Filigree" })}</span>
                 </button>
 
                 <button
@@ -772,10 +785,10 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                   }`}
                 >
                   <div className="flex items-center gap-1 font-bold">
-                    <Layers className="h-3.5 w-3.5" />
-                    <span>Landscape B</span>
+                    <Layers className="h-3.5 w-3.5 shrink-0" />
+                    <span>{t("cert_builder.landscape_b", { defaultValue: "Landscape B" })}</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 block mt-0.5">Modern Accent</span>
+                  <span className="text-[10px] text-gray-400 block mt-0.5">{t("cert_builder.modern_accent", { defaultValue: "Modern Accent" })}</span>
                 </button>
 
                 <button
@@ -788,10 +801,10 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                   }`}
                 >
                   <div className="flex items-center gap-1 font-bold">
-                    <FileBadge className="h-3.5 w-3.5" />
-                    <span>Portrait A</span>
+                    <FileBadge className="h-3.5 w-3.5 shrink-0" />
+                    <span>{t("cert_builder.portrait_a", { defaultValue: "Portrait A" })}</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 block mt-0.5">Honor Plaque</span>
+                  <span className="text-[10px] text-gray-400 block mt-0.5">{t("cert_builder.honor_plaque", { defaultValue: "Honor Plaque" })}</span>
                 </button>
 
                 <button
@@ -804,28 +817,28 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                   }`}
                 >
                   <div className="flex items-center gap-1 font-bold">
-                    <QrCode className="h-3.5 w-3.5" />
-                    <span>Portrait B</span>
+                    <QrCode className="h-3.5 w-3.5 shrink-0" />
+                    <span>{t("cert_builder.portrait_b", { defaultValue: "Portrait B" })}</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 block mt-0.5">Member ID Card</span>
+                  <span className="text-[10px] text-gray-400 block mt-0.5">{t("cert_builder.member_id_card", { defaultValue: "Member ID Card" })}</span>
                 </button>
               </div>
             </div>
 
             {/* DUAL LOGOS & PARTNER CO-BRANDING */}
             <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 space-y-3">
-              <label className="text-xs font-bold text-gray-800 dark:text-gray-200 block flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <ImageIcon className="h-3.5 w-3.5 text-[#156c45]" />
-                  Logo & Partner Endorsement
+              <label className="text-xs font-bold text-gray-800 dark:text-gray-200 block flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <ImageIcon className="h-3.5 w-3.5 text-[#156c45] shrink-0" />
+                  <span className="break-words">{t("cert_builder.logo_endorsement_label", { defaultValue: "Logo & Partner Endorsement" })}</span>
                 </span>
-                <span className="text-[10px] text-gray-400">Co-Branding</span>
+                <span className="text-[10px] text-gray-400 shrink-0">{t("cert_builder.co_branding", { defaultValue: "Co-Branding" })}</span>
               </label>
 
               {/* Organization Logo Controls */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-semibold text-gray-700 dark:text-gray-300">Primary Org Logo</span>
+                  <span className="font-semibold text-gray-700 dark:text-gray-300">{t("cert_builder.primary_org_logo", { defaultValue: "Primary Org Logo" })}</span>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
@@ -843,14 +856,14 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                       <div className="relative group shrink-0">
                         <img 
                           src={effectiveOrgLogo} 
-                          alt="Org logo" 
+                          alt={t("cert_builder.org_logo_alt", { defaultValue: "Org logo" })}
                           className="h-9 w-9 object-contain bg-white rounded-lg border border-gray-200 p-0.5" 
                         />
                         <button
                           type="button"
                           onClick={() => setOrgLogoOverride("")}
-                          className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 text-[9px] shadow-xs"
-                          title="Reset to default org logo"
+                          className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 text-[9px] shadow-xs cursor-pointer"
+                          title={t("cert_builder.reset_default_logo", { defaultValue: "Reset to default org logo" })}
                         >
                           <X className="h-2.5 w-2.5" />
                         </button>
@@ -861,8 +874,8 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                       </div>
                     )}
                     <label className="flex-1 px-2.5 py-1.5 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 text-gray-700 dark:text-gray-300 rounded-lg text-[11px] font-bold border border-gray-200 dark:border-slate-700 cursor-pointer flex items-center justify-center gap-1 transition">
-                      <Upload className="h-3 w-3" />
-                      <span>{effectiveOrgLogo ? "Change Logo" : "Upload Logo"}</span>
+                      <Upload className="h-3 w-3 shrink-0" />
+                      <span>{effectiveOrgLogo ? t("cert_builder.change_logo", { defaultValue: "Change Logo" }) : t("cert_builder.upload_logo", { defaultValue: "Upload Logo" })}</span>
                       <input type="file" accept="image/*" onChange={handleOrgLogoUpload} className="hidden" />
                     </label>
                   </div>
@@ -872,7 +885,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
               {/* Partner / Co-Sponsor Logo */}
               <div className="pt-2 border-t border-gray-150 dark:border-slate-800 space-y-2">
                 <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-semibold text-gray-700 dark:text-gray-300">Partner / Sponsor Logo</span>
+                  <span className="font-semibold text-gray-700 dark:text-gray-300">{t("cert_builder.partner_sponsor_logo", { defaultValue: "Partner / Sponsor Logo" })}</span>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
@@ -891,13 +904,13 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                         <div className="relative group shrink-0">
                           <img 
                             src={partnerLogoUrl} 
-                            alt="Partner logo" 
+                            alt={t("cert_builder.partner_logo_alt", { defaultValue: "Partner logo" })}
                             className="h-9 w-9 object-contain bg-white rounded-lg border border-gray-200 p-0.5" 
                           />
                           <button
                             type="button"
                             onClick={() => setPartnerLogoUrl("")}
-                            className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 text-[9px] shadow-xs"
+                            className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 text-[9px] shadow-xs cursor-pointer"
                           >
                             <X className="h-2.5 w-2.5" />
                           </button>
@@ -908,8 +921,8 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                         </div>
                       )}
                       <label className="flex-1 px-2.5 py-1.5 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 text-gray-700 dark:text-gray-300 rounded-lg text-[11px] font-bold border border-gray-200 dark:border-slate-700 cursor-pointer flex items-center justify-center gap-1 transition">
-                        <Upload className="h-3 w-3" />
-                        <span>{partnerLogoUrl ? "Change Partner Logo" : "Upload Partner Logo"}</span>
+                        <Upload className="h-3 w-3 shrink-0" />
+                        <span>{partnerLogoUrl ? t("cert_builder.change_partner_logo", { defaultValue: "Change Partner Logo" }) : t("cert_builder.upload_partner_logo", { defaultValue: "Upload Partner Logo" })}</span>
                         <input type="file" accept="image/*" onChange={handlePartnerLogoUpload} className="hidden" />
                       </label>
                     </div>
@@ -918,7 +931,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                       type="text"
                       value={partnerName}
                       onChange={(e) => setPartnerName(e.target.value)}
-                      placeholder="Partner Name (e.g. MINICOM, RCA)"
+                      placeholder={t("cert_builder.partner_name_placeholder", { defaultValue: "Partner Name (e.g. MINICOM, RCA)" })}
                       className="w-full text-[11px] px-2.5 py-1 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg outline-none"
                     />
 
@@ -926,7 +939,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                       type="text"
                       value={partnerSubtitle}
                       onChange={(e) => setPartnerSubtitle(e.target.value)}
-                      placeholder="e.g. In Technical Partnership With"
+                      placeholder={t("cert_builder.partner_subtitle_placeholder", { defaultValue: "e.g. In Technical Partnership With" })}
                       className="w-full text-[10px] px-2.5 py-1 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg outline-none text-gray-500"
                     />
                   </div>
@@ -935,14 +948,14 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
 
               {/* Logo Sizing */}
               <div className="pt-2 border-t border-gray-150 dark:border-slate-800 flex items-center justify-between text-[11px]">
-                <span className="text-gray-500 font-semibold">Logo Scale:</span>
+                <span className="text-gray-500 font-semibold">{t("cert_builder.logo_scale", { defaultValue: "Logo Scale:" })}</span>
                 <div className="flex gap-1">
                   {(["sm", "md", "lg"] as const).map((sz) => (
                     <button
                       key={sz}
                       type="button"
                       onClick={() => setLogoSize(sz)}
-                      className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold transition ${
+                      className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold transition cursor-pointer ${
                         logoSize === sz ? "bg-[#156c45] text-white" : "bg-gray-100 dark:bg-slate-800 text-gray-600"
                       }`}
                     >
@@ -956,8 +969,8 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
             {/* Template Styles */}
             <div>
               <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-2 flex items-center gap-1.5">
-                <Palette className="h-3.5 w-3.5 text-[#156c45]" />
-                Palette & Accent
+                <Palette className="h-3.5 w-3.5 text-[#156c45] shrink-0" />
+                {t("cert_builder.palette_accent_label", { defaultValue: "Palette & Accent" })}
               </label>
               <div className="grid grid-cols-1 gap-1.5">
                 {(Object.keys(THEME_CONFIGS) as TemplateStyle[]).map((key) => {
@@ -977,14 +990,14 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                           : "border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300"
                       }`}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         <span 
                           className="h-3.5 w-3.5 rounded-full border border-black/10 shrink-0" 
                           style={{ backgroundColor: cfg.primary }}
                         />
-                        <span>{cfg.name}</span>
+                        <span className="break-words">{t(`cert_builder.theme_${key}`, { defaultValue: cfg.name })}</span>
                       </div>
-                      {isSelected && <Check className="h-3.5 w-3.5 text-[#156c45]" />}
+                      {isSelected && <Check className="h-3.5 w-3.5 text-[#156c45] shrink-0" />}
                     </button>
                   );
                 })}
@@ -993,7 +1006,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
               {/* Custom Color */}
               <div className="mt-2 flex items-center gap-2 p-2 bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800">
                 <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-400 flex-1">
-                  Custom Hex Color:
+                  {t("cert_builder.custom_hex_color", { defaultValue: "Custom Hex Color:" })}
                 </label>
                 <input
                   type="color"
@@ -1007,34 +1020,34 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
             {/* Editable Content Fields */}
             <div className="space-y-3">
               <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block flex items-center gap-1.5">
-                <Type className="h-3.5 w-3.5 text-[#156c45]" />
-                Word & Wording Editor
+                <Type className="h-3.5 w-3.5 text-[#156c45] shrink-0" />
+                {t("cert_builder.word_editor_label", { defaultValue: "Word & Wording Editor" })}
               </label>
 
               <div>
-                <span className="text-[11px] font-semibold text-gray-500 block mb-1">Main Heading</span>
+                <span className="text-[11px] font-semibold text-gray-500 block mb-1">{t("cert_builder.main_heading", { defaultValue: "Main Heading" })}</span>
                 <input
                   type="text"
                   value={certificateTitle}
                   onChange={(e) => setCertificateTitle(e.target.value)}
                   className="w-full text-xs font-semibold px-3 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl focus:border-[#156c45] outline-none"
-                  placeholder="e.g. CERTIFICATE OF EXCELLENCE"
+                  placeholder={t("cert_builder.main_heading_placeholder", { defaultValue: "e.g. CERTIFICATE OF EXCELLENCE" })}
                 />
               </div>
 
               <div>
-                <span className="text-[11px] font-semibold text-gray-500 block mb-1">Subheading / Authority</span>
+                <span className="text-[11px] font-semibold text-gray-500 block mb-1">{t("cert_builder.subheading_authority", { defaultValue: "Subheading / Authority" })}</span>
                 <input
                   type="text"
                   value={subtitle}
                   onChange={(e) => setSubtitle(e.target.value)}
                   className="w-full text-xs font-semibold px-3 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl focus:border-[#156c45] outline-none"
-                  placeholder="Subheading..."
+                  placeholder={t("cert_builder.subheading_placeholder", { defaultValue: "Subheading..." })}
                 />
               </div>
 
               <div>
-                <span className="text-[11px] font-semibold text-gray-500 block mb-1">Citation / Reason Statement</span>
+                <span className="text-[11px] font-semibold text-gray-500 block mb-1">{t("cert_builder.citation_statement", { defaultValue: "Citation / Reason Statement" })}</span>
                 <textarea
                   rows={2}
                   value={reasonText}
@@ -1045,7 +1058,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <span className="text-[11px] font-semibold text-gray-500 block mb-1">Issue Date</span>
+                  <span className="text-[11px] font-semibold text-gray-500 block mb-1">{t("cert_builder.issue_date", { defaultValue: "Issue Date" })}</span>
                   <input
                     type="date"
                     value={issueDate}
@@ -1054,7 +1067,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                   />
                 </div>
                 <div>
-                  <span className="text-[11px] font-semibold text-gray-500 block mb-1">Signatory Title</span>
+                  <span className="text-[11px] font-semibold text-gray-500 block mb-1">{t("cert_builder.signatory_title", { defaultValue: "Signatory Title" })}</span>
                   <input
                     type="text"
                     value={signatoryTitle}
@@ -1065,7 +1078,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
               </div>
 
               <div>
-                <span className="text-[11px] font-semibold text-gray-500 block mb-1">Signatory Official Name</span>
+                <span className="text-[11px] font-semibold text-gray-500 block mb-1">{t("cert_builder.signatory_official_name", { defaultValue: "Signatory Official Name" })}</span>
                 <input
                   type="text"
                   value={signatoryName}
@@ -1075,50 +1088,54 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
               </div>
 
               {/* Digital Signature */}
-              <div className="pt-2 border-t border-gray-200 dark:border-slate-800 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-gray-800 dark:text-gray-200 block">Digital Signature</span>
+              <div className="pt-2 border-t border-gray-200 dark:border-slate-800 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-gray-800 dark:text-gray-200 block">{t("cert_builder.digital_signature", { defaultValue: "Digital Signature" })}</span>
                   <span className="text-[10px] text-gray-400 block">
-                    {signatureDataUrl ? "Signature applied" : "Using printed typeface"}
+                    {signatureDataUrl ? t("cert_builder.signature_applied", { defaultValue: "Signature applied" }) : t("cert_builder.using_typeface", { defaultValue: "Using printed typeface" })}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowSignaturePad(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 rounded-xl text-xs font-bold text-[#156c45] transition cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 rounded-xl text-xs font-bold text-[#156c45] transition cursor-pointer shrink-0"
                 >
-                  <PenTool className="h-3.5 w-3.5" />
-                  <span>{signatureDataUrl ? "Change" : "Draw/Upload"}</span>
+                  <PenTool className="h-3.5 w-3.5 shrink-0" />
+                  <span>{signatureDataUrl ? t("common.change", { defaultValue: "Change" }) : t("cert_builder.draw_upload_btn", { defaultValue: "Draw/Upload" })}</span>
                 </button>
               </div>
             </div>
           </div>
 
           {/* COLUMN 2: LIVE CANVAS PREVIEW */}
-          <div className="flex-1 p-4 sm:p-6 bg-stone-100/60 dark:bg-slate-950/40 flex flex-col items-center justify-center overflow-y-auto">
+          <div className="flex-1 p-4 sm:p-6 bg-stone-100/60 dark:bg-slate-950/40 flex flex-col items-center justify-center overflow-y-auto min-w-0">
             
             {/* Preview Navigation */}
-            <div className="w-full max-w-3xl mb-3 flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-600 dark:text-gray-400">
-                Live Preview: Showing member <strong className="text-gray-900 dark:text-white">{previewMemberIndex + 1}</strong> of <strong className="text-gray-900 dark:text-white">{selectedMembersList.length || 1}</strong>
+            <div className="w-full max-w-3xl mb-3 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-bold text-gray-600 dark:text-gray-400 break-words">
+                {t("cert_builder.live_preview_showing", {
+                  current: previewMemberIndex + 1,
+                  total: selectedMembersList.length || 1,
+                  defaultValue: `Live Preview: Showing member ${previewMemberIndex + 1} of ${selectedMembersList.length || 1}`
+                })}
               </span>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   disabled={previewMemberIndex <= 0}
                   onClick={() => setPreviewMemberIndex(prev => Math.max(0, prev - 1))}
-                  className="px-2.5 py-1 text-xs font-bold bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg disabled:opacity-40"
+                  className="px-2.5 py-1 text-xs font-bold bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg disabled:opacity-40 cursor-pointer"
                 >
-                  Previous
+                  {t("common.previous", { defaultValue: "Previous" })}
                 </button>
                 <button
                   type="button"
                   disabled={previewMemberIndex >= selectedMembersList.length - 1}
                   onClick={() => setPreviewMemberIndex(prev => Math.min(selectedMembersList.length - 1, prev + 1))}
-                  className="px-2.5 py-1 text-xs font-bold bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg disabled:opacity-40"
+                  className="px-2.5 py-1 text-xs font-bold bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg disabled:opacity-40 cursor-pointer"
                 >
-                  Next
+                  {t("common.next", { defaultValue: "Next" })}
                 </button>
               </div>
             </div>
@@ -1128,7 +1145,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
             {/* STRUCTURE 1: LANDSCAPE CLASSIC */}
             {structure === "landscape_classic" && (
               <div 
-                className="w-full max-w-3xl aspect-[1.414/1] bg-white dark:bg-slate-900 shadow-xl border-4 rounded-xl p-8 flex flex-col justify-between text-center relative overflow-hidden transition select-none"
+                className="w-full max-w-3xl aspect-[1.414/1] bg-white dark:bg-slate-900 shadow-xl border-4 rounded-xl p-5 sm:p-8 flex flex-col justify-between text-center relative overflow-hidden transition select-none"
                 style={{ borderColor: effectivePrimary }}
               >
                 <div className="absolute top-2.5 left-2.5 w-10 h-10 border-t-2 border-l-2 opacity-50" style={{ borderColor: effectivePrimary }} />
@@ -1137,51 +1154,51 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                 <div className="absolute bottom-2.5 right-2.5 w-10 h-10 border-b-2 border-r-2 opacity-50" style={{ borderColor: effectivePrimary }} />
 
                 {/* Top Logo Bar */}
-                <div className="flex items-center justify-between border-b border-gray-150 dark:border-slate-800 pb-2">
-                  <div className="text-left">
+                <div className="flex items-center justify-between gap-2 border-b border-gray-150 dark:border-slate-800 pb-2">
+                  <div className="text-left min-w-0">
                     {showOrgLogo && effectiveOrgLogo ? (
-                      <img src={effectiveOrgLogo} alt="Org logo" className="h-10 max-w-[120px] object-contain" />
+                      <img src={effectiveOrgLogo} alt={t("cert_builder.org_logo_alt", { defaultValue: "Org logo" })} className="h-10 max-w-[120px] object-contain" />
                     ) : (
-                      <span className="font-extrabold text-xs tracking-wider" style={{ color: effectivePrimary }}>
-                        {activeOrg?.name || "COOPERATIVE"}
+                      <span className="font-extrabold text-xs tracking-wider break-words" style={{ color: effectivePrimary }}>
+                        {activeOrg?.name || t("cert_builder.cooperative_fallback", { defaultValue: "COOPERATIVE" })}
                       </span>
                     )}
                   </div>
-                  <div>
-                    <h3 className="text-xs font-black tracking-widest uppercase font-sans" style={{ color: effectivePrimary }}>
-                      {activeOrg?.name || "COOPERATIVE FEDERATION"}
+                  <div className="min-w-0 px-2">
+                    <h3 className="text-xs font-black tracking-widest uppercase font-sans break-words" style={{ color: effectivePrimary }}>
+                      {activeOrg?.name || t("cert_builder.cooperative_federation_fallback", { defaultValue: "COOPERATIVE FEDERATION" })}
                     </h3>
-                    <p className="text-[9px] text-gray-500 uppercase tracking-widest">{subtitle}</p>
+                    <p className="text-[9px] text-gray-500 uppercase tracking-widest break-words">{subtitle}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right min-w-0">
                     {showPartnerLogo && (partnerLogoUrl ? (
-                      <img src={partnerLogoUrl} alt="Partner" className="h-9 max-w-[100px] object-contain" />
+                      <img src={partnerLogoUrl} alt={t("cert_builder.partner_logo_alt", { defaultValue: "Partner" })} className="h-9 max-w-[100px] object-contain" />
                     ) : (
-                      <span className="text-[10px] font-bold text-gray-500">{partnerName}</span>
+                      <span className="text-[10px] font-bold text-gray-500 break-words">{partnerName}</span>
                     ))}
                   </div>
                 </div>
 
                 {/* Title */}
                 <div className="my-2">
-                  <h1 className="text-xl sm:text-2xl font-black font-serif tracking-tight uppercase" style={{ color: effectivePrimary }}>
+                  <h1 className="text-lg sm:text-2xl font-black font-serif tracking-tight uppercase break-words" style={{ color: effectivePrimary }}>
                     {certificateTitle}
                   </h1>
                   <p className="text-xs text-gray-500 italic mt-0.5 font-serif">
-                    This formal instrument of recognition is solemnly conferred upon
+                    {t("cert_builder.conferred_upon_classic", { defaultValue: "This formal instrument of recognition is solemnly conferred upon" })}
                   </p>
                 </div>
 
                 {/* Recipient */}
                 <div className="my-1">
                   <span 
-                    className="text-2xl sm:text-3xl font-serif font-bold text-gray-900 dark:text-white border-b-2 pb-1 px-8 inline-block"
+                    className="text-xl sm:text-3xl font-serif font-bold text-gray-900 dark:text-white border-b-2 pb-1 px-6 sm:px-8 inline-block break-words"
                     style={{ borderColor: effectivePrimary }}
                   >
-                    {activePreviewMember?.user?.full_name || "Representative Member"}
+                    {activePreviewMember?.user?.full_name || t("cert_builder.representative_member", { defaultValue: "Representative Member" })}
                   </span>
                   <p className="text-[10px] font-mono font-bold uppercase tracking-widest mt-1.5" style={{ color: effectivePrimary }}>
-                    CERTIFICATE ID: <span className="text-gray-700 dark:text-gray-300 font-black">{previewCertificateId}</span>
+                    {t("cert_builder.certificate_id_prefix", { defaultValue: "Certificate ID" }).toUpperCase()}: <span className="text-gray-700 dark:text-gray-300 font-black">{previewCertificateId}</span>
                   </p>
                 </div>
 
@@ -1190,25 +1207,27 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                 </p>
 
                 {/* Footer */}
-                <div className="pt-3 border-t border-gray-200 dark:border-slate-800 flex items-end justify-between px-4 font-sans text-left">
+                <div className="pt-3 border-t border-gray-200 dark:border-slate-800 flex items-end justify-between gap-2 px-4 font-sans text-left">
                   <div>
-                    <span className="text-[9px] uppercase font-bold text-gray-400 block">Date Conferred</span>
-                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200">{issueDate}</span>
+                    <span className="text-[9px] uppercase font-bold text-gray-400 block">{t("cert_builder.date_conferred", { defaultValue: "Date Conferred" })}</span>
+                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                      {issueDate ? new Date(`${issueDate}T12:00:00`).toLocaleDateString(i18n.language, { year: "numeric", month: "short", day: "numeric" }) : issueDate}
+                    </span>
                     <span className="text-[8px] font-mono text-[#156c45] block mt-0.5">impacto.rw/verify</span>
                   </div>
 
                   <div 
-                    className="w-14 h-14 rounded-full border-2 border-dashed flex flex-col items-center justify-center text-center p-1"
+                    className="w-14 h-14 rounded-full border-2 border-dashed flex flex-col items-center justify-center text-center p-1 shrink-0"
                     style={{ borderColor: effectivePrimary, color: effectivePrimary }}
                   >
                     <ShieldCheck className="h-4 w-4 mb-0.5" />
-                    <span className="text-[6px] font-black uppercase">OFFICIAL SEAL</span>
+                    <span className="text-[6px] font-black uppercase leading-tight">{t("cert_builder.official_seal_full", { defaultValue: "OFFICIAL SEAL" })}</span>
                   </div>
 
-                  <div className="text-right">
+                  <div className="text-right min-w-0">
                     <div className="h-7 flex items-end justify-end mb-1">
                       {signatureDataUrl ? (
-                        <img src={signatureDataUrl} alt="Signature" className="h-6 object-contain" />
+                        <img src={signatureDataUrl} alt={t("cert_builder.signature_alt", { defaultValue: "Signature" })} className="h-6 object-contain" />
                       ) : (
                         <span className="font-serif italic font-bold text-sm" style={{ color: effectivePrimary }}>
                           {signatoryName}
@@ -1229,58 +1248,58 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
               <div className="w-full max-w-3xl aspect-[1.414/1] bg-white dark:bg-slate-900 shadow-xl border border-gray-200 dark:border-slate-800 rounded-xl flex overflow-hidden select-none">
                 {/* Accent Column */}
                 <div 
-                  className="w-1/3 p-5 text-white flex flex-col justify-between"
+                  className="w-1/3 p-5 text-white flex flex-col justify-between min-w-0"
                   style={{ backgroundColor: effectivePrimary }}
                 >
                   <div>
                     {showOrgLogo && effectiveOrgLogo ? (
                       <div className="bg-white p-2 rounded-lg inline-block mb-3">
-                        <img src={effectiveOrgLogo} alt="Org" className="h-8 max-w-[100px] object-contain" />
+                        <img src={effectiveOrgLogo} alt={t("cert_builder.org_logo_alt", { defaultValue: "Org" })} className="h-8 max-w-[100px] object-contain" />
                       </div>
                     ) : (
                       <div className="font-black text-sm mb-3">IMPACTO</div>
                     )}
-                    <h4 className="text-xs font-bold uppercase tracking-wider">{activeOrg?.name || "COOPERATIVE"}</h4>
-                    <p className="text-[9px] opacity-80 mt-1">{subtitle}</p>
+                    <h4 className="text-xs font-bold uppercase tracking-wider break-words">{activeOrg?.name || t("cert_builder.cooperative_fallback", { defaultValue: "COOPERATIVE" })}</h4>
+                    <p className="text-[9px] opacity-80 mt-1 break-words">{subtitle}</p>
                   </div>
 
                   {showPartnerLogo && (
                     <div className="bg-white/10 p-2.5 rounded-lg my-3">
-                      <span className="text-[8px] uppercase opacity-75 block mb-1">{partnerSubtitle}</span>
+                      <span className="text-[8px] uppercase opacity-75 block mb-1 break-words">{partnerSubtitle}</span>
                       {partnerLogoUrl ? (
-                        <img src={partnerLogoUrl} alt="Partner" className="h-6 max-w-[90px] object-contain filter brightness-0 invert" />
+                        <img src={partnerLogoUrl} alt={t("cert_builder.partner_logo_alt", { defaultValue: "Partner" })} className="h-6 max-w-[90px] object-contain filter brightness-0 invert" />
                       ) : (
-                        <span className="text-[10px] font-bold">{partnerName}</span>
+                        <span className="text-[10px] font-bold break-words">{partnerName}</span>
                       )}
                     </div>
                   )}
 
                   <div className="text-[8px] opacity-75 border-t border-white/20 pt-2 font-mono">
-                    Token: VERIFIED-TOKEN<br />
-                    Verify: impacto.rw/verify
+                    {t("cert_builder.token_label", { defaultValue: "Token" })}: {t("cert_builder.verified_token_sample", { defaultValue: "VERIFIED-TOKEN" })}<br />
+                    {t("cert_builder.verify_label", { defaultValue: "Verify" })}: impacto.rw/verify
                   </div>
                 </div>
 
                 {/* Right Body */}
-                <div className="flex-1 p-6 flex flex-col justify-between text-left">
+                <div className="flex-1 p-6 flex flex-col justify-between text-left min-w-0">
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-widest text-[#156c45]">
-                      Official Verification Credential
+                      {t("cert_builder.official_verification_credential", { defaultValue: "Official Verification Credential" })}
                     </span>
-                    <h2 className="text-xl font-black uppercase text-gray-900 dark:text-white mt-1">
+                    <h2 className="text-lg sm:text-xl font-black uppercase text-gray-900 dark:text-white mt-1 break-words">
                       {certificateTitle}
                     </h2>
                   </div>
 
                   <div>
-                    <h3 className="text-2xl font-serif font-bold" style={{ color: effectivePrimary }}>
-                      {activePreviewMember?.user?.full_name || "Representative Member"}
+                    <h3 className="text-xl sm:text-2xl font-serif font-bold break-words" style={{ color: effectivePrimary }}>
+                      {activePreviewMember?.user?.full_name || t("cert_builder.representative_member", { defaultValue: "Representative Member" })}
                     </h3>
                     <span 
                       className="inline-block mt-1.5 text-[9px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded border shadow-xs"
                       style={{ borderColor: effectivePrimary, color: effectivePrimary, backgroundColor: "#f8fafc" }}
                     >
-                      CERTIFICATE ID: {previewCertificateId}
+                      {t("cert_builder.certificate_id_prefix", { defaultValue: "Certificate ID" }).toUpperCase()}: {previewCertificateId}
                     </span>
                   </div>
 
@@ -1288,12 +1307,14 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                     "{reasonText}"
                   </p>
 
-                  <div className="flex justify-between items-end border-t border-gray-150 dark:border-slate-800 pt-3">
+                  <div className="flex justify-between items-end border-t border-gray-150 dark:border-slate-800 pt-3 gap-2">
                     <div>
-                      <span className="text-[9px] text-gray-400 font-bold block uppercase">Date</span>
-                      <span className="text-xs font-bold text-gray-900 dark:text-white">{issueDate}</span>
+                      <span className="text-[9px] text-gray-400 font-bold block uppercase">{t("common.date", { defaultValue: "Date" })}</span>
+                      <span className="text-xs font-bold text-gray-900 dark:text-white">
+                        {issueDate ? new Date(`${issueDate}T12:00:00`).toLocaleDateString(i18n.language, { year: "numeric", month: "short", day: "numeric" }) : issueDate}
+                      </span>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right min-w-0">
                       <div className="text-xs font-bold text-gray-900 dark:text-white">{signatoryName}</div>
                       <div className="text-[9px] text-gray-500">{signatoryTitle}</div>
                     </div>
@@ -1310,25 +1331,25 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
               >
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    {showOrgLogo && effectiveOrgLogo && <img src={effectiveOrgLogo} alt="Org" className="h-7 object-contain" />}
-                    {showPartnerLogo && (partnerLogoUrl ? <img src={partnerLogoUrl} alt="Partner" className="h-6 object-contain" /> : <span className="text-[9px] text-gray-400">{partnerName}</span>)}
+                    {showOrgLogo && effectiveOrgLogo && <img src={effectiveOrgLogo} alt={t("cert_builder.org_logo_alt", { defaultValue: "Org" })} className="h-7 object-contain" />}
+                    {showPartnerLogo && (partnerLogoUrl ? <img src={partnerLogoUrl} alt={t("cert_builder.partner_logo_alt", { defaultValue: "Partner" })} className="h-6 object-contain" /> : <span className="text-[9px] text-gray-400">{partnerName}</span>)}
                   </div>
-                  <h3 className="text-xs font-bold tracking-widest uppercase" style={{ color: effectivePrimary }}>
-                    {activeOrg?.name || "COOPERATIVE FEDERATION"}
+                  <h3 className="text-xs font-bold tracking-widest uppercase break-words" style={{ color: effectivePrimary }}>
+                    {activeOrg?.name || t("cert_builder.cooperative_federation_fallback", { defaultValue: "COOPERATIVE FEDERATION" })}
                   </h3>
-                  <p className="text-[8px] text-gray-500 uppercase">{subtitle}</p>
+                  <p className="text-[8px] text-gray-500 uppercase break-words">{subtitle}</p>
                 </div>
 
                 <div>
-                  <h2 className="text-base font-black font-serif uppercase tracking-tight" style={{ color: effectivePrimary }}>
+                  <h2 className="text-base font-black font-serif uppercase tracking-tight break-words" style={{ color: effectivePrimary }}>
                     {certificateTitle}
                   </h2>
-                  <p className="text-[10px] text-gray-500 italic mt-0.5 font-serif">Conferred with honors upon</p>
-                  <div className="text-xl font-serif font-bold text-gray-900 dark:text-white border-b-2 pb-1 inline-block mt-2" style={{ borderColor: effectivePrimary }}>
-                    {activePreviewMember?.user?.full_name || "Representative Member"}
+                  <p className="text-[10px] text-gray-500 italic mt-0.5 font-serif">{t("cert_builder.conferred_with_honors", { defaultValue: "Conferred with honors upon" })}</p>
+                  <div className="text-xl font-serif font-bold text-gray-900 dark:text-white border-b-2 pb-1 inline-block mt-2 break-words" style={{ borderColor: effectivePrimary }}>
+                    {activePreviewMember?.user?.full_name || t("cert_builder.representative_member", { defaultValue: "Representative Member" })}
                   </div>
                   <div className="text-[10px] font-mono font-bold mt-1.5 uppercase tracking-wider" style={{ color: effectivePrimary }}>
-                    CERTIFICATE ID: {previewCertificateId}
+                    {t("cert_builder.certificate_id_prefix", { defaultValue: "Certificate ID" }).toUpperCase()}: {previewCertificateId}
                   </div>
                 </div>
 
@@ -1342,12 +1363,14 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                   </div>
                 </div>
 
-                <div className="flex justify-between items-end border-t border-gray-150 dark:border-slate-800 pt-2 text-left">
+                <div className="flex justify-between items-end border-t border-gray-150 dark:border-slate-800 pt-2 text-left gap-2">
                   <div>
-                    <span className="text-[8px] text-gray-400 block uppercase font-bold">Conferred</span>
-                    <span className="text-[11px] font-bold text-gray-800 dark:text-gray-200">{issueDate}</span>
+                    <span className="text-[8px] text-gray-400 block uppercase font-bold">{t("cert_builder.conferred_short", { defaultValue: "Conferred" })}</span>
+                    <span className="text-[11px] font-bold text-gray-800 dark:text-gray-200">
+                      {issueDate ? new Date(`${issueDate}T12:00:00`).toLocaleDateString(i18n.language, { year: "numeric", month: "short", day: "numeric" }) : issueDate}
+                    </span>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right min-w-0">
                     <span className="text-[11px] font-bold text-gray-900 dark:text-white block">{signatoryName}</span>
                     <span className="text-[8px] text-gray-500 block">{signatoryTitle}</span>
                   </div>
@@ -1364,11 +1387,11 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
 
                 <div className="py-3 px-3 text-white text-center" style={{ backgroundColor: effectivePrimary }}>
                   <div className="flex justify-between items-center mb-1">
-                    {showOrgLogo && effectiveOrgLogo && <img src={effectiveOrgLogo} alt="Org" className="h-5 object-contain filter brightness-0 invert" />}
-                    {showPartnerLogo && partnerLogoUrl && <img src={partnerLogoUrl} alt="Partner" className="h-4 object-contain filter brightness-0 invert" />}
+                    {showOrgLogo && effectiveOrgLogo && <img src={effectiveOrgLogo} alt={t("cert_builder.org_logo_alt", { defaultValue: "Org" })} className="h-5 object-contain filter brightness-0 invert" />}
+                    {showPartnerLogo && partnerLogoUrl && <img src={partnerLogoUrl} alt={t("cert_builder.partner_logo_alt", { defaultValue: "Partner" })} className="h-4 object-contain filter brightness-0 invert" />}
                   </div>
-                  <h4 className="text-xs font-black uppercase">{activeOrg?.name || "COOPERATIVE"}</h4>
-                  <p className="text-[8px] uppercase opacity-90">{certificateTitle}</p>
+                  <h4 className="text-xs font-black uppercase break-words">{activeOrg?.name || t("cert_builder.cooperative_fallback", { defaultValue: "COOPERATIVE" })}</h4>
+                  <p className="text-[8px] uppercase opacity-90 break-words">{certificateTitle}</p>
                 </div>
 
                 <div className="p-4 flex flex-col items-center text-center gap-2.5">
@@ -1380,36 +1403,38 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                   </div>
 
                   <div>
-                    <h3 className="text-sm font-black text-gray-900 dark:text-white">
-                      {activePreviewMember?.user?.full_name || "Member Name"}
+                    <h3 className="text-sm font-black text-gray-900 dark:text-white break-words">
+                      {activePreviewMember?.user?.full_name || t("cert_builder.member_name_placeholder", { defaultValue: "Member Name" })}
                     </h3>
                     <span 
                       className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase text-white tracking-wider"
                       style={{ backgroundColor: effectivePrimary }}
                     >
-                      CERT ID: {previewCertificateId}
+                      {t("cert_builder.cert_id_short", { defaultValue: "CERT ID" })}: {previewCertificateId}
                     </span>
                   </div>
 
                   <div className="w-full bg-gray-50 dark:bg-slate-800/50 rounded-xl p-2.5 border border-gray-150 dark:border-slate-800 text-[10px] space-y-1 text-left">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400 font-semibold">Member ID:</span>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-gray-400 font-semibold">{t("cert_builder.member_id", { defaultValue: "Member ID" })}:</span>
                       <span className="font-mono font-bold text-gray-800 dark:text-gray-200">
                         {activePreviewMember?.id?.substring(0, 8)}
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400 font-semibold">Valid:</span>
-                      <span className="font-bold text-gray-800 dark:text-gray-200">{issueDate}</span>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-gray-400 font-semibold">{t("cert_builder.valid_label", { defaultValue: "Valid" })}:</span>
+                      <span className="font-bold text-gray-800 dark:text-gray-200">
+                        {issueDate ? new Date(`${issueDate}T12:00:00`).toLocaleDateString(i18n.language, { year: "numeric", month: "short", day: "numeric" }) : issueDate}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="w-full pt-2 border-t border-dashed border-gray-200 dark:border-slate-800 flex items-center justify-between">
-                    <div className="text-left text-[8px]">
-                      <span className="text-gray-400 block font-bold">Authorized By</span>
-                      <span className="font-bold text-gray-800 dark:text-gray-200">{signatoryName}</span>
+                  <div className="w-full pt-2 border-t border-dashed border-gray-200 dark:border-slate-800 flex items-center justify-between gap-2">
+                    <div className="text-left text-[8px] min-w-0">
+                      <span className="text-gray-400 block font-bold">{t("cert_builder.authorized_by", { defaultValue: "Authorized By" })}</span>
+                      <span className="font-bold text-gray-800 dark:text-gray-200 break-words">{signatoryName}</span>
                     </div>
-                    <div className="p-1 rounded bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700">
+                    <div className="p-1 rounded bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 shrink-0">
                       <QrCode className="h-4 w-4 text-gray-600 dark:text-gray-300" />
                     </div>
                   </div>
@@ -1419,25 +1444,31 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
           </div>
 
           {/* COLUMN 3: MEMBER SELECTION ROSTER */}
-          <div className="w-full lg:w-80 border-l border-gray-150 dark:border-slate-800 p-5 overflow-y-auto bg-white dark:bg-slate-900 flex flex-col gap-4 shrink-0">
+          <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-gray-150 dark:border-slate-800 p-5 overflow-y-auto bg-white dark:bg-slate-900 flex flex-col gap-4 shrink-0">
             
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
                 <h3 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-                  <Users className="h-3.5 w-3.5 text-[#156c45]" />
-                  Select Recipients
+                  <Users className="h-3.5 w-3.5 text-[#156c45] shrink-0" />
+                  <span>{t("cert_builder.select_recipients", { defaultValue: "Select Recipients" })}</span>
                 </h3>
                 <p className="text-[10px] text-gray-400">
-                  {selectedMemberIds.length} of {members.length} members selected
+                  {t("cert_builder.members_selected_count", {
+                    selected: selectedMemberIds.length,
+                    total: members.length,
+                    defaultValue: `${selectedMemberIds.length} of ${members.length} members selected`
+                  })}
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={handleToggleSelectAll}
-                className="text-[11px] font-bold text-[#156c45] hover:underline cursor-pointer"
+                className="text-[11px] font-bold text-[#156c45] hover:underline cursor-pointer shrink-0"
               >
-                {selectedMemberIds.length === members.length ? "Deselect All" : "Select All"}
+                {selectedMemberIds.length === members.length
+                  ? t("common.deselect_all", { defaultValue: "Deselect All" })
+                  : t("common.select_all", { defaultValue: "Select All" })}
               </button>
             </div>
 
@@ -1448,7 +1479,7 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                 type="text"
                 value={memberSearch}
                 onChange={(e) => setMemberSearch(e.target.value)}
-                placeholder="Search member name or role..."
+                placeholder={t("cert_builder.search_member_placeholder", { defaultValue: "Search member name or role..." })}
                 className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/80 text-xs text-gray-900 dark:text-white outline-none focus:border-[#156c45]"
               />
             </div>
@@ -1457,19 +1488,19 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
             <div className="space-y-1.5 flex-1 overflow-y-auto max-h-[480px] pr-1">
               {filteredMembers.length === 0 ? (
                 <div className="text-center py-8 text-gray-400 text-xs">
-                  No matching members found
+                  {t("cert_builder.no_matching_members", { defaultValue: "No matching members found" })}
                 </div>
               ) : (
                 filteredMembers.map((member) => {
                   const isChecked = selectedMemberIds.includes(member.id);
                   const isCurrentPreview = activePreviewMember?.id === member.id;
-                  const fullName = member.user?.full_name || "Member";
+                  const fullName = member.user?.full_name || t("common.member", { defaultValue: "Member" });
 
                   return (
                     <div
                       key={member.id}
                       onClick={() => handleToggleMember(member.id)}
-                      className={`flex items-center justify-between p-2.5 rounded-xl border transition cursor-pointer select-none ${
+                      className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border transition cursor-pointer select-none ${
                         isChecked 
                           ? "border-[#156c45]/40 bg-emerald-50/30 dark:bg-emerald-950/20" 
                           : "border-gray-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/60"
@@ -1485,11 +1516,11 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                         </div>
 
                         <div className="min-w-0">
-                          <span className="text-xs font-bold text-gray-800 dark:text-gray-200 block truncate">
+                          <span className="text-xs font-bold text-gray-800 dark:text-gray-200 block break-words">
                             {fullName}
                           </span>
-                          <span className="text-[10px] text-gray-400 capitalize block truncate">
-                            {member.role || "Member"} {member.user?.email ? `• ${member.user.email}` : ""}
+                          <span className="text-[10px] text-gray-400 capitalize block break-words">
+                            {t(`roles.${member.role}`, { defaultValue: member.role || "Member" })} {member.user?.email ? `• ${member.user.email}` : ""}
                           </span>
                         </div>
                       </div>
@@ -1502,13 +1533,13 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                             const idx = selectedMembersList.findIndex(m => m.id === member.id);
                             if (idx !== -1) setPreviewMemberIndex(idx);
                           }}
-                          className={`text-[9px] font-bold px-2 py-0.5 rounded-md border transition shrink-0 ${
+                          className={`text-[9px] font-bold px-2 py-0.5 rounded-md border transition shrink-0 cursor-pointer ${
                             isCurrentPreview 
                               ? "bg-[#156c45] text-white border-[#156c45]" 
                               : "bg-white dark:bg-slate-800 text-gray-600 border-gray-200 hover:border-[#156c45]"
                           }`}
                         >
-                          {isCurrentPreview ? "Viewing" : "Preview"}
+                          {isCurrentPreview ? t("cert_builder.viewing", { defaultValue: "Viewing" }) : t("cert_builder.preview", { defaultValue: "Preview" })}
                         </button>
                       )}
                     </div>
@@ -1519,16 +1550,19 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
 
             {/* Quick Export Summary Card */}
             <div className="p-3 bg-gray-50 dark:bg-slate-800/60 rounded-xl border border-gray-200 dark:border-slate-800 text-[11px] space-y-2">
-              <div className="flex items-center justify-between text-gray-600 dark:text-gray-400">
-                <span>Selected:</span>
+              <div className="flex items-center justify-between gap-2 text-gray-600 dark:text-gray-400">
+                <span>{t("cert_builder.selected_label", { defaultValue: "Selected" })}:</span>
                 <span className="font-bold text-gray-900 dark:text-white">
-                  {selectedMemberIds.length} recipient{selectedMemberIds.length === 1 ? "" : "s"}
+                  {t("cert_builder.recipients_count", {
+                    count: selectedMemberIds.length,
+                    defaultValue: `${selectedMemberIds.length} ${selectedMemberIds.length === 1 ? "recipient" : "recipients"}`
+                  })}
                 </span>
               </div>
-              <div className="flex items-center justify-between text-gray-600 dark:text-gray-400">
-                <span>Structure:</span>
-                <span className="font-bold text-gray-900 dark:text-white capitalize">
-                  {structure.replace("_", " ")}
+              <div className="flex items-center justify-between gap-2 text-gray-600 dark:text-gray-400">
+                <span>{t("cert_builder.structure_label", { defaultValue: "Structure" })}:</span>
+                <span className="font-bold text-gray-900 dark:text-white capitalize text-right">
+                  {t(`cert_builder.structure_${structure}`, { defaultValue: structure.replace("_", " ") })}
                 </span>
               </div>
               <button
@@ -1537,8 +1571,8 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
                 disabled={isExporting || selectedMemberIds.length === 0}
                 className="w-full py-2 bg-[#156c45] hover:bg-[#115436] disabled:bg-[#156c45]/60 text-white font-bold rounded-lg transition shadow-3xs cursor-pointer flex items-center justify-center gap-1.5"
               >
-                <Download className="h-3.5 w-3.5" />
-                <span>Export {selectedMemberIds.length} Credentials</span>
+                <Download className="h-3.5 w-3.5 shrink-0" />
+                <span>{t("cert_builder.export_credentials_btn", { count: selectedMemberIds.length, defaultValue: `Export ${selectedMemberIds.length} Credentials` })}</span>
               </button>
             </div>
           </div>
@@ -1549,14 +1583,14 @@ export const CertificateBadgeBuilderModal: React.FC<CertificateBadgeBuilderModal
       <DigitalSignaturePad
         isOpen={showSignaturePad}
         onClose={() => setShowSignaturePad(false)}
-        documentTitle="Official Executive Certificate Seal"
+        documentTitle={t("cert_builder.signature_doc_title", { defaultValue: "Official Executive Certificate Seal" })}
         documentVersion={1}
         signerName={signatoryName}
         signerRole={signatoryTitle}
         onSignComplete={(data) => {
           setSignatureDataUrl(data.signatureDataUrl);
           setShowSignaturePad(false);
-          addToast("Digital signature successfully bound to certificate builder!", "success");
+          addToast(t("cert_builder.toast_signature_bound", { defaultValue: "Digital signature successfully bound to certificate builder!" }), "success");
         }}
       />
     </div>

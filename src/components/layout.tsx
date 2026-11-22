@@ -42,6 +42,7 @@ import {
   ChevronDown,
   ChevronRight,
   Compass,
+  Search,
   User,
   Eye,
   EyeOff,
@@ -145,7 +146,139 @@ export const OrgThemeInjector: React.FC = () => {
 };
 
 // ==========================================
-// 2. TOPBAR COMPONENT
+// 2. GLOBAL COMMAND SEARCH COMPONENT
+// ==========================================
+const FEATURES = [
+  { id: "dashboard", path: "/dashboard", icon: LayoutDashboard, titleKey: "nav.dashboard", descKey: "search_feat.dashboard" },
+  { id: "members", path: "/dashboard/members", icon: Users, titleKey: "nav.members", descKey: "search_feat.members" },
+  { id: "events", path: "/dashboard/events", icon: Calendar, titleKey: "nav.events", descKey: "search_feat.events" },
+  { id: "fees", path: "/dashboard/fees", icon: Coins, titleKey: "nav.fees", descKey: "search_feat.fees" },
+  { id: "ledger", path: "/dashboard/ledger", icon: FileBarChart, titleKey: "nav.ledger", descKey: "search_feat.ledger" },
+  { id: "assets", path: "/dashboard/assets", icon: PackageCheck, titleKey: "nav.assets", descKey: "search_feat.assets" },
+  { id: "goals", path: "/dashboard/goals", icon: Target, titleKey: "nav.goals", descKey: "search_feat.goals" },
+  { id: "documents", path: "/dashboard/documents", icon: FolderOpen, titleKey: "nav.documents", descKey: "search_feat.documents" },
+  { id: "chat", path: "/dashboard/chat", icon: MessageSquare, titleKey: "nav.chat", descKey: "search_feat.chat" },
+  { id: "news", path: "/dashboard/news", icon: Megaphone, titleKey: "nav.news", descKey: "search_feat.news" },
+  { id: "marketplace", path: "/dashboard/marketplace", icon: ShoppingBag, titleKey: "nav.marketplace", descKey: "search_feat.marketplace" },
+  { id: "grants", path: "/dashboard/grants", icon: Award, titleKey: "nav.grants", descKey: "search_feat.grants" },
+  { id: "reports", path: "/dashboard/reports", icon: BarChart3, titleKey: "nav.reports", descKey: "search_feat.reports" },
+  { id: "org_profile", path: "/dashboard/org-profile", icon: Building2, titleKey: "nav.org_profile", descKey: "search_feat.org_profile" },
+  { id: "settings", path: "/dashboard/settings", icon: Settings, titleKey: "nav.settings", descKey: "search_feat.settings" },
+  { id: "profile", path: "/dashboard/profile", icon: User, titleKey: "nav.my_profile", descKey: "search_feat.profile" },
+];
+
+export const GlobalCommandSearch: React.FC = () => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { addToast } = useToast();
+  const [query, setQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+
+  const filteredFeatures = React.useMemo(() => {
+    if (!query.trim()) return FEATURES.slice(0, 6);
+    const q = query.toLowerCase();
+    return FEATURES.filter((f) => {
+      const title = t(f.titleKey).toLowerCase();
+      const desc = t(f.descKey).toLowerCase();
+      return title.includes(q) || desc.includes(q) || f.id.includes(q);
+    });
+  }, [query, t]);
+
+  const handleSelect = (feat: typeof FEATURES[0]) => {
+    setIsOpen(false);
+    setQuery("");
+    navigate(feat.path);
+    const hasVisitedKey = `visited_feature_${feat.id}`;
+    const isFirstTime = !localStorage.getItem(hasVisitedKey);
+    if (isFirstTime) {
+      localStorage.setItem(hasVisitedKey, "true");
+      addToast(t("search_bar.first_time_tip"), "info");
+    }
+  };
+
+  return (
+    <div className="relative flex-1 max-w-md mx-2 sm:mx-6 hidden md:block">
+      <div className="relative flex items-center group">
+        <Search className="absolute left-3.5 h-4 w-4 text-emerald-600 dark:text-emerald-400 pointer-events-none group-focus-within:scale-110 transition-transform" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          placeholder={t("search_bar.placeholder", "What do you want to do today? e.g. meetings, dues, ledger...")}
+          className="w-full h-9 pl-10 pr-4 bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-750 focus:bg-white dark:focus:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-3xs outline-none transition focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setIsOpen(false);
+            }}
+            className="absolute right-3 p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div className="absolute left-0 right-0 top-11 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden py-2 max-h-96 flex flex-col">
+            <div className="px-3.5 py-2 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">
+              <span>{query.trim() ? t("search_bar.prompt", "Features") : t("search_bar.quick_shortcuts", "Quick Feature Shortcuts")}</span>
+              <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold">{filteredFeatures.length} available</span>
+            </div>
+
+            <div className="overflow-y-auto px-1.5 py-1 flex flex-col gap-1">
+              {filteredFeatures.length > 0 ? (
+                filteredFeatures.map((feat) => {
+                  const Icon = feat.icon;
+                  return (
+                    <button
+                      key={feat.id}
+                      type="button"
+                      onClick={() => handleSelect(feat)}
+                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition flex items-start gap-3 group cursor-pointer border border-transparent hover:border-emerald-200/50 dark:hover:border-emerald-900/50"
+                    >
+                      <div className="p-2 rounded-xl bg-emerald-100/70 text-[#156c45] dark:bg-emerald-950/60 dark:text-emerald-400 shrink-0 group-hover:scale-105 transition-transform">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-[#156c45] dark:group-hover:text-emerald-300 transition-colors truncate">
+                          {t(feat.titleKey)}
+                        </span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 leading-relaxed">
+                          {t(feat.descKey)}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="py-8 text-center text-xs text-slate-400 flex flex-col items-center gap-1.5">
+                  <Compass className="h-6 w-6 text-slate-300 animate-spin-slow" />
+                  <span>{t("search_bar.no_results", "No matching features found")}</span>
+                </div>
+              )}
+            </div>
+            <div className="px-3.5 py-2 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-[10px] text-slate-400 flex justify-between items-center">
+              <span>Type to search all workspace modules</span>
+              <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">Impacto i18n</span>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// ==========================================
+// 3. TOPBAR COMPONENT
 // ==========================================
 export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () => void }> = ({ onToggleSidebar, onStartTour }) => {
   const { user, logout, updateUserLanguage } = useAuthStore();
@@ -235,8 +368,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
     ...(meetings || []).map((m) => ({
       id: "meeting-" + m.id,
       type: "meeting" as const,
-      title: `Upcoming Meeting: ${m.title}`,
-      summary: `Meeting venue/link at ${m.location}.`,
+      title: t("layout.upcoming_meeting", "Upcoming Meeting: {{title}}", { title: m.title }),
+      summary: t("layout.meeting_venue", "Meeting venue/link at {{location}}.", { location: m.location }),
       time: m.date_time || new Date().toISOString(),
       path: "/dashboard",
     })),
@@ -250,15 +383,15 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
           id: "notif-" + ns.id,
           type: isConfirmed ? ("payment_success" as const) : isRejected ? ("payment_rejected" as const) : ("notification" as const),
           title: isVerification
-            ? "Verification Document Reminder"
+            ? t("layout.notif_verification_reminder", "Verification Document Reminder")
             : isConfirmed
-            ? "Payment / Subscription Approved"
+            ? t("layout.notif_payment_approved", "Payment / Subscription Approved")
             : isRejected
-            ? "Payment Proof Rejected"
+            ? t("layout.notif_payment_rejected", "Payment Proof Rejected")
             : lower.includes("submitted")
-            ? "Payment Slip Submitted"
-            : "Cooperative Update",
-          summary: ns.body_text || "Notice dispatched",
+            ? t("layout.notif_slip_submitted", "Payment Slip Submitted")
+            : t("layout.notif_coop_update", "Cooperative Update"),
+          summary: ns.body_text || t("layout.notif_dispatched", "Notice dispatched"),
           time: ns.created_at || new Date().toISOString(),
           path: isVerification
             ? "/dashboard"
@@ -274,11 +407,19 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
           id: `sub-payment-notif-${p.id}-${p.status}`,
           type: isApproved ? ("payment_success" as const) : ("payment_rejected" as const),
           title: isApproved 
-            ? (isPkg ? "Add-On Package Activated!" : "Subscription Approved & Active!")
-            : "Subscription Payment Rejected",
+            ? (isPkg ? t("layout.notif_addon_activated", "Add-On Package Activated!") : t("layout.notif_sub_approved", "Subscription Approved & Active!"))
+            : t("layout.notif_sub_rejected", "Subscription Payment Rejected"),
           summary: isApproved
-            ? `${p.plan || "Plan"} payment of ${(p.amount_local || 0).toLocaleString()} RWF (Ref: ${p.reference || p.transaction_reference || "TXN"}) was verified. All features active.`
-            : `${p.plan || "Plan"} proof of ${(p.amount_local || 0).toLocaleString()} RWF was rejected. Notes: ${p.audit_notes || "Please check transaction details and resubmit."}`,
+            ? t("layout.notif_sub_approved_summary", "{{plan}} payment of {{amount}} RWF (Ref: {{ref}}) was verified. All features active.", {
+                plan: p.plan || t("layout.plan_fallback", "Plan"),
+                amount: (p.amount_local || 0).toLocaleString(),
+                ref: p.reference || p.transaction_reference || "TXN"
+              })
+            : t("layout.notif_sub_rejected_summary", "{{plan}} proof of {{amount}} RWF was rejected. Notes: {{notes}}", {
+                plan: p.plan || t("layout.plan_fallback", "Plan"),
+                amount: (p.amount_local || 0).toLocaleString(),
+                notes: p.audit_notes || t("layout.notif_check_resubmit", "Please check transaction details and resubmit.")
+              }),
           time: p.validated_at || p.audited_at || p.submitted_at || new Date().toISOString(),
           path: "/dashboard/settings?tab=subscription",
         };
@@ -287,11 +428,18 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
         id: "fee-status-" + f.id + "-" + (f.paid_at || f.reported_at || f.status),
         type: f.status === "paid" ? ("payment_success" as const) : ("payment_pending" as const),
         title: f.status === "paid"
-          ? `Payment Cleared: ${f.member_name}`
-          : `Slip Pending Review: ${f.member_name}`,
+          ? t("layout.notif_fee_cleared", "Payment Cleared: {{name}}", { name: f.member_name })
+          : t("layout.notif_fee_pending", "Slip Pending Review: {{name}}", { name: f.member_name }),
         summary: f.status === "paid"
-          ? `${f.amount.toLocaleString()} RWF for ${f.payment_period.toUpperCase()} (${f.period_date}) verified and confirmed by accountant.`
-          : `Slip submitted for ${f.amount.toLocaleString()} RWF (${f.payment_period.toUpperCase()}). Pending verification.`,
+          ? t("layout.notif_fee_cleared_summary", "{{amount}} RWF for {{period}} ({{date}}) verified and confirmed by accountant.", {
+              amount: f.amount.toLocaleString(),
+              period: f.payment_period.toUpperCase(),
+              date: f.period_date
+            })
+          : t("layout.notif_fee_pending_summary", "Slip submitted for {{amount}} RWF ({{period}}). Pending verification.", {
+              amount: f.amount.toLocaleString(),
+              period: f.payment_period.toUpperCase()
+            }),
         time: f.paid_at || f.reported_at || f.created_at || new Date().toISOString(),
         path: "/dashboard/fees",
       }))
@@ -342,7 +490,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
           data-tour="mobile-menu-toggle"
           onClick={onToggleSidebar}
           className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 md:hidden cursor-pointer"
-          aria-label="Toggle mobile menu"
+          aria-label={t("layout.toggle_mobile_menu", "Toggle mobile menu")}
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -389,7 +537,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
               <>
                 <span className="truncate max-w-[180px] md:max-w-[240px]">{activeOrg.name}</span>
                 {activeOrg.verification_status === "verified" && (
-                  <span title="Verified Authentic Organization" className="inline-flex items-center shrink-0">
+                  <span title={t("layout.verified_org_badge", "Verified Authentic Organization")} className="inline-flex items-center shrink-0">
                     <CheckCircle2 className="h-5 w-5 fill-emerald-500 text-white dark:fill-emerald-400 dark:text-slate-900" />
                   </span>
                 )}
@@ -400,6 +548,8 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
           </span>
         </Link>
       </div>
+
+      <GlobalCommandSearch />
 
       <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
         {/* Currency Switcher */}
@@ -518,7 +668,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
-          aria-label="Toggle dark mode"
+          aria-label={t("layout.toggle_dark_mode", "Toggle dark mode")}
           className="w-8 sm:w-8.5 h-8 sm:h-8.5 rounded-xl flex items-center justify-center bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 transition cursor-pointer shadow-3xs shrink-0"
         >
           {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -534,7 +684,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                 localStorage.setItem("last_notification_seen", now);
                 setLastNotificationTimestamp(now);
               }}
-              aria-label="Notifications"
+              aria-label={t("layout.notifications", "Notifications")}
               className="w-8 sm:w-8.5 h-8 sm:h-8.5 rounded-xl flex items-center justify-center bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 transition cursor-pointer relative shadow-3xs shrink-0"
             >
               <Bell className="h-4 w-4" />
@@ -710,7 +860,7 @@ export const Topbar: React.FC<{ onToggleSidebar: () => void; onStartTour?: () =>
                     onClick={() => setUserMenuOpen(false)}
                     className="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-300 text-xs"
                   >
-                    Android APK
+                    {t("layout.android_apk", "Android APK")}
                   </a>
 
                   <button
@@ -837,7 +987,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; onStartTo
             {/* Workspace section */}
             <div id="tour-nav-workspace" data-tour="nav-workspace">
               <div className="px-3 pb-1 text-[10px] font-mono uppercase font-bold tracking-wider text-gray-400 dark:text-slate-500">
-                Workspace
+                {t("layout.workspace_section", "Workspace")}
               </div>
               <nav className="flex flex-col gap-0.5 mt-1">
                 {workspaceNav.map((item) => {
@@ -877,9 +1027,9 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; onStartTo
                   aria-expanded={isManagementExpanded}
                   className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-mono uppercase font-bold tracking-wider text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200 transition group rounded-lg hover:bg-slate-100/60 dark:hover:bg-slate-800/40 cursor-pointer"
                 >
-                  <span className="flex items-center gap-1.5 truncate">
-                    <span>{isAdmin || isStaff || isAccountant ? "Management Tools" : "Account & Tools"}</span>
-                    <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-slate-200/70 dark:bg-slate-700/70 text-slate-600 dark:text-slate-300 font-mono">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="break-words text-left">{isAdmin || isStaff || isAccountant ? t("layout.mgmt_tools", "Management Tools") : t("layout.account_tools", "Account & Tools")}</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-slate-200/70 dark:bg-slate-700/70 text-slate-600 dark:text-slate-300 font-mono shrink-0">
                       {managementNav.length}
                     </span>
                   </span>
@@ -943,7 +1093,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; onStartTo
                       {user.full_name || user.email.split("@")[0]}
                     </span>
                     <span className="text-[10px] text-gray-400 font-mono capitalize">
-                      {activeMember?.role?.replace("_", " ") || "Member"}
+                      {activeMember?.role ? t(`roles.${activeMember.role}`, activeMember.role.replace("_", " ")) : t("common.member", "Member")}
                     </span>
                   </div>
                 </div>
@@ -967,7 +1117,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; onStartTo
             <div className="px-2 flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-bold tracking-tight text-gray-900 dark:text-white block font-display">
-                  Impact<span className="text-[#156c45] dark:text-[#22c06b] font-black">o</span> Suite
+                  Impact<span className="text-[#156c45] dark:text-[#22c06b] font-black">o</span> {t("layout.suite", "Suite")}
                 </span>
                 <span className="text-[9px] text-gray-400 font-mono block">v1.0.1 • 2026</span>
               </div>
@@ -1008,11 +1158,11 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         if (statusChanged || endsAtChanged || tierChanged || nameChanged || verificationChanged) {
           setActiveOrg(dbOrg, activeMember);
           if (activeOrg?.subscription_status !== "active" && dbOrg?.subscription_status === "active") {
-            addToast(`Your cooperative workspace "${dbOrg?.name || "Workspace"}" has been approved and unlocked in real-time!`, "success");
+            addToast(t("layout.toast_org_unlocked", "Your cooperative workspace \"{{name}}\" has been approved and unlocked in real-time!", { name: dbOrg?.name || t("layout.workspace_section", "Workspace") }), "success");
           } else if (activeOrg?.verification_status !== "verified" && dbOrg?.verification_status === "verified") {
-            addToast(`"${dbOrg?.name || "Organization"}" is now officially verified!`, "success");
+            addToast(t("layout.toast_org_verified", "\"{{name}}\" is now officially verified!", { name: dbOrg?.name || t("layout.org_fallback", "Organization") }), "success");
           } else {
-            addToast(`Cooperative Workspace workspace configuration updated in real-time.`, "info");
+            addToast(t("layout.toast_org_updated", "Cooperative workspace configuration updated in real-time."), "info");
           }
         }
       }
@@ -1155,26 +1305,26 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         setActiveOrg(updatedOrg, activeMember);
       }
 
-      setPaySuccessAlert(`Payment of ${data.amount.toLocaleString()} RWF authorized via MTN MoMo SIM push! Workspace unlocked on ${selectedTier}.`);
+      setPaySuccessAlert(t("layout.momo_push_authorized_alert", "Payment of {{amount}} RWF authorized via MTN MoMo SIM push! Workspace unlocked on {{tier}}.", { amount: data.amount.toLocaleString(), tier: selectedTier }));
       refetchSaas();
-      addToast(`Workspace unlocked! Your subscription to ${selectedTier} is now active.`, "success");
+      addToast(t("layout.momo_push_authorized_toast", "Workspace unlocked! Your subscription to {{tier}} is now active.", { tier: selectedTier }), "success");
     } catch (err: any) {
       console.error(err);
-      addToast("MoMo prompt authorized! Updating workspace: " + (err.message || ""), "info");
+      addToast(t("layout.momo_push_updating", "MoMo prompt authorized! Updating workspace: {{msg}}", { msg: err.message || "" }), "info");
     }
   };
 
   const handlePayLockout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!smsProof) {
-      addToast("Please provide the payment text/message receipt to alert Superadmin.", "error");
+      addToast(t("layout.err_sms_proof", "Please provide the payment text/message receipt to alert Superadmin."), "error");
       return;
     }
 
     if (momoPhone) {
       const clean = momoPhone.replace(/\D/g, "");
       if (!/^07[2389]\d{7}$/.test(clean)) {
-        addToast("Please enter a valid 10-digit Rwanda mobile number starting with 078/079 (MTN) or 072/073 (Airtel).", "error");
+        addToast(t("layout.err_rwanda_phone", "Please enter a valid 10-digit Rwanda mobile number starting with 078/079 (MTN) or 072/073 (Airtel)."), "error");
         return;
       }
     }
@@ -1202,14 +1352,14 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         proof_url: smsProof
       });
 
-      setPaySuccessAlert("Invoice proof dispatched! Platform Superadmin notified to verify and unlock licenses.");
+      setPaySuccessAlert(t("layout.invoice_proof_dispatched", "Invoice proof dispatched! Platform Superadmin notified to verify and unlock licenses."));
       setMomoPhone("");
       setMomoRef("");
       setSmsProof("");
       refetchSaas();
     } catch (err) {
       console.error(err);
-      addToast("Failed to submit payment details. Please retry.", "error");
+      addToast(t("layout.err_submit_payment", "Failed to submit payment details. Please retry."), "error");
     } finally {
       setSubmittingPayment(false);
     }
@@ -1218,14 +1368,14 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
   const handleSubmitMemberPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!smsProof) {
-      addToast("Please provide the payment text/message receipt to alert Superadmin.", "error");
+      addToast(t("layout.err_sms_proof", "Please provide the payment text/message receipt to alert Superadmin."), "error");
       return;
     }
 
     if (momoPhone) {
       const clean = momoPhone.replace(/\D/g, "");
       if (!/^07[2389]\d{7}$/.test(clean)) {
-        addToast("Please enter a valid 10-digit Rwanda mobile number starting with 078/079 (MTN) or 072/073 (Airtel).", "error");
+        addToast(t("layout.err_rwanda_phone", "Please enter a valid 10-digit Rwanda mobile number starting with 078/079 (MTN) or 072/073 (Airtel)."), "error");
         return;
       }
     }
@@ -1263,14 +1413,14 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
       });
       localStorage.setItem(`plan_recs_${activeOrg?.id}`, JSON.stringify(recs));
 
-      setRecommendSuccess(`Payment proof and recommendation for "${selectedTier}" submitted successfully! Platform Superadmin has been notified to verify the logs and unlock your workspace.`);
+      setRecommendSuccess(t("layout.recommend_success", "Payment proof and recommendation for \"{{tier}}\" submitted successfully! Platform Superadmin has been notified to verify the logs and unlock your workspace.", { tier: selectedTier }));
       setMomoPhone("");
       setMomoRef("");
       setSmsProof("");
       refetchSaas();
     } catch (err) {
       console.error(err);
-      addToast("Failed to submit payment details. Please retry.", "error");
+      addToast(t("layout.err_submit_payment", "Failed to submit payment details. Please retry."), "error");
     } finally {
       setSubmittingPayment(false);
     }
@@ -1290,7 +1440,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         screenshot_url: "Lockout direct line"
       });
       setSupportText("");
-      setSupportSuccessAlert("Direct support comments successfully saved and escalated!");
+      setSupportSuccessAlert(t("layout.support_comments_saved", "Direct support comments successfully saved and escalated!"));
     } catch (err) {
       console.error(err);
     } finally {
@@ -1403,19 +1553,19 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           
           {/* Top Glassmorphic Transparency & Peek Controls Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white/40 dark:bg-slate-900/40 border border-white/60 dark:border-white/10 rounded-2xl backdrop-blur-xs">
-            <div className="flex items-center gap-2">
-              <span className="flex h-2.5 w-2.5 relative">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="flex h-2.5 w-2.5 relative shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
               </span>
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                Transparent Glass View: Workspace Data Visible in Background
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 break-words">
+                {t("layout.glass_view")}
               </span>
             </div>
             
             <div className="flex items-center gap-2 flex-wrap">
               {/* Glass transparency level toggle */}
-              <div className="flex items-center bg-black/10 dark:bg-white/10 rounded-xl p-0.5 text-[10px] font-bold">
+              <div className="flex items-center flex-wrap bg-black/10 dark:bg-white/10 rounded-xl p-0.5 text-[10px] font-bold">
                 <button
                   type="button"
                   onClick={() => setGlassTransparency("crystal")}
@@ -1425,7 +1575,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       : "text-stone-600 dark:text-stone-300 hover:text-stone-900"
                   }`}
                 >
-                  Crystal (45%)
+                  {t("layout.crystal")}
                 </button>
                 <button
                   type="button"
@@ -1436,7 +1586,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       : "text-stone-600 dark:text-stone-300 hover:text-stone-900"
                   }`}
                 >
-                  Frosted (65%)
+                  {t("layout.frosted")}
                 </button>
                 <button
                   type="button"
@@ -1447,7 +1597,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       : "text-stone-600 dark:text-stone-300 hover:text-stone-900"
                   }`}
                 >
-                  Balanced (85%)
+                  {t("layout.balanced")}
                 </button>
               </div>
 
@@ -1456,11 +1606,11 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                 type="button"
                 size="sm"
                 onClick={() => setIsPeekMode(true)}
-                className="bg-emerald-600/90 hover:bg-emerald-600 text-white font-bold text-xs h-7 px-2.5 rounded-xl flex items-center gap-1.5 shadow-xs"
-                title="Minimize to inspect background data"
+                className="bg-emerald-600/90 hover:bg-emerald-600 text-white font-bold text-xs min-h-[28px] px-2.5 py-1 rounded-xl flex items-center gap-1.5 shadow-xs"
+                title={t("layout.peek_tooltip", "Minimize to inspect background data")}
               >
-                <Eye className="h-3.5 w-3.5" />
-                <span>Peek at Preserved Data</span>
+                <Eye className="h-3.5 w-3.5 shrink-0" />
+                <span className="break-words">{t("layout.peek_data")}</span>
               </Button>
             </div>
           </div>
@@ -1472,12 +1622,12 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                  Organization Records Preserved in Read-Only Mode
+                <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 break-words">
+                  {t("layout.records_preserved_title")}
                 </h4>
               </div>
-              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed">
-                All organization rosters, ledgers, and documents remain visible and preserved. Choose a subscription below to restore interactive editing and exports.
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed break-words">
+                {t("layout.records_preserved_desc")}
               </p>
             </div>
           </div>
@@ -1486,21 +1636,21 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
             <div className="h-11 w-11 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-600 flex items-center justify-center rounded-xl shrink-0">
               <AlertTriangle className="h-5 w-5 shrink-0" />
             </div>
-            <h1 className="text-xl md:text-2xl font-bold font-display leading-none tracking-tight text-slate-900 dark:text-white">
-              Workspace Access Paused
+            <h1 className="text-xl md:text-2xl font-bold font-display leading-none tracking-tight text-slate-900 dark:text-white break-words">
+              {t("layout.access_paused")}
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              The active licensing subscription plan for <span className="text-slate-900 dark:text-white font-semibold">@{activeOrg?.slug}</span> has reached its term limit.
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium break-words">
+              {t("layout.access_paused_desc", "The active licensing subscription plan for @{{slug}} has reached its term limit.", { slug: activeOrg?.slug || "" })}
             </p>
           </div>
           
           {isAdmin ? (
             // ADMIN LICENSE UPGRADE & ESCALATION CONTROL HUB
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full font-medium">
-              <div className="rounded-xl p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col gap-4">
+              <div className="rounded-xl p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col gap-4 min-w-0">
                 <div className="border-b border-slate-200 dark:border-slate-800 pb-2.5">
-                  <h3 className="font-display font-semibold text-sm text-slate-900 dark:text-white">
-                    Select Subscription Plan
+                  <h3 className="font-display font-semibold text-sm text-slate-900 dark:text-white break-words">
+                    {t("layout.select_sub_plan")}
                   </h3>
                 </div>
                 <PaymentGatewaySection
@@ -1519,30 +1669,30 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                   onSmsProofChange={setSmsProof}
                   onSubmit={handlePayLockout}
                   submitting={submittingPayment}
-                  submitLabel="Submit Plan Upgrade & Proof"
+                  submitLabel={t("layout.submit_upgrade_proof", "Submit Plan Upgrade & Proof")}
                   successState={
                     paySuccessAlert
                       ? {
-                          title: "Payment Receipt Submitted",
+                          title: t("layout.payment_receipt_submitted", "Payment Receipt Submitted"),
                           message: paySuccessAlert,
                           amountRwf
                         }
                       : null
                   }
                   onDoneSuccess={() => setPaySuccessAlert("")}
-                  doneLabel="Submit Another Payment"
+                  doneLabel={t("layout.submit_another_payment", "Submit Another Payment")}
                   tierSelector={
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs text-slate-600 dark:text-slate-400 font-medium">Select active tier</label>
+                      <label className="text-xs text-slate-600 dark:text-slate-400 font-medium">{t("layout.select_active_tier")}</label>
                       <select
                         value={selectedTier}
                         onChange={(e) => setSelectedTier(e.target.value)}
                         className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100 select-none focus:ring-1 focus:ring-emerald-500 font-medium"
                       >
-                        <option value="Free Forever Plan - $0/month">Free Forever Plan — $0</option>
-                        <option value="Growth Plan - $10/month">Growth Tier — $10 ({(10 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(10, 'USD'))})</option>
-                        <option value="Pro Plan - $25/month">Pro Plan — $25 ({(25 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(25, 'USD'))})</option>
-                        <option value="Enterprise Plan - Custom">Enterprise Plan — Custom / Contact Sales</option>
+                        <option value="Free Forever Plan - $0/month">{t("layout.tier_free_opt", "Free Forever Plan — $0")}</option>
+                        <option value="Growth Plan - $10/month">{t("layout.tier_growth_opt", "Growth Tier — $10 ({{rwf}} RWF / {{amt}})", { rwf: (10 * platformSettings.usd_to_rwf_rate).toLocaleString(), amt: formatAmount(convertToRWF(10, 'USD')) })}</option>
+                        <option value="Pro Plan - $25/month">{t("layout.tier_pro_opt", "Pro Plan — $25 ({{rwf}} RWF / {{amt}})", { rwf: (25 * platformSettings.usd_to_rwf_rate).toLocaleString(), amt: formatAmount(convertToRWF(25, 'USD')) })}</option>
+                        <option value="Enterprise Plan - Custom">{t("layout.tier_ent_opt", "Enterprise Plan — Custom / Contact Sales")}</option>
                       </select>
                     </div>
                   }
@@ -1557,35 +1707,35 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                 />
               </div>
 
-              <div className="rounded-2xl p-5 bg-white/45 dark:bg-slate-900/40 backdrop-blur-md border border-white/60 dark:border-white/10 shadow-xs flex flex-col gap-4">
+              <div className="rounded-2xl p-5 bg-white/45 dark:bg-slate-900/40 backdrop-blur-md border border-white/60 dark:border-white/10 shadow-xs flex flex-col gap-4 min-w-0">
                 <div className="border-b border-stone-200/50 dark:border-slate-800/60 pb-2.5">
-                  <h3 className="font-display font-bold text-sm text-stone-900 dark:text-white flex items-center justify-between">
-                    <span>Contact Platform Superadmin Direct Line</span>
+                  <h3 className="font-display font-bold text-sm text-stone-900 dark:text-white flex items-center justify-between break-words">
+                    <span>{t("layout.contact_superadmin")}</span>
                   </h3>
                 </div>
                 {supportSuccessAlert ? (
                   <div className="p-3 bg-emerald-55/10 border border-emerald-500/25 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold rounded-lg flex flex-col gap-1.5 leading-relaxed">
-                    <span className="font-bold flex items-center gap-1.5"><CheckCircle className="h-4 w-4 shrink-0" /> Conversation Log Update</span>
+                    <span className="font-bold flex items-center gap-1.5"><CheckCircle className="h-4 w-4 shrink-0" /> {t("layout.conv_log_update", "Conversation Log Update")}</span>
                     {supportSuccessAlert}
                   </div>
                 ) : (
                   <form onSubmit={handleSupportLockout} className="flex flex-col gap-4 text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    <p className="text-gray-500 dark:text-gray-400 font-normal leading-normal text-[11px]">
-                      Stuck or experiencing confirmation lags? Text platform superadmin directly below.
+                    <p className="text-gray-500 dark:text-gray-400 font-normal leading-normal text-[11px] break-words">
+                      {t("layout.superadmin_help_desc", "Stuck or experiencing confirmation lags? Text platform superadmin directly below.")}
                     </p>
 
                     <div className="flex flex-col gap-1.5 w-full">
-                      <label className="text-[10px] uppercase text-gray-400 font-mono tracking-wider font-bold">Write support ticket message or just talk</label>
+                      <label className="text-[10px] uppercase text-gray-400 font-mono tracking-wider font-bold">{t("layout.support_ticket_label", "Write support ticket message or just talk")}</label>
                       <textarea
                         className="w-full text-xs rounded-lg border bg-white/80 border-gray-300 p-3 h-28 text-stone-900 dark:bg-slate-950/80 dark:border-slate-800 dark:text-white font-sans"
                         value={supportText}
                         onChange={(e) => setSupportText(e.target.value)}
-                        placeholder="Type direct support Comments here, e.g. Just paid Growth plan, please approve..."
+                        placeholder={t("layout.support_ticket_placeholder", "Type direct support comments here, e.g. Just paid Growth plan, please approve...")}
                       />
                     </div>
 
                     <Button type="submit" loading={sendingSupport} icon={<Send className="h-4 w-4" />} className="w-full py-2.5">
-                      Transmit Direct Support Comments
+                      {t("layout.transmit_support", "Transmit Direct Support Comments")}
                     </Button>
                   </form>
                 )}
@@ -1594,10 +1744,10 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           ) : (
             // MEMBER/STAFF LOCK SCREEN: RECOMMEND PLAN & TEXT ADMIN
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full font-medium">
-              <div className="rounded-2xl p-5 bg-white/75 dark:bg-slate-900/75 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col gap-4">
+              <div className="rounded-2xl p-5 bg-white/75 dark:bg-slate-900/75 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col gap-4 min-w-0">
                 <div className="border-b border-slate-200 dark:border-slate-800 pb-2.5">
-                  <h3 className="font-display font-bold text-sm text-stone-900 dark:text-white flex items-center justify-between">
-                    <span>Select Subscription Plan</span>
+                  <h3 className="font-display font-bold text-sm text-stone-900 dark:text-white flex items-center justify-between break-words">
+                    <span>{t("layout.select_sub_plan")}</span>
                   </h3>
                 </div>
                 <PaymentGatewaySection
@@ -1616,30 +1766,30 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                   onSmsProofChange={setSmsProof}
                   onSubmit={handleSubmitMemberPayment}
                   submitting={submittingPayment}
-                  submitLabel="Submit Payment Proof & Recommend"
+                  submitLabel={t("layout.submit_proof_recommend", "Submit Payment Proof & Recommend")}
                   successState={
                     recommendSuccess
                       ? {
-                          title: "Payment Proof & Recommendation Sent",
+                          title: t("layout.proof_recommend_sent", "Payment Proof & Recommendation Sent"),
                           message: recommendSuccess,
                           amountRwf
                         }
                       : null
                   }
                   onDoneSuccess={() => setRecommendSuccess("")}
-                  doneLabel="Submit Another Payment"
+                  doneLabel={t("layout.submit_another_payment", "Submit Another Payment")}
                   tierSelector={
                     <div className="flex flex-col gap-1">
-                      <label className="text-xs text-slate-600 dark:text-slate-400 font-medium">Select tier to pay</label>
+                      <label className="text-xs text-slate-600 dark:text-slate-400 font-medium">{t("layout.select_tier_pay", "Select tier to pay")}</label>
                       <select
                         value={selectedTier}
                         onChange={(e) => setSelectedTier(e.target.value)}
                         className="w-full text-xs rounded-lg border bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 px-3 py-2 text-slate-900 dark:text-slate-100 select-none focus:ring-1 focus:ring-emerald-500 font-medium"
                       >
-                        <option value="Free Forever Plan - $0/month">Free Forever Plan — $0</option>
-                        <option value="Growth Plan - $10/month">Growth Tier — $10 ({(10 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(10, 'USD'))})</option>
-                        <option value="Pro Plan - $25/month">Pro Plan — $25 ({(25 * platformSettings.usd_to_rwf_rate).toLocaleString()} RWF / {formatAmount(convertToRWF(25, 'USD'))})</option>
-                        <option value="Enterprise Plan - Custom">Enterprise Plan — Custom / Contact Sales</option>
+                        <option value="Free Forever Plan - $0/month">{t("layout.tier_free_opt", "Free Forever Plan — $0")}</option>
+                        <option value="Growth Plan - $10/month">{t("layout.tier_growth_opt", "Growth Tier — $10 ({{rwf}} RWF / {{amt}})", { rwf: (10 * platformSettings.usd_to_rwf_rate).toLocaleString(), amt: formatAmount(convertToRWF(10, 'USD')) })}</option>
+                        <option value="Pro Plan - $25/month">{t("layout.tier_pro_opt", "Pro Plan — $25 ({{rwf}} RWF / {{amt}})", { rwf: (25 * platformSettings.usd_to_rwf_rate).toLocaleString(), amt: formatAmount(convertToRWF(25, 'USD')) })}</option>
+                        <option value="Enterprise Plan - Custom">{t("layout.tier_ent_opt", "Enterprise Plan — Custom / Contact Sales")}</option>
                       </select>
                     </div>
                   }
@@ -1654,34 +1804,34 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                 />
               </div>
 
-              <div className="rounded-2xl p-5 bg-white/45 dark:bg-slate-900/40 backdrop-blur-md border border-white/60 dark:border-white/10 shadow-xs flex flex-col gap-4">
+              <div className="rounded-2xl p-5 bg-white/45 dark:bg-slate-900/40 backdrop-blur-md border border-white/60 dark:border-white/10 shadow-xs flex flex-col gap-4 min-w-0">
                 <div className="border-b border-stone-200/50 dark:border-slate-800/60 pb-2.5">
-                  <h3 className="font-display font-bold text-sm text-stone-900 dark:text-white flex items-center justify-between">
-                    <span>Text/Message Workspace Admin</span>
+                  <h3 className="font-display font-bold text-sm text-stone-900 dark:text-white flex items-center justify-between break-words">
+                    <span>{t("layout.msg_workspace_admin")}</span>
                   </h3>
                 </div>
                 {memberSupportSuccess ? (
-                  <div className="p-3.5 bg-emerald-50 border border-emerald-150 text-emerald-850 rounded-lg font-bold flex items-center gap-2 text-xs">
-                    <CheckCircle className="h-4.5 w-4.5" /> {memberSupportSuccess}
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-150 text-emerald-850 rounded-lg font-bold flex items-center gap-2 text-xs break-words">
+                    <CheckCircle className="h-4.5 w-4.5 shrink-0" /> {memberSupportSuccess}
                   </div>
                 ) : (
                   <div className="flex flex-col gap-4 text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    <p className="text-gray-500 dark:text-gray-400 font-normal leading-normal text-[11px]">
-                      Send a secure internal text message or pager notice to your Workspace Admin requesting to restore workspace access.
+                    <p className="text-gray-500 dark:text-gray-400 font-normal leading-normal text-[11px] break-words">
+                      {t("layout.msg_admin_desc", "Send a secure internal text message or pager notice to your Workspace Admin requesting to restore workspace access.")}
                     </p>
                     <div className="flex flex-col gap-1.5 w-full">
-                      <label className="text-[10px] uppercase text-gray-400 font-mono tracking-wider font-bold">Write message to admin</label>
+                      <label className="text-[10px] uppercase text-gray-400 font-mono tracking-wider font-bold">{t("layout.write_msg_admin", "Write message to admin")}</label>
                       <textarea
                         className="w-full text-xs rounded-lg border bg-white/80 border-gray-300 p-3 h-24 text-stone-900 dark:bg-slate-950/80 dark:border-slate-800 dark:text-white font-sans"
                         value={memberSupportMsg}
                         onChange={(e) => setMemberSupportMsg(e.target.value)}
-                        placeholder="e.g. Hi Admin, our 30-day trial is finished and we are locked out. Please upgrade our subscription so we can record today's ledger..."
+                        placeholder={t("layout.msg_admin_placeholder", "e.g. Hi Admin, our 30-day trial is finished and we are locked out. Please upgrade our subscription so we can record today's ledger...")}
                       />
                     </div>
                     <Button 
                       onClick={() => {
                         if (!memberSupportMsg.trim()) return;
-                        setMemberSupportSuccess("Message successfully transmitted and page alerted to Administrator!");
+                        setMemberSupportSuccess(t("layout.msg_admin_sent", "Message successfully transmitted and page alerted to Administrator!"));
                         const existingMsgs = localStorage.getItem(`admin_messages_${activeOrg?.id}`);
                         const msgs = existingMsgs ? JSON.parse(existingMsgs) : [];
                         msgs.push({
@@ -1695,7 +1845,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       icon={<Send className="h-4 w-4" />} 
                       className="w-full py-2.5"
                     >
-                      Message Workspace Administrator
+                      {t("layout.msg_admin_btn", "Message Workspace Administrator")}
                     </Button>
                   </div>
                 )}
@@ -1771,25 +1921,25 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                   <Lock className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-xs sm:text-sm font-bold text-amber-950 dark:text-amber-200">
-                      Read-Only Document & Data Mode Active
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-xs sm:text-sm font-bold text-amber-950 dark:text-amber-200 break-words">
+                      {t("layout.read_only_active_banner", "Read-Only Document & Data Mode Active")}
                     </h4>
-                    <span className="text-[9px] font-mono font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full uppercase">
-                      Viewing Allowed
+                    <span className="text-[9px] font-mono font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full uppercase shrink-0">
+                      {t("layout.viewing_allowed", "Viewing Allowed")}
                     </span>
                   </div>
-                  <p className="text-xs text-stone-600 dark:text-stone-300 mt-0.5">
-                    Your records and documents are preserved and viewable below. Complete payment to make edits, export files, or add entries.
+                  <p className="text-xs text-stone-600 dark:text-stone-300 mt-0.5 break-words">
+                    {t("layout.read_only_banner_desc", "Your records and documents are preserved and viewable below. Complete payment to make edits, export files, or add entries.")}
                   </p>
                 </div>
               </div>
               <Button
                 size="sm"
                 onClick={() => setIsPeekMode(false)}
-                className="bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-medium text-xs h-8.5 px-3.5 rounded-lg shrink-0 cursor-pointer shadow-xs flex items-center gap-1.5 self-start sm:self-auto"
+                className="bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-medium text-xs min-h-[34px] px-3.5 py-1.5 rounded-lg shrink-0 cursor-pointer shadow-xs flex items-center gap-1.5 self-start sm:self-auto"
               >
-                <span>Renew Subscription</span>
+                <span>{t("layout.renew_subscription", "Renew Subscription")}</span>
               </Button>
             </div>
           )}
@@ -1806,9 +1956,9 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
               <div 
                 className="absolute inset-0 z-20 bg-slate-900/[0.04] dark:bg-black/[0.15] backdrop-blur-[0.5px] rounded-xl cursor-default flex flex-col items-center justify-start p-4 pointer-events-auto"
                 onClick={() => {
-                  addToast("Workspace is in read-only mode. All records and documents are preserved. Click 'Renew Subscription' to restore editing access.", "info");
+                  addToast(t("layout.read_only_click_toast", "Workspace is in read-only mode. All records and documents are preserved. Click 'Renew Subscription' to restore editing access."), "info");
                 }}
-                title="Read-Only Mode: Renew subscription to restore interactive editing and exports"
+                title={t("layout.read_only_hover_title", "Read-Only Mode: Renew subscription to restore interactive editing and exports")}
               />
             )}
           </div>

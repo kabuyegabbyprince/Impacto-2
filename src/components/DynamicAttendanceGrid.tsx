@@ -21,6 +21,7 @@ import {
   Info
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 interface DynamicAttendanceGridProps {
   events: ImpactEvent[];
@@ -45,6 +46,7 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
   onCheckOut,
   addToast,
 }) => {
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [eventSearch, setEventSearch] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
@@ -89,12 +91,12 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
   // Toggle cell attendance for Paid plans
   const handleToggleCell = async (eventId: string, memberId: string, memberName: string, eventTitle: string) => {
     if (!isPaidPlan) {
-      addToast("Live matrix check-in requires a Paid Plan or Event Package. Use Direct Local Excel Export below.", "error");
+      addToast(t("attendance_grid.paid_plan_req", "Live matrix check-in requires a Paid Plan or Event Package. Use Direct Local Excel Export below."), "error");
       return;
     }
 
     if (!canManageAttendance) {
-      addToast("Only administrators, managers, and accountants can mark attendance.", "error");
+      addToast(t("attendance_grid.role_req", "Only administrators, managers, and accountants can mark attendance."), "error");
       return;
     }
 
@@ -106,17 +108,17 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
       if (isCurrentlyPresent) {
         if (onCheckOut) {
           await onCheckOut(eventId, memberId);
-          addToast(`Marked ${memberName} as Absent for "${eventTitle}"`, "info");
+          addToast(t("attendance_grid.marked_absent_toast", { member: memberName, event: eventTitle, defaultValue: "Marked {{member}} as Absent for \"{{event}}\"" }), "info");
         }
       } else {
         if (onCheckIn) {
           await onCheckIn(eventId, memberId);
-          addToast(`Marked ${memberName} as Present for "${eventTitle}"`, "success");
+          addToast(t("attendance_grid.marked_present_toast", { member: memberName, event: eventTitle, defaultValue: "Marked {{member}} as Present for \"{{event}}\"" }), "success");
         }
       }
     } catch (err: any) {
       console.error("Failed to toggle attendance:", err);
-      addToast(err?.message || "Failed to update attendance record.", "error");
+      addToast(err?.message || t("attendance_grid.update_failed", "Failed to update attendance record."), "error");
     } finally {
       setUpdatingCell(null);
     }
@@ -125,13 +127,13 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
   // Direct Local Excel Export function (Formatted with Users in Columns, Events in Rows)
   const handleExportLocalAttendanceExcel = () => {
     if (activeMembers.length === 0) {
-      addToast("No active members available to export.", "error");
+      addToast(t("attendance_grid.no_members_export", "No active members available to export."), "error");
       return;
     }
 
     const eventList = filteredEvents.length > 0 ? filteredEvents : events;
     if (eventList.length === 0) {
-      addToast("No scheduled events available to export.", "error");
+      addToast(t("attendance_grid.no_events_export", "No scheduled events available to export."), "error");
       return;
     }
 
@@ -275,7 +277,7 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    addToast("Direct local attendance Excel spreadsheet generated and downloaded successfully!", "success");
+    addToast(t("attendance_grid.excel_exported_toast", "Direct local attendance Excel spreadsheet generated and downloaded successfully!"), "success");
   };
 
   // Overall metrics calculation
@@ -294,19 +296,19 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 md:p-6 shadow-xs space-y-5">
       {/* Top Header & Direct Local Excel Export Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-              Attendance Matrix
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white break-words">
+              {t("attendance_grid.title", "Attendance Matrix")}
             </h3>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Two-dimensional matrix with scheduled events in columns (X-Axis) and active members in rows (Y-Axis).
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 break-words">
+            {t("attendance_grid.subtitle", "Two-dimensional matrix with scheduled events in columns (X-Axis) and active members in rows (Y-Axis).")}
           </p>
         </div>
 
         {/* Direct Local Excel Export Button */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <Button
             size="sm"
             onClick={handleExportLocalAttendanceExcel}
@@ -314,7 +316,7 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
             variant="outline"
             className="text-xs font-medium"
           >
-            Export Attendance Spreadsheet
+            {t("attendance_grid.export_btn", "Export Attendance Spreadsheet")}
           </Button>
 
           {!isPaidPlan && (
@@ -323,21 +325,20 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
               onClick={() => navigate("/dashboard/settings")}
               className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium"
             >
-              Upgrade for Live Matrix Check-in
+              {t("attendance_grid.upgrade_btn", "Upgrade for Live Matrix Check-in")}
             </Button>
           )}
         </div>
       </div>
 
-
       {/* Filter and Metric Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Member Search */}
-        <div className="relative">
+        <div className="relative min-w-0">
           <Users className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
           <input
             type="text"
-            placeholder="Filter members (rows Y-Axis)..."
+            placeholder={t("attendance_grid.filter_members_placeholder", "Filter members (rows Y-Axis)...")}
             value={memberSearch}
             onChange={(e) => setMemberSearch(e.target.value)}
             className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-8 pr-3 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
@@ -345,11 +346,11 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
         </div>
 
         {/* Event Search */}
-        <div className="relative">
+        <div className="relative min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
           <input
             type="text"
-            placeholder="Search events (columns X-Axis)..."
+            placeholder={t("attendance_grid.search_events_placeholder", "Search events (columns X-Axis)...")}
             value={eventSearch}
             onChange={(e) => setEventSearch(e.target.value)}
             className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 pl-8 pr-3 py-1.5 outline-none focus:ring-1 focus:ring-emerald-600 text-slate-900 dark:text-white"
@@ -357,16 +358,20 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
         </div>
 
         {/* Total Events & Users Stats */}
-        <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 text-xs">
-          <span className="text-slate-500">Dimensions:</span>
+        <div className="flex flex-wrap items-center justify-between gap-1 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 text-xs min-w-0">
+          <span className="text-slate-500">{t("attendance_grid.dimensions_label", "Dimensions:")}</span>
           <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">
-            {activeMembers.length} Members × {filteredEvents.length} Events
+            {t("attendance_grid.dimensions_value", {
+              members: activeMembers.length,
+              events: filteredEvents.length,
+              defaultValue: "{{members}} Members × {{events}} Events"
+            })}
           </span>
         </div>
 
         {/* Overall Attendance Rate */}
-        <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 text-xs">
-          <span className="text-slate-500">Overall Presence:</span>
+        <div className="flex flex-wrap items-center justify-between gap-1 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 text-xs min-w-0">
+          <span className="text-slate-500">{t("attendance_grid.overall_presence", "Overall Presence:")}</span>
           <span className="font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums">
             {overallRate}% ({totalPresentCount}/{totalSlots})
           </span>
@@ -383,8 +388,8 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
                 {/* Sticky Left: Member Name & Details (Y-Axis) */}
                 <th className="sticky left-0 z-30 bg-slate-50 dark:bg-slate-800 p-3 min-w-[200px] font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5 text-slate-500" />
-                    <span>Member Directory (Y-Axis)</span>
+                    <Users className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                    <span>{t("attendance_grid.col_member_dir", "Member Directory (Y-Axis)")}</span>
                   </div>
                 </th>
 
@@ -404,7 +409,7 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
                           {ev.title}
                         </span>
                         <span className="text-[10px] text-slate-500 font-mono">
-                          {new Date(ev.date_time).toLocaleDateString()}
+                          {new Date(ev.date_time).toLocaleDateString(i18n.language)}
                         </span>
                         <span
                           className={`text-[9px] font-medium px-1.5 py-0.2 rounded capitalize mt-0.5 ${
@@ -413,7 +418,7 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
                               : "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
                           }`}
                         >
-                          {isPassed ? "Completed" : ev.status}
+                          {isPassed ? t("common.completed", "Completed") : ev.status}
                         </span>
                       </div>
                     </th>
@@ -422,13 +427,13 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
 
                 {/* Right: Member Attendance Summary Columns */}
                 <th className="p-2.5 min-w-[65px] text-center font-semibold text-slate-700 dark:text-slate-300 border-l border-slate-200 dark:border-slate-700">
-                  Attended
+                  {t("attendance_grid.col_attended", "Attended")}
                 </th>
                 <th className="p-2.5 min-w-[65px] text-center font-semibold text-slate-700 dark:text-slate-300">
-                  Missed
+                  {t("attendance_grid.col_missed", "Missed")}
                 </th>
                 <th className="p-2.5 min-w-[70px] text-center font-semibold text-slate-700 dark:text-slate-300">
-                  Rate %
+                  {t("attendance_grid.col_rate", "Rate %")}
                 </th>
               </tr>
             </thead>
@@ -461,9 +466,9 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
                           <div className="h-7 w-7 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs flex items-center justify-center shrink-0 border border-emerald-200 dark:border-emerald-800">
                             {initial}
                           </div>
-                          <div className="space-y-0.5">
+                          <div className="space-y-0.5 min-w-0">
                             <span className="font-semibold text-slate-900 dark:text-white text-xs block truncate max-w-[140px]" title={m.user?.full_name}>
-                              {m.user?.full_name || "Member"}
+                              {m.user?.full_name || t("common.member", "Member")}
                             </span>
                             <span className="text-[10px] text-slate-400 font-mono block">
                               #{m.member_number || `MEM-${idx + 1}`}
@@ -486,7 +491,7 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
                             <button
                               type="button"
                               disabled={!isPaidPlan || isUpdating}
-                              onClick={() => handleToggleCell(ev.id, m.id, m.user?.full_name || "Member", ev.title)}
+                              onClick={() => handleToggleCell(ev.id, m.id, m.user?.full_name || t("common.member", "Member"), ev.title)}
                               className={`w-full py-1.5 px-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors ${
                                 !isPaidPlan
                                   ? isPresent
@@ -498,21 +503,25 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
                               }`}
                               title={
                                 !isPaidPlan
-                                  ? `${m.user?.full_name} is ${isPresent ? "Present" : "Absent"} for "${ev.title}".`
-                                  : `Click to mark ${m.user?.full_name} as ${isPresent ? "Absent" : "Present"} for "${ev.title}"`
+                                  ? (isPresent
+                                      ? t("attendance_grid.cell_present_tooltip", { member: m.user?.full_name, event: ev.title, defaultValue: "{{member}} is Present for \"{{event}}\"." })
+                                      : t("attendance_grid.cell_absent_tooltip", { member: m.user?.full_name, event: ev.title, defaultValue: "{{member}} is Absent for \"{{event}}\"." }))
+                                  : (isPresent
+                                      ? t("attendance_grid.click_mark_absent", { member: m.user?.full_name, event: ev.title, defaultValue: "Click to mark {{member}} as Absent for \"{{event}}\"" })
+                                      : t("attendance_grid.click_mark_present", { member: m.user?.full_name, event: ev.title, defaultValue: "Click to mark {{member}} as Present for \"{{event}}\"" }))
                               }
                             >
                               {isUpdating ? (
-                                <span className="text-[10px] animate-pulse">Saving...</span>
+                                <span className="text-[10px] animate-pulse">{t("common.saving", "Saving...")}</span>
                               ) : isPresent ? (
                                 <>
-                                  <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                                  <span className="text-[10px]">Present</span>
+                                  <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                  <span className="text-[10px]">{t("attendance_grid.present", "Present")}</span>
                                 </>
                               ) : (
                                 <>
-                                  <X className="h-3 w-3 text-slate-400" />
-                                  <span className="text-[10px]">Absent</span>
+                                  <X className="h-3 w-3 text-slate-400 shrink-0" />
+                                  <span className="text-[10px]">{t("attendance_grid.absent", "Absent")}</span>
                                 </>
                               )}
                             </button>
@@ -539,7 +548,7 @@ export const DynamicAttendanceGrid: React.FC<DynamicAttendanceGridProps> = ({
                     colSpan={filteredEvents.length + 4}
                     className="text-center py-10 text-slate-400 italic"
                   >
-                    No matching active members found.
+                    {t("attendance_grid.no_matching_members", "No matching active members found.")}
                   </td>
                 </tr>
               )}

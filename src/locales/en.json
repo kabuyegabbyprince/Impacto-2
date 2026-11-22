@@ -27,6 +27,31 @@
     "auditor_desk": "Auditor Verification",
     "admin_settings": "Admin Settings"
   },
+  "search_bar": {
+    "prompt": "What do you want to do today?",
+    "placeholder": "Search features e.g. meetings, dues, ledger, members...",
+    "no_results": "No matching features found",
+    "quick_shortcuts": "Quick Feature Shortcuts",
+    "first_time_tip": "First time here? Follow our guided suggestions or check out the page tour!"
+  },
+  "search_feat": {
+    "dashboard": "Organization overview, live statistics, and pinned metrics.",
+    "members": "Manage member directory, identity trust documents, and offboarding logs.",
+    "events": "Schedule assembly meetings, conference links, and QR attendance gates.",
+    "fees": "Track weekly dues, mobile money payments, and review payment slips.",
+    "ledger": "Auditable income statements, expense tracking, and balance sheets.",
+    "assets": "Inventory tracking, equipment allocation, and resource auditing.",
+    "goals": "Strategic milestones, targets, and progress tracking.",
+    "documents": "Shared cooperative bylaws, guidelines, and PDF resources.",
+    "chat": "Secure messaging channels and group discussions.",
+    "news": "Published bulletins, updates, and community notices.",
+    "marketplace": "Browse cooperative goods, agricultural tools, and express purchase interest.",
+    "grants": "Grant deadline tracking and donor contribution audits.",
+    "reports": "Compile professional annual PDF reports and financial statements.",
+    "org_profile": "Mission statement, vision blueprint, and public identity cards.",
+    "settings": "Branding customizer, MoMo carrier accounts, and subscription tiers.",
+    "profile": "Personal credentials, identity verification, and account settings."
+  },
   "common": {
     "save": "Save",
     "cancel": "Cancel",
