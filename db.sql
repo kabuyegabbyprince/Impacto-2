@@ -157,6 +157,17 @@ CREATE TABLE IF NOT EXISTS public.organizations (
   twitter_url TEXT,
   linkedin_url TEXT,
   employee_count TEXT,
+  alternate_name TEXT,
+  contact_email TEXT,
+  contact_phone TEXT,
+  service_area TEXT,
+  key_activities TEXT,
+  target_beneficiaries TEXT,
+  membership_info TEXT,
+  registration_authority TEXT,
+  seo_keywords TEXT,
+  ai_summary TEXT,
+  faq_items JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -1271,6 +1282,17 @@ ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS exit_survey_enabled BO
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS exit_survey_title TEXT;
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS exit_survey_description TEXT;
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS exit_survey_questions JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS alternate_name TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS contact_email TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS contact_phone TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS service_area TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS key_activities TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS target_beneficiaries TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS membership_info TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS registration_authority TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS seo_keywords TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS ai_summary TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS faq_items JSONB DEFAULT '[]'::jsonb;
 
 -- Org members upgrades & verification status normalization
 ALTER TABLE public.org_members ADD COLUMN IF NOT EXISTS phone_number TEXT;

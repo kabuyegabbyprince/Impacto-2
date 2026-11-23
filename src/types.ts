@@ -118,6 +118,20 @@ export interface Organization {
   twitter_url?: string;
   linkedin_url?: string;
   employee_count?: string;
+  alternate_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  service_area?: string;
+  key_activities?: string;
+  target_beneficiaries?: string;
+  membership_info?: string;
+  registration_authority?: string;
+  seo_keywords?: string;
+  ai_summary?: string;
+  faq_items?: Array<{
+    question: string;
+    answer: string;
+  }>;
 }
 
 

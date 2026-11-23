@@ -51,8 +51,14 @@ import {
   Loader2,
   Receipt,
   PhoneCall,
-  Store
+  Store,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle,
+  Sparkles,
+  Tag
 } from "lucide-react";
+import { QRCodeCanvas } from "qrcode.react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { MockDB } from "../lib/mockData";
 import { Organization, Goal, NewsPost, MarketplaceProduct } from "../types";
@@ -64,6 +70,18 @@ import { cleanMerchantCode, cleanPhoneNumber, getOrgMomoDisplayMethods } from ".
 import { useCreateDonation } from "../hooks/useImpactoData";
 import { resolveFileUrl } from "../lib/storageService";
 import { canAccessFeature } from "../lib/subscriptionMatrix";
+import {
+  buildOrgAiSnippet,
+  buildOrgMetaTags,
+  buildOrgStructuredData,
+  getCanonicalPublicOrgUrl,
+  getEffectiveOrgFaqs,
+  getLiveShareableOrgUrl,
+  getOrgActivitiesList,
+  getOrgContactSummary,
+  getOrgDisplayLocation,
+  hydrateOrgProfileFallbacks,
+} from "../lib/publicOrgSeo";
 import html2canvas from "html2canvas";
 
 /**
@@ -175,6 +193,8 @@ export const PublicOrgPage: React.FC = () => {
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"about" | "goals" | "impact" | "news" | "marketplace" | "calendar">("about");
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
+  const qrWrapperRef = useRef<HTMLDivElement>(null);
 
   // Related data
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -576,7 +596,7 @@ export const PublicOrgPage: React.FC = () => {
           }
         }
 
-        setOrg(matchedOrg);
+        setOrg(matchedOrg ? hydrateOrgProfileFallbacks(matchedOrg) : null);
 
         if (matchedOrg) {
           // Fetch related goals
@@ -651,6 +671,88 @@ export const PublicOrgPage: React.FC = () => {
       setLoading(false);
     }
   }, [targetSlug]);
+
+  // Dynamically manage <head> SEO Meta Tags, Canonical Link & Schema.org JSON-LD (Organization + FAQPage)
+  useEffect(() => {
+    if (!org) return;
+
+    const previousTitle = document.title;
+    const { title, description, keywords } = buildOrgMetaTags(org);
+    const canonicalUrl = getCanonicalPublicOrgUrl(org.slug);
+    const { orgSchema, faqSchema } = buildOrgStructuredData(org);
+
+    document.title = title;
+
+    const upsertMeta = (attr: "name" | "property", key: string, content: string) => {
+      let el = document.head.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute(attr, key);
+        el.setAttribute("data-impacto-org-seo", "true");
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", content);
+    };
+
+    upsertMeta("name", "description", description);
+    upsertMeta("name", "keywords", keywords.join(", "));
+    upsertMeta("property", "og:title", title);
+    upsertMeta("property", "og:description", description);
+    upsertMeta("property", "og:url", canonicalUrl);
+    upsertMeta("property", "og:type", "website");
+    upsertMeta("name", "twitter:title", title);
+    upsertMeta("name", "twitter:description", description);
+
+    let canonicalEl = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!canonicalEl) {
+      canonicalEl = document.createElement("link");
+      canonicalEl.setAttribute("rel", "canonical");
+      canonicalEl.setAttribute("data-impacto-org-seo", "true");
+      document.head.appendChild(canonicalEl);
+    }
+    canonicalEl.setAttribute("href", canonicalUrl);
+
+    const upsertJsonLd = (id: string, payload: unknown) => {
+      let script = document.getElementById(id) as HTMLScriptElement | null;
+      if (!script) {
+        script = document.createElement("script");
+        script.id = id;
+        script.type = "application/ld+json";
+        document.head.appendChild(script);
+      }
+      script.textContent = JSON.stringify(payload);
+    };
+
+    upsertJsonLd("impacto-org-jsonld", orgSchema);
+    upsertJsonLd("impacto-faq-jsonld", faqSchema);
+
+    return () => {
+      document.title = previousTitle;
+      document.getElementById("impacto-org-jsonld")?.remove();
+      document.getElementById("impacto-faq-jsonld")?.remove();
+      document.head.querySelectorAll('[data-impacto-org-seo="true"]').forEach((node) => node.remove());
+    };
+  }, [org]);
+
+  const handleDownloadQr = () => {
+    const canvas = qrWrapperRef.current?.querySelector("canvas");
+    if (!canvas) {
+      addToast("QR code is still rendering, please try again.", "warning");
+      return;
+    }
+    try {
+      const dataUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `${(org?.slug || "organization").replace(/[^a-z0-9-_]/gi, "-")}-qr.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      addToast("Organization QR code downloaded!", "success");
+    } catch {
+      addToast("Unable to download QR code image.", "error");
+    }
+  };
 
   const handleCopy = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -1088,13 +1190,123 @@ export const PublicOrgPage: React.FC = () => {
                   {/* Card: About Our Organization */}
                   <div className="bg-white dark:bg-slate-900 border border-gray-200/80 dark:border-slate-800 rounded-2xl p-6 sm:p-7 shadow-xs flex flex-col gap-3">
                     <h2 className="text-base sm:text-lg font-extrabold font-display text-gray-950 dark:text-white">
-                      About Our Organization
+                      About {org.name}
                     </h2>
                     <p className="text-xs sm:text-sm leading-relaxed text-gray-700 dark:text-slate-300 whitespace-pre-line">
                       {org.description ||
                         org.tagline ||
-                        `${org.name} is a verified community organization and cooperative society organized to foster shared socio-economic resilience, transparent governance, and sustainable impact.`}
+                        `${org.name} is a ${org.org_category || "community organization"} based in ${getOrgDisplayLocation(org)}. This official Impacto profile shares verified organizational credentials, active goals, impact logs, and public announcements.`}
                     </p>
+
+                    {/* Public / AI Overview Snippet */}
+                    <div className="mt-1 p-4 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 flex flex-col gap-1.5">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        {t("public_org.official_overview", "Public Summary")}
+                      </span>
+                      <p className="text-xs leading-relaxed text-gray-700 dark:text-slate-300">
+                        {buildOrgAiSnippet(org)}
+                      </p>
+                      <div className="pt-1 flex flex-wrap items-center gap-2 text-[11px] font-mono text-emerald-700 dark:text-emerald-400">
+                        <span>Canonical Portal:</span>
+                        <a
+                          href={getCanonicalPublicOrgUrl(org.slug)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline hover:text-emerald-900 dark:hover:text-emerald-200 break-all"
+                        >
+                          {getCanonicalPublicOrgUrl(org.slug)}
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* Key Activities & Community Coverage */}
+                    {(getOrgActivitiesList(org).length > 0 || org.target_beneficiaries || org.service_area || org.membership_info) && (
+                      <div className="mt-2 pt-4 border-t border-gray-100 dark:border-slate-800 flex flex-col gap-3">
+                        {getOrgActivitiesList(org).length > 0 && (
+                          <div className="flex flex-col gap-2">
+                            <span className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                              <Tag className="h-3.5 w-3.5 text-emerald-600" />
+                              {t("public_org.key_activities", "Key Activities & Focus Areas")}
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              {getOrgActivitiesList(org).map((activity, idx) => (
+                                <span
+                                  key={idx}
+                                  className="px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-200 border border-gray-200/80 dark:border-slate-700"
+                                >
+                                  {activity}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {org.target_beneficiaries && (
+                            <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-800">
+                              <span className="text-[11px] font-bold text-gray-900 dark:text-white block mb-1">
+                                {t("public_org.who_we_serve", "Who We Serve")}
+                              </span>
+                              <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed">
+                                {org.target_beneficiaries}
+                              </p>
+                            </div>
+                          )}
+                          {org.service_area && (
+                            <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-800">
+                              <span className="text-[11px] font-bold text-gray-900 dark:text-white block mb-1">
+                                {t("public_org.service_area", "Service Area")}
+                              </span>
+                              <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed">
+                                {org.service_area}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {org.membership_info && (
+                          <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-800">
+                            <span className="text-[11px] font-bold text-gray-900 dark:text-white block mb-1">
+                              {t("org_profile.membership_info", "How to Join / Membership Guide")}
+                            </span>
+                            <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed">
+                              {org.membership_info}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Registration & Identity Facts (only shown when explicitly entered) */}
+                    {(org.founded_date || org.registration_number || org.registration_authority || org.founders || org.employee_count) && (
+                      <div className="mt-2 pt-4 border-t border-gray-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                        {org.founded_date && (
+                          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-800">
+                            <span className="text-[10px] font-mono uppercase text-gray-400 block">Founded</span>
+                            <span className="font-bold text-gray-900 dark:text-white">{org.founded_date}</span>
+                          </div>
+                        )}
+                        {(org.registration_number || org.registration_authority) && (
+                          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-800">
+                            <span className="text-[10px] font-mono uppercase text-gray-400 block">Registration</span>
+                            <span className="font-bold text-gray-900 dark:text-white break-words">
+                              {[org.registration_authority, org.registration_number].filter(Boolean).join(" • ")}
+                            </span>
+                          </div>
+                        )}
+                        {(org.founders || org.employee_count) && (
+                          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-800">
+                            <span className="text-[10px] font-mono uppercase text-gray-400 block">
+                              {org.founders ? "Leadership / Founders" : "Team Size"}
+                            </span>
+                            <span className="font-bold text-gray-900 dark:text-white break-words">
+                              {org.founders || `${org.employee_count} staff / members`}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {(org.mission || org.vision) && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-4 border-t border-gray-100 dark:border-slate-800">
@@ -1183,6 +1395,45 @@ export const PublicOrgPage: React.FC = () => {
                         </div>
                       </div>
                     )}
+                  </div>
+
+                  {/* Card: Searchable Frequently Asked Questions (FAQPage Schema Synced) */}
+                  <div className="bg-white dark:bg-slate-900 border border-gray-200/80 dark:border-slate-800 rounded-2xl p-6 sm:p-7 shadow-xs flex flex-col gap-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <h2 className="text-base sm:text-lg font-extrabold font-display text-gray-950 dark:text-white flex items-center gap-2">
+                        <HelpCircle className="h-5 w-5 text-emerald-600 shrink-0" />
+                        <span>{t("public_org.faq_title", "Frequently Asked Questions")}</span>
+                      </h2>
+                    </div>
+
+                    <div className="flex flex-col divide-y divide-gray-100 dark:divide-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl overflow-hidden">
+                      {getEffectiveOrgFaqs(org).map((faq, idx) => {
+                        const isOpen = openFaqIndex === idx;
+                        return (
+                          <div key={idx} className="bg-gray-50/50 dark:bg-slate-800/30">
+                            <button
+                              type="button"
+                              onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
+                              className="w-full px-4 py-3.5 text-left flex items-center justify-between gap-3 hover:bg-gray-100/70 dark:hover:bg-slate-800/60 transition cursor-pointer"
+                            >
+                              <span className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white">
+                                {faq.question}
+                              </span>
+                              {isOpen ? (
+                                <ChevronUp className="h-4 w-4 text-emerald-600 shrink-0" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
+                              )}
+                            </button>
+                            {isOpen && (
+                              <div className="px-4 pb-4 pt-0.5 text-xs leading-relaxed text-gray-600 dark:text-slate-300 whitespace-pre-line">
+                                {faq.answer}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </>
               )}
@@ -1728,82 +1979,163 @@ export const PublicOrgPage: React.FC = () => {
               {/* Card 1: Quick Info (Single Official Verification Link) */}
               <div className="bg-white dark:bg-slate-900 border border-gray-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-xs flex flex-col gap-4 min-w-0 overflow-hidden">
                 <h3 className="text-base font-extrabold font-display text-gray-950 dark:text-white">
-                  Quick Info
+                  {t("public_org.quick_info", "Quick Info")}
                 </h3>
 
                 <div className="flex flex-col gap-3 text-xs text-gray-700 dark:text-slate-300 min-w-0">
-                  {/* Category */}
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <BookOpen className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span className="font-semibold text-gray-900 dark:text-white break-words min-w-0">
-                      {org.org_category || "Social Action"}
-                    </span>
+                  {/* Category + Alternate Name */}
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <BookOpen className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex flex-col">
+                      <span className="font-semibold text-gray-900 dark:text-white break-words">
+                        {org.org_category || "Social Action"}
+                      </span>
+                      {org.alternate_name && (
+                        <span className="text-[11px] text-gray-500 dark:text-slate-400 break-words">
+                          Also known as: {org.alternate_name}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Location */}
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <MapPin className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span className="break-words min-w-0">
-                      {org.location_name ||
-                        (org.district ? `${org.district}, ${org.country || "Rwanda"}` : "Kigali, Rwanda")}
-                    </span>
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <MapPin className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex flex-col">
+                      <span className="break-words">{getOrgDisplayLocation(org)}</span>
+                      {org.service_area && (
+                        <span className="text-[11px] text-gray-500 dark:text-slate-400 break-words">
+                          Serves: {org.service_area}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Public Slug URL */}
                   <div className="flex items-center gap-2.5 min-w-0">
                     <Globe className="h-4 w-4 text-emerald-600 shrink-0" />
                     <span
-                      onClick={() => handleCopy(window.location.href, "Public URL")}
+                      onClick={() => handleCopy(getLiveShareableOrgUrl(org.slug), "Public URL")}
                       className="font-mono text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer break-all min-w-0"
                       title="Click to copy public portal link"
                     >
                       impacto.rw/@{org.slug}
                     </span>
                   </div>
+
+                  {/* Official Website if provided */}
+                  {org.website && /^https?:\/\//i.test(org.website.trim()) && (
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ExternalLink className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <a
+                        href={org.website.trim()}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-emerald-600 dark:text-emerald-400 hover:underline break-all min-w-0 font-medium"
+                      >
+                        {org.website.trim().replace(/^https?:\/\//i, "")}
+                      </a>
+                    </div>
+                  )}
                 </div>
 
                 {/* Contact Us Subsection */}
-                <div className="pt-4 border-t border-gray-100 dark:border-slate-800 flex flex-col gap-1">
+                <div className="pt-4 border-t border-gray-100 dark:border-slate-800 flex flex-col gap-1.5">
                   <span className="text-xs font-bold text-gray-900 dark:text-white">Contact Us:</span>
-                  <p className="text-xs text-gray-600 dark:text-slate-400 break-words font-medium">
-                    {(() => {
-                      // 1. Organization custom contacts
-                      const rawContact = org.contact_us?.trim();
-                      const isPlaceholder =
-                        !rawContact ||
-                        rawContact.toLowerCase().includes("contact@ourorganization.org") ||
-                        rawContact.includes("788 123 456");
+                  {(() => {
+                    const summary = getOrgContactSummary(org);
+                    if (!summary.email && !summary.phone && summary.combined) {
+                      return (
+                        <p className="text-xs text-gray-600 dark:text-slate-400 break-words font-medium">
+                          {summary.combined}
+                        </p>
+                      );
+                    }
+                    if (summary.email || summary.phone) {
+                      return (
+                        <div className="flex flex-col gap-1 text-xs text-gray-600 dark:text-slate-400 font-medium">
+                          {summary.email && (
+                            <a
+                              href={`mailto:${summary.email}`}
+                              className="flex items-center gap-1.5 hover:text-emerald-600 break-all"
+                            >
+                              <Mail className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                              <span>{summary.email}</span>
+                            </a>
+                          )}
+                          {summary.phone && (
+                            <a
+                              href={`tel:${summary.phone.replace(/\s+/g, "")}`}
+                              className="flex items-center gap-1.5 hover:text-emerald-600 break-all"
+                            >
+                              <Phone className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                              <span>{summary.phone}</span>
+                            </a>
+                          )}
+                        </div>
+                      );
+                    }
+                    return (
+                      <p className="text-xs text-gray-600 dark:text-slate-400 break-words font-medium">
+                        support@impacto.rw / +250 788 000 000
+                      </p>
+                    );
+                  })()}
+                </div>
 
-                      if (rawContact && !isPlaceholder) {
-                        return rawContact;
-                      }
+                {/* SHAREABLE PUBLIC PAGE QR CODE SECTION */}
+                <div className="pt-4 border-t border-gray-100 dark:border-slate-800 flex flex-col gap-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                      <QrCode className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span>{t("public_org.scan_qr", "Scan to Visit & Share")}</span>
+                    </span>
+                    <span className="text-[10px] font-mono text-gray-400">/@{org.slug}</span>
+                  </div>
 
-                      const orgEmail = (org as any).email || (org as any).contact_email;
-                      const orgPhone =
-                        (org as any).phone ||
-                        (org as any).contact_phone ||
-                        (org.donation_mtn_number
-                          ? `+250 ${org.donation_mtn_number}`
-                          : org.dues_mtn_number
-                          ? `+250 ${org.dues_mtn_number}`
-                          : "");
-
-                      if (orgEmail && orgPhone) {
-                        return `${orgEmail} / ${orgPhone}`;
-                      }
-                      if (orgEmail) return orgEmail;
-                      if (orgPhone) return orgPhone;
-
-                      // 2. Fallback to Impacto platform contacts
-                      const impactoContact = "support@impacto.rw / +250 788 000 000";
-                      if (impactoContact) {
-                        return impactoContact;
-                      }
-
-                      // 3. If there is not ones yet say _
-                      return "_";
-                    })()}
-                  </p>
+                  <div className="flex flex-col items-center gap-2.5 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-gray-200/80 dark:border-slate-700/80">
+                    <div
+                      ref={qrWrapperRef}
+                      className="p-2 bg-white rounded-xl border border-gray-200 shadow-3xs"
+                    >
+                      <QRCodeCanvas
+                        value={getLiveShareableOrgUrl(org.slug)}
+                        size={136}
+                        level="M"
+                        includeMargin
+                        bgColor="#ffffff"
+                        fgColor="#0f172a"
+                      />
+                    </div>
+                    <p className="text-[11px] text-center text-gray-500 dark:text-slate-400 leading-snug">
+                      {t(
+                        "public_org.scan_qr_desc",
+                        "Scan this QR code with any phone camera to open or share this public page."
+                      )}
+                    </p>
+                    <div className="w-full grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={handleDownloadQr}
+                        className="py-1.5 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      >
+                        <Download className="h-3.5 w-3.5 shrink-0" />
+                        <span>{t("public_org.download_qr", "Download QR")}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(getLiveShareableOrgUrl(org.slug), "Public URL")}
+                        className="py-1.5 px-2.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-200 text-[11px] font-bold border border-gray-200 dark:border-slate-700 flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      >
+                        {copiedField === "Public URL" ? (
+                          <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5 shrink-0" />
+                        )}
+                        <span>{t("public_org.copy_link", "Copy Link")}</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* THE SINGLE OFFICIAL VERIFICATION LINK ON THIS PAGE */}

@@ -39,3 +39,37 @@ ALTER TABLE public.organizations
 UPDATE public.organizations
 SET momo_display_methods = ARRAY['merchant_code']::text[]
 WHERE momo_display_methods IS NULL OR array_length(momo_display_methods, 1) IS NULL;
+
+-- =====================================================================
+-- INCREMENTAL DATABASE MIGRATION: ORGANIZATION PROFILE, SEO/GEO & FAQ
+-- =====================================================================
+-- Adds fields for public organization search optimization (SEO/GEO),
+-- official contact channels, activities, membership guide, and FAQs.
+-- Safe and idempotent to run manually on existing Supabase / PostgreSQL instances.
+-- =====================================================================
+
+ALTER TABLE public.organizations
+  ADD COLUMN IF NOT EXISTS alternate_name TEXT,
+  ADD COLUMN IF NOT EXISTS contact_email TEXT,
+  ADD COLUMN IF NOT EXISTS contact_phone TEXT,
+  ADD COLUMN IF NOT EXISTS service_area TEXT,
+  ADD COLUMN IF NOT EXISTS key_activities TEXT,
+  ADD COLUMN IF NOT EXISTS target_beneficiaries TEXT,
+  ADD COLUMN IF NOT EXISTS membership_info TEXT,
+  ADD COLUMN IF NOT EXISTS registration_authority TEXT,
+  ADD COLUMN IF NOT EXISTS seo_keywords TEXT,
+  ADD COLUMN IF NOT EXISTS ai_summary TEXT,
+  ADD COLUMN IF NOT EXISTS faq_items JSONB DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS country TEXT,
+  ADD COLUMN IF NOT EXISTS province TEXT,
+  ADD COLUMN IF NOT EXISTS district TEXT,
+  ADD COLUMN IF NOT EXISTS sector TEXT,
+  ADD COLUMN IF NOT EXISTS founded_date TEXT,
+  ADD COLUMN IF NOT EXISTS founders TEXT,
+  ADD COLUMN IF NOT EXISTS registration_number TEXT,
+  ADD COLUMN IF NOT EXISTS website TEXT,
+  ADD COLUMN IF NOT EXISTS facebook_url TEXT,
+  ADD COLUMN IF NOT EXISTS twitter_url TEXT,
+  ADD COLUMN IF NOT EXISTS linkedin_url TEXT,
+  ADD COLUMN IF NOT EXISTS employee_count TEXT;
+
