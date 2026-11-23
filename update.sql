@@ -4,7 +4,7 @@
 -- Adds support for multi-installment / partial member_fees payments
 -- (paid_amount vs total_due_amount, pending_installment_amount,
 -- payment_history, and due_name for filtering by payment purpose).
--- Safe and idempotent to run on existing Supabase / PostgreSQL instances.
+-- Safe and idempotent to run on existing Supabase / PostgreSQL instances.run
 -- =====================================================================
 
 ALTER TABLE public.member_fees
